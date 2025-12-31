@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: gatex
+
+resources:
+  - deployment.yaml
+  - configmap.yaml
+  - secret.yaml
+
+# Common labels to add to all resources
+commonLabels:
+  app.kubernetes.io/name: gatex-gateway
+  app.kubernetes.io/component: gateway
+  app.kubernetes.io/part-of: gatex
+
+# Add namespace annotation
+commonAnnotations:
+  description: "GateKey VPN Gateway - OpenVPN + Gateway Agent"
+
+# Image configuration - override in your environment
+images:
+  - name: ghcr.io/gatex-project/gatex-gateway
+    newTag: latest

@@ -1,0 +1,156 @@
+# GateKey Control Plane Configuration
+# Copy this file and modify for your environment
+
+server:
+  # HTTP server address
+  address: ":8080"
+  # HTTPS server address (if TLS enabled)
+  tls_address: ":8443"
+  # Enable TLS
+  tls_enabled: true
+  # TLS certificate and key paths
+  tls_cert: "/etc/gatex/certs/server.crt"
+  tls_key: "/etc/gatex/certs/server.key"
+  # Trusted proxies for X-Forwarded-For
+  trusted_proxies: []
+  # CORS allowed origins
+  cors_origins:
+    - "https://localhost:3000"
+
+# Database configuration
+database:
+  # PostgreSQL connection string
+  url: "postgres://gatex:gatex@localhost:5432/gatex?sslmode=disable"
+  # Maximum open connections
+  max_open_conns: 25
+  # Maximum idle connections
+  max_idle_conns: 5
+  # Connection max lifetime
+  conn_max_lifetime: "5m"
+
+# PKI configuration
+pki:
+  # CA certificate path (if not set, embedded CA is used)
+  ca_cert: ""
+  # CA private key path
+  ca_key: ""
+  # Certificate validity duration
+  cert_validity: "24h"
+  # CA validity duration (for embedded CA)
+  ca_validity: "87600h" # 10 years
+  # Key algorithm: rsa2048, rsa4096, ecdsa256, ecdsa384
+  key_algorithm: "ecdsa256"
+  # Organization name for certificates
+  organization: "GateKey"
+
+# Authentication providers
+auth:
+  # Session configuration
+  session:
+    # Session token validity
+    validity: "12h"
+    # Session cookie name
+    cookie_name: "gatex_session"
+    # Secure cookie (HTTPS only)
+    secure: true
+    # HTTP only cookie
+    http_only: true
+    # SameSite cookie attribute: strict, lax, none
+    same_site: "lax"
+
+  # OIDC providers
+  oidc:
+    enabled: true
+    providers:
+      - name: "default"
+        display_name: "Login with SSO"
+        issuer: "https://auth.example.com"
+        client_id: "${GATEX_OIDC_CLIENT_ID}"
+        client_secret: "${GATEX_OIDC_CLIENT_SECRET}"
+        redirect_url: "https://gatex.example.com/api/v1/auth/oidc/callback"
+        scopes:
+          - "openid"
+          - "profile"
+          - "email"
+          - "groups"
+        # Claim mappings
+        claims:
+          email: "email"
+          name: "name"
+          groups: "groups"
+
+  # SAML providers
+  saml:
+    enabled: true
+    providers:
+      - name: "enterprise"
+        display_name: "Enterprise SSO"
+        # IdP metadata URL or file path
+        idp_metadata_url: "https://idp.example.com/metadata"
+        # SP entity ID
+        entity_id: "https://gatex.example.com/saml/metadata"
+        # ACS URL
+        acs_url: "https://gatex.example.com/api/v1/auth/saml/acs"
+        # Certificate and key for signing
+        cert_file: "/etc/gatex/saml/sp.crt"
+        key_file: "/etc/gatex/saml/sp.key"
+        # Attribute mappings
+        attributes:
+          email: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+          name: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
+          groups: "http://schemas.xmlsoap.org/claims/Group"
+
+# Gateway configuration
+gateway:
+  # API endpoint for gateway communication
+  api_url: "https://gatex.example.com/api/v1/gateway"
+  # Gateway authentication token
+  token: "${GATEX_GATEWAY_TOKEN}"
+  # Heartbeat interval
+  heartbeat_interval: "30s"
+
+# Policy defaults
+policy:
+  # Default policy for new users
+  default_policy: "deny-all"
+  # Policy evaluation mode: strict, permissive
+  evaluation_mode: "strict"
+
+# Logging configuration
+logging:
+  # Log level: debug, info, warn, error
+  level: "info"
+  # Log format: json, console
+  format: "json"
+  # Log output: stdout, stderr, file path
+  output: "stdout"
+
+# Metrics and monitoring
+metrics:
+  # Enable Prometheus metrics
+  enabled: true
+  # Metrics endpoint path
+  path: "/metrics"
+  # Metrics port (0 = same as server)
+  port: 0
+
+# Audit logging
+audit:
+  # Enable audit logging
+  enabled: true
+  # Audit log destination: database, file, syslog
+  destination: "database"
+  # File path (if destination is file)
+  file_path: "/var/log/gatex/audit.log"
+  # Events to audit
+  events:
+    - "auth.login"
+    - "auth.logout"
+    - "auth.failed"
+    - "config.generate"
+    - "config.download"
+    - "policy.create"
+    - "policy.update"
+    - "policy.delete"
+    - "gateway.connect"
+    - "gateway.disconnect"

@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gatex-gateway
+  labels:
+    app: gatex-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gatex-gateway
+  template:
+    metadata:
+      labels:
+        app: gatex-gateway
+    spec:
+      serviceAccountName: gatex-gateway
+      containers:
+        # OpenVPN container
+        - name: openvpn
+          image: docker.io/kylemanna/openvpn:2.4
+          ports:
+            - containerPort: 1194
+              protocol: UDP
+              name: openvpn
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+          volumeMounts:
+            - name: openvpn-config
+              mountPath: /etc/openvpn
+            - name: gatex-scripts
+              mountPath: /etc/gatex/scripts
+            - name: pki
+              mountPath: /etc/openvpn/pki
+          env:
+            - name: OVPN_SERVER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: gatex-gateway-config
+                  key: openvpn_server_url
+
+        # GateKey Gateway Agent container
+        - name: gateway-agent
+          image: ghcr.io/gatex-project/gatex-gateway:latest
+          command:
+            - /usr/local/bin/gatex-gateway
+            - run
+            - --config
+            - /etc/gatex/gateway.yaml
+          volumeMounts:
+            - name: gateway-config
+              mountPath: /etc/gatex
+          env:
+            - name: PUBLIC_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+
+      volumes:
+        - name: openvpn-config
+          configMap:
+            name: openvpn-server-config
+        - name: gatex-scripts
+          configMap:
+            name: gatex-gateway-scripts
+            defaultMode: 0755
+        - name: gateway-config
+          secret:
+            secretName: gatex-gateway-secret
+        - name: pki
+          secret:
+            secretName: gatex-gateway-pki
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gatex-gateway
+  labels:
+    app: gatex-gateway
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 1194
+      targetPort: 1194
+      protocol: UDP
+      name: openvpn
+  selector:
+    app: gatex-gateway
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gatex-gateway

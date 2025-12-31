@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gatex-gateway-config
+data:
+  openvpn_server_url: "udp://YOUR_GATEWAY_IP:1194"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openvpn-server-config
+data:
+  server.conf: |
+    # OpenVPN Server Configuration
+    # Managed by GateKey Gateway
+
+    # Network settings
+    port 1194
+    proto udp
+    dev tun
+
+    # Certificate settings
+    ca /etc/openvpn/pki/ca.crt
+    cert /etc/openvpn/pki/server.crt
+    key /etc/openvpn/pki/server.key
+    dh /etc/openvpn/pki/dh.pem
+
+    # Network configuration
+    server 10.8.0.0 255.255.255.0
+    topology subnet
+
+    # Keep tunnel alive
+    keepalive 10 120
+
+    # Encryption settings
+    cipher AES-256-GCM
+    auth SHA256
+    tls-version-min 1.2
+
+    # Reduce privileges after initialization
+    user nobody
+    group nogroup
+    persist-key
+    persist-tun
+
+    # Logging
+    status /tmp/openvpn-status.log
+    verb 3
+
+    # Hook scripts (GateKey integration)
+    auth-user-pass-verify "/etc/gatex/scripts/hook.sh auth-user-pass-verify" via-file
+    tls-verify "/etc/gatex/scripts/hook.sh tls-verify"
+    client-connect "/etc/gatex/scripts/hook.sh client-connect"
+    client-disconnect "/etc/gatex/scripts/hook.sh client-disconnect"
+
+    # Script security - allow calling external scripts
+    script-security 2
+
+    # Require both client certificate AND auth-user-pass for maximum security
+    verify-client-cert require
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gatex-gateway-scripts
+data:
+  hook.sh: |
+    #!/bin/bash
+    # Gateway hook script wrapper
+    # This script calls the gatex-gateway binary to handle OpenVPN hooks
+
+    HOOK_TYPE="$1"
+    shift
+
+    exec /usr/local/bin/gatex-gateway hook --type "$HOOK_TYPE" "$@"
