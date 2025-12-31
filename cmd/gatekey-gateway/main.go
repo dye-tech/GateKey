@@ -47,7 +47,7 @@ func loadConfigVersion() string {
 
 // saveConfigVersion persists the config version to disk
 func saveConfigVersion(version string) error {
-	return os.WriteFile(configVersionFile, []byte(version), 0644)
+	return os.WriteFile(configVersionFile, []byte(version), 0600)
 }
 
 func main() {
@@ -87,28 +87,28 @@ func main() {
 
 // GatewayConfig holds gateway agent configuration.
 type GatewayConfig struct {
-	ControlPlaneURL   string        `mapstructure:"control_plane_url"`
-	Token             string        `mapstructure:"token"`
-	HeartbeatInterval time.Duration `mapstructure:"heartbeat_interval"`
+	ControlPlaneURL     string        `mapstructure:"control_plane_url"`
+	Token               string        `mapstructure:"token"`
+	HeartbeatInterval   time.Duration `mapstructure:"heartbeat_interval"`
 	RuleRefreshInterval time.Duration `mapstructure:"rule_refresh_interval"`
-	LogLevel          string        `mapstructure:"log_level"`
+	LogLevel            string        `mapstructure:"log_level"`
 }
 
 // ConnectedClient holds info about a connected VPN client.
 type ConnectedClient struct {
-	UserID     string
-	UserEmail  string
-	UserGroups []string
-	VPNIP      string
+	UserID      string
+	UserEmail   string
+	UserGroups  []string
+	VPNIP       string
 	ConnectedAt time.Time
 }
 
 // ClientRulesResponse is the response from the control plane.
 type ClientRulesResponse struct {
-	UserID   string `json:"user_id"`
-	ClientIP string `json:"client_ip"`
+	UserID   string               `json:"user_id"`
+	ClientIP string               `json:"client_ip"`
 	Allowed  []AllowedDestination `json:"allowed"`
-	Default  string `json:"default"`
+	Default  string               `json:"default"`
 }
 
 // AllowedDestination represents an allowed destination.
@@ -300,11 +300,12 @@ func handleReprovision(ctx context.Context, cfg *GatewayConfig, client *openvpn.
 	}
 
 	// Update certificate files
+	// Note: Certs need 0644 for OpenVPN to read them (runs as openvpn user)
 	openvpnDir := "/etc/openvpn/server"
-	if err := os.WriteFile(openvpnDir+"/ca.crt", []byte(provResp.CACert), 0644); err != nil {
+	if err := os.WriteFile(openvpnDir+"/ca.crt", []byte(provResp.CACert), 0644); err != nil { //nolint:gosec // G306: cert must be readable by openvpn
 		return fmt.Errorf("failed to write CA cert: %w", err)
 	}
-	if err := os.WriteFile(openvpnDir+"/server.crt", []byte(provResp.ServerCert), 0644); err != nil {
+	if err := os.WriteFile(openvpnDir+"/server.crt", []byte(provResp.ServerCert), 0644); err != nil { //nolint:gosec // G306: cert must be readable by openvpn
 		return fmt.Errorf("failed to write server cert: %w", err)
 	}
 	if err := os.WriteFile(openvpnDir+"/server.key", []byte(provResp.ServerKey), 0600); err != nil {
@@ -377,7 +378,7 @@ func ruleRefreshLoop(ctx context.Context, cfg *GatewayConfig) {
 	defer ticker.Stop()
 
 	// Ensure clients directory exists
-	os.MkdirAll(clientsDir, 0755)
+	_ = os.MkdirAll(clientsDir, 0750)
 
 	logger.Info("Started rule refresh loop", zap.Duration("interval", cfg.RuleRefreshInterval))
 
@@ -669,7 +670,7 @@ const clientsDir = "/var/run/gatekey/clients"
 
 // writeClientFile writes client info to a file for the daemon.
 func writeClientFile(vpnIP string, client ConnectedClient) error {
-	if err := os.MkdirAll(clientsDir, 0755); err != nil {
+	if err := os.MkdirAll(clientsDir, 0750); err != nil {
 		return err
 	}
 
@@ -679,7 +680,7 @@ func writeClientFile(vpnIP string, client ConnectedClient) error {
 	}
 
 	filename := fmt.Sprintf("%s/%s.json", clientsDir, strings.ReplaceAll(vpnIP, ".", "-"))
-	return os.WriteFile(filename, data, 0644)
+	return os.WriteFile(filename, data, 0600)
 }
 
 // removeClientFile removes the client info file.

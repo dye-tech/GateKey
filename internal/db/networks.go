@@ -175,10 +175,13 @@ func (s *NetworkStore) GetNetworkGateways(ctx context.Context, networkID string)
 	var gateways []*Gateway
 	for rows.Next() {
 		var g Gateway
-		var publicIP *string
-		if err := rows.Scan(&g.ID, &g.Name, &g.Hostname, &publicIP, &g.VPNPort, &g.VPNProtocol,
+		var hostname, publicIP *string
+		if err := rows.Scan(&g.ID, &g.Name, &hostname, &publicIP, &g.VPNPort, &g.VPNProtocol,
 			&g.IsActive, &g.LastHeartbeat, &g.CreatedAt, &g.UpdatedAt); err != nil {
 			return nil, err
+		}
+		if hostname != nil {
+			g.Hostname = *hostname
 		}
 		if publicIP != nil {
 			g.PublicIP = *publicIP

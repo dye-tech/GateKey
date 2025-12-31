@@ -24,8 +24,8 @@ type Gateway struct {
 	PublicIP       string
 	VPNPort        int
 	VPNProtocol    string
-	CryptoProfile  string // "modern", "fips", or "compatible"
-	VPNSubnet      string // VPN client subnet (e.g., "10.8.0.0/24")
+	CryptoProfile  string   // "modern", "fips", or "compatible"
+	VPNSubnet      string   // VPN client subnet (e.g., "10.8.0.0/24")
 	TLSAuthEnabled bool     // Enable TLS-Auth for additional security
 	TLSAuthKey     string   // TLS-Auth static key (generated during provisioning)
 	FullTunnelMode bool     // When true, route all traffic through VPN (push 0.0.0.0/0)

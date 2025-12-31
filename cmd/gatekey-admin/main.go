@@ -123,8 +123,8 @@ gateways, policies, users, and certificates.`,
 
 	// Connection commands
 	connCmd := &cobra.Command{
-		Use:   "connection",
-		Short: "Manage VPN connections",
+		Use:     "connection",
+		Short:   "Manage VPN connections",
 		Aliases: []string{"conn"},
 	}
 

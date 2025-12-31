@@ -285,12 +285,12 @@ func (ca *CA) loadFromFiles(certPath, keyPath string) error {
 
 // saveToFiles saves the CA certificate and private key to files.
 func (ca *CA) saveToFiles(certPath, keyPath string) error {
-	// Save certificate
+	// Save certificate (needs to be readable by clients that verify certs)
 	certPEM := pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: ca.certificate.Raw,
 	})
-	if err := os.WriteFile(certPath, certPEM, 0644); err != nil {
+	if err := os.WriteFile(certPath, certPEM, 0644); err != nil { //nolint:gosec // G306: CA cert must be readable
 		return fmt.Errorf("failed to write CA certificate: %w", err)
 	}
 

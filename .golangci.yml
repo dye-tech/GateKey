@@ -22,7 +22,6 @@ linters:
     - dupl
     - errorlint
     - exhaustive
-    - exportloopref
     - gochecknoinits
     - goconst
     - gocritic
@@ -51,9 +50,9 @@ linters:
     - funlen      # Function length - too strict
     - gocognit    # Cognitive complexity - too strict
     - godox       # TODO/FIXME comments - we use these intentionally
-    - gomnd       # Magic numbers - too strict for configs
     - lll         # Line length - handled by gofmt
     - wsl         # Whitespace linter - too opinionated
+    - mnd         # Magic numbers (was gomnd) - too strict for configs
 
 linters-settings:
   dupl:
@@ -105,8 +104,9 @@ linters-settings:
       - G304  # File path provided as taint input - necessary for config files
 
   govet:
-    check-shadowing: true
     enable-all: true
+    disable:
+      - fieldalignment  # Too strict for this project
 
   misspell:
     locale: US

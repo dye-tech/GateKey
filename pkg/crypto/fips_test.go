@@ -9,8 +9,8 @@ func TestHash(t *testing.T) {
 	data := []byte("test data for hashing")
 
 	tests := []struct {
-		alg        HashAlgorithm
-		expectLen  int
+		alg       HashAlgorithm
+		expectLen int
 	}{
 		{SHA256, 32},
 		{SHA384, 48},

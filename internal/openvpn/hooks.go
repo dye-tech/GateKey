@@ -44,8 +44,8 @@ type HookRequest struct {
 
 // HookResponse represents a response to an OpenVPN hook.
 type HookResponse struct {
-	Allow       bool     `json:"allow"`
-	Message     string   `json:"message,omitempty"`
+	Allow        bool     `json:"allow"`
+	Message      string   `json:"message,omitempty"`
 	ClientConfig []string `json:"client_config,omitempty"`
 }
 

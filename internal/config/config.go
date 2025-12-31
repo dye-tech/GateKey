@@ -44,19 +44,19 @@ type DatabaseConfig struct {
 
 // PKIConfig holds PKI/CA configuration.
 type PKIConfig struct {
-	CACert        string        `mapstructure:"ca_cert"`
-	CAKey         string        `mapstructure:"ca_key"`
-	CertValidity  time.Duration `mapstructure:"cert_validity"`
-	CAValidity    time.Duration `mapstructure:"ca_validity"`
-	KeyAlgorithm  string        `mapstructure:"key_algorithm"`
-	Organization  string        `mapstructure:"organization"`
+	CACert       string        `mapstructure:"ca_cert"`
+	CAKey        string        `mapstructure:"ca_key"`
+	CertValidity time.Duration `mapstructure:"cert_validity"`
+	CAValidity   time.Duration `mapstructure:"ca_validity"`
+	KeyAlgorithm string        `mapstructure:"key_algorithm"`
+	Organization string        `mapstructure:"organization"`
 }
 
 // AuthConfig holds authentication configuration.
 type AuthConfig struct {
-	Session SessionConfig   `mapstructure:"session"`
-	OIDC    OIDCConfig      `mapstructure:"oidc"`
-	SAML    SAMLConfig      `mapstructure:"saml"`
+	Session SessionConfig `mapstructure:"session"`
+	OIDC    OIDCConfig    `mapstructure:"oidc"`
+	SAML    SAMLConfig    `mapstructure:"saml"`
 }
 
 // SessionConfig holds session management configuration.

@@ -64,8 +64,8 @@ func (m *SecretManager) SaveAdminPassword(ctx context.Context, password string) 
 			Name:      AdminPasswordSecretName,
 			Namespace: m.namespace,
 			Labels: map[string]string{
-				"app.kubernetes.io/name":      "gatekey",
-				"app.kubernetes.io/component": "admin-init",
+				"app.kubernetes.io/name":       "gatekey",
+				"app.kubernetes.io/component":  "admin-init",
 				"app.kubernetes.io/managed-by": "gatekey-server",
 			},
 			Annotations: map[string]string{
