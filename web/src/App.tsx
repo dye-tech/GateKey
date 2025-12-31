@@ -11,6 +11,7 @@ import AdminNetworks from './pages/AdminNetworks'
 import AdminAccessRules from './pages/AdminAccessRules'
 import AdminProxyApps from './pages/AdminProxyApps'
 import AdminMonitoring from './pages/AdminMonitoring'
+import AdminMesh from './pages/AdminMesh'
 import Help from './pages/Help'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
@@ -136,6 +137,13 @@ function AppRoutes() {
         <AdminRoute>
           <Layout>
             <AdminMonitoring />
+          </Layout>
+        </AdminRoute>
+      } />
+      <Route path="/admin/mesh" element={
+        <AdminRoute>
+          <Layout>
+            <AdminMesh />
           </Layout>
         </AdminRoute>
       } />

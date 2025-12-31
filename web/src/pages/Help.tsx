@@ -90,6 +90,15 @@ const sections: Section[] = [
     ),
   },
   {
+    id: 'mesh',
+    title: 'Mesh Networking',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2zM12 7v10M7 12h10" />
+      </svg>
+    ),
+  },
+  {
     id: 'general',
     title: 'General Settings',
     icon: (
@@ -863,6 +872,267 @@ curl -sSL ${baseUrl}/scripts/install-gateway.sh | \\
                     Purging logs is irreversible. Once deleted, login history cannot be recovered.
                   </p>
                 </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Mesh Networking Section */}
+        <section id="mesh" className="scroll-mt-24">
+          <div className="card">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Mesh Networking</h1>
+            <p className="text-gray-600 mb-6">
+              Connect remote sites and networks using a hub-and-spoke VPN mesh. Mesh networking allows gateways behind NAT to connect to a central hub, enabling site-to-site connectivity without inbound firewall rules.
+            </p>
+
+            {/* Architecture Overview */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Architecture Overview</h3>
+            <div className="bg-gray-50 rounded-lg p-4 mb-6 font-mono text-sm overflow-x-auto">
+              <pre className="text-gray-700">{`                 ┌─────────────────┐
+                 │  Control Plane  │
+                 │   (GateKey UI)  │
+                 └────────┬────────┘
+                          │ API / Config Sync
+                          ▼
+                 ┌─────────────────┐
+                 │   Mesh Hub      │◄── OpenVPN Server
+                 │  (gatekey-hub)  │    Runs on public endpoint
+                 └────────┬────────┘
+                          │
+         ┌────────────────┼────────────────┐
+         │                │                │
+         ▼                ▼                ▼
+┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+│  Gateway A  │  │  Gateway B  │  │  Gateway C  │
+│  10.0.0.0/8 │  │ 192.168.0/24│  │ 172.16.0/16 │
+└─────────────┘  └─────────────┘  └─────────────┘
+  Home Lab         AWS VPC         Office Network`}</pre>
+            </div>
+
+            {/* Key Features */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Key Features</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Gateway-Initiated Connections</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• Gateways connect TO the hub (outbound)</li>
+                  <li>• Works behind NAT/firewalls</li>
+                  <li>• No inbound ports required on gateways</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Standalone Hub</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• Hub runs separately from control plane</li>
+                  <li>• Deploy on any public server or cloud VM</li>
+                  <li>• Syncs configuration from control plane</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">FIPS Compliant</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• Uses OpenVPN with AES-256-GCM</li>
+                  <li>• Configurable crypto profiles</li>
+                  <li>• Optional TLS-Auth for added security</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Dynamic Routing</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• Gateways advertise local networks</li>
+                  <li>• Hub aggregates and distributes routes</li>
+                  <li>• Automatic route updates</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Setting Up a Hub */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Setting Up a Mesh Hub</h3>
+            <ol className="list-decimal list-inside space-y-3 text-gray-600 mb-6">
+              <li>Navigate to <strong>Administration → Mesh</strong></li>
+              <li>Click <strong>Add Hub</strong> and configure:
+                <ul className="list-disc list-inside ml-6 mt-2 space-y-1 text-sm">
+                  <li><strong>Name:</strong> Display name for the hub</li>
+                  <li><strong>Public Endpoint:</strong> Hostname or IP where gateways will connect</li>
+                  <li><strong>VPN Port:</strong> OpenVPN port (default: 1194)</li>
+                  <li><strong>VPN Subnet:</strong> Tunnel IP range (e.g., 172.30.0.0/16)</li>
+                  <li><strong>Crypto Profile:</strong> FIPS, Modern, or Compatible</li>
+                </ul>
+              </li>
+              <li><strong>Save the API Token</strong> - shown only once at creation</li>
+              <li>Click <strong>Install Script</strong> to get the deployment script</li>
+              <li>Run the install script on your hub server:
+                <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto mt-2">
+                  <code className="text-green-400 text-sm">sudo bash install-hub.sh</code>
+                </div>
+              </li>
+            </ol>
+
+            {/* Setting Up Gateways */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Adding Mesh Gateways</h3>
+            <ol className="list-decimal list-inside space-y-3 text-gray-600 mb-6">
+              <li>In the <strong>Mesh</strong> page, switch to the <strong>Gateways</strong> tab</li>
+              <li>Select the hub this gateway will connect to</li>
+              <li>Click <strong>Add Gateway</strong> and configure:
+                <ul className="list-disc list-inside ml-6 mt-2 space-y-1 text-sm">
+                  <li><strong>Name:</strong> Identifier for this gateway</li>
+                  <li><strong>Local Networks:</strong> CIDR blocks behind this gateway (e.g., 10.0.0.0/8)</li>
+                </ul>
+              </li>
+              <li><strong>Save the Gateway Token</strong> - shown only once</li>
+              <li>Click <strong>Install Script</strong> for the deployment script</li>
+              <li>Run on your gateway server:
+                <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto mt-2">
+                  <code className="text-green-400 text-sm">sudo bash install-gateway.sh</code>
+                </div>
+              </li>
+            </ol>
+
+            {/* How It Works */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">How It Works</h3>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <ol className="list-decimal list-inside space-y-2 text-blue-800 text-sm">
+                <li><strong>Gateway Connects:</strong> Mesh gateway initiates OpenVPN connection to hub</li>
+                <li><strong>Authentication:</strong> Gateway authenticates using its provisioned certificate</li>
+                <li><strong>Route Advertisement:</strong> Gateway tells hub about its local networks via <code className="bg-blue-100 px-1 rounded">iroute</code></li>
+                <li><strong>Hub Aggregates:</strong> Hub collects routes from all gateways</li>
+                <li><strong>Traffic Routing:</strong> Traffic between sites flows through the hub</li>
+                <li><strong>Control Plane Sync:</strong> Hub periodically syncs access rules and config</li>
+              </ol>
+            </div>
+
+            {/* Binaries */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Mesh Binaries</h3>
+            <div className="overflow-x-auto mb-6">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Binary</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200 text-sm">
+                  <tr>
+                    <td className="px-4 py-3 font-medium font-mono">gatekey-hub</td>
+                    <td className="px-4 py-3">Runs on the central hub server. Manages OpenVPN server and syncs with control plane.</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium font-mono">gatekey-mesh-gateway</td>
+                    <td className="px-4 py-3">Runs on remote sites. Connects to hub and advertises local networks.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Access Control */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Access Control</h3>
+            <p className="text-gray-600 mb-4">
+              Mesh networking supports fine-grained access control at both the hub and spoke level, allowing you to control which users can connect and which networks they can access.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Hub Access Control</h4>
+                <p className="text-sm text-gray-600 mb-2">
+                  Control who can connect to the mesh network as a VPN client.
+                </p>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• Assign users directly to hub</li>
+                  <li>• Assign groups for team access</li>
+                  <li>• Users without access cannot generate mesh configs</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Spoke Access Control</h4>
+                <p className="text-sm text-gray-600 mb-2">
+                  Control who can route traffic to networks behind each spoke.
+                </p>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• Per-spoke user/group assignments</li>
+                  <li>• Limit access to specific CIDR ranges</li>
+                  <li>• Fine-grained network segmentation</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Managing Hub Access */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Managing Hub Access</h3>
+            <ol className="list-decimal list-inside space-y-2 text-gray-600 mb-6">
+              <li>Navigate to <strong>Administration → Mesh</strong></li>
+              <li>On the <strong>Hubs</strong> tab, click the actions menu on a hub</li>
+              <li>Select <strong>Manage Access</strong></li>
+              <li>Add users or groups that should be able to connect to this mesh network</li>
+              <li>Users can then generate VPN configs from the Connect page</li>
+            </ol>
+
+            {/* Managing Spoke Access */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Managing Spoke Access</h3>
+            <ol className="list-decimal list-inside space-y-2 text-gray-600 mb-6">
+              <li>Navigate to <strong>Administration → Mesh → Spokes</strong></li>
+              <li>Select the hub and find the spoke you want to configure</li>
+              <li>Click the actions menu and select <strong>Manage Access</strong></li>
+              <li>The modal shows the networks accessible via this spoke</li>
+              <li>Add users or groups that should have access to these networks</li>
+            </ol>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <div className="flex">
+                <svg className="h-5 w-5 text-blue-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-blue-800">Example: Network Segmentation</h3>
+                  <p className="mt-1 text-sm text-blue-700">
+                    A spoke advertises networks <code className="bg-blue-100 px-1 rounded">10.0.0.0/24</code> (prod) and <code className="bg-blue-100 px-1 rounded">10.0.1.0/24</code> (dev).
+                    You can assign the "Developers" group to the spoke so they can access both networks, while the "QA" group only
+                    gets access via a different spoke that only advertises the dev network.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Client Connectivity */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Connecting as a Client</h3>
+            <p className="text-gray-600 mb-4">
+              Users with hub access can download VPN configs to connect to the mesh network:
+            </p>
+            <ol className="list-decimal list-inside space-y-2 text-gray-600 mb-6">
+              <li>Navigate to the <strong>Connect</strong> page</li>
+              <li>Switch to the <strong>Mesh Networks</strong> tab</li>
+              <li>Find the mesh hub you have access to</li>
+              <li>Click <strong>Download Config</strong></li>
+              <li>Import the <code className="bg-gray-100 px-1 rounded">.ovpn</code> file into your OpenVPN client</li>
+            </ol>
+
+            {/* Troubleshooting */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Troubleshooting</h3>
+            <div className="space-y-4">
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Gateway Won't Connect</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• Verify hub endpoint is reachable from gateway</li>
+                  <li>• Check firewall allows outbound UDP/1194 (or configured port)</li>
+                  <li>• Verify gateway token is correct</li>
+                  <li>• Check logs: <code className="bg-gray-100 px-1 rounded">journalctl -u gatekey-mesh-gateway -f</code></li>
+                </ul>
+              </div>
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Hub Shows Offline</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• Verify hub can reach control plane</li>
+                  <li>• Check hub service: <code className="bg-gray-100 px-1 rounded">systemctl status gatekey-hub</code></li>
+                  <li>• Verify API token is correct in hub config</li>
+                  <li>• Check logs: <code className="bg-gray-100 px-1 rounded">journalctl -u gatekey-hub -f</code></li>
+                </ul>
+              </div>
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Routes Not Working</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• Verify gateway's local networks are correctly configured</li>
+                  <li>• Check IP forwarding is enabled on hub and gateways</li>
+                  <li>• Verify firewall rules allow forwarded traffic</li>
+                  <li>• Check OpenVPN routing: <code className="bg-gray-100 px-1 rounded">ip route show</code></li>
+                </ul>
               </div>
             </div>
           </div>

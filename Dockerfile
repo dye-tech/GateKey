@@ -31,6 +31,16 @@ RUN mkdir -p /client-binaries && \
     CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o /client-binaries/gatekey-darwin-amd64 ./cmd/gatekey && \
     CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o /client-binaries/gatekey-darwin-arm64 ./cmd/gatekey
 
+# Build hub binaries for multiple platforms
+RUN mkdir -p /hub-binaries && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /hub-binaries/gatekey-hub-linux-amd64 ./cmd/gatekey-hub && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o /hub-binaries/gatekey-hub-linux-arm64 ./cmd/gatekey-hub
+
+# Build mesh gateway binaries for multiple platforms
+RUN mkdir -p /mesh-gateway-binaries && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /mesh-gateway-binaries/gatekey-mesh-gateway-linux-amd64 ./cmd/gatekey-mesh-gateway && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o /mesh-gateway-binaries/gatekey-mesh-gateway-linux-arm64 ./cmd/gatekey-mesh-gateway
+
 # Runtime stage
 FROM alpine:3.23
 
@@ -45,6 +55,8 @@ COPY --from=builder /gatekey-server /usr/local/bin/gatekey-server
 # Copy gateway and client binaries for download
 COPY --from=builder /gateway-binaries /app/bin
 COPY --from=builder /client-binaries /app/bin
+COPY --from=builder /hub-binaries /app/bin
+COPY --from=builder /mesh-gateway-binaries /app/bin
 
 # Copy frontend assets
 COPY web/dist /app/web/dist

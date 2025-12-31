@@ -35,6 +35,7 @@ type Server struct {
 	pkiStore        *db.PKIStore
 	proxyAppStore   *db.ProxyApplicationStore
 	loginLogStore   *db.LoginLogStore
+	meshStore       *db.MeshStore
 	ca              *pki.CA
 	configGen       *openvpn.ConfigGenerator
 	adminPassword   string             // Initial admin password (shown once at startup)
@@ -92,6 +93,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	pkiStore := db.NewPKIStore(database)
 	proxyAppStore := db.NewProxyApplicationStore(database)
 	loginLogStore := db.NewLoginLogStore(database)
+	meshStore := db.NewMeshStore(database)
 
 	// Initialize PKI with database store for CA persistence
 	// This ensures all pods share the same CA
@@ -131,6 +133,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 		pkiStore:        pkiStore,
 		proxyAppStore:   proxyAppStore,
 		loginLogStore:   loginLogStore,
+		meshStore:       meshStore,
 		ca:              ca,
 		configGen:       configGen,
 		adminPassword:   adminPassword,
@@ -274,6 +277,33 @@ func (s *Server) setupRoutes() {
 			gateway.POST("/all-rules", s.handleGatewayAllRules)
 		}
 
+		// Mesh Hub internal routes (hub → control plane communication)
+		meshHub := v1.Group("/mesh-hub")
+		{
+			meshHub.POST("/heartbeat", s.handleMeshHubHeartbeat)
+			meshHub.POST("/provision", s.handleMeshHubProvisionRequest)
+			meshHub.GET("/routes", s.handleMeshHubGetRoutes)
+			meshHub.GET("/spokes", s.handleMeshHubGetSpokes)
+			meshHub.POST("/spoke-connected", s.handleMeshSpokeConnected)
+			meshHub.POST("/spoke-disconnected", s.handleMeshSpokeDisconnected)
+			meshHub.POST("/client-connected", s.handleMeshClientConnected)
+			meshHub.POST("/client-disconnected", s.handleMeshClientDisconnected)
+		}
+
+		// Mesh Spoke internal routes (spoke → control plane for initial setup)
+		meshSpoke := v1.Group("/mesh-spoke")
+		{
+			meshSpoke.POST("/provision", s.handleMeshSpokeProvisionRequest)
+			meshSpoke.POST("/heartbeat", s.handleMeshSpokeHeartbeat)
+		}
+
+		// Mesh Gateway alias (binary uses mesh-gateway, routes to same handlers)
+		meshGateway := v1.Group("/mesh-gateway")
+		{
+			meshGateway.POST("/provision", s.handleMeshSpokeProvisionRequest)
+			meshGateway.POST("/heartbeat", s.handleMeshSpokeHeartbeat)
+		}
+
 		// User routes
 		users := v1.Group("/users")
 		{
@@ -366,10 +396,44 @@ func (s *Server) setupRoutes() {
 			admin.DELETE("/login-logs", s.handlePurgeLoginLogs)
 			admin.GET("/login-logs/retention", s.handleGetLoginLogRetention)
 			admin.PUT("/login-logs/retention", s.handleSetLoginLogRetention)
+
+			// Mesh Hub management
+			admin.GET("/mesh/hubs", s.handleListMeshHubs)
+			admin.POST("/mesh/hubs", s.handleCreateMeshHub)
+			admin.GET("/mesh/hubs/:id", s.handleGetMeshHub)
+			admin.PUT("/mesh/hubs/:id", s.handleUpdateMeshHub)
+			admin.DELETE("/mesh/hubs/:id", s.handleDeleteMeshHub)
+			admin.POST("/mesh/hubs/:id/provision", s.handleProvisionMeshHub)
+			admin.GET("/mesh/hubs/:id/install-script", s.handleMeshHubInstallScript)
+			admin.GET("/mesh/hubs/:id/users", s.handleGetMeshHubUsers)
+			admin.POST("/mesh/hubs/:id/users", s.handleAssignMeshHubUser)
+			admin.DELETE("/mesh/hubs/:id/users/:userId", s.handleRemoveMeshHubUser)
+			admin.GET("/mesh/hubs/:id/groups", s.handleGetMeshHubGroups)
+			admin.POST("/mesh/hubs/:id/groups", s.handleAssignMeshHubGroup)
+			admin.DELETE("/mesh/hubs/:id/groups/:groupName", s.handleRemoveMeshHubGroup)
+
+			// Mesh Spoke management
+			admin.GET("/mesh/hubs/:id/spokes", s.handleListMeshSpokes)
+			admin.POST("/mesh/hubs/:id/spokes", s.handleCreateMeshSpoke)
+			admin.GET("/mesh/spokes/:id", s.handleGetMeshSpoke)
+			admin.PUT("/mesh/spokes/:id", s.handleUpdateMeshSpoke)
+			admin.DELETE("/mesh/spokes/:id", s.handleDeleteMeshSpoke)
+			admin.POST("/mesh/spokes/:id/provision", s.handleProvisionMeshSpoke)
+			admin.GET("/mesh/spokes/:id/install-script", s.handleMeshSpokeInstallScript)
+			admin.GET("/mesh/spokes/:id/users", s.handleGetMeshSpokeUsers)
+			admin.POST("/mesh/spokes/:id/users", s.handleAssignMeshSpokeUser)
+			admin.DELETE("/mesh/spokes/:id/users/:userId", s.handleRemoveMeshSpokeUser)
+			admin.GET("/mesh/spokes/:id/groups", s.handleGetMeshSpokeGroups)
+			admin.POST("/mesh/spokes/:id/groups", s.handleAssignMeshSpokeGroup)
+			admin.DELETE("/mesh/spokes/:id/groups/:groupName", s.handleRemoveMeshSpokeGroup)
 		}
 
 		// User proxy applications portal
 		v1.GET("/proxy-apps", s.handleListUserProxyApps)
+
+		// User mesh hub access
+		v1.GET("/mesh/hubs", s.handleListUserMeshHubs)
+		v1.POST("/mesh/generate-config", s.handleGenerateMeshClientConfig)
 	}
 
 	// Metrics endpoint
@@ -389,6 +453,8 @@ func (s *Server) setupRoutes() {
 	// Scripts endpoint for installers
 	s.router.GET("/scripts/install-gateway.sh", s.handleInstallScript)
 	s.router.GET("/scripts/install-client.sh", s.handleClientInstallScript)
+	s.router.GET("/scripts/install-hub.sh", s.handleHubInstallScript)
+	s.router.GET("/scripts/install-mesh-spoke.sh", s.handleMeshSpokeGenericInstallScript)
 	s.router.GET("/install.sh", s.handleInstallScript) // Alias for easy curl install
 
 	// Downloads endpoints
