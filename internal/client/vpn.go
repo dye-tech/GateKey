@@ -1290,3 +1290,266 @@ func (v *VPNManager) promptGatewaySelection(gateways []Gateway) error {
 	fmt.Println("Run: gatekey connect <gateway-name>")
 	return nil
 }
+
+// MeshHub represents a mesh VPN hub from the server.
+type MeshHub struct {
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Description    string `json:"description,omitempty"`
+	PublicEndpoint string `json:"public_endpoint"`
+	Status         string `json:"status"`
+	SpokeCount     int    `json:"spoke_count"`
+}
+
+// ListMeshHubs lists available mesh hubs.
+func (v *VPNManager) ListMeshHubs(ctx context.Context) error {
+	token, err := v.auth.GetToken()
+	if err != nil {
+		return fmt.Errorf("authentication required: %w\nRun 'gatekey login' to authenticate", err)
+	}
+
+	hubs, err := v.fetchMeshHubs(ctx, token)
+	if err != nil {
+		return fmt.Errorf("failed to fetch mesh hubs: %w", err)
+	}
+
+	if len(hubs) == 0 {
+		fmt.Println("No mesh hubs available.")
+		return nil
+	}
+
+	fmt.Println("Available Mesh Hubs:")
+	fmt.Println("--------------------")
+	for _, hub := range hubs {
+		statusIcon := "✓"
+		if hub.Status != "online" {
+			statusIcon = "✗"
+		}
+		fmt.Printf("%s %s\n", statusIcon, hub.Name)
+		if hub.Description != "" {
+			fmt.Printf("  Description: %s\n", hub.Description)
+		}
+		fmt.Printf("  Endpoint:    %s\n", hub.PublicEndpoint)
+		fmt.Printf("  Status:      %s\n", hub.Status)
+		fmt.Printf("  Spokes:      %d\n", hub.SpokeCount)
+		fmt.Println()
+	}
+
+	return nil
+}
+
+// fetchMeshHubs retrieves the list of available mesh hubs from the server.
+func (v *VPNManager) fetchMeshHubs(ctx context.Context, token *TokenData) ([]MeshHub, error) {
+	hubsURL, err := url.Parse(v.config.ServerURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid server URL: %w", err)
+	}
+	hubsURL.Path = "/api/v1/mesh/hubs"
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, hubsURL.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return nil, fmt.Errorf("authentication expired. Run 'gatekey login' to re-authenticate")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	var response struct {
+		Hubs []MeshHub `json:"hubs"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return response.Hubs, nil
+}
+
+// ConnectMesh connects to a mesh VPN hub.
+func (v *VPNManager) ConnectMesh(ctx context.Context, hubName string) error {
+	// Load existing multi-connection state
+	multiState := v.loadMultiState()
+
+	// Check if already connected to this specific hub
+	meshKey := "mesh:" + hubName
+	if hubName != "" {
+		if conn, exists := multiState.Connections[meshKey]; exists && conn.Connected {
+			if v.isProcessRunning(conn.PID) {
+				return fmt.Errorf("already connected to mesh hub %s. Run 'gatekey disconnect %s' first", hubName, meshKey)
+			}
+			// Process died, clean up stale connection
+			delete(multiState.Connections, meshKey)
+		}
+	}
+
+	// Clean up any stale connections (processes that died)
+	v.cleanupStaleConnections(multiState)
+
+	// Ensure we're logged in
+	token, err := v.auth.GetToken()
+	if err != nil {
+		return fmt.Errorf("authentication required: %w\nRun 'gatekey login' to authenticate", err)
+	}
+
+	// Get available mesh hubs
+	hubs, err := v.fetchMeshHubs(ctx, token)
+	if err != nil {
+		return fmt.Errorf("failed to fetch mesh hubs: %w", err)
+	}
+
+	if len(hubs) == 0 {
+		return fmt.Errorf("no mesh hubs available")
+	}
+
+	// Select hub
+	var selectedHub *MeshHub
+	if hubName == "" {
+		if len(hubs) == 1 {
+			selectedHub = &hubs[0]
+		} else {
+			return v.promptMeshHubSelection(hubs)
+		}
+	} else {
+		for i := range hubs {
+			if strings.EqualFold(hubs[i].Name, hubName) || hubs[i].ID == hubName {
+				selectedHub = &hubs[i]
+				break
+			}
+		}
+		if selectedHub == nil {
+			return fmt.Errorf("mesh hub '%s' not found", hubName)
+		}
+	}
+
+	// Update meshKey with actual hub name
+	meshKey = "mesh:" + selectedHub.Name
+
+	// Check if already connected to this hub (by name match after selection)
+	if conn, exists := multiState.Connections[meshKey]; exists && conn.Connected {
+		if v.isProcessRunning(conn.PID) {
+			return fmt.Errorf("already connected to mesh hub %s", selectedHub.Name)
+		}
+	}
+
+	// Check if hub is online
+	if selectedHub.Status != "online" {
+		return fmt.Errorf("mesh hub '%s' is not online (status: %s)", selectedHub.Name, selectedHub.Status)
+	}
+
+	fmt.Printf("Connecting to mesh hub %s...\n", selectedHub.Name)
+
+	// Find an available tun interface number
+	tunNum := v.findAvailableTunNumber(multiState)
+	tunInterface := fmt.Sprintf("tun%d", tunNum)
+
+	// Download mesh VPN configuration
+	configPath, err := v.downloadMeshConfig(ctx, token, selectedHub.ID, selectedHub.Name)
+	if err != nil {
+		return fmt.Errorf("failed to download mesh VPN configuration: %w", err)
+	}
+
+	// Start OpenVPN with specific tun interface
+	pid, err := v.startOpenVPNForGateway(configPath, meshKey, tunInterface)
+	if err != nil {
+		return fmt.Errorf("failed to start OpenVPN: %w", err)
+	}
+
+	// Save connection state
+	conn := &ConnectionState{
+		Connected:    true,
+		Gateway:      meshKey,
+		GatewayID:    selectedHub.ID,
+		ConnectedAt:  time.Now(),
+		PID:          pid,
+		TunInterface: tunInterface,
+	}
+	multiState.Connections[meshKey] = conn
+
+	if err := v.saveMultiState(multiState); err != nil {
+		// Kill the process if we can't save state
+		if proc, err := os.FindProcess(pid); err == nil {
+			proc.Kill()
+		}
+		return fmt.Errorf("failed to save connection state: %w", err)
+	}
+
+	fmt.Printf("Connected to mesh hub %s (PID: %d, Interface: %s)\n", selectedHub.Name, pid, tunInterface)
+	fmt.Println("Mesh VPN connection established. Use 'gatekey status' to check connection.")
+	return nil
+}
+
+// downloadMeshConfig downloads the mesh VPN config for a hub.
+func (v *VPNManager) downloadMeshConfig(ctx context.Context, token *TokenData, hubID, hubName string) (string, error) {
+	configPath := v.config.GatewayConfigPath("mesh-" + hubName)
+	client := &http.Client{Timeout: 60 * time.Second}
+
+	// Generate mesh config
+	reqURL := fmt.Sprintf("%s/api/v1/mesh/generate-config", v.config.ServerURL)
+	reqBody := fmt.Sprintf(`{"hubid": "%s"}`, hubID)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, strings.NewReader(reqBody))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	var configResp struct {
+		HubName string `json:"hubname"`
+		Config  string `json:"config"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&configResp); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// Write config to file
+	if err := os.MkdirAll(filepath.Dir(configPath), 0700); err != nil {
+		return "", fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	if err := os.WriteFile(configPath, []byte(configResp.Config), 0600); err != nil {
+		return "", fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return configPath, nil
+}
+
+// promptMeshHubSelection prompts the user to select a mesh hub.
+func (v *VPNManager) promptMeshHubSelection(hubs []MeshHub) error {
+	fmt.Println("Multiple mesh hubs available. Please specify one:")
+	fmt.Println()
+	for i, hub := range hubs {
+		fmt.Printf("  %d. %s", i+1, hub.Name)
+		if hub.Description != "" {
+			fmt.Printf(" - %s", hub.Description)
+		}
+		fmt.Println()
+	}
+	fmt.Println()
+	fmt.Println("Run: gatekey mesh connect <hub-name>")
+	return nil
+}
