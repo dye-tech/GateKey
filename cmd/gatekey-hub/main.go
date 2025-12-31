@@ -427,8 +427,8 @@ func generateServerConfig(prov ProvisionResponse) string {
 		sb.WriteString(fmt.Sprintf("server %s %s\n\n", network, mask))
 	}
 
-	sb.WriteString("# Client configuration directory for gateway routes\n")
-	sb.WriteString("client-config-dir /etc/openvpn/ccd\n\n")
+	sb.WriteString("# Client configuration directory for spoke routes\n")
+	sb.WriteString("client-config-dir /etc/openvpn/server/ccd\n\n")
 
 	sb.WriteString("# Enable routing between clients (hub-and-spoke)\n")
 	sb.WriteString("client-to-client\n\n")
@@ -490,68 +490,136 @@ func gatewayMonitorLoop(ctx context.Context, cfg *HubConfig) {
 }
 
 func updateGatewayRoutes(ctx context.Context, cfg *HubConfig) {
-	url := strings.TrimSuffix(cfg.ControlPlaneURL, "/") + "/api/v1/mesh-hub/gateways?token=" + cfg.APIToken
+	url := strings.TrimSuffix(cfg.ControlPlaneURL, "/") + "/api/v1/mesh-hub/spokes?token=" + cfg.APIToken
 	resp, err := http.Get(url)
 	if err != nil {
-		logger.Warn("Failed to fetch gateways", zap.Error(err))
+		logger.Warn("Failed to fetch spokes", zap.Error(err))
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		logger.Warn("Failed to fetch spokes", zap.Int("status", resp.StatusCode))
 		return
 	}
 
 	var result struct {
-		Gateways []struct {
+		Spokes []struct {
 			ID            string   `json:"id"`
 			Name          string   `json:"name"`
 			LocalNetworks []string `json:"localNetworks"`
 			TunnelIP      string   `json:"tunnelIp"`
-		} `json:"gateways"`
+		} `json:"spokes"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		logger.Warn("Failed to decode gateways", zap.Error(err))
+		logger.Warn("Failed to decode spokes", zap.Error(err))
 		return
 	}
 
-	// Create CCD directory if it doesn't exist
-	ccdDir := "/etc/openvpn/ccd"
+	// Use the OpenVPN server's CCD directory
+	ccdDir := "/etc/openvpn/server/ccd"
 	_ = os.MkdirAll(ccdDir, 0755)
 
-	// Update CCD files for each gateway
-	for _, gw := range result.Gateways {
-		if gw.TunnelIP == "" {
+	// Update CCD files and kernel routes for each spoke
+	for _, spoke := range result.Spokes {
+		if spoke.TunnelIP == "" {
+			logger.Debug("Skipping spoke without tunnel IP", zap.String("spoke", spoke.Name))
 			continue
 		}
 
-		// CCD file content: iroute directives for this gateway's networks
+		// CCD file content: iroute directives for this spoke's networks
 		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("# Gateway: %s\n", gw.Name))
-		sb.WriteString(fmt.Sprintf("ifconfig-push %s 255.255.255.255\n", gw.TunnelIP))
-		for _, network := range gw.LocalNetworks {
-			parts := strings.Split(network, "/")
-			if len(parts) == 2 {
-				// Convert CIDR to iroute format
-				mask := "255.255.255.0" // Default
-				switch parts[1] {
-				case "8":
-					mask = "255.0.0.0"
-				case "16":
-					mask = "255.255.0.0"
-				case "24":
-					mask = "255.255.255.0"
-				}
-				sb.WriteString(fmt.Sprintf("iroute %s %s\n", parts[0], mask))
+		sb.WriteString(fmt.Sprintf("# Spoke: %s\n", spoke.Name))
+		sb.WriteString(fmt.Sprintf("ifconfig-push %s 255.255.0.0\n", spoke.TunnelIP))
+		for _, network := range spoke.LocalNetworks {
+			netIP, mask := cidrToNetmask(network)
+			if netIP != "" && mask != "" {
+				sb.WriteString(fmt.Sprintf("iroute %s %s\n", netIP, mask))
 			}
 		}
 
-		// Write CCD file (use gateway certificate CN as filename)
-		ccdFile := fmt.Sprintf("%s/mesh-gateway-%s", ccdDir, gw.Name)
+		// Write CCD file (use spoke certificate CN as filename)
+		ccdFile := fmt.Sprintf("%s/mesh-gateway-%s", ccdDir, spoke.Name)
 		if err := os.WriteFile(ccdFile, []byte(sb.String()), 0644); err != nil {
-			logger.Warn("Failed to write CCD file", zap.String("gateway", gw.Name), zap.Error(err))
+			logger.Warn("Failed to write CCD file", zap.String("spoke", spoke.Name), zap.Error(err))
+		} else {
+			logger.Debug("Updated CCD file", zap.String("spoke", spoke.Name), zap.String("file", ccdFile))
 		}
+
+		// Add kernel routes for each spoke network via the spoke's tunnel IP
+		for _, network := range spoke.LocalNetworks {
+			addKernelRoute(network, spoke.TunnelIP)
+		}
+	}
+}
+
+// cidrToNetmask converts CIDR notation to network IP and netmask
+func cidrToNetmask(cidr string) (string, string) {
+	parts := strings.Split(cidr, "/")
+	if len(parts) != 2 {
+		return "", ""
+	}
+	netIP := parts[0]
+	prefix := parts[1]
+
+	// Convert prefix to netmask
+	maskMap := map[string]string{
+		"8":  "255.0.0.0",
+		"9":  "255.128.0.0",
+		"10": "255.192.0.0",
+		"11": "255.224.0.0",
+		"12": "255.240.0.0",
+		"13": "255.248.0.0",
+		"14": "255.252.0.0",
+		"15": "255.254.0.0",
+		"16": "255.255.0.0",
+		"17": "255.255.128.0",
+		"18": "255.255.192.0",
+		"19": "255.255.224.0",
+		"20": "255.255.240.0",
+		"21": "255.255.248.0",
+		"22": "255.255.252.0",
+		"23": "255.255.254.0",
+		"24": "255.255.255.0",
+		"25": "255.255.255.128",
+		"26": "255.255.255.192",
+		"27": "255.255.255.224",
+		"28": "255.255.255.240",
+		"29": "255.255.255.248",
+		"30": "255.255.255.252",
+		"31": "255.255.255.254",
+		"32": "255.255.255.255",
+	}
+
+	mask, ok := maskMap[prefix]
+	if !ok {
+		return "", ""
+	}
+	return netIP, mask
+}
+
+// addKernelRoute adds a route in the kernel routing table
+func addKernelRoute(network, gateway string) {
+	// Check if route already exists
+	checkCmd := exec.Command("ip", "route", "show", network)
+	output, _ := checkCmd.Output()
+	if len(output) > 0 && strings.Contains(string(output), gateway) {
+		// Route already exists with correct gateway
+		return
+	}
+
+	// Add the route (replace if exists with different gateway)
+	cmd := exec.Command("ip", "route", "replace", network, "via", gateway)
+	if err := cmd.Run(); err != nil {
+		logger.Warn("Failed to add kernel route",
+			zap.String("network", network),
+			zap.String("gateway", gateway),
+			zap.Error(err))
+	} else {
+		logger.Info("Added kernel route",
+			zap.String("network", network),
+			zap.String("gateway", gateway))
 	}
 }
 

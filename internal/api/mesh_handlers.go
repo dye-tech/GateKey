@@ -199,14 +199,15 @@ func (s *Server) handleUpdateMeshHub(c *gin.Context) {
 	hubID := c.Param("id")
 
 	var req struct {
-		Name           string `json:"name"`
-		Description    string `json:"description"`
-		PublicEndpoint string `json:"publicEndpoint"`
-		VPNPort        int    `json:"vpnPort"`
-		VPNProtocol    string `json:"vpnProtocol"`
-		VPNSubnet      string `json:"vpnSubnet"`
-		CryptoProfile  string `json:"cryptoProfile"`
-		TLSAuthEnabled *bool  `json:"tlsAuthEnabled"`
+		Name           string   `json:"name"`
+		Description    string   `json:"description"`
+		PublicEndpoint string   `json:"publicEndpoint"`
+		VPNPort        int      `json:"vpnPort"`
+		VPNProtocol    string   `json:"vpnProtocol"`
+		VPNSubnet      string   `json:"vpnSubnet"`
+		CryptoProfile  string   `json:"cryptoProfile"`
+		TLSAuthEnabled *bool    `json:"tlsAuthEnabled"`
+		LocalNetworks  []string `json:"localNetworks"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -250,6 +251,10 @@ func (s *Server) handleUpdateMeshHub(c *gin.Context) {
 	}
 	if req.TLSAuthEnabled != nil {
 		hub.TLSAuthEnabled = *req.TLSAuthEnabled
+	}
+	// LocalNetworks can be updated to an empty array, so always set it if provided
+	if req.LocalNetworks != nil {
+		hub.LocalNetworks = req.LocalNetworks
 	}
 
 	if err := s.meshStore.UpdateHub(ctx, hub); err != nil {
@@ -1708,6 +1713,12 @@ func (s *Server) handleGenerateMeshClientConfig(c *gin.Context) {
 	// Check if hub has PKI set up
 	if hub.CACert == "" || hub.CAKey == "" {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "mesh hub PKI not configured"})
+		return
+	}
+
+	// Check if control plane CA is initialized (needed for full CA chain)
+	if s.ca == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "PKI not initialized - cannot build CA chain"})
 		return
 	}
 
