@@ -1,0 +1,1 @@
+ALTER TABLE gateways DROP COLUMN IF EXISTS vpn_subnet;

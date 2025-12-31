@@ -1,0 +1,4964 @@
+// Package api contains route handler implementations.
+package api
+
+import (
+	"context"
+	"crypto/rsa"
+	"crypto/x509"
+	cryptoRand "crypto/rand"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/xml"
+	"errors"
+	"fmt"
+	"net"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/crewjam/saml"
+	"github.com/crewjam/saml/samlsp"
+	"github.com/gatekey-project/gatekey/internal/db"
+	"github.com/google/uuid"
+	"github.com/gatekey-project/gatekey/internal/models"
+	"github.com/gatekey-project/gatekey/internal/openvpn"
+	"github.com/gatekey-project/gatekey/internal/pki"
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+	"golang.org/x/oauth2"
+)
+
+// cliCallbackStore stores CLI callback URLs by state
+var cliCallbackStore sync.Map
+
+// cidrToRoute converts a CIDR notation (e.g., "192.168.50.0/23") to OpenVPN route format (e.g., "route 192.168.50.0 255.255.254.0")
+func cidrToRoute(cidr string) string {
+	_, ipNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return ""
+	}
+	// Convert net.IPMask to dotted decimal format
+	mask := ipNet.Mask
+	if len(mask) == 4 {
+		return fmt.Sprintf("route %s %d.%d.%d.%d", ipNet.IP.String(), mask[0], mask[1], mask[2], mask[3])
+	}
+	return ""
+}
+
+// Authentication handlers
+
+func (s *Server) handleOIDCLogin(c *gin.Context) {
+	providerName := c.Query("provider")
+	if providerName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider parameter required"})
+		return
+	}
+
+	// Get provider config from database
+	providerConfig, err := s.providerStore.GetOIDCProvider(c.Request.Context(), providerName)
+	if err != nil {
+		s.logger.Error("Failed to get OIDC provider", zap.String("provider", providerName), zap.Error(err))
+		c.JSON(http.StatusNotFound, gin.H{"error": "provider not found"})
+		return
+	}
+
+	if !providerConfig.Enabled {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider is disabled"})
+		return
+	}
+
+	// Create OIDC provider
+	ctx := context.Background()
+	issuerURL := strings.TrimSpace(providerConfig.Issuer)
+	s.logger.Info("Connecting to OIDC provider", zap.String("provider", providerName), zap.String("issuer", issuerURL))
+
+	oidcProvider, err := oidc.NewProvider(ctx, issuerURL)
+	if err != nil {
+		s.logger.Error("Failed to create OIDC provider",
+			zap.String("provider", providerName),
+			zap.String("issuer", issuerURL),
+			zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect to identity provider: " + err.Error()})
+		return
+	}
+
+	// Determine scopes
+	scopes := providerConfig.Scopes
+	if len(scopes) == 0 {
+		scopes = []string{oidc.ScopeOpenID, "profile", "email"}
+	}
+
+	// Create OAuth2 config
+	oauth2Config := &oauth2.Config{
+		ClientID:     strings.TrimSpace(providerConfig.ClientID),
+		ClientSecret: strings.TrimSpace(providerConfig.ClientSecret),
+		RedirectURL:  strings.TrimSpace(providerConfig.RedirectURL),
+		Endpoint:     oidcProvider.Endpoint(),
+		Scopes:       scopes,
+	}
+
+	// Generate state and nonce
+	state, err := generateState()
+	if err != nil {
+		s.logger.Error("Failed to generate state", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate state"})
+		return
+	}
+
+	nonce, err := generateState()
+	if err != nil {
+		s.logger.Error("Failed to generate nonce", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate nonce"})
+		return
+	}
+
+	// Check for CLI state (to redirect back to CLI after auth)
+	cliState := c.Query("cli_state")
+	var cliCallbackURL string
+	if cliState != "" {
+		s.logger.Info("OIDC login with CLI state", zap.String("cli_state", cliState))
+		// Look up the CLI callback URL from database
+		callbackURL, err := s.stateStore.GetCLICallback(c.Request.Context(), cliState)
+		if err != nil {
+			s.logger.Warn("CLI callback URL not found", zap.String("cli_state", cliState), zap.Error(err))
+		} else {
+			cliCallbackURL = callbackURL
+			s.logger.Info("Found CLI callback URL", zap.String("callback_url", cliCallbackURL))
+		}
+	}
+
+	// Store state data in database for validation (expires in 10 minutes)
+	oauthState := &db.OAuthState{
+		State:          state,
+		Provider:       providerName,
+		ProviderType:   "oidc",
+		Nonce:          nonce,
+		RelayState:     cliState,
+		CLICallbackURL: cliCallbackURL, // Store CLI callback URL for redirect after auth
+		ExpiresAt:      time.Now().Add(10 * time.Minute),
+	}
+	if err := s.stateStore.SaveState(c.Request.Context(), oauthState); err != nil {
+		s.logger.Error("Failed to save state", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save state"})
+		return
+	}
+
+	// Redirect to authorization URL
+	authURL := oauth2Config.AuthCodeURL(state, oidc.Nonce(nonce))
+	c.Redirect(http.StatusFound, authURL)
+}
+
+func (s *Server) handleOIDCCallback(c *gin.Context) {
+	// Get state and code from query params
+	state := c.Query("state")
+	code := c.Query("code")
+
+	if state == "" || code == "" {
+		// Check for error response from IdP
+		if errMsg := c.Query("error"); errMsg != "" {
+			errDesc := c.Query("error_description")
+			s.logger.Error("OIDC error from IdP", zap.String("error", errMsg), zap.String("description", errDesc))
+			c.Redirect(http.StatusFound, "/login?error="+errMsg)
+			return
+		}
+		c.Redirect(http.StatusFound, "/login?error=invalid_callback")
+		return
+	}
+
+	// Validate and retrieve state data from database
+	stateData, err := s.stateStore.GetState(c.Request.Context(), state)
+	if err != nil {
+		s.logger.Error("Invalid or expired state", zap.Error(err))
+		c.Redirect(http.StatusFound, "/login?error=invalid_state")
+		return
+	}
+
+	// Get provider config from database
+	providerConfig, err := s.providerStore.GetOIDCProvider(c.Request.Context(), stateData.Provider)
+	if err != nil {
+		s.logger.Error("Failed to get OIDC provider", zap.Error(err))
+		c.Redirect(http.StatusFound, "/login?error=provider_not_found")
+		return
+	}
+
+	// Create OIDC provider
+	ctx := context.Background()
+	issuerURL := strings.TrimSpace(providerConfig.Issuer)
+	oidcProvider, err := oidc.NewProvider(ctx, issuerURL)
+	if err != nil {
+		s.logger.Error("Failed to create OIDC provider", zap.Error(err))
+		c.Redirect(http.StatusFound, "/login?error=provider_error")
+		return
+	}
+
+	// Create OAuth2 config
+	scopes := providerConfig.Scopes
+	if len(scopes) == 0 {
+		scopes = []string{oidc.ScopeOpenID, "profile", "email"}
+	}
+
+	oauth2Config := &oauth2.Config{
+		ClientID:     strings.TrimSpace(providerConfig.ClientID),
+		ClientSecret: strings.TrimSpace(providerConfig.ClientSecret),
+		RedirectURL:  strings.TrimSpace(providerConfig.RedirectURL),
+		Endpoint:     oidcProvider.Endpoint(),
+		Scopes:       scopes,
+	}
+
+	// Exchange code for token
+	oauth2Token, err := oauth2Config.Exchange(ctx, code)
+	if err != nil {
+		s.logger.Error("Failed to exchange code for token", zap.Error(err))
+		c.Redirect(http.StatusFound, "/login?error=token_exchange_failed")
+		return
+	}
+
+	// Extract ID token
+	rawIDToken, ok := oauth2Token.Extra("id_token").(string)
+	if !ok {
+		s.logger.Error("No id_token in token response")
+		c.Redirect(http.StatusFound, "/login?error=no_id_token")
+		return
+	}
+
+	// Verify ID token
+	verifier := oidcProvider.Verifier(&oidc.Config{ClientID: providerConfig.ClientID})
+	idToken, err := verifier.Verify(ctx, rawIDToken)
+	if err != nil {
+		s.logger.Error("Failed to verify ID token", zap.Error(err))
+		c.Redirect(http.StatusFound, "/login?error=token_verification_failed")
+		return
+	}
+
+	// Verify nonce
+	if idToken.Nonce != stateData.Nonce {
+		s.logger.Error("Nonce mismatch")
+		c.Redirect(http.StatusFound, "/login?error=nonce_mismatch")
+		return
+	}
+
+	// Extract claims
+	var claims struct {
+		Email         string   `json:"email"`
+		EmailVerified bool     `json:"email_verified"`
+		Name          string   `json:"name"`
+		PreferredUser string   `json:"preferred_username"`
+		Groups        []string `json:"groups"`
+	}
+	if err := idToken.Claims(&claims); err != nil {
+		s.logger.Error("Failed to parse claims", zap.Error(err))
+		c.Redirect(http.StatusFound, "/login?error=claims_error")
+		return
+	}
+
+	// Use preferred_username or email as identifier
+	username := claims.PreferredUser
+	if username == "" {
+		username = claims.Email
+	}
+	if username == "" {
+		username = idToken.Subject
+	}
+
+	email := claims.Email
+	if email == "" {
+		email = username + "@" + stateData.Provider
+	}
+
+	name := claims.Name
+	if name == "" {
+		name = username
+	}
+
+	// Generate a session token
+	tokenBytes := make([]byte, 32)
+	if _, err := cryptoRand.Read(tokenBytes); err != nil {
+		s.logger.Error("Failed to generate session token", zap.Error(err))
+		c.Redirect(http.StatusFound, "/login?error=session_error")
+		return
+	}
+	token := base64.URLEncoding.EncodeToString(tokenBytes)
+
+	// Create or update user in database and create session
+	// For SSO users, we'll create a session directly using a special user ID
+	// In a full implementation, you'd sync users to the database
+	userID := "oidc:" + stateData.Provider + ":" + idToken.Subject
+
+	expiresAt := time.Now().Add(s.config.Auth.Session.Validity)
+	ipAddress := c.ClientIP()
+	userAgent := c.GetHeader("User-Agent")
+
+	// Store SSO session (using a modified approach since SSO users aren't in local_users)
+	// For now, we'll store it in admin_sessions with a synthetic user_id
+	// A better approach would be to have a separate sso_sessions table
+	if err := s.createSSOSession(c.Request.Context(), userID, token, expiresAt, ipAddress, userAgent, username, email, name, claims.Groups); err != nil {
+		s.logger.Error("Failed to create session", zap.Error(err))
+		c.Redirect(http.StatusFound, "/login?error=session_error")
+		return
+	}
+
+	// Set session cookie
+	c.SetCookie(
+		s.config.Auth.Session.CookieName,
+		token,
+		int(s.config.Auth.Session.Validity.Seconds()),
+		"/",
+		"",
+		s.config.Auth.Session.Secure,
+		true, // httpOnly
+	)
+
+	s.logger.Info("OIDC login successful",
+		zap.String("provider", stateData.Provider),
+		zap.String("user", username),
+		zap.String("email", email),
+	)
+
+	// Check if this is a CLI login flow
+	if stateData.CLICallbackURL != "" {
+		s.logger.Info("OIDC callback with CLI callback URL", zap.String("callback_url", stateData.CLICallbackURL))
+		// Redirect to CLI callback with token
+		redirectURL := stateData.CLICallbackURL + "?token=" + token + "&email=" + url.QueryEscape(email) + "&name=" + url.QueryEscape(name) + "&expires_in=86400"
+		s.logger.Info("Redirecting to CLI", zap.String("redirect_url", redirectURL))
+		c.Redirect(http.StatusFound, redirectURL)
+		return
+	} else {
+		s.logger.Info("OIDC callback without CLI callback URL (normal web login)")
+	}
+
+	// Redirect to dashboard for normal web login
+	c.Redirect(http.StatusFound, "/")
+}
+
+func (s *Server) handleSAMLLogin(c *gin.Context) {
+	providerName := c.Query("provider")
+	if providerName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider parameter required"})
+		return
+	}
+
+	// Get provider config from database
+	providerConfig, err := s.providerStore.GetSAMLProvider(c.Request.Context(), providerName)
+	if err != nil {
+		s.logger.Error("Failed to get SAML provider", zap.String("provider", providerName), zap.Error(err))
+		c.JSON(http.StatusNotFound, gin.H{"error": "provider not found"})
+		return
+	}
+
+	if !providerConfig.Enabled {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider is disabled"})
+		return
+	}
+
+	// Fetch IdP metadata
+	idpMetadataURL, err := url.Parse(providerConfig.IDPMetadataURL)
+	if err != nil {
+		s.logger.Error("Invalid IdP metadata URL", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid IdP metadata URL"})
+		return
+	}
+
+	idpMetadata, err := samlsp.FetchMetadata(c.Request.Context(), http.DefaultClient, *idpMetadataURL)
+	if err != nil {
+		s.logger.Error("Failed to fetch IdP metadata", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch IdP metadata"})
+		return
+	}
+
+	// Parse ACS URL
+	acsURL, err := url.Parse(providerConfig.ACSURL)
+	if err != nil {
+		s.logger.Error("Invalid ACS URL", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid ACS URL"})
+		return
+	}
+
+	// Create a minimal SP (we don't need signing for the AuthnRequest in most cases)
+	sp := &saml.ServiceProvider{
+		EntityID:          providerConfig.EntityID,
+		AcsURL:            *acsURL,
+		IDPMetadata:       idpMetadata,
+		AllowIDPInitiated: true,
+	}
+
+	// Generate a relay state for CSRF protection
+	relayState, err := generateState()
+	if err != nil {
+		s.logger.Error("Failed to generate relay state", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate state"})
+		return
+	}
+
+	// Store state data in database for validation (expires in 10 minutes)
+	oauthState := &db.OAuthState{
+		State:        relayState,
+		Provider:     providerName,
+		ProviderType: "saml",
+		RelayState:   relayState,
+		ExpiresAt:    time.Now().Add(10 * time.Minute),
+	}
+	if err := s.stateStore.SaveState(c.Request.Context(), oauthState); err != nil {
+		s.logger.Error("Failed to save state", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save state"})
+		return
+	}
+
+	// Create AuthnRequest
+	authnRequest, err := sp.MakeAuthenticationRequest(
+		sp.GetSSOBindingLocation(saml.HTTPRedirectBinding),
+		saml.HTTPRedirectBinding,
+		saml.HTTPPostBinding,
+	)
+	if err != nil {
+		s.logger.Error("Failed to create SAML AuthnRequest", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create authentication request"})
+		return
+	}
+
+	// Get redirect URL
+	redirectURL, err := authnRequest.Redirect(relayState, sp)
+	if err != nil {
+		s.logger.Error("Failed to create redirect URL", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create redirect"})
+		return
+	}
+
+	c.Redirect(http.StatusFound, redirectURL.String())
+}
+
+func (s *Server) handleSAMLACS(c *gin.Context) {
+	// Get provider from relay state
+	relayState := c.PostForm("RelayState")
+	if relayState == "" {
+		relayState = c.Query("RelayState")
+	}
+
+	// Validate relay state from database
+	stateData, err := s.stateStore.GetState(c.Request.Context(), relayState)
+	if err != nil {
+		s.logger.Error("Invalid or expired relay state", zap.Error(err))
+		c.Redirect(http.StatusFound, "/login?error=invalid_state")
+		return
+	}
+
+	// Get provider config from database
+	providerConfig, err := s.providerStore.GetSAMLProvider(c.Request.Context(), stateData.Provider)
+	if err != nil {
+		s.logger.Error("Failed to get SAML provider", zap.Error(err))
+		c.Redirect(http.StatusFound, "/login?error=provider_not_found")
+		return
+	}
+
+	// Fetch IdP metadata
+	idpMetadataURL, err := url.Parse(providerConfig.IDPMetadataURL)
+	if err != nil {
+		s.logger.Error("Invalid IdP metadata URL", zap.Error(err))
+		c.Redirect(http.StatusFound, "/login?error=config_error")
+		return
+	}
+
+	idpMetadata, err := samlsp.FetchMetadata(c.Request.Context(), http.DefaultClient, *idpMetadataURL)
+	if err != nil {
+		s.logger.Error("Failed to fetch IdP metadata", zap.Error(err))
+		c.Redirect(http.StatusFound, "/login?error=metadata_error")
+		return
+	}
+
+	// Parse ACS URL
+	acsURL, err := url.Parse(providerConfig.ACSURL)
+	if err != nil {
+		s.logger.Error("Invalid ACS URL", zap.Error(err))
+		c.Redirect(http.StatusFound, "/login?error=config_error")
+		return
+	}
+
+	// Create SP
+	sp := &saml.ServiceProvider{
+		EntityID:          providerConfig.EntityID,
+		AcsURL:            *acsURL,
+		IDPMetadata:       idpMetadata,
+		AllowIDPInitiated: true,
+	}
+
+	// Get SAML response
+	samlResponse := c.PostForm("SAMLResponse")
+	if samlResponse == "" {
+		s.logger.Error("No SAMLResponse in request")
+		c.Redirect(http.StatusFound, "/login?error=no_response")
+		return
+	}
+
+	// Parse and validate the assertion
+	assertion, err := sp.ParseResponse(c.Request, []string{})
+	if err != nil {
+		s.logger.Error("Failed to parse SAML response", zap.Error(err))
+		c.Redirect(http.StatusFound, "/login?error=invalid_response")
+		return
+	}
+
+	// Extract user info from assertion
+	username := ""
+	email := ""
+	name := ""
+	nameID := ""
+	var groups []string
+
+	// Get NameID as primary identifier
+	if assertion.Subject != nil && assertion.Subject.NameID != nil {
+		nameID = assertion.Subject.NameID.Value
+		username = nameID
+	}
+
+	// Extract attributes from all attribute statements
+	for _, attrStatement := range assertion.AttributeStatements {
+		for _, attr := range attrStatement.Attributes {
+			if len(attr.Values) == 0 {
+				continue
+			}
+			// Check both Name and FriendlyName
+			attrName := attr.Name
+			friendlyName := attr.FriendlyName
+
+			switch {
+			case attrName == "email" || friendlyName == "email" ||
+				attrName == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress":
+				email = attr.Values[0].Value
+			case attrName == "name" || friendlyName == "name" || attrName == "displayName" ||
+				attrName == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name":
+				name = attr.Values[0].Value
+			case attrName == "username" || friendlyName == "username" ||
+				attrName == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn":
+				if username == "" || username == nameID {
+					username = attr.Values[0].Value
+				}
+			case attrName == "groups" || friendlyName == "groups" ||
+				attrName == "http://schemas.xmlsoap.org/claims/Group" || attrName == "memberOf":
+				for _, v := range attr.Values {
+					groups = append(groups, v.Value)
+				}
+			}
+		}
+	}
+
+	// Use email as username if no username found
+	if username == "" && email != "" {
+		username = email
+	}
+	if username == "" {
+		username = "unknown"
+	}
+	if nameID == "" {
+		nameID = username
+	}
+
+	if email == "" {
+		email = username + "@" + stateData.Provider
+	}
+
+	if name == "" {
+		name = username
+	}
+
+	// Generate a session token
+	tokenBytes := make([]byte, 32)
+	if _, err := cryptoRand.Read(tokenBytes); err != nil {
+		s.logger.Error("Failed to generate session token", zap.Error(err))
+		c.Redirect(http.StatusFound, "/login?error=session_error")
+		return
+	}
+	token := base64.URLEncoding.EncodeToString(tokenBytes)
+
+	// Create session
+	userID := "saml:" + stateData.Provider + ":" + nameID
+	expiresAt := time.Now().Add(s.config.Auth.Session.Validity)
+	ipAddress := c.ClientIP()
+	userAgent := c.GetHeader("User-Agent")
+
+	if err := s.createSSOSession(c.Request.Context(), userID, token, expiresAt, ipAddress, userAgent, username, email, name, groups); err != nil {
+		s.logger.Error("Failed to create session", zap.Error(err))
+		c.Redirect(http.StatusFound, "/login?error=session_error")
+		return
+	}
+
+	// Set session cookie
+	c.SetCookie(
+		s.config.Auth.Session.CookieName,
+		token,
+		int(s.config.Auth.Session.Validity.Seconds()),
+		"/",
+		"",
+		s.config.Auth.Session.Secure,
+		true,
+	)
+
+	s.logger.Info("SAML login successful",
+		zap.String("provider", stateData.Provider),
+		zap.String("user", username),
+		zap.String("email", email),
+	)
+
+	// Redirect to dashboard
+	c.Redirect(http.StatusFound, "/")
+}
+
+func (s *Server) handleSAMLMetadata(c *gin.Context) {
+	providerName := c.Query("provider")
+	if providerName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider parameter required"})
+		return
+	}
+
+	// Get provider config from database
+	providerConfig, err := s.providerStore.GetSAMLProvider(c.Request.Context(), providerName)
+	if err != nil {
+		s.logger.Error("Failed to get SAML provider", zap.Error(err))
+		c.JSON(http.StatusNotFound, gin.H{"error": "provider not found"})
+		return
+	}
+
+	// Parse ACS URL
+	acsURL, err := url.Parse(providerConfig.ACSURL)
+	if err != nil {
+		s.logger.Error("Invalid ACS URL", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid ACS URL"})
+		return
+	}
+
+	// Create SP metadata
+	sp := &saml.ServiceProvider{
+		EntityID: providerConfig.EntityID,
+		AcsURL:   *acsURL,
+	}
+
+	metadata := sp.Metadata()
+
+	// Return metadata as XML
+	c.Header("Content-Type", "application/samlmetadata+xml")
+	xmlData, err := xml.MarshalIndent(metadata, "", "  ")
+	if err != nil {
+		s.logger.Error("Failed to marshal metadata", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate metadata"})
+		return
+	}
+	c.String(http.StatusOK, xml.Header+string(xmlData))
+}
+
+// Unused imports prevention
+var (
+	_ = rsa.PublicKey{}
+	_ = x509.Certificate{}
+)
+
+func (s *Server) handleLogout(c *gin.Context) {
+	// Get session token from cookie
+	sessionCookie, err := c.Cookie(s.config.Auth.Session.CookieName)
+	if err == nil && sessionCookie != "" {
+		// Delete from SSO session database
+		s.stateStore.DeleteSSOSession(c.Request.Context(), sessionCookie)
+		// Delete from local session database
+		s.userStore.DeleteSession(c.Request.Context(), sessionCookie)
+	}
+
+	// Clear session cookie
+	c.SetCookie(
+		s.config.Auth.Session.CookieName,
+		"",
+		-1,
+		"/",
+		"",
+		s.config.Auth.Session.Secure,
+		true,
+	)
+
+	c.JSON(http.StatusOK, gin.H{"message": "logged out successfully"})
+}
+
+func (s *Server) handleGetSession(c *gin.Context) {
+	// Check for session cookie or Authorization header
+	token := ""
+	sessionCookie, err := c.Cookie(s.config.Auth.Session.CookieName)
+	if err == nil && sessionCookie != "" {
+		token = sessionCookie
+	} else {
+		// Also check Authorization header
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" && len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+			token = authHeader[7:]
+		}
+	}
+
+	if token == "" {
+		c.JSON(http.StatusOK, gin.H{"user": nil, "authenticated": false})
+		return
+	}
+
+	// First, check SSO session in database
+	if ssoSession, err := s.stateStore.GetSSOSession(c.Request.Context(), token); err == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"user": gin.H{
+				"id":       ssoSession.UserID,
+				"email":    ssoSession.Email,
+				"name":     ssoSession.Name,
+				"groups":   ssoSession.Groups,
+				"isAdmin":  ssoSession.IsAdmin,
+				"provider": ssoSession.Provider,
+			},
+			"authenticated": true,
+		})
+		return
+	}
+
+	// Fall back to local user session from database
+	_, user, err := s.userStore.GetSession(c.Request.Context(), token)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"user": nil, "authenticated": false})
+		return
+	}
+
+	// Return user info
+	c.JSON(http.StatusOK, gin.H{
+		"user": gin.H{
+			"id":       user.Username,
+			"email":    user.Email,
+			"name":     user.Username,
+			"groups":   []string{},
+			"isAdmin":  user.IsAdmin,
+		},
+		"authenticated": true,
+	})
+}
+
+// createSSOSession stores an SSO session in the database
+func (s *Server) createSSOSession(ctx context.Context, userID, token string, expiresAt time.Time, ipAddress, userAgent, username, email, name string, groups []string) error {
+	// Determine provider and external ID from userID (format: "oidc:provider:subject" or "saml:provider:subject")
+	providerType := ""
+	providerName := ""
+	externalID := ""
+	parts := splitN(userID, ":", 3)
+	if len(parts) >= 2 {
+		providerType = parts[0]
+		providerName = parts[1]
+	}
+	if len(parts) >= 3 {
+		externalID = parts[2]
+	}
+
+	// Check if user should be admin based on provider's admin_group setting
+	isAdmin := false
+	if providerType == "oidc" && providerName != "" {
+		oidcProvider, err := s.providerStore.GetOIDCProvider(ctx, providerName)
+		if err == nil && oidcProvider.AdminGroup != "" {
+			// Check if user is in the admin group
+			for _, group := range groups {
+				if group == oidcProvider.AdminGroup {
+					isAdmin = true
+					s.logger.Info("User granted admin via OIDC group membership",
+						zap.String("email", email),
+						zap.String("group", oidcProvider.AdminGroup))
+					break
+				}
+			}
+		}
+	} else if providerType == "saml" && providerName != "" {
+		samlProvider, err := s.providerStore.GetSAMLProvider(ctx, providerName)
+		if err == nil && samlProvider.AdminGroup != "" {
+			// Check if user is in the admin group
+			for _, group := range groups {
+				if group == samlProvider.AdminGroup {
+					isAdmin = true
+					s.logger.Info("User granted admin via SAML group membership",
+						zap.String("email", email),
+						zap.String("group", samlProvider.AdminGroup))
+					break
+				}
+			}
+		}
+	}
+
+	// Persist the user to the database (upsert on each login)
+	// Use the actual database UUID as the session UserID for consistent access checks
+	actualUserID := userID // fallback to compound ID
+	if externalID != "" && providerName != "" {
+		ssoUser, err := s.userStore.UpsertSSOUser(ctx, externalID, providerName, email, name, groups, isAdmin)
+		if err != nil {
+			s.logger.Warn("Failed to persist SSO user", zap.Error(err), zap.String("email", email))
+			// Continue anyway - session can still be created
+		} else if ssoUser != nil {
+			actualUserID = ssoUser.ID // Use the database UUID
+		}
+	}
+
+	session := &db.SSOSession{
+		Token:     token,
+		UserID:    actualUserID,
+		Username:  username,
+		Email:     email,
+		Name:      name,
+		Groups:    groups,
+		Provider:  providerName,
+		IsAdmin:   isAdmin,
+		ExpiresAt: expiresAt,
+	}
+
+	return s.stateStore.SaveSSOSession(ctx, session)
+}
+
+// splitN splits a string by separator into at most n parts
+func splitN(s, sep string, n int) []string {
+	result := []string{}
+	for i := 0; i < n-1; i++ {
+		idx := -1
+		for j := 0; j < len(s); j++ {
+			if j+len(sep) <= len(s) && s[j:j+len(sep)] == sep {
+				idx = j
+				break
+			}
+		}
+		if idx == -1 {
+			break
+		}
+		result = append(result, s[:idx])
+		s = s[idx+len(sep):]
+	}
+	result = append(result, s)
+	return result
+}
+
+func (s *Server) handleGetProviders(c *gin.Context) {
+	// Return list of available auth providers
+	providers := []gin.H{}
+
+	// Only include dynamically configured OIDC providers from database
+	oidcProviders, _ := s.providerStore.GetOIDCProviders(c.Request.Context())
+	for _, p := range oidcProviders {
+		if p.Enabled {
+			providers = append(providers, gin.H{
+				"type":         "oidc",
+				"name":         p.Name,
+				"display_name": p.DisplayName,
+				"login_url":    "/api/v1/auth/oidc/login?provider=" + p.Name,
+			})
+		}
+	}
+
+	// Only include dynamically configured SAML providers from database
+	samlProviders, _ := s.providerStore.GetSAMLProviders(c.Request.Context())
+	for _, p := range samlProviders {
+		if p.Enabled {
+			providers = append(providers, gin.H{
+				"type":         "saml",
+				"name":         p.Name,
+				"display_name": p.DisplayName,
+				"login_url":    "/api/v1/auth/saml/login?provider=" + p.Name,
+			})
+		}
+	}
+
+	// Always include local auth for admin access
+	providers = append(providers, gin.H{
+		"type":         "local",
+		"name":         "local",
+		"display_name": "Local Admin",
+		"login_url":    "/api/v1/auth/local/login",
+	})
+
+	c.JSON(http.StatusOK, gin.H{"providers": providers})
+}
+
+// Local authentication handlers
+
+func (s *Server) handleLocalLogin(c *gin.Context) {
+	var req struct {
+		Username string `json:"username" binding:"required"`
+		Password string `json:"password" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "username and password required"})
+		return
+	}
+
+	user, err := s.userStore.Authenticate(c.Request.Context(), req.Username, req.Password)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		return
+	}
+
+	// Generate a session token
+	tokenBytes := make([]byte, 32)
+	if _, err := cryptoRand.Read(tokenBytes); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate session"})
+		return
+	}
+	token := base64.URLEncoding.EncodeToString(tokenBytes)
+
+	// Store session in database
+	expiresAt := time.Now().Add(s.config.Auth.Session.Validity)
+	ipAddress := c.ClientIP()
+	userAgent := c.GetHeader("User-Agent")
+	if err := s.userStore.CreateSession(c.Request.Context(), user.ID, token, expiresAt, ipAddress, userAgent); err != nil {
+		s.logger.Error("Failed to create session", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create session"})
+		return
+	}
+
+	// Set session cookie
+	c.SetCookie(
+		s.config.Auth.Session.CookieName,
+		token,
+		int(s.config.Auth.Session.Validity.Seconds()),
+		"/",
+		"",
+		s.config.Auth.Session.Secure,
+		true, // httpOnly
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"user": gin.H{
+			"username": user.Username,
+			"email":    user.Email,
+			"is_admin": user.IsAdmin,
+		},
+		"token": token,
+	})
+}
+
+func (s *Server) handleChangePassword(c *gin.Context) {
+	var req struct {
+		Username        string `json:"username" binding:"required"`
+		CurrentPassword string `json:"current_password" binding:"required"`
+		NewPassword     string `json:"new_password" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	// Verify current password
+	_, err := s.userStore.Authenticate(c.Request.Context(), req.Username, req.CurrentPassword)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "current password is incorrect"})
+		return
+	}
+
+	// Update password
+	if err := s.userStore.UpdatePassword(c.Request.Context(), req.Username, req.NewPassword); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update password"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "password updated successfully"})
+}
+
+// CLI authentication handlers
+
+func (s *Server) handleCLILogin(c *gin.Context) {
+	callbackURL := c.Query("callback")
+	if callbackURL == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "callback parameter required"})
+		return
+	}
+
+	// Store the CLI callback URL in a session/state
+	state, err := generateState()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate state"})
+		return
+	}
+
+	// Store callback URL in database (works across replicas)
+	if err := s.stateStore.SaveCLICallback(c.Request.Context(), state, callbackURL); err != nil {
+		s.logger.Error("Failed to save CLI callback", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save state"})
+		return
+	}
+
+	s.logger.Info("CLI login initiated", zap.String("state", state), zap.String("callback", callbackURL))
+
+	// Redirect to the login page with the CLI flow indicator
+	loginPageURL := "/login?cli=true&state=" + state
+	c.Redirect(http.StatusFound, loginPageURL)
+}
+
+// handleCLIComplete completes CLI login for users who are already logged in
+func (s *Server) handleCLIComplete(c *gin.Context) {
+	state := c.Query("state")
+	if state == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "state parameter required"})
+		return
+	}
+
+	// Get session from cookie (use configured cookie name)
+	token, err := c.Cookie(s.config.Auth.Session.CookieName)
+	if err != nil || token == "" {
+		s.logger.Warn("CLI complete: no session cookie", zap.String("cookie_name", s.config.Auth.Session.CookieName), zap.Error(err))
+		c.Redirect(http.StatusFound, "/login?cli=true&state="+url.QueryEscape(state)+"&error=not_logged_in")
+		return
+	}
+
+	// Validate session
+	session, err := s.stateStore.GetSSOSession(c.Request.Context(), token)
+	if err != nil {
+		s.logger.Warn("CLI complete: invalid session", zap.Error(err))
+		c.Redirect(http.StatusFound, "/login?cli=true&state="+url.QueryEscape(state)+"&error=session_expired")
+		return
+	}
+
+	// Get CLI callback URL from database
+	callbackURL, err := s.stateStore.GetCLICallback(c.Request.Context(), state)
+	if err != nil {
+		s.logger.Warn("CLI complete: callback URL not found", zap.String("state", state), zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired state"})
+		return
+	}
+
+	s.logger.Info("CLI complete: redirecting with existing session",
+		zap.String("state", state),
+		zap.String("email", session.Email),
+		zap.String("callback_url", callbackURL))
+
+	// Redirect to CLI callback with token
+	redirectURL := callbackURL + "?token=" + session.Token + "&email=" + url.QueryEscape(session.Email) + "&name=" + url.QueryEscape(session.Name) + "&expires_in=86400"
+	c.Redirect(http.StatusFound, redirectURL)
+}
+
+func (s *Server) handleCLICallback(c *gin.Context) {
+	state := c.Query("state")
+	if state == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "state parameter required"})
+		return
+	}
+
+	// Retrieve the CLI callback URL
+	callbackURLInterface, ok := cliCallbackStore.Load(state)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired state"})
+		return
+	}
+	callbackURL := callbackURLInterface.(string)
+	cliCallbackStore.Delete(state) // Clean up
+
+	// Get user info from session (set by OIDC/SAML callback)
+	userEmail, _ := c.Get("user_email")
+	userName, _ := c.Get("user_name")
+	token, _ := c.Get("access_token")
+
+	if token == nil || token == "" {
+		// Generate a new token for the CLI
+		token = "cli-token-placeholder" // TODO: Generate proper JWT
+	}
+
+	// Build callback URL with token
+	redirectURL := callbackURL + "?token=" + token.(string)
+	if userEmail != nil {
+		redirectURL += "&email=" + userEmail.(string)
+	}
+	if userName != nil {
+		redirectURL += "&name=" + userName.(string)
+	}
+	redirectURL += "&expires_in=86400" // 24 hours
+
+	c.Redirect(http.StatusFound, redirectURL)
+}
+
+func (s *Server) handleTokenRefresh(c *gin.Context) {
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	// TODO: Validate refresh token and issue new access token
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "token refresh not yet implemented"})
+}
+
+// generateState creates a secure random state string
+func generateState() (string, error) {
+	b := make([]byte, 32)
+	if _, err := cryptoRand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
+}
+
+// Config generation handlers
+
+func (s *Server) handleGenerateConfig(c *gin.Context) {
+	// Check if config generation is available
+	if s.ca == nil || s.configGen == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "config generation not available"})
+		return
+	}
+
+	// Get authenticated user from session
+	user, err := s.getAuthenticatedUser(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+
+	// Parse request
+	var req struct {
+		GatewayID      string `json:"gateway_id" binding:"required"`
+		CLICallbackURL string `json:"cli_callback_url"` // Optional: for CLI auto-download
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "gateway_id is required"})
+		return
+	}
+
+	// Get gateway info
+	ctx := c.Request.Context()
+	gateway, err := s.gatewayStore.GetGateway(ctx, req.GatewayID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "gateway not found"})
+		return
+	}
+
+	// Check if gateway is active
+	if !gateway.IsActive {
+		c.JSON(http.StatusForbidden, gin.H{"error": "gateway is not active"})
+		return
+	}
+
+	// Check if user has access to this gateway (user must be assigned directly or via group)
+	hasAccess, err := s.gatewayStore.UserHasGatewayAccess(ctx, user.UserID, gateway.ID, user.Groups)
+	if err != nil {
+		s.logger.Error("Failed to check gateway access", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check access"})
+		return
+	}
+	if !hasAccess {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you do not have access to this gateway"})
+		return
+	}
+
+	// Generate client certificate (valid for configured duration or 24h default)
+	certValidity := s.config.PKI.CertValidity
+	if certValidity == 0 {
+		certValidity = 24 * time.Hour
+	}
+
+	certReq := pki.CertificateRequest{
+		CommonName: user.Email,
+		Email:      user.Email,
+		ValidFor:   certValidity,
+	}
+
+	cert, err := s.ca.IssueClientCertificate(certReq)
+	if err != nil {
+		s.logger.Error("Failed to issue client certificate", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate certificate"})
+		return
+	}
+
+	// Create models for config generation
+	modelGateway := &models.Gateway{
+		Name:           gateway.Name,
+		Hostname:       gateway.Hostname,
+		PublicIP:       gateway.PublicIP,
+		VPNPort:        gateway.VPNPort,
+		VPNProtocol:    gateway.VPNProtocol,
+		TLSAuthEnabled: gateway.TLSAuthEnabled,
+	}
+
+	modelUser := &models.User{
+		Email: user.Email,
+		Name:  user.Name,
+	}
+
+	// Get networks assigned to this gateway for routes
+	networks, err := s.networkStore.GetGatewayNetworks(ctx, gateway.ID)
+	if err != nil {
+		s.logger.Warn("Failed to get gateway networks", zap.Error(err))
+		// Continue without routes - not a fatal error
+	}
+
+	// Convert networks to routes
+	var routes []openvpn.Route
+	for _, network := range networks {
+		if network.IsActive && network.CIDR != "" {
+			netIP, netmask, err := cidrToNetmask(network.CIDR)
+			if err != nil {
+				s.logger.Warn("Invalid network CIDR", zap.String("cidr", network.CIDR), zap.Error(err))
+				continue
+			}
+			routes = append(routes, openvpn.Route{
+				Network: netIP,
+				Netmask: netmask,
+			})
+		}
+	}
+
+	// Determine crypto profile - enforce FIPS if server requires it
+	cryptoProfile := gateway.CryptoProfile
+	requireFIPS := s.settingsStore.GetBool(ctx, db.SettingRequireFIPS, false)
+	if requireFIPS {
+		cryptoProfile = openvpn.CryptoProfileFIPS
+		s.logger.Info("FIPS mode enforced by server settings", zap.String("gateway", gateway.Name))
+	}
+
+	// Generate unique config ID and auth token
+	configID := generateConfigID()
+	authToken := generateAuthToken()
+
+	// Generate OpenVPN config
+	genReq := openvpn.GenerateRequest{
+		Gateway:       modelGateway,
+		User:          modelUser,
+		Certificate:   cert,
+		ExpiresAt:     cert.NotAfter,
+		Routes:        routes,
+		CryptoProfile: cryptoProfile,
+		TLSAuthKey:    gateway.TLSAuthKey, // Use gateway-specific TLS-Auth key
+		AuthToken:     authToken,          // Unique token for password authentication
+	}
+
+	vpnConfig, err := s.configGen.Generate(genReq)
+	if err != nil {
+		s.logger.Error("Failed to generate config", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate config"})
+		return
+	}
+
+	// Store config in database
+	dbConfig := &db.GeneratedConfig{
+		ID:             configID,
+		UserID:         user.UserID,
+		GatewayID:      req.GatewayID,
+		GatewayName:    gateway.Name,
+		FileName:       vpnConfig.FileName,
+		ConfigData:     vpnConfig.Content,
+		SerialNumber:   cert.SerialNumber,
+		Fingerprint:    cert.Fingerprint,
+		CLICallbackURL: req.CLICallbackURL,
+		AuthToken:      authToken, // Store token for gateway verification
+		ExpiresAt:      vpnConfig.ExpiresAt,
+	}
+
+	if err := s.configStore.SaveConfig(c.Request.Context(), dbConfig); err != nil {
+		s.logger.Error("Failed to save config", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save config"})
+		return
+	}
+
+	s.logger.Info("Config generated",
+		zap.String("config_id", configID),
+		zap.String("user", user.Email),
+		zap.String("gateway", gateway.Name),
+	)
+
+	// Return config metadata
+	c.JSON(http.StatusOK, gin.H{
+		"id":           configID,
+		"fileName":     vpnConfig.FileName,
+		"gatewayName":  gateway.Name,
+		"expiresAt":    vpnConfig.ExpiresAt.Format(time.RFC3339),
+		"downloadUrl":  "/api/v1/configs/download/" + configID,
+		"cliCallback":  req.CLICallbackURL != "",
+	})
+}
+
+func (s *Server) handleDownloadConfig(c *gin.Context) {
+	configID := c.Param("id")
+
+	// Get config from database
+	vpnConfig, err := s.configStore.GetConfig(c.Request.Context(), configID)
+	if err != nil {
+		if err == db.ErrConfigNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "config not found"})
+			return
+		}
+		if err == db.ErrConfigExpired {
+			c.JSON(http.StatusGone, gin.H{"error": "config expired"})
+			return
+		}
+		s.logger.Error("Failed to get config", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get config"})
+		return
+	}
+
+	// Check if this is a CLI callback request
+	cliRedirect := c.Query("cli_redirect")
+	if cliRedirect == "true" && vpnConfig.CLICallbackURL != "" {
+		// Redirect to CLI with config data encoded
+		s.configStore.MarkDownloaded(c.Request.Context(), configID)
+		redirectURL := vpnConfig.CLICallbackURL + "?config_id=" + configID
+		c.Redirect(http.StatusFound, redirectURL)
+		return
+	}
+
+	// Mark as downloaded
+	s.configStore.MarkDownloaded(c.Request.Context(), configID)
+
+	// Return config file
+	c.Header("Content-Disposition", "attachment; filename="+vpnConfig.FileName)
+	c.Header("Content-Type", "application/x-openvpn-profile")
+	c.Data(http.StatusOK, "application/x-openvpn-profile", vpnConfig.ConfigData)
+}
+
+// Helper function to get authenticated user from session
+func (s *Server) getAuthenticatedUser(c *gin.Context) (*authenticatedUser, error) {
+	token := ""
+	sessionCookie, err := c.Cookie(s.config.Auth.Session.CookieName)
+	if err == nil && sessionCookie != "" {
+		token = sessionCookie
+	} else {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" && len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+			token = authHeader[7:]
+		}
+	}
+
+	if token == "" {
+		return nil, errors.New("no session token")
+	}
+
+	// Check SSO session
+	if ssoSession, err := s.stateStore.GetSSOSession(c.Request.Context(), token); err == nil {
+		return &authenticatedUser{
+			UserID:   ssoSession.UserID,
+			Email:    ssoSession.Email,
+			Name:     ssoSession.Name,
+			Groups:   ssoSession.Groups,
+			IsAdmin:  ssoSession.IsAdmin,
+			Provider: ssoSession.Provider,
+		}, nil
+	}
+
+	// Check local session
+	_, localUser, err := s.userStore.GetSession(c.Request.Context(), token)
+	if err != nil {
+		return nil, err
+	}
+
+	return &authenticatedUser{
+		UserID:  localUser.ID,
+		Email:   localUser.Email,
+		Name:    localUser.Username,
+		Groups:  []string{}, // Local users don't have IdP groups
+		IsAdmin: localUser.IsAdmin,
+	}, nil
+}
+
+type authenticatedUser struct {
+	UserID   string
+	Email    string
+	Name     string
+	Groups   []string
+	IsAdmin  bool
+	Provider string
+}
+
+type mockGateway struct {
+	ID          string
+	Name        string
+	Hostname    string
+	VPNPort     int
+	VPNProtocol string
+}
+
+func (s *Server) getMockGateway(id string) *mockGateway {
+	gateways := map[string]*mockGateway{
+		"gw-001": {
+			ID:          "gw-001",
+			Name:        "US East Gateway",
+			Hostname:    "vpn-us-east.example.com",
+			VPNPort:     1194,
+			VPNProtocol: "udp",
+		},
+		"gw-002": {
+			ID:          "gw-002",
+			Name:        "EU West Gateway",
+			Hostname:    "vpn-eu-west.example.com",
+			VPNPort:     1194,
+			VPNProtocol: "udp",
+		},
+	}
+	return gateways[id]
+}
+
+func generateConfigID() string {
+	return uuid.New().String()
+}
+
+// generateAuthToken generates a cryptographically secure random token for config authentication
+func generateAuthToken() string {
+	b := make([]byte, 32) // 256-bit token
+	if _, err := cryptoRand.Read(b); err != nil {
+		// Fallback to UUID if crypto rand fails
+		return uuid.New().String()
+	}
+	return hex.EncodeToString(b)
+}
+
+// cidrToNetmask converts a CIDR notation (e.g., "10.0.0.0/24") to network and netmask
+func cidrToNetmask(cidr string) (string, string, error) {
+	_, ipNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return "", "", err
+	}
+
+	// Get network address
+	network := ipNet.IP.String()
+
+	// Convert mask to dotted decimal
+	mask := ipNet.Mask
+	netmask := fmt.Sprintf("%d.%d.%d.%d", mask[0], mask[1], mask[2], mask[3])
+
+	return network, netmask, nil
+}
+
+func (s *Server) handleGetConfigMetadata(c *gin.Context) {
+	configID := c.Param("id")
+
+	// Get config from database
+	vpnConfig, err := s.configStore.GetConfig(c.Request.Context(), configID)
+	if err != nil {
+		if err == db.ErrConfigNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "config not found"})
+			return
+		}
+		if err == db.ErrConfigExpired {
+			c.JSON(http.StatusGone, gin.H{"error": "config expired"})
+			return
+		}
+		s.logger.Error("Failed to get config", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get config"})
+		return
+	}
+
+	// Return metadata only (not the actual config data)
+	c.JSON(http.StatusOK, gin.H{
+		"id":          vpnConfig.ID,
+		"fileName":    vpnConfig.FileName,
+		"gatewayName": vpnConfig.GatewayName,
+		"expiresAt":   vpnConfig.ExpiresAt.Format(time.RFC3339),
+		"createdAt":   vpnConfig.CreatedAt.Format(time.RFC3339),
+		"downloaded":  vpnConfig.DownloadedAt != nil,
+	})
+}
+
+func (s *Server) handleGetConfigRaw(c *gin.Context) {
+	configID := c.Param("id")
+
+	// Get config from database
+	vpnConfig, err := s.configStore.GetConfig(c.Request.Context(), configID)
+	if err != nil {
+		if err == db.ErrConfigNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "config not found"})
+			return
+		}
+		if err == db.ErrConfigExpired {
+			c.JSON(http.StatusGone, gin.H{"error": "config expired"})
+			return
+		}
+		s.logger.Error("Failed to get config", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get config"})
+		return
+	}
+
+	// Mark as downloaded
+	s.configStore.MarkDownloaded(c.Request.Context(), configID)
+
+	// Return raw config content as text
+	c.Header("Content-Type", "text/plain")
+	c.String(http.StatusOK, string(vpnConfig.ConfigData))
+}
+
+// handleRevokeConfig allows users to revoke their own config
+func (s *Server) handleRevokeConfig(c *gin.Context) {
+	configID := c.Param("id")
+
+	// Get user from session
+	userID, _, err := s.getCurrentUserInfo(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	// Get config to verify ownership
+	config, err := s.configStore.GetConfig(c.Request.Context(), configID)
+	if err != nil {
+		if err == db.ErrConfigNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "config not found"})
+			return
+		}
+		s.logger.Error("Failed to get config", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get config"})
+		return
+	}
+
+	// Verify ownership (user can only revoke their own configs)
+	if config.UserID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you can only revoke your own configs"})
+		return
+	}
+
+	// Revoke the config
+	if err := s.configStore.RevokeConfig(c.Request.Context(), configID, "revoked by user"); err != nil {
+		if err == db.ErrConfigNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "config not found or already revoked"})
+			return
+		}
+		s.logger.Error("Failed to revoke config", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to revoke config"})
+		return
+	}
+
+	s.logger.Info("Config revoked by user",
+		zap.String("config_id", configID),
+		zap.String("user_id", userID))
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Config revoked successfully",
+	})
+}
+
+// handleListUserConfigs returns all configs for the current user
+func (s *Server) handleListUserConfigs(c *gin.Context) {
+	// Get user from session
+	userID, _, err := s.getCurrentUserInfo(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	// Get all configs for user
+	configs, err := s.configStore.GetUserConfigs(c.Request.Context(), userID)
+	if err != nil {
+		s.logger.Error("Failed to get user configs", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get configs"})
+		return
+	}
+
+	// Convert to response format
+	result := make([]gin.H, len(configs))
+	for i, cfg := range configs {
+		result[i] = gin.H{
+			"id":          cfg.ID,
+			"gatewayId":   cfg.GatewayID,
+			"gatewayName": cfg.GatewayName,
+			"fileName":    cfg.FileName,
+			"expiresAt":   cfg.ExpiresAt.Format(time.RFC3339),
+			"createdAt":   cfg.CreatedAt.Format(time.RFC3339),
+			"isRevoked":   cfg.IsRevoked,
+			"revokedAt":   nil,
+			"downloaded":  cfg.DownloadedAt != nil,
+		}
+		if cfg.RevokedAt != nil {
+			result[i]["revokedAt"] = cfg.RevokedAt.Format(time.RFC3339)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"configs": result})
+}
+
+// handleAdminRevokeConfig allows admins to revoke any config
+func (s *Server) handleAdminRevokeConfig(c *gin.Context) {
+	configID := c.Param("id")
+
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		req.Reason = "revoked by admin"
+	}
+
+	// Revoke the config
+	if err := s.configStore.RevokeConfig(c.Request.Context(), configID, req.Reason); err != nil {
+		if err == db.ErrConfigNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "config not found or already revoked"})
+			return
+		}
+		s.logger.Error("Failed to revoke config", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to revoke config"})
+		return
+	}
+
+	s.logger.Info("Config revoked by admin", zap.String("config_id", configID))
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Config revoked successfully",
+	})
+}
+
+// handleAdminRevokeUserConfigs allows admins to revoke all configs for a user
+func (s *Server) handleAdminRevokeUserConfigs(c *gin.Context) {
+	userID := c.Param("id")
+
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		req.Reason = "all configs revoked by admin"
+	}
+
+	// Revoke all configs for user
+	count, err := s.configStore.RevokeUserConfigs(c.Request.Context(), userID, req.Reason)
+	if err != nil {
+		s.logger.Error("Failed to revoke user configs", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to revoke configs"})
+		return
+	}
+
+	s.logger.Info("User configs revoked by admin",
+		zap.String("user_id", userID),
+		zap.Int64("count", count))
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":       true,
+		"message":       "User configs revoked successfully",
+		"revokedCount": count,
+	})
+}
+
+// Certificate handlers
+
+func (s *Server) handleGetCACert(c *gin.Context) {
+	// TODO: Return CA certificate
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "get CA cert not yet implemented"})
+}
+
+func (s *Server) handleRevokeCert(c *gin.Context) {
+	// TODO: Revoke a certificate
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "revoke cert not yet implemented"})
+}
+
+// Policy handlers
+
+func (s *Server) handleListPolicies(c *gin.Context) {
+	// TODO: List all policies
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "list policies not yet implemented"})
+}
+
+func (s *Server) handleCreatePolicy(c *gin.Context) {
+	// TODO: Create a new policy
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "create policy not yet implemented"})
+}
+
+func (s *Server) handleGetPolicy(c *gin.Context) {
+	policyID := c.Param("id")
+	// TODO: Get a specific policy
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "get policy not yet implemented", "policy_id": policyID})
+}
+
+func (s *Server) handleUpdatePolicy(c *gin.Context) {
+	policyID := c.Param("id")
+	// TODO: Update a policy
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "update policy not yet implemented", "policy_id": policyID})
+}
+
+func (s *Server) handleDeletePolicy(c *gin.Context) {
+	policyID := c.Param("id")
+	// TODO: Delete a policy
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "delete policy not yet implemented", "policy_id": policyID})
+}
+
+// Gateway handlers (internal API for gateways)
+
+func (s *Server) handleGatewayVerify(c *gin.Context) {
+	// Verify a client connection request from gateway agent
+	var req struct {
+		Token          string `json:"token" binding:"required"`
+		CommonName     string `json:"common_name" binding:"required"`
+		Username       string `json:"username"`       // auth-user-pass username (email)
+		Password       string `json:"password"`       // auth-user-pass password (auth token)
+		SerialNumber   string `json:"serial_number"`
+		ClientIP       string `json:"client_ip"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Verify gateway token
+	ctx := c.Request.Context()
+	gateway, err := s.gatewayStore.GetGatewayByToken(ctx, req.Token)
+	if err != nil {
+		s.logger.Warn("Gateway verify: invalid token", zap.Error(err))
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid gateway token", "allowed": false})
+		return
+	}
+
+	// Verify auth token (password) if provided - this is the primary authentication method
+	var config *db.GeneratedConfig
+	if req.Password != "" {
+		var err error
+		config, err = s.configStore.GetConfigByAuthToken(ctx, req.Password)
+		if err != nil {
+			if err == db.ErrConfigRevoked {
+				s.logger.Warn("Gateway verify: config revoked",
+					zap.String("username", req.Username))
+				c.JSON(http.StatusOK, gin.H{
+					"allowed": false,
+					"reason":  "access revoked",
+				})
+				return
+			}
+			if err == db.ErrConfigExpired {
+				s.logger.Warn("Gateway verify: config expired",
+					zap.String("username", req.Username))
+				c.JSON(http.StatusOK, gin.H{
+					"allowed": false,
+					"reason":  "config expired",
+				})
+				return
+			}
+			s.logger.Warn("Gateway verify: invalid auth token",
+				zap.String("username", req.Username),
+				zap.Error(err))
+			c.JSON(http.StatusOK, gin.H{
+				"allowed": false,
+				"reason":  "invalid credentials",
+			})
+			return
+		}
+
+		// Verify the username matches the config's user (email)
+		// Username in auth-user-pass should be the user's email
+		if req.Username != "" && config.UserID != "" {
+			// Get user to verify email matches
+			user, err := s.userStore.GetSSOUser(ctx, config.UserID)
+			if err == nil && user.Email != req.Username {
+				s.logger.Warn("Gateway verify: username mismatch",
+					zap.String("provided", req.Username),
+					zap.String("expected", user.Email))
+				c.JSON(http.StatusOK, gin.H{
+					"allowed": false,
+					"reason":  "username mismatch",
+				})
+				return
+			}
+		}
+
+		// Check if the config was issued for this gateway
+		if config.GatewayID != gateway.ID {
+			s.logger.Warn("Gateway verify: config not for this gateway",
+				zap.String("config_gateway", config.GatewayID),
+				zap.String("request_gateway", gateway.ID))
+			c.JSON(http.StatusOK, gin.H{
+				"allowed": false,
+				"reason":  "config not valid for this gateway",
+			})
+			return
+		}
+
+		s.logger.Info("Gateway verify: auth token valid",
+			zap.String("config_id", config.ID),
+			zap.String("user_id", config.UserID),
+			zap.String("gateway", gateway.Name))
+	} else if req.SerialNumber != "" {
+		// Fallback to certificate verification if no password provided
+		var err error
+		config, err = s.configStore.GetConfigBySerial(ctx, req.SerialNumber)
+		if err != nil {
+			s.logger.Warn("Gateway verify: certificate not found",
+				zap.String("serial", req.SerialNumber),
+				zap.Error(err))
+			c.JSON(http.StatusOK, gin.H{
+				"allowed": false,
+				"reason":  "certificate not found or revoked",
+			})
+			return
+		}
+
+		// Check if config is revoked
+		if config.IsRevoked {
+			c.JSON(http.StatusOK, gin.H{
+				"allowed": false,
+				"reason":  "access revoked",
+			})
+			return
+		}
+
+		// Check if certificate has expired
+		if time.Now().After(config.ExpiresAt) {
+			c.JSON(http.StatusOK, gin.H{
+				"allowed": false,
+				"reason":  "certificate expired",
+			})
+			return
+		}
+
+		// Check if the config was issued for this gateway
+		if config.GatewayID != gateway.ID {
+			s.logger.Warn("Gateway verify: config not for this gateway",
+				zap.String("config_gateway", config.GatewayID),
+				zap.String("request_gateway", gateway.ID))
+			c.JSON(http.StatusOK, gin.H{
+				"allowed": false,
+				"reason":  "certificate not valid for this gateway",
+			})
+			return
+		}
+	}
+
+	// Look up the user by email (common_name is the email)
+	user, err := s.userStore.GetSSOUserByEmail(ctx, req.CommonName)
+	if err != nil {
+		s.logger.Warn("Gateway verify: user not found",
+			zap.String("common_name", req.CommonName),
+			zap.Error(err))
+		c.JSON(http.StatusOK, gin.H{
+			"allowed": false,
+			"reason":  "user not found",
+		})
+		return
+	}
+
+	// Check if user is active
+	if !user.IsActive {
+		c.JSON(http.StatusOK, gin.H{
+			"allowed": false,
+			"reason":  "user account is disabled",
+		})
+		return
+	}
+
+	// Check if user has access to this gateway
+	hasAccess, err := s.gatewayStore.UserHasGatewayAccess(ctx, user.ID, gateway.ID, user.Groups)
+	if err != nil {
+		s.logger.Error("Gateway verify: failed to check access", zap.Error(err))
+		c.JSON(http.StatusOK, gin.H{
+			"allowed": false,
+			"reason":  "access check failed",
+		})
+		return
+	}
+	if !hasAccess {
+		s.logger.Warn("Gateway verify: user does not have gateway access",
+			zap.String("user", user.Email),
+			zap.String("gateway", gateway.Name))
+		c.JSON(http.StatusOK, gin.H{
+			"allowed": false,
+			"reason":  "user does not have access to this gateway",
+		})
+		return
+	}
+
+	s.logger.Info("Gateway verify: connection allowed",
+		zap.String("gateway", gateway.Name),
+		zap.String("user", user.Email),
+		zap.String("client_ip", req.ClientIP))
+
+	c.JSON(http.StatusOK, gin.H{
+		"allowed":      true,
+		"gateway_id":   gateway.ID,
+		"gateway_name": gateway.Name,
+		"user_id":      user.ID,
+		"user_email":   user.Email,
+	})
+}
+
+func (s *Server) handleGatewayConnect(c *gin.Context) {
+	// Record a client connection from gateway agent
+	var req struct {
+		Token        string `json:"token" binding:"required"`
+		CommonName   string `json:"common_name" binding:"required"`
+		ClientIP     string `json:"client_ip" binding:"required"`
+		VPNIPv4      string `json:"vpn_ipv4"`
+		VPNIPv6      string `json:"vpn_ipv6"`
+		SerialNumber string `json:"serial_number"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Verify gateway token
+	ctx := c.Request.Context()
+	gateway, err := s.gatewayStore.GetGatewayByToken(ctx, req.Token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid gateway token"})
+		return
+	}
+
+	// Look up the user by email (common_name is the email)
+	user, err := s.userStore.GetSSOUserByEmail(ctx, req.CommonName)
+	if err != nil {
+		s.logger.Warn("Gateway connect: user not found",
+			zap.String("common_name", req.CommonName),
+			zap.Error(err))
+		c.JSON(http.StatusForbidden, gin.H{"error": "user not found"})
+		return
+	}
+
+	// Check if user has access to this gateway (defense in depth)
+	hasAccess, err := s.gatewayStore.UserHasGatewayAccess(ctx, user.ID, gateway.ID, user.Groups)
+	if err != nil || !hasAccess {
+		s.logger.Warn("Gateway connect: access denied",
+			zap.String("user", user.Email),
+			zap.String("gateway", gateway.Name))
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		return
+	}
+
+	// Get the user's access rules for firewall enforcement
+	accessRules, err := s.accessRuleStore.GetUserAccessRules(ctx, user.ID, user.Groups)
+	if err != nil {
+		s.logger.Error("Gateway connect: failed to get access rules", zap.Error(err))
+		// Continue but with empty rules (default deny)
+		accessRules = nil
+	}
+
+	// Build firewall rules from access rules
+	// Default: DENY ALL
+	firewallRules := []gin.H{}
+	clientConfig := []string{}
+
+	// If full tunnel mode is enabled, push default route for all traffic
+	if gateway.FullTunnelMode {
+		clientConfig = append(clientConfig, "redirect-gateway def1 bypass-dhcp")
+	}
+
+	// Push DNS servers if enabled
+	if gateway.PushDNS {
+		if len(gateway.DNSServers) > 0 {
+			// Use custom DNS servers configured for this gateway
+			for _, dns := range gateway.DNSServers {
+				clientConfig = append(clientConfig, fmt.Sprintf("dhcp-option DNS %s", dns))
+			}
+		} else {
+			// Fallback to public DNS if push_dns is enabled but no servers configured
+			clientConfig = append(clientConfig, "dhcp-option DNS 1.1.1.1")
+			clientConfig = append(clientConfig, "dhcp-option DNS 8.8.8.8")
+		}
+	}
+
+	for _, rule := range accessRules {
+		if !rule.IsActive {
+			continue
+		}
+		fwRule := gin.H{
+			"action":    "allow",
+			"rule_type": rule.RuleType,
+			"value":     rule.Value,
+		}
+		if rule.PortRange != nil {
+			fwRule["port_range"] = *rule.PortRange
+		}
+		if rule.Protocol != nil {
+			fwRule["protocol"] = *rule.Protocol
+		}
+		firewallRules = append(firewallRules, fwRule)
+
+		// For split tunnel mode, push routes for each CIDR rule
+		if !gateway.FullTunnelMode && rule.RuleType == "cidr" {
+			// Convert CIDR to OpenVPN route format (network netmask)
+			route := cidrToRoute(rule.Value)
+			if route != "" {
+				clientConfig = append(clientConfig, route)
+			}
+		}
+	}
+
+	s.logger.Info("Gateway connect: client connected with rules",
+		zap.String("gateway", gateway.Name),
+		zap.String("user", user.Email),
+		zap.String("vpn_ipv4", req.VPNIPv4),
+		zap.Int("rule_count", len(firewallRules)),
+		zap.Bool("full_tunnel", gateway.FullTunnelMode),
+		zap.Int("route_count", len(clientConfig)))
+
+	c.JSON(http.StatusOK, gin.H{
+		"allow":          true,
+		"status":         "connected",
+		"gateway_id":     gateway.ID,
+		"gateway_name":   gateway.Name,
+		"user_id":        user.ID,
+		"user_email":     user.Email,
+		"default_policy": "deny",
+		"firewall_rules": firewallRules,
+		"client_config":  clientConfig,
+	})
+}
+
+func (s *Server) handleGatewayDisconnect(c *gin.Context) {
+	// Record a client disconnection from gateway agent
+	var req struct {
+		Token        string `json:"token" binding:"required"`
+		CommonName   string `json:"common_name" binding:"required"`
+		ClientIP     string `json:"client_ip"`
+		Duration     int64  `json:"duration_seconds"`
+		BytesSent    int64  `json:"bytes_sent"`
+		BytesRecv    int64  `json:"bytes_received"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Verify gateway token
+	ctx := c.Request.Context()
+	gateway, err := s.gatewayStore.GetGatewayByToken(ctx, req.Token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid gateway token"})
+		return
+	}
+
+	s.logger.Info("Gateway disconnect: client disconnected",
+		zap.String("gateway", gateway.Name),
+		zap.String("common_name", req.CommonName),
+		zap.Int64("duration_seconds", req.Duration),
+		zap.Int64("bytes_sent", req.BytesSent),
+		zap.Int64("bytes_received", req.BytesRecv))
+
+	// TODO: Update connection record in database and remove firewall rules
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":      "disconnected",
+		"gateway_id":  gateway.ID,
+		"gateway_name": gateway.Name,
+	})
+}
+
+func (s *Server) handleGatewayHeartbeat(c *gin.Context) {
+	// Process gateway heartbeat
+	var req struct {
+		Token           string  `json:"token" binding:"required"`
+		PublicIP        string  `json:"public_ip"`
+		ActiveClients   int     `json:"active_clients"`
+		CPUUsage        float64 `json:"cpu_usage"`
+		MemoryUsage     float64 `json:"memory_usage"`
+		OpenVPNRunning  bool    `json:"openvpn_running"`
+		ConfigVersion   string  `json:"config_version"` // Gateway's current config version
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Verify and update gateway
+	ctx := c.Request.Context()
+	gateway, err := s.gatewayStore.GetGatewayByToken(ctx, req.Token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid gateway token"})
+		return
+	}
+
+	// Update gateway heartbeat and status
+	if req.PublicIP != "" {
+		err = s.gatewayStore.UpdateGatewayStatus(ctx, gateway.ID, req.PublicIP)
+	} else {
+		err = s.gatewayStore.UpdateHeartbeat(ctx, gateway.ID)
+	}
+
+	if err != nil {
+		s.logger.Error("Failed to update gateway heartbeat", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update heartbeat"})
+		return
+	}
+
+	// Check if gateway needs to reprovision
+	// Trigger reprovision if:
+	// 1. Gateway sends empty version AND server has a version (new/reset gateway needs initial provision)
+	// 2. Gateway version doesn't match server version (config changed)
+	needsReprovision := false
+	if gateway.ConfigVersion != "" {
+		if req.ConfigVersion == "" {
+			needsReprovision = true
+			s.logger.Info("Gateway has no config version, signaling initial reprovision",
+				zap.String("gateway", gateway.Name),
+				zap.String("server_version", gateway.ConfigVersion))
+		} else if req.ConfigVersion != gateway.ConfigVersion {
+			needsReprovision = true
+			s.logger.Info("Gateway config version mismatch, signaling reprovision",
+				zap.String("gateway", gateway.Name),
+				zap.String("gateway_version", req.ConfigVersion),
+				zap.String("server_version", gateway.ConfigVersion))
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":            "ok",
+		"gateway_id":        gateway.ID,
+		"gateway_name":      gateway.Name,
+		"config_version":    gateway.ConfigVersion,
+		"needs_reprovision": needsReprovision,
+	})
+}
+
+// handleGatewayProvision provisions certificates for a gateway to run OpenVPN server
+func (s *Server) handleGatewayProvision(c *gin.Context) {
+	if s.ca == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "PKI not configured"})
+		return
+	}
+
+	var req struct {
+		Token string `json:"token" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Verify gateway token
+	ctx := c.Request.Context()
+	gateway, err := s.gatewayStore.GetGatewayByToken(ctx, req.Token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid gateway token"})
+		return
+	}
+
+	// Issue server certificate for this gateway
+	certReq := pki.CertificateRequest{
+		CommonName: fmt.Sprintf("gateway-%s", gateway.Name),
+		ValidFor:   365 * 24 * time.Hour, // 1 year validity for server certs
+	}
+
+	cert, err := s.ca.IssueServerCertificate(certReq)
+	if err != nil {
+		s.logger.Error("Failed to issue gateway server certificate", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to issue certificate"})
+		return
+	}
+
+	// Generate DH parameters (or use pre-generated ones)
+	// For simplicity, we'll use ECDH which doesn't need DH params
+	// OpenVPN 2.4+ supports this with "dh none" and ecdh-curve
+
+	// Use gateway's VPN subnet or default
+	vpnSubnet := gateway.VPNSubnet
+	if vpnSubnet == "" {
+		vpnSubnet = db.DefaultVPNSubnet
+	}
+
+	// Parse subnet to get network and netmask
+	vpnNetwork, vpnNetmask := parseSubnetToNetworkMask(vpnSubnet)
+
+	// Get or generate TLS-Auth key if enabled for this gateway
+	var tlsAuthKey string
+	if gateway.TLSAuthEnabled {
+		// First check if gateway already has a TLS-Auth key in database
+		if gateway.TLSAuthKey != "" {
+			tlsAuthKey = gateway.TLSAuthKey
+			s.logger.Info("Using existing TLS-Auth key from database", zap.String("gateway", gateway.Name))
+		} else {
+			// Generate new TLS-Auth key
+			tlsAuthKeyBytes, err := openvpn.GenerateTLSAuthKey()
+			if err != nil {
+				s.logger.Error("Failed to generate TLS-Auth key", zap.Error(err))
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate TLS-Auth key"})
+				return
+			}
+			tlsAuthKey = string(tlsAuthKeyBytes)
+
+			// Store TLS-Auth key in database for client config generation
+			if err := s.gatewayStore.SetTLSAuthKey(ctx, gateway.ID, tlsAuthKey); err != nil {
+				s.logger.Error("Failed to store TLS-Auth key", zap.Error(err))
+				// Non-fatal - continue with provisioning
+			}
+			s.logger.Info("Generated new TLS-Auth key", zap.String("gateway", gateway.Name))
+		}
+	}
+
+	s.logger.Info("Gateway provisioned",
+		zap.String("gateway", gateway.Name),
+		zap.String("serial", cert.SerialNumber),
+		zap.String("vpn_subnet", vpnSubnet),
+		zap.Bool("tls_auth_enabled", gateway.TLSAuthEnabled))
+
+	response := gin.H{
+		"gateway_id":       gateway.ID,
+		"gateway_name":     gateway.Name,
+		"ca_cert":          string(s.ca.CertificatePEM()),
+		"server_cert":      string(cert.CertificatePEM),
+		"server_key":       string(cert.PrivateKeyPEM),
+		"vpn_subnet":       vpnSubnet,
+		"vpn_network":      vpnNetwork,
+		"vpn_netmask":      vpnNetmask,
+		"vpn_port":         gateway.VPNPort,
+		"vpn_protocol":     gateway.VPNProtocol,
+		"crypto_profile":   gateway.CryptoProfile,
+		"tls_auth_enabled": gateway.TLSAuthEnabled,
+	}
+
+	// Only include TLS-Auth key if enabled
+	if gateway.TLSAuthEnabled && tlsAuthKey != "" {
+		response["tls_auth_key"] = tlsAuthKey
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// parseSubnetToNetworkMask converts CIDR (e.g., "10.8.0.0/24") to network and netmask
+func parseSubnetToNetworkMask(cidr string) (string, string) {
+	_, ipNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		// Default fallback
+		return "10.8.0.0", "255.255.255.0"
+	}
+	network := ipNet.IP.String()
+	mask := ipNet.Mask
+	netmask := fmt.Sprintf("%d.%d.%d.%d", mask[0], mask[1], mask[2], mask[3])
+	return network, netmask
+}
+
+// handleGatewayClientRules returns access rules for a specific client
+// Called by gateway agent when a client connects to determine allowed destinations
+func (s *Server) handleGatewayClientRules(c *gin.Context) {
+	var req struct {
+		Token      string `json:"token" binding:"required"`
+		UserID     string `json:"user_id" binding:"required"`
+		UserEmail  string `json:"user_email"`
+		UserGroups []string `json:"user_groups"`
+		ClientIP   string `json:"client_ip"` // VPN IP assigned to client
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Verify gateway token
+	ctx := c.Request.Context()
+	gateway, err := s.gatewayStore.GetGatewayByToken(ctx, req.Token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid gateway token"})
+		return
+	}
+
+	// The UserID from the certificate common name is actually the user's email
+	// We need to look up the user by email to get their UUID for rule lookup
+	userID := req.UserID
+	userGroups := req.UserGroups
+
+	// Try to find user by email (the common name in the cert is the email)
+	ssoUser, err := s.userStore.GetSSOUserByEmail(ctx, req.UserID)
+	if err == nil && ssoUser != nil {
+		userID = ssoUser.ID
+		userGroups = ssoUser.Groups
+	} else {
+		// Check if it's a local user
+		localUser, err := s.userStore.GetLocalUserByEmail(ctx, req.UserID)
+		if err == nil && localUser != nil {
+			userID = localUser.ID
+			userGroups = []string{} // Local users don't have groups
+		} else {
+			// If no user found, return empty rules (deny all)
+			s.logger.Warn("User not found for access rules", zap.String("user_id", req.UserID))
+			c.JSON(http.StatusOK, gin.H{
+				"user_id":   req.UserID,
+				"client_ip": req.ClientIP,
+				"allowed":   []interface{}{},
+				"default":   "deny",
+			})
+			return
+		}
+	}
+
+	// Get access rules for this user
+	// Rules come from: user_access_rules + group_access_rules
+	rules, err := s.accessRuleStore.GetUserAccessRules(ctx, userID, userGroups)
+	if err != nil {
+		s.logger.Error("Failed to get user access rules", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get access rules"})
+		return
+	}
+
+	// Convert rules to firewall-friendly format
+	type AllowedDestination struct {
+		Type     string `json:"type"`      // "ip", "cidr", "hostname"
+		Value    string `json:"value"`     // IP address, CIDR, or hostname
+		Port     string `json:"port"`      // Port or port range (empty = all)
+		Protocol string `json:"protocol"`  // tcp, udp, or empty for both
+	}
+
+	allowed := make([]AllowedDestination, 0)
+	for _, rule := range rules {
+		if !rule.IsActive {
+			continue
+		}
+		port := ""
+		if rule.PortRange != nil {
+			port = *rule.PortRange
+		}
+		protocol := ""
+		if rule.Protocol != nil {
+			protocol = *rule.Protocol
+		}
+		dest := AllowedDestination{
+			Type:     string(rule.RuleType),
+			Value:    rule.Value,
+			Port:     port,
+			Protocol: protocol,
+		}
+		allowed = append(allowed, dest)
+	}
+
+	s.logger.Info("Client rules requested",
+		zap.String("gateway", gateway.Name),
+		zap.String("user_id", req.UserID),
+		zap.String("client_ip", req.ClientIP),
+		zap.Int("rules_count", len(allowed)))
+
+	c.JSON(http.StatusOK, gin.H{
+		"user_id":     req.UserID,
+		"client_ip":   req.ClientIP,
+		"allowed":     allowed,
+		"default":     "deny", // Default policy is deny
+		"last_update": time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+// handleGatewayAllRules returns all active access rules for periodic refresh
+// Gateway can poll this to detect changes
+func (s *Server) handleGatewayAllRules(c *gin.Context) {
+	var req struct {
+		Token string `json:"token" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Verify gateway token
+	ctx := c.Request.Context()
+	gateway, err := s.gatewayStore.GetGatewayByToken(ctx, req.Token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid gateway token"})
+		return
+	}
+
+	// Get all active access rules
+	rules, err := s.accessRuleStore.ListAccessRules(ctx)
+	if err != nil {
+		s.logger.Error("Failed to list access rules", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list rules"})
+		return
+	}
+
+	// Get all user-rule and group-rule assignments
+	userRules, err := s.accessRuleStore.GetAllUserAccessRuleAssignments(ctx)
+	if err != nil {
+		s.logger.Warn("Failed to get user rule assignments", zap.Error(err))
+		userRules = make(map[string][]string) // Continue with empty
+	}
+
+	groupRules, err := s.accessRuleStore.GetAllGroupAccessRuleAssignments(ctx)
+	if err != nil {
+		s.logger.Warn("Failed to get group rule assignments", zap.Error(err))
+		groupRules = make(map[string][]string) // Continue with empty
+	}
+
+	// Build response
+	type RuleInfo struct {
+		ID       string `json:"id"`
+		Name     string `json:"name"`
+		Type     string `json:"type"`
+		Value    string `json:"value"`
+		Port     string `json:"port"`
+		Protocol string `json:"protocol"`
+		IsActive bool   `json:"is_active"`
+	}
+
+	ruleList := make([]RuleInfo, 0, len(rules))
+	for _, r := range rules {
+		port := ""
+		if r.PortRange != nil {
+			port = *r.PortRange
+		}
+		protocol := ""
+		if r.Protocol != nil {
+			protocol = *r.Protocol
+		}
+		ruleList = append(ruleList, RuleInfo{
+			ID:       r.ID,
+			Name:     r.Name,
+			Type:     string(r.RuleType),
+			Value:    r.Value,
+			Port:     port,
+			Protocol: protocol,
+			IsActive: r.IsActive,
+		})
+	}
+
+	// Generate a hash of the rules for change detection
+	rulesHash := fmt.Sprintf("%d-%d", len(rules), time.Now().Unix()/60) // Changes every minute if rules change
+
+	s.logger.Debug("All rules requested", zap.String("gateway", gateway.Name))
+
+	c.JSON(http.StatusOK, gin.H{
+		"rules":       ruleList,
+		"user_rules":  userRules,  // map[userID][]ruleID
+		"group_rules": groupRules, // map[groupName][]ruleID
+		"hash":        rulesHash,
+		"timestamp":   time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+// User handlers
+
+func (s *Server) handleGetCurrentUser(c *gin.Context) {
+	// TODO: Get current user info
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "get current user not yet implemented"})
+}
+
+func (s *Server) handleGetUserConnections(c *gin.Context) {
+	// TODO: Get current user's connections
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "get user connections not yet implemented"})
+}
+
+// User gateway handlers
+
+func (s *Server) handleListUserGateways(c *gin.Context) {
+	// List gateways available to the authenticated user
+	// Users only see gateways they're assigned to (directly or via group)
+	ctx := c.Request.Context()
+
+	// Get user info from session
+	userID, groups, err := s.getCurrentUserInfo(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	// Get gateways user has access to
+	gateways, err := s.gatewayStore.ListUserGateways(ctx, userID, groups)
+	if err != nil {
+		s.logger.Error("Failed to list user gateways", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list gateways"})
+		return
+	}
+
+	// Convert to API response format
+	// Only include gateways that are truly active (heartbeat within last 2 minutes)
+	result := make([]gin.H, 0, len(gateways))
+	activeThreshold := 2 * time.Minute
+	now := time.Now()
+
+	for _, gw := range gateways {
+		// Gateway is active only if it has sent a heartbeat within the threshold
+		isActive := gw.LastHeartbeat != nil && now.Sub(*gw.LastHeartbeat) < activeThreshold
+
+		// Show all gateways (both online and offline) so users know what's available
+		gwData := gin.H{
+			"id":          gw.ID,
+			"name":        gw.Name,
+			"hostname":    gw.Hostname,
+			"publicIp":    gw.PublicIP,
+			"vpnPort":     gw.VPNPort,
+			"vpnProtocol": gw.VPNProtocol,
+			"isActive":    isActive,
+		}
+		if gw.LastHeartbeat != nil {
+			gwData["lastHeartbeat"] = gw.LastHeartbeat.Format(time.RFC3339)
+		}
+		result = append(result, gwData)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"gateways": result})
+}
+
+// getCurrentUserInfo extracts user ID and groups from the session
+func (s *Server) getCurrentUserInfo(c *gin.Context) (string, []string, error) {
+	// Check for session cookie or Authorization header
+	token := ""
+	sessionCookie, err := c.Cookie(s.config.Auth.Session.CookieName)
+	if err == nil && sessionCookie != "" {
+		token = sessionCookie
+	} else {
+		// Also check Authorization header
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" && len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+			token = authHeader[7:]
+		}
+	}
+
+	if token == "" {
+		return "", nil, errors.New("no session token")
+	}
+
+	// First, check SSO session
+	if ssoSession, err := s.stateStore.GetSSOSession(c.Request.Context(), token); err == nil {
+		return ssoSession.UserID, ssoSession.Groups, nil
+	}
+
+	// Fall back to local user session
+	_, user, err := s.userStore.GetSession(c.Request.Context(), token)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return user.ID, []string{}, nil
+}
+
+// Admin handlers
+
+func (s *Server) handleListGateways(c *gin.Context) {
+	// List all registered gateways (admin only)
+	ctx := c.Request.Context()
+
+	gateways, err := s.gatewayStore.ListGateways(ctx)
+	if err != nil {
+		s.logger.Error("Failed to list gateways", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list gateways"})
+		return
+	}
+
+	// Convert to API response format (include token for admin)
+	// Compute isActive dynamically based on last_heartbeat (active if heartbeat within last 2 minutes)
+	result := make([]gin.H, 0, len(gateways))
+	activeThreshold := 2 * time.Minute
+	now := time.Now()
+
+	for _, gw := range gateways {
+		// Gateway is active only if it has sent a heartbeat within the threshold
+		isActive := gw.LastHeartbeat != nil && now.Sub(*gw.LastHeartbeat) < activeThreshold
+
+		gwData := gin.H{
+			"id":             gw.ID,
+			"name":           gw.Name,
+			"hostname":       gw.Hostname,
+			"publicIp":       gw.PublicIP,
+			"vpnPort":        gw.VPNPort,
+			"vpnProtocol":    gw.VPNProtocol,
+			"cryptoProfile":   gw.CryptoProfile,
+			"vpnSubnet":       gw.VPNSubnet,
+			"tlsAuthEnabled":  gw.TLSAuthEnabled,
+			"fullTunnelMode":  gw.FullTunnelMode,
+			"pushDns":         gw.PushDNS,
+			"dnsServers":      gw.DNSServers,
+			"isActive":        isActive,
+			"createdAt":      gw.CreatedAt.Format(time.RFC3339),
+			"updatedAt":      gw.UpdatedAt.Format(time.RFC3339),
+		}
+		if gw.LastHeartbeat != nil {
+			gwData["lastHeartbeat"] = gw.LastHeartbeat.Format(time.RFC3339)
+		}
+		result = append(result, gwData)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"gateways": result})
+}
+
+func (s *Server) handleRegisterGateway(c *gin.Context) {
+	// Register a new gateway (admin only)
+	var req struct {
+		Name           string `json:"name" binding:"required"`
+		Hostname       string `json:"hostname"`
+		PublicIP       string `json:"public_ip"`
+		VPNPort        int    `json:"vpn_port"`
+		VPNProtocol    string `json:"vpn_protocol"`
+		CryptoProfile  string `json:"crypto_profile"`   // modern, fips, or compatible
+		VPNSubnet      string `json:"vpn_subnet"`       // VPN client subnet (e.g., "10.8.0.0/24")
+		TLSAuthEnabled *bool    `json:"tls_auth_enabled"` // Enable TLS-Auth (default: true)
+		FullTunnelMode *bool    `json:"full_tunnel_mode"` // Route all traffic through VPN (default: false)
+		PushDNS        *bool    `json:"push_dns"`         // Push DNS servers to clients (default: false)
+		DNSServers     []string `json:"dns_servers"`      // DNS server IPs to push
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Validate that at least one of hostname or public_ip is provided
+	if req.Hostname == "" && req.PublicIP == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "either hostname or public_ip is required"})
+		return
+	}
+
+	// Default values
+	if req.VPNPort == 0 {
+		req.VPNPort = 1194
+	}
+	if req.VPNProtocol == "" {
+		req.VPNProtocol = "udp"
+	}
+	if req.CryptoProfile == "" {
+		req.CryptoProfile = db.CryptoProfileModern
+	}
+	if req.VPNSubnet == "" {
+		req.VPNSubnet = db.DefaultVPNSubnet
+	}
+	if req.DNSServers == nil {
+		req.DNSServers = []string{}
+	}
+	// Validate crypto profile is valid
+	switch req.CryptoProfile {
+	case db.CryptoProfileModern, db.CryptoProfileFIPS, db.CryptoProfileCompatible:
+		// Valid
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid crypto_profile: must be 'modern', 'fips', or 'compatible'"})
+		return
+	}
+
+	// Validate crypto profile is allowed by system settings
+	ctx := c.Request.Context()
+	if err := s.validateCryptoProfileAllowed(ctx, req.CryptoProfile); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Generate authentication token
+	token, err := db.GenerateToken()
+	if err != nil {
+		s.logger.Error("Failed to generate gateway token", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+		return
+	}
+
+	// Default TLS Auth to true if not specified
+	tlsAuthEnabled := true
+	if req.TLSAuthEnabled != nil {
+		tlsAuthEnabled = *req.TLSAuthEnabled
+	}
+
+	// Default Full Tunnel Mode to false if not specified
+	fullTunnelMode := false
+	if req.FullTunnelMode != nil {
+		fullTunnelMode = *req.FullTunnelMode
+	}
+
+	// Default Push DNS to false if not specified
+	pushDNS := false
+	if req.PushDNS != nil {
+		pushDNS = *req.PushDNS
+	}
+
+	gateway := &db.Gateway{
+		Name:           req.Name,
+		Hostname:       req.Hostname,
+		PublicIP:       req.PublicIP,
+		VPNPort:        req.VPNPort,
+		VPNProtocol:    req.VPNProtocol,
+		CryptoProfile:  req.CryptoProfile,
+		VPNSubnet:      req.VPNSubnet,
+		TLSAuthEnabled: tlsAuthEnabled,
+		FullTunnelMode: fullTunnelMode,
+		PushDNS:        pushDNS,
+		DNSServers:     req.DNSServers,
+		Token:          token,
+	}
+
+	if err := s.gatewayStore.CreateGateway(ctx, gateway); err != nil {
+		if err == db.ErrGatewayExists {
+			c.JSON(http.StatusConflict, gin.H{"error": "gateway with this name already exists"})
+			return
+		}
+		s.logger.Error("Failed to create gateway", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create gateway"})
+		return
+	}
+
+	// Fetch the created gateway to get its ID
+	createdGateway, err := s.gatewayStore.GetGatewayByName(ctx, req.Name)
+	if err != nil {
+		s.logger.Error("Failed to fetch created gateway", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "gateway created but failed to fetch details"})
+		return
+	}
+
+	s.logger.Info("Gateway registered",
+		zap.String("name", req.Name),
+		zap.String("hostname", req.Hostname))
+
+	c.JSON(http.StatusCreated, gin.H{
+		"id":              createdGateway.ID,
+		"name":            createdGateway.Name,
+		"hostname":        createdGateway.Hostname,
+		"vpnPort":         createdGateway.VPNPort,
+		"vpnProtocol":     createdGateway.VPNProtocol,
+		"cryptoProfile":   createdGateway.CryptoProfile,
+		"tlsAuthEnabled":  createdGateway.TLSAuthEnabled,
+		"fullTunnelMode":  createdGateway.FullTunnelMode,
+		"pushDns":         createdGateway.PushDNS,
+		"dnsServers":      createdGateway.DNSServers,
+		"token":           token, // Only returned on creation
+		"message":         "Gateway registered successfully. Save the token - it will not be shown again.",
+	})
+}
+
+func (s *Server) handleDeleteGateway(c *gin.Context) {
+	gatewayID := c.Param("id")
+
+	ctx := c.Request.Context()
+	if err := s.gatewayStore.DeleteGateway(ctx, gatewayID); err != nil {
+		if err == db.ErrGatewayNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "gateway not found"})
+			return
+		}
+		s.logger.Error("Failed to delete gateway", zap.Error(err), zap.String("id", gatewayID))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete gateway"})
+		return
+	}
+
+	s.logger.Info("Gateway deleted", zap.String("id", gatewayID))
+	c.JSON(http.StatusOK, gin.H{"message": "gateway deleted successfully"})
+}
+
+func (s *Server) handleUpdateGateway(c *gin.Context) {
+	gatewayID := c.Param("id")
+
+	var req struct {
+		Name           string `json:"name" binding:"required"`
+		Hostname       string `json:"hostname"`
+		PublicIP       string `json:"public_ip"`
+		VPNPort        int    `json:"vpn_port"`
+		VPNProtocol    string `json:"vpn_protocol"`
+		CryptoProfile  string `json:"crypto_profile"`   // modern, fips, or compatible
+		VPNSubnet      string `json:"vpn_subnet"`       // VPN client subnet (e.g., "10.8.0.0/24")
+		TLSAuthEnabled *bool    `json:"tls_auth_enabled"` // Enable TLS-Auth
+		FullTunnelMode *bool    `json:"full_tunnel_mode"` // Route all traffic through VPN
+		PushDNS        *bool    `json:"push_dns"`         // Push DNS servers to clients
+		DNSServers     []string `json:"dns_servers"`      // DNS server IPs to push
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Validate that at least one of hostname or public_ip is provided
+	if req.Hostname == "" && req.PublicIP == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "either hostname or public_ip is required"})
+		return
+	}
+
+	// Default values
+	if req.VPNPort == 0 {
+		req.VPNPort = 1194
+	}
+	if req.VPNProtocol == "" {
+		req.VPNProtocol = "udp"
+	}
+	if req.CryptoProfile == "" {
+		req.CryptoProfile = db.CryptoProfileModern
+	}
+	if req.VPNSubnet == "" {
+		req.VPNSubnet = db.DefaultVPNSubnet
+	}
+	// Validate crypto profile is valid
+	switch req.CryptoProfile {
+	case db.CryptoProfileModern, db.CryptoProfileFIPS, db.CryptoProfileCompatible:
+		// Valid
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid crypto_profile: must be 'modern', 'fips', or 'compatible'"})
+		return
+	}
+
+	// Validate crypto profile is allowed by system settings
+	ctx := c.Request.Context()
+	if err := s.validateCryptoProfileAllowed(ctx, req.CryptoProfile); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Get existing gateway to preserve TLSAuthEnabled if not specified
+	existingGw, err := s.gatewayStore.GetGateway(ctx, gatewayID)
+	if err != nil {
+		if err == db.ErrGatewayNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "gateway not found"})
+			return
+		}
+		s.logger.Error("Failed to get gateway", zap.Error(err), zap.String("id", gatewayID))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get gateway"})
+		return
+	}
+
+	// Use existing TLSAuthEnabled if not specified in request
+	tlsAuthEnabled := existingGw.TLSAuthEnabled
+	if req.TLSAuthEnabled != nil {
+		tlsAuthEnabled = *req.TLSAuthEnabled
+	}
+
+	// Use existing FullTunnelMode if not specified in request
+	fullTunnelMode := existingGw.FullTunnelMode
+	if req.FullTunnelMode != nil {
+		fullTunnelMode = *req.FullTunnelMode
+	}
+
+	// Use existing PushDNS if not specified in request
+	pushDNS := existingGw.PushDNS
+	if req.PushDNS != nil {
+		pushDNS = *req.PushDNS
+	}
+
+	// Use request DNSServers if provided, otherwise keep existing
+	dnsServers := existingGw.DNSServers
+	if req.DNSServers != nil {
+		dnsServers = req.DNSServers
+	}
+
+	gw := &db.Gateway{
+		ID:             gatewayID,
+		Name:           req.Name,
+		Hostname:       req.Hostname,
+		PublicIP:       req.PublicIP,
+		VPNPort:        req.VPNPort,
+		VPNProtocol:    req.VPNProtocol,
+		CryptoProfile:  req.CryptoProfile,
+		VPNSubnet:      req.VPNSubnet,
+		TLSAuthEnabled: tlsAuthEnabled,
+		FullTunnelMode: fullTunnelMode,
+		PushDNS:        pushDNS,
+		DNSServers:     dnsServers,
+	}
+
+	if err := s.gatewayStore.UpdateGateway(ctx, gw); err != nil {
+		if err == db.ErrGatewayNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "gateway not found"})
+			return
+		}
+		if err == db.ErrGatewayExists {
+			c.JSON(http.StatusConflict, gin.H{"error": "gateway with this name already exists"})
+			return
+		}
+		s.logger.Error("Failed to update gateway", zap.Error(err), zap.String("id", gatewayID))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update gateway"})
+		return
+	}
+
+	s.logger.Info("Gateway updated", zap.String("id", gatewayID), zap.String("name", req.Name))
+	c.JSON(http.StatusOK, gin.H{"message": "gateway updated successfully"})
+}
+
+func (s *Server) handleGetGatewayUsers(c *gin.Context) {
+	gatewayID := c.Param("id")
+	ctx := c.Request.Context()
+
+	users, err := s.gatewayStore.GetGatewayUsers(ctx, gatewayID)
+	if err != nil {
+		s.logger.Error("Failed to get gateway users", zap.Error(err), zap.String("gatewayId", gatewayID))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get gateway users"})
+		return
+	}
+
+	result := make([]gin.H, 0, len(users))
+	for _, u := range users {
+		result = append(result, gin.H{
+			"userId":    u.UserID,
+			"email":     u.Email,
+			"name":      u.Name,
+			"createdAt": u.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"users": result})
+}
+
+func (s *Server) handleAssignGatewayUser(c *gin.Context) {
+	gatewayID := c.Param("id")
+
+	var req struct {
+		UserID string `json:"user_id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Resolve email/username to actual user UUID
+	resolvedUserID := req.UserID
+	if strings.Contains(req.UserID, "@") {
+		// Looks like an email, try to find the user
+		if ssoUser, err := s.userStore.GetSSOUserByEmail(ctx, req.UserID); err == nil {
+			resolvedUserID = ssoUser.ID
+		} else if localUser, err := s.userStore.GetLocalUserByEmail(ctx, req.UserID); err == nil {
+			resolvedUserID = localUser.ID
+		}
+	} else {
+		// Try to find by username (for local users)
+		if localUser, err := s.userStore.GetLocalUserByUsername(ctx, req.UserID); err == nil {
+			resolvedUserID = localUser.ID
+		}
+		// If not found, assume it's already a UUID
+	}
+
+	if err := s.gatewayStore.AssignUserToGateway(ctx, resolvedUserID, gatewayID); err != nil {
+		s.logger.Error("Failed to assign user to gateway", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign user to gateway"})
+		return
+	}
+
+	s.logger.Info("User assigned to gateway", zap.String("userId", resolvedUserID), zap.String("gatewayId", gatewayID))
+	c.JSON(http.StatusOK, gin.H{"message": "user assigned to gateway"})
+}
+
+func (s *Server) handleRemoveGatewayUser(c *gin.Context) {
+	gatewayID := c.Param("id")
+	userID := c.Param("userId")
+
+	ctx := c.Request.Context()
+	if err := s.gatewayStore.RemoveUserFromGateway(ctx, userID, gatewayID); err != nil {
+		s.logger.Error("Failed to remove user from gateway", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove user from gateway"})
+		return
+	}
+
+	s.logger.Info("User removed from gateway", zap.String("userId", userID), zap.String("gatewayId", gatewayID))
+	c.JSON(http.StatusOK, gin.H{"message": "user removed from gateway"})
+}
+
+func (s *Server) handleGetGatewayGroups(c *gin.Context) {
+	gatewayID := c.Param("id")
+	ctx := c.Request.Context()
+
+	groups, err := s.gatewayStore.GetGatewayGroups(ctx, gatewayID)
+	if err != nil {
+		s.logger.Error("Failed to get gateway groups", zap.Error(err), zap.String("gatewayId", gatewayID))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get gateway groups"})
+		return
+	}
+
+	result := make([]gin.H, 0, len(groups))
+	for _, g := range groups {
+		result = append(result, gin.H{
+			"groupName": g.GroupName,
+			"createdAt": g.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"groups": result})
+}
+
+func (s *Server) handleAssignGatewayGroup(c *gin.Context) {
+	gatewayID := c.Param("id")
+
+	var req struct {
+		GroupName string `json:"group_name" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := c.Request.Context()
+	if err := s.gatewayStore.AssignGroupToGateway(ctx, req.GroupName, gatewayID); err != nil {
+		s.logger.Error("Failed to assign group to gateway", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign group to gateway"})
+		return
+	}
+
+	s.logger.Info("Group assigned to gateway", zap.String("groupName", req.GroupName), zap.String("gatewayId", gatewayID))
+	c.JSON(http.StatusOK, gin.H{"message": "group assigned to gateway"})
+}
+
+func (s *Server) handleRemoveGatewayGroup(c *gin.Context) {
+	gatewayID := c.Param("id")
+	groupName := c.Param("groupName")
+
+	ctx := c.Request.Context()
+	if err := s.gatewayStore.RemoveGroupFromGateway(ctx, groupName, gatewayID); err != nil {
+		s.logger.Error("Failed to remove group from gateway", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove group from gateway"})
+		return
+	}
+
+	s.logger.Info("Group removed from gateway", zap.String("groupName", groupName), zap.String("gatewayId", gatewayID))
+	c.JSON(http.StatusOK, gin.H{"message": "group removed from gateway"})
+}
+
+func (s *Server) handleListConnections(c *gin.Context) {
+	// TODO: List all active connections
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "list connections not yet implemented"})
+}
+
+func (s *Server) handleGetAuditLogs(c *gin.Context) {
+	// TODO: Get audit logs
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "get audit logs not yet implemented"})
+}
+
+// Network handlers
+
+func (s *Server) handleListNetworks(c *gin.Context) {
+	ctx := c.Request.Context()
+	networks, err := s.networkStore.ListNetworks(ctx)
+	if err != nil {
+		s.logger.Error("Failed to list networks", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list networks"})
+		return
+	}
+
+	result := make([]gin.H, 0, len(networks))
+	for _, n := range networks {
+		result = append(result, gin.H{
+			"id":          n.ID,
+			"name":        n.Name,
+			"description": n.Description,
+			"cidr":        n.CIDR,
+			"isActive":    n.IsActive,
+			"createdAt":   n.CreatedAt.Format(time.RFC3339),
+			"updatedAt":   n.UpdatedAt.Format(time.RFC3339),
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"networks": result})
+}
+
+func (s *Server) handleCreateNetwork(c *gin.Context) {
+	var req struct {
+		Name        string `json:"name" binding:"required"`
+		Description string `json:"description"`
+		CIDR        string `json:"cidr" binding:"required"`
+		IsActive    *bool  `json:"is_active"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	isActive := true
+	if req.IsActive != nil {
+		isActive = *req.IsActive
+	}
+
+	network := &db.Network{
+		Name:        req.Name,
+		Description: req.Description,
+		CIDR:        req.CIDR,
+		IsActive:    isActive,
+	}
+
+	ctx := c.Request.Context()
+	if err := s.networkStore.CreateNetwork(ctx, network); err != nil {
+		if err == db.ErrNetworkExists {
+			c.JSON(http.StatusConflict, gin.H{"error": "network with this name already exists"})
+			return
+		}
+		s.logger.Error("Failed to create network", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create network"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"id":          network.ID,
+		"name":        network.Name,
+		"description": network.Description,
+		"cidr":        network.CIDR,
+		"isActive":    network.IsActive,
+		"createdAt":   network.CreatedAt.Format(time.RFC3339),
+	})
+}
+
+func (s *Server) handleGetNetwork(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
+
+	network, err := s.networkStore.GetNetwork(ctx, id)
+	if err != nil {
+		if err == db.ErrNetworkNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "network not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get network"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":          network.ID,
+		"name":        network.Name,
+		"description": network.Description,
+		"cidr":        network.CIDR,
+		"isActive":    network.IsActive,
+		"createdAt":   network.CreatedAt.Format(time.RFC3339),
+		"updatedAt":   network.UpdatedAt.Format(time.RFC3339),
+	})
+}
+
+func (s *Server) handleUpdateNetwork(c *gin.Context) {
+	id := c.Param("id")
+	var req struct {
+		Name        string `json:"name" binding:"required"`
+		Description string `json:"description"`
+		CIDR        string `json:"cidr" binding:"required"`
+		IsActive    *bool  `json:"is_active"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := c.Request.Context()
+	network, err := s.networkStore.GetNetwork(ctx, id)
+	if err != nil {
+		if err == db.ErrNetworkNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "network not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get network"})
+		return
+	}
+
+	network.Name = req.Name
+	network.Description = req.Description
+	network.CIDR = req.CIDR
+	if req.IsActive != nil {
+		network.IsActive = *req.IsActive
+	}
+
+	if err := s.networkStore.UpdateNetwork(ctx, network); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update network"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "network updated successfully"})
+}
+
+func (s *Server) handleDeleteNetwork(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
+
+	if err := s.networkStore.DeleteNetwork(ctx, id); err != nil {
+		if err == db.ErrNetworkNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "network not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete network"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "network deleted successfully"})
+}
+
+func (s *Server) handleGetNetworkGateways(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
+
+	gateways, err := s.networkStore.GetNetworkGateways(ctx, id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get network gateways"})
+		return
+	}
+
+	result := make([]gin.H, 0, len(gateways))
+	for _, g := range gateways {
+		gw := gin.H{
+			"id":          g.ID,
+			"name":        g.Name,
+			"hostname":    g.Hostname,
+			"publicIp":    g.PublicIP,
+			"vpnPort":     g.VPNPort,
+			"vpnProtocol": g.VPNProtocol,
+			"isActive":    g.IsActive,
+		}
+		if g.LastHeartbeat != nil {
+			gw["lastHeartbeat"] = g.LastHeartbeat.Format(time.RFC3339)
+		}
+		result = append(result, gw)
+	}
+	c.JSON(http.StatusOK, gin.H{"gateways": result})
+}
+
+func (s *Server) handleGetNetworkAccessRules(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
+
+	rules, err := s.accessRuleStore.ListAccessRulesByNetwork(ctx, id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get network access rules"})
+		return
+	}
+
+	result := make([]gin.H, 0, len(rules))
+	for _, r := range rules {
+		// Get users and groups for this rule
+		users, _ := s.accessRuleStore.GetRuleUsers(ctx, r.ID)
+		groups, _ := s.accessRuleStore.GetRuleGroups(ctx, r.ID)
+
+		rule := gin.H{
+			"id":          r.ID,
+			"name":        r.Name,
+			"description": r.Description,
+			"rule_type":   r.RuleType,
+			"value":       r.Value,
+			"port_range":  r.PortRange,
+			"protocol":    r.Protocol,
+			"network_id":  r.NetworkID,
+			"is_active":   r.IsActive,
+			"users":       users,
+			"groups":      groups,
+		}
+		result = append(result, rule)
+	}
+	c.JSON(http.StatusOK, gin.H{"access_rules": result})
+}
+
+func (s *Server) handleGetGatewayNetworks(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
+
+	networks, err := s.networkStore.GetGatewayNetworks(ctx, id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get gateway networks"})
+		return
+	}
+
+	result := make([]gin.H, 0, len(networks))
+	for _, n := range networks {
+		result = append(result, gin.H{
+			"id":          n.ID,
+			"name":        n.Name,
+			"description": n.Description,
+			"cidr":        n.CIDR,
+			"isActive":    n.IsActive,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"networks": result})
+}
+
+func (s *Server) handleAssignGatewayNetwork(c *gin.Context) {
+	gatewayID := c.Param("id")
+	var req struct {
+		NetworkID string `json:"network_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := c.Request.Context()
+	if err := s.networkStore.AssignGatewayToNetwork(ctx, gatewayID, req.NetworkID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign gateway to network"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "gateway assigned to network"})
+}
+
+func (s *Server) handleRemoveGatewayNetwork(c *gin.Context) {
+	gatewayID := c.Param("id")
+	networkID := c.Param("networkId")
+	ctx := c.Request.Context()
+
+	if err := s.networkStore.RemoveGatewayFromNetwork(ctx, gatewayID, networkID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove gateway from network"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "gateway removed from network"})
+}
+
+// Access Rule handlers
+
+func (s *Server) handleListAccessRules(c *gin.Context) {
+	ctx := c.Request.Context()
+	rules, err := s.accessRuleStore.ListAccessRules(ctx)
+	if err != nil {
+		s.logger.Error("Failed to list access rules", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list access rules"})
+		return
+	}
+
+	result := make([]gin.H, 0, len(rules))
+	for _, r := range rules {
+		rule := gin.H{
+			"id":          r.ID,
+			"name":        r.Name,
+			"description": r.Description,
+			"ruleType":    r.RuleType,
+			"value":       r.Value,
+			"isActive":    r.IsActive,
+			"createdAt":   r.CreatedAt.Format(time.RFC3339),
+			"updatedAt":   r.UpdatedAt.Format(time.RFC3339),
+		}
+		if r.PortRange != nil {
+			rule["portRange"] = *r.PortRange
+		}
+		if r.Protocol != nil {
+			rule["protocol"] = *r.Protocol
+		}
+		if r.NetworkID != nil {
+			rule["networkId"] = *r.NetworkID
+		}
+		result = append(result, rule)
+	}
+	c.JSON(http.StatusOK, gin.H{"accessRules": result})
+}
+
+func (s *Server) handleCreateAccessRule(c *gin.Context) {
+	var req struct {
+		Name        string  `json:"name" binding:"required"`
+		Description string  `json:"description"`
+		RuleType    string  `json:"rule_type" binding:"required"`
+		Value       string  `json:"value" binding:"required"`
+		PortRange   *string `json:"port_range"`
+		Protocol    *string `json:"protocol"`
+		NetworkID   *string `json:"network_id"`
+		IsActive    *bool   `json:"is_active"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Validate rule type
+	validTypes := map[string]bool{"ip": true, "cidr": true, "hostname": true, "hostname_wildcard": true}
+	if !validTypes[req.RuleType] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid rule_type, must be: ip, cidr, hostname, or hostname_wildcard"})
+		return
+	}
+
+	isActive := true
+	if req.IsActive != nil {
+		isActive = *req.IsActive
+	}
+
+	rule := &db.AccessRule{
+		Name:        req.Name,
+		Description: req.Description,
+		RuleType:    db.AccessRuleType(req.RuleType),
+		Value:       req.Value,
+		PortRange:   req.PortRange,
+		Protocol:    req.Protocol,
+		NetworkID:   req.NetworkID,
+		IsActive:    isActive,
+	}
+
+	ctx := c.Request.Context()
+	if err := s.accessRuleStore.CreateAccessRule(ctx, rule); err != nil {
+		s.logger.Error("Failed to create access rule", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create access rule"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"id":        rule.ID,
+		"name":      rule.Name,
+		"ruleType":  rule.RuleType,
+		"value":     rule.Value,
+		"isActive":  rule.IsActive,
+		"createdAt": rule.CreatedAt.Format(time.RFC3339),
+	})
+}
+
+func (s *Server) handleGetAccessRule(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
+
+	rule, err := s.accessRuleStore.GetAccessRule(ctx, id)
+	if err != nil {
+		if err == db.ErrAccessRuleNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "access rule not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get access rule"})
+		return
+	}
+
+	// Get assigned users and groups
+	users, _ := s.accessRuleStore.GetRuleUsers(ctx, id)
+	groups, _ := s.accessRuleStore.GetRuleGroups(ctx, id)
+
+	result := gin.H{
+		"id":          rule.ID,
+		"name":        rule.Name,
+		"description": rule.Description,
+		"ruleType":    rule.RuleType,
+		"value":       rule.Value,
+		"isActive":    rule.IsActive,
+		"createdAt":   rule.CreatedAt.Format(time.RFC3339),
+		"updatedAt":   rule.UpdatedAt.Format(time.RFC3339),
+		"users":       users,
+		"groups":      groups,
+	}
+	if rule.PortRange != nil {
+		result["portRange"] = *rule.PortRange
+	}
+	if rule.Protocol != nil {
+		result["protocol"] = *rule.Protocol
+	}
+	if rule.NetworkID != nil {
+		result["networkId"] = *rule.NetworkID
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func (s *Server) handleUpdateAccessRule(c *gin.Context) {
+	id := c.Param("id")
+	var req struct {
+		Name        string  `json:"name" binding:"required"`
+		Description string  `json:"description"`
+		RuleType    string  `json:"rule_type" binding:"required"`
+		Value       string  `json:"value" binding:"required"`
+		PortRange   *string `json:"port_range"`
+		Protocol    *string `json:"protocol"`
+		NetworkID   *string `json:"network_id"`
+		IsActive    *bool   `json:"is_active"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := c.Request.Context()
+	rule, err := s.accessRuleStore.GetAccessRule(ctx, id)
+	if err != nil {
+		if err == db.ErrAccessRuleNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "access rule not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get access rule"})
+		return
+	}
+
+	rule.Name = req.Name
+	rule.Description = req.Description
+	rule.RuleType = db.AccessRuleType(req.RuleType)
+	rule.Value = req.Value
+	rule.PortRange = req.PortRange
+	rule.Protocol = req.Protocol
+	rule.NetworkID = req.NetworkID
+	if req.IsActive != nil {
+		rule.IsActive = *req.IsActive
+	}
+
+	if err := s.accessRuleStore.UpdateAccessRule(ctx, rule); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update access rule"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "access rule updated successfully"})
+}
+
+func (s *Server) handleDeleteAccessRule(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
+
+	if err := s.accessRuleStore.DeleteAccessRule(ctx, id); err != nil {
+		if err == db.ErrAccessRuleNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "access rule not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete access rule"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "access rule deleted successfully"})
+}
+
+func (s *Server) handleAssignRuleToUser(c *gin.Context) {
+	ruleID := c.Param("id")
+	var req struct {
+		UserID string `json:"user_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := c.Request.Context()
+	if err := s.accessRuleStore.AssignRuleToUser(ctx, req.UserID, ruleID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign rule to user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "rule assigned to user"})
+}
+
+func (s *Server) handleRemoveRuleFromUser(c *gin.Context) {
+	ruleID := c.Param("id")
+	userID := c.Param("userId")
+	ctx := c.Request.Context()
+
+	if err := s.accessRuleStore.RemoveRuleFromUser(ctx, userID, ruleID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove rule from user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "rule removed from user"})
+}
+
+func (s *Server) handleAssignRuleToGroup(c *gin.Context) {
+	ruleID := c.Param("id")
+	var req struct {
+		GroupName string `json:"group_name" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := c.Request.Context()
+	if err := s.accessRuleStore.AssignRuleToGroup(ctx, req.GroupName, ruleID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign rule to group"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "rule assigned to group"})
+}
+
+func (s *Server) handleRemoveRuleFromGroup(c *gin.Context) {
+	ruleID := c.Param("id")
+	groupName := c.Param("groupName")
+	ctx := c.Request.Context()
+
+	if err := s.accessRuleStore.RemoveRuleFromGroup(ctx, groupName, ruleID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove rule from group"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "rule removed from group"})
+}
+
+// Metrics handler
+
+func (s *Server) handleMetrics(c *gin.Context) {
+	// TODO: Implement Prometheus metrics
+	c.String(http.StatusOK, "# HELP gatekey_info GateKey server info\n# TYPE gatekey_info gauge\ngatekey_info{version=\"0.1.0\"} 1\n")
+}
+
+// Server info handler - returns server requirements for clients
+func (s *Server) handleGetServerInfo(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Get FIPS requirement from settings
+	requireFIPS := s.settingsStore.GetBool(ctx, db.SettingRequireFIPS, false)
+
+	c.JSON(http.StatusOK, gin.H{
+		"require_fips": requireFIPS,
+		"version":      "0.1.0",
+	})
+}
+
+// Admin settings handlers
+
+func (s *Server) handleGetSettings(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Get settings from database
+	settings, err := s.settingsStore.GetAll(ctx)
+	if err != nil {
+		s.logger.Error("Failed to get settings", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get settings"})
+		return
+	}
+
+	// Convert to map for easier frontend consumption
+	settingsMap := make(map[string]string)
+	for _, setting := range settings {
+		settingsMap[setting.Key] = setting.Value
+	}
+
+	c.JSON(http.StatusOK, gin.H{"settings": settingsMap})
+}
+
+func (s *Server) handleUpdateSettings(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var req map[string]string
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	// Validate allowed settings
+	allowedSettings := map[string]bool{
+		db.SettingSessionDurationHours:  true,
+		db.SettingSecureCookies:         true,
+		db.SettingVPNCertValidityHours:  true,
+		db.SettingRequireFIPS:           true,
+		db.SettingAllowedCryptoProfiles: true,
+		db.SettingMinTLSVersion:         true,
+		db.SettingAllowedCiphers:        true,
+	}
+
+	for key, value := range req {
+		if !allowedSettings[key] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid setting key: " + key})
+			return
+		}
+		if err := s.settingsStore.Set(ctx, key, value); err != nil {
+			s.logger.Error("Failed to update setting", zap.String("key", key), zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update setting"})
+			return
+		}
+	}
+
+	s.logger.Info("Settings updated", zap.Any("settings", req))
+	c.JSON(http.StatusOK, gin.H{"message": "settings updated"})
+}
+
+func (s *Server) handleGetOIDCProviders(c *gin.Context) {
+	providers := []gin.H{}
+	for _, p := range s.config.Auth.OIDC.Providers {
+		providers = append(providers, gin.H{
+			"name":          p.Name,
+			"display_name":  p.DisplayName,
+			"issuer":        p.Issuer,
+			"client_id":     p.ClientID,
+			"redirect_url":  p.RedirectURL,
+			"scopes":        p.Scopes,
+			"has_secret":    p.ClientSecret != "",
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"providers": providers, "enabled": s.config.Auth.OIDC.Enabled})
+}
+
+func (s *Server) handleCreateOIDCProvider(c *gin.Context) {
+	// TODO: Create OIDC provider (requires config file update or database storage)
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "create OIDC provider not yet implemented"})
+}
+
+func (s *Server) handleUpdateOIDCProvider(c *gin.Context) {
+	name := c.Param("name")
+	// TODO: Update OIDC provider
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "update OIDC provider not yet implemented", "name": name})
+}
+
+func (s *Server) handleDeleteOIDCProvider(c *gin.Context) {
+	name := c.Param("name")
+	// TODO: Delete OIDC provider
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "delete OIDC provider not yet implemented", "name": name})
+}
+
+func (s *Server) handleGetSAMLProviders(c *gin.Context) {
+	providers := []gin.H{}
+	for _, p := range s.config.Auth.SAML.Providers {
+		providers = append(providers, gin.H{
+			"name":             p.Name,
+			"display_name":     p.DisplayName,
+			"idp_metadata_url": p.IDPMetadataURL,
+			"entity_id":        p.EntityID,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"providers": providers, "enabled": s.config.Auth.SAML.Enabled})
+}
+
+func (s *Server) handleCreateSAMLProvider(c *gin.Context) {
+	// TODO: Create SAML provider
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "create SAML provider not yet implemented"})
+}
+
+func (s *Server) handleUpdateSAMLProvider(c *gin.Context) {
+	name := c.Param("name")
+	// TODO: Update SAML provider
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "update SAML provider not yet implemented", "name": name})
+}
+
+func (s *Server) handleDeleteSAMLProvider(c *gin.Context) {
+	name := c.Param("name")
+	// TODO: Delete SAML provider
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "delete SAML provider not yet implemented", "name": name})
+}
+
+// Install script and binary download handlers
+
+func (s *Server) handleInstallScript(c *gin.Context) {
+	// Serve the gateway installer script from file
+	// Try multiple paths for development and production
+	scriptPaths := []string{
+		"/app/scripts/install-gateway.sh",      // Docker container
+		"scripts/install-gateway.sh",           // Local development
+		"../scripts/install-gateway.sh",        // Running from cmd/
+	}
+
+	var script []byte
+	var err error
+	for _, path := range scriptPaths {
+		script, err = os.ReadFile(path)
+		if err == nil {
+			break
+		}
+	}
+
+	if err != nil {
+		s.logger.Error("Failed to read install script", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "install script not found"})
+		return
+	}
+
+	c.Header("Content-Type", "text/x-shellscript")
+	c.Header("Content-Disposition", "attachment; filename=install-gateway.sh")
+	c.String(http.StatusOK, string(script))
+}
+
+func (s *Server) handleInstallScriptLegacyEmbedded(c *gin.Context) {
+	// Legacy embedded script - kept for reference
+	script := `#!/bin/bash
+# GateKey Gateway Installer (Legacy Embedded Version)
+# This script installs and configures the GateKey gateway agent alongside OpenVPN.
+#
+# Usage:
+#   curl -sSL https://your-gatekey-server/scripts/install-gateway.sh | bash -s -- \
+#     --server https://gatekey.example.com \
+#     --token YOUR_GATEWAY_TOKEN \
+#     --name my-gateway
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Configuration
+GATEKEY_SERVER=""
+GATEWAY_TOKEN=""
+GATEWAY_NAME=""
+INSTALL_DIR="/opt/gatekey"
+CONFIG_DIR="/etc/gatekey"
+BIN_DIR="/usr/local/bin"
+OPENVPN_CONFIG_DIR="/etc/openvpn/server"
+VPN_PORT="1194"
+VPN_PROTOCOL="udp"
+VPN_NETWORK="172.31.255.0/24"
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --server)
+            GATEKEY_SERVER="$2"
+            shift 2
+            ;;
+        --token)
+            GATEWAY_TOKEN="$2"
+            shift 2
+            ;;
+        --name)
+            GATEWAY_NAME="$2"
+            shift 2
+            ;;
+        --port)
+            VPN_PORT="$2"
+            shift 2
+            ;;
+        --protocol)
+            VPN_PROTOCOL="$2"
+            shift 2
+            ;;
+        --help)
+            echo "GateKey Gateway Installer"
+            echo ""
+            echo "Usage: $0 [options]"
+            echo ""
+            echo "Required options:"
+            echo "  --server URL      GateKey control plane URL"
+            echo "  --token TOKEN     Gateway authentication token"
+            echo "  --name NAME       Gateway name"
+            echo ""
+            echo "Optional options:"
+            echo "  --port PORT       OpenVPN port (default: 1194)"
+            echo "  --protocol PROTO  Protocol: udp or tcp (default: udp)"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
+
+# Validate required arguments
+if [[ -z "$GATEKEY_SERVER" ]]; then
+    echo -e "${RED}Error: --server is required${NC}"
+    exit 1
+fi
+
+if [[ -z "$GATEWAY_TOKEN" ]]; then
+    echo -e "${RED}Error: --token is required${NC}"
+    exit 1
+fi
+
+if [[ -z "$GATEWAY_NAME" ]]; then
+    echo -e "${RED}Error: --name is required${NC}"
+    exit 1
+fi
+
+# Check if running as root
+if [[ $EUID -ne 0 ]]; then
+    echo -e "${RED}Error: This script must be run as root${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}GateKey Gateway Installer${NC}"
+echo "========================"
+echo "Server: $GATEKEY_SERVER"
+echo "Gateway: $GATEWAY_NAME"
+echo ""
+
+# Detect OS
+detect_os() {
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        OS=$ID
+        VERSION=$VERSION_ID
+    else
+        echo -e "${RED}Error: Unable to detect OS${NC}"
+        exit 1
+    fi
+}
+
+# Install dependencies
+install_dependencies() {
+    echo -e "${YELLOW}Installing dependencies...${NC}"
+    case $OS in
+        ubuntu|debian)
+            apt-get update
+            apt-get install -y openvpn easy-rsa curl jq
+            ;;
+        centos|rhel|fedora|rocky|almalinux)
+            if command -v dnf &> /dev/null; then
+                dnf install -y epel-release || true
+                dnf install -y openvpn easy-rsa curl jq
+            else
+                yum install -y epel-release || true
+                yum install -y openvpn easy-rsa curl jq
+            fi
+            ;;
+        amzn)
+            # Amazon Linux 2 and Amazon Linux 2023
+            if command -v dnf &> /dev/null; then
+                # AL2023 has packages in default repos
+                dnf install -y openvpn easy-rsa curl jq
+            else
+                # AL2 needs EPEL for openvpn and easy-rsa
+                amazon-linux-extras install -y epel || true
+                yum install -y openvpn easy-rsa curl jq
+            fi
+            ;;
+        *)
+            echo -e "${RED}Unsupported OS: $OS${NC}"
+            exit 1
+            ;;
+    esac
+}
+
+# Download and install gateway binary
+install_gateway_binary() {
+    echo -e "${YELLOW}Installing GateKey gateway agent...${NC}"
+    mkdir -p "$INSTALL_DIR"
+    mkdir -p "$CONFIG_DIR"
+
+    ARCH=$(uname -m)
+    case $ARCH in
+        x86_64) ARCH="amd64" ;;
+        aarch64|arm64) ARCH="arm64" ;;
+        *) echo -e "${RED}Unsupported architecture: $ARCH${NC}"; exit 1 ;;
+    esac
+
+    DOWNLOAD_URL="${GATEKEY_SERVER}/downloads/gatekey-gateway-linux-${ARCH}"
+    if curl -sSL -o "$BIN_DIR/gatekey-gateway" "$DOWNLOAD_URL"; then
+        chmod +x "$BIN_DIR/gatekey-gateway"
+        echo -e "${GREEN}Gateway binary installed${NC}"
+    else
+        echo -e "${RED}Error: Could not download gateway binary${NC}"
+        exit 1
+    fi
+}
+
+# Create gateway configuration
+create_gateway_config() {
+    echo -e "${YELLOW}Creating gateway configuration...${NC}"
+    cat > "$CONFIG_DIR/gateway.yaml" << EOF
+control_plane_url: "${GATEKEY_SERVER}"
+token: "${GATEWAY_TOKEN}"
+heartbeat_interval: "30s"
+log_level: "info"
+EOF
+    chmod 600 "$CONFIG_DIR/gateway.yaml"
+}
+
+# Provision OpenVPN certificates from control plane
+provision_openvpn() {
+    echo -e "${YELLOW}Provisioning OpenVPN certificates...${NC}"
+
+    # Request certificates from control plane
+    PROVISION_RESPONSE=$(curl -sSk -X POST "${GATEKEY_SERVER}/api/v1/gateway/provision" \
+        -H "Content-Type: application/json" \
+        -d "{\"token\": \"${GATEWAY_TOKEN}\"}")
+
+    if echo "$PROVISION_RESPONSE" | grep -q "error"; then
+        echo -e "${RED}Error provisioning certificates: $PROVISION_RESPONSE${NC}"
+        exit 1
+    fi
+
+    # Extract certificates and config from response
+    mkdir -p /etc/openvpn/server
+
+    echo "$PROVISION_RESPONSE" | jq -r '.ca_cert' > /etc/openvpn/server/ca.crt
+    echo "$PROVISION_RESPONSE" | jq -r '.server_cert' > /etc/openvpn/server/server.crt
+    echo "$PROVISION_RESPONSE" | jq -r '.server_key' > /etc/openvpn/server/server.key
+    chmod 600 /etc/openvpn/server/server.key
+
+    VPN_PORT=$(echo "$PROVISION_RESPONSE" | jq -r '.vpn_port // 1194')
+    VPN_PROTO=$(echo "$PROVISION_RESPONSE" | jq -r '.vpn_protocol // "udp"')
+    VPN_NETWORK=$(echo "$PROVISION_RESPONSE" | jq -r '.vpn_network // "10.8.0.0"')
+    VPN_NETMASK=$(echo "$PROVISION_RESPONSE" | jq -r '.vpn_netmask // "255.255.255.0"')
+    CRYPTO_PROFILE=$(echo "$PROVISION_RESPONSE" | jq -r '.crypto_profile // "modern"')
+
+    # Create OpenVPN server configuration
+    echo -e "${YELLOW}Creating OpenVPN server configuration...${NC}"
+    cat > /etc/openvpn/server/server.conf << OVPNEOF
+# GateKey OpenVPN Server Configuration
+# Auto-generated by GateKey gateway installer
+
+port ${VPN_PORT}
+proto ${VPN_PROTO}
+dev tun
+
+# Certificates
+ca /etc/openvpn/server/ca.crt
+cert /etc/openvpn/server/server.crt
+key /etc/openvpn/server/server.key
+
+# Use ECDH instead of DH (faster, more secure)
+dh none
+ecdh-curve prime256v1
+
+# Network configuration
+server ${VPN_NETWORK} ${VPN_NETMASK}
+topology subnet
+
+# Keep client IP assignments
+ifconfig-pool-persist /var/log/openvpn/ipp.txt
+
+# Push routes to clients will be handled by GateKey gateway agent
+
+# Keepalive
+keepalive 10 120
+
+# Security settings based on crypto profile
+OVPNEOF
+
+    # Detect OpenVPN version for compatibility
+    OPENVPN_VERSION=$(/usr/sbin/openvpn --version 2>/dev/null | head -1 | grep -oP '\d+\.\d+' | head -1)
+    OPENVPN_MAJOR=$(echo "$OPENVPN_VERSION" | cut -d. -f1)
+    OPENVPN_MINOR=$(echo "$OPENVPN_VERSION" | cut -d. -f2)
+
+    # Check if OpenVPN supports data-ciphers (2.5+)
+    SUPPORTS_DATA_CIPHERS=false
+    if [ "$OPENVPN_MAJOR" -gt 2 ] || ([ "$OPENVPN_MAJOR" -eq 2 ] && [ "$OPENVPN_MINOR" -ge 5 ]); then
+        SUPPORTS_DATA_CIPHERS=true
+    fi
+
+    echo "Detected OpenVPN version: $OPENVPN_VERSION (data-ciphers: $SUPPORTS_DATA_CIPHERS)"
+
+    # Add crypto settings based on profile and OpenVPN version
+    case "$CRYPTO_PROFILE" in
+        fips)
+            cat >> /etc/openvpn/server/server.conf << OVPNEOF
+# FIPS 140-3 Compliant Settings
+cipher AES-256-GCM
+OVPNEOF
+            if [ "$SUPPORTS_DATA_CIPHERS" = true ]; then
+                echo "data-ciphers AES-256-GCM:AES-128-GCM" >> /etc/openvpn/server/server.conf
+            else
+                echo "ncp-ciphers AES-256-GCM:AES-128-GCM" >> /etc/openvpn/server/server.conf
+            fi
+            cat >> /etc/openvpn/server/server.conf << OVPNEOF
+auth SHA256
+tls-version-min 1.2
+tls-cipher TLS-ECDHE-RSA-WITH-AES-256-GCM-SHA384:TLS-RSA-WITH-AES-256-GCM-SHA384
+OVPNEOF
+            ;;
+        compatible)
+            cat >> /etc/openvpn/server/server.conf << OVPNEOF
+# Compatible Settings (Legacy Support)
+cipher AES-256-CBC
+OVPNEOF
+            if [ "$SUPPORTS_DATA_CIPHERS" = true ]; then
+                echo "data-ciphers AES-256-GCM:AES-128-GCM:AES-256-CBC:AES-128-CBC" >> /etc/openvpn/server/server.conf
+            else
+                echo "ncp-ciphers AES-256-GCM:AES-128-GCM:AES-256-CBC:AES-128-CBC" >> /etc/openvpn/server/server.conf
+            fi
+            cat >> /etc/openvpn/server/server.conf << OVPNEOF
+auth SHA256
+tls-version-min 1.0
+OVPNEOF
+            ;;
+        *)
+            cat >> /etc/openvpn/server/server.conf << OVPNEOF
+# Modern Secure Settings
+cipher AES-256-GCM
+OVPNEOF
+            if [ "$SUPPORTS_DATA_CIPHERS" = true ]; then
+                echo "data-ciphers AES-256-GCM:CHACHA20-POLY1305" >> /etc/openvpn/server/server.conf
+            else
+                echo "ncp-ciphers AES-256-GCM:AES-256-CBC" >> /etc/openvpn/server/server.conf
+            fi
+            cat >> /etc/openvpn/server/server.conf << OVPNEOF
+auth SHA256
+tls-version-min 1.2
+tls-cipher TLS-ECDHE-ECDSA-WITH-AES-256-GCM-SHA384:TLS-ECDHE-RSA-WITH-AES-256-GCM-SHA384
+OVPNEOF
+            ;;
+    esac
+
+    # Add common settings
+    cat >> /etc/openvpn/server/server.conf << OVPNEOF
+
+# Additional security
+persist-key
+persist-tun
+user nobody
+group nobody
+
+# Verify client certificates
+remote-cert-tls client
+
+# Logging
+status /var/log/openvpn/openvpn-status.log
+log-append /var/log/openvpn/openvpn.log
+verb 3
+mute 20
+
+# Client scripts (GateKey hooks)
+script-security 2
+client-connect /etc/gatekey/hooks/client-connect.sh
+client-disconnect /etc/gatekey/hooks/client-disconnect.sh
+OVPNEOF
+
+    # Create log directory
+    mkdir -p /var/log/openvpn
+
+    # Create hook scripts directory
+    mkdir -p /etc/gatekey/hooks
+
+    # Create client-connect hook
+    cat > /etc/gatekey/hooks/client-connect.sh << 'HOOKEOF'
+#!/bin/bash
+# GateKey client-connect hook
+# Called when a client connects
+
+# Get client info from environment
+CN="${common_name}"
+CLIENT_IP="${ifconfig_pool_remote_ip}"
+
+# Notify control plane (if gateway agent is running)
+if [ -f /etc/gatekey/gateway.yaml ]; then
+    curl -sS -X POST "http://localhost:8081/hooks/connect" \
+        -H "Content-Type: application/json" \
+        -d "{\"common_name\": \"${CN}\", \"client_ip\": \"${CLIENT_IP}\"}" \
+        2>/dev/null || true
+fi
+
+exit 0
+HOOKEOF
+    chmod +x /etc/gatekey/hooks/client-connect.sh
+
+    # Create client-disconnect hook
+    cat > /etc/gatekey/hooks/client-disconnect.sh << 'HOOKEOF'
+#!/bin/bash
+# GateKey client-disconnect hook
+# Called when a client disconnects
+
+CN="${common_name}"
+CLIENT_IP="${ifconfig_pool_remote_ip}"
+
+if [ -f /etc/gatekey/gateway.yaml ]; then
+    curl -sS -X POST "http://localhost:8081/hooks/disconnect" \
+        -H "Content-Type: application/json" \
+        -d "{\"common_name\": \"${CN}\", \"client_ip\": \"${CLIENT_IP}\"}" \
+        2>/dev/null || true
+fi
+
+exit 0
+HOOKEOF
+    chmod +x /etc/gatekey/hooks/client-disconnect.sh
+
+    echo -e "${GREEN}OpenVPN configuration created${NC}"
+}
+
+# Create systemd service
+create_systemd_service() {
+    echo -e "${YELLOW}Creating systemd service...${NC}"
+    cat > /etc/systemd/system/gatekey-gateway.service << EOF
+[Unit]
+Description=GateKey Gateway Agent
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=${BIN_DIR}/gatekey-gateway run --config ${CONFIG_DIR}/gateway.yaml
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    systemctl daemon-reload
+}
+
+# Enable IP forwarding
+enable_ip_forwarding() {
+    echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/99-gatekey.conf
+    sysctl -p /etc/sysctl.d/99-gatekey.conf
+}
+
+# Create OpenVPN systemd service
+create_openvpn_service() {
+    echo -e "${YELLOW}Configuring OpenVPN service...${NC}"
+
+    # Create systemd service for OpenVPN server
+    cat > /etc/systemd/system/openvpn-server@.service << 'SVCEOF'
+[Unit]
+Description=OpenVPN service for %I
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+PrivateTmp=true
+WorkingDirectory=/etc/openvpn/server
+ExecStart=/usr/sbin/openvpn --status %t/openvpn-server/status-%i.log --status-version 2 --suppress-timestamps --config %i.conf
+CapabilityBoundingSet=CAP_IPC_LOCK CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_SETGID CAP_SETUID CAP_SYS_CHROOT CAP_DAC_OVERRIDE
+LimitNPROC=10
+DeviceAllow=/dev/null rw
+DeviceAllow=/dev/net/tun rw
+ProtectSystem=true
+ProtectHome=true
+KillMode=process
+RestartSec=5s
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+
+    # Create runtime directory
+    mkdir -p /run/openvpn-server
+
+    systemctl daemon-reload
+}
+
+# Start services
+start_services() {
+    echo -e "${YELLOW}Starting services...${NC}"
+
+    # Enable and start OpenVPN
+    systemctl enable openvpn-server@server.service
+    systemctl start openvpn-server@server.service
+
+    # Wait a moment for OpenVPN to start
+    sleep 2
+
+    # Check if OpenVPN started successfully
+    if systemctl is-active --quiet openvpn-server@server.service; then
+        echo -e "${GREEN}OpenVPN server started successfully${NC}"
+    else
+        echo -e "${YELLOW}Warning: OpenVPN may not have started. Checking status...${NC}"
+        systemctl status openvpn-server@server.service --no-pager || true
+    fi
+
+    # Enable and start gateway agent
+    systemctl enable gatekey-gateway.service
+    systemctl start gatekey-gateway.service
+}
+
+# Verify installation
+verify_installation() {
+    echo -e "${YELLOW}Verifying installation...${NC}"
+    local errors=0
+
+    # Check OpenVPN
+    if systemctl is-active --quiet openvpn-server@server.service; then
+        echo -e "${GREEN}✓ OpenVPN server is running${NC}"
+    else
+        echo -e "${RED}✗ OpenVPN server is NOT running${NC}"
+        errors=$((errors + 1))
+    fi
+
+    # Check gateway agent
+    if systemctl is-active --quiet gatekey-gateway.service; then
+        echo -e "${GREEN}✓ GateKey gateway agent is running${NC}"
+    else
+        echo -e "${RED}✗ GateKey gateway agent is NOT running${NC}"
+        errors=$((errors + 1))
+    fi
+
+    # Check IP forwarding
+    if [ "$(cat /proc/sys/net/ipv4/ip_forward)" = "1" ]; then
+        echo -e "${GREEN}✓ IP forwarding is enabled${NC}"
+    else
+        echo -e "${RED}✗ IP forwarding is NOT enabled${NC}"
+        errors=$((errors + 1))
+    fi
+
+    # Check if OpenVPN is listening
+    if command -v ss &> /dev/null; then
+        if ss -uln | grep -q ":1194"; then
+            echo -e "${GREEN}✓ OpenVPN is listening on UDP port 1194${NC}"
+        elif ss -tln | grep -q ":1194"; then
+            echo -e "${GREEN}✓ OpenVPN is listening on TCP port 1194${NC}"
+        else
+            echo -e "${YELLOW}! Could not verify OpenVPN is listening (may need firewall rule)${NC}"
+        fi
+    fi
+
+    return $errors
+}
+
+# Configure NAT/Masquerade for VPN traffic
+setup_nat() {
+    echo -e "${YELLOW}Setting up NAT for VPN traffic...${NC}"
+
+    # Get the default interface
+    DEFAULT_IF=$(ip route | grep default | awk '{print $5}' | head -1)
+
+    if [ -n "$DEFAULT_IF" ]; then
+        # Add masquerade rule for VPN subnet
+        iptables -t nat -C POSTROUTING -s ${VPN_SUBNET} -o "$DEFAULT_IF" -j MASQUERADE 2>/dev/null || \
+        iptables -t nat -A POSTROUTING -s ${VPN_SUBNET} -o "$DEFAULT_IF" -j MASQUERADE
+
+        # Save iptables rules (varies by distro)
+        if command -v iptables-save &> /dev/null; then
+            mkdir -p /etc/iptables
+            iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
+        fi
+
+        echo -e "${GREEN}NAT configured for interface $DEFAULT_IF${NC}"
+    else
+        echo -e "${YELLOW}Warning: Could not determine default interface for NAT${NC}"
+    fi
+}
+
+# Main
+main() {
+    detect_os
+    echo "Detected OS: $OS $VERSION"
+    install_dependencies
+    install_gateway_binary
+    create_gateway_config
+    provision_openvpn
+    create_openvpn_service
+    create_systemd_service
+    enable_ip_forwarding
+    setup_nat
+    start_services
+
+    echo ""
+    verify_installation
+
+    echo ""
+    echo -e "${GREEN}============================================${NC}"
+    echo -e "${GREEN}GateKey Gateway Installation Complete!${NC}"
+    echo -e "${GREEN}============================================${NC}"
+    echo ""
+    echo "Commands:"
+    echo "  Check OpenVPN:  systemctl status openvpn-server@server"
+    echo "  Check Agent:    systemctl status gatekey-gateway"
+    echo "  View VPN logs:  journalctl -u openvpn-server@server -f"
+    echo "  View Agent logs: journalctl -u gatekey-gateway -f"
+}
+
+main
+`
+	c.Header("Content-Type", "text/x-shellscript")
+	c.Header("Content-Disposition", "attachment; filename=install-gateway.sh")
+	c.String(http.StatusOK, script)
+}
+
+func (s *Server) handleDownloadBinary(c *gin.Context) {
+	filename := c.Param("filename")
+
+	// Only allow specific binary patterns
+	allowedPatterns := []string{
+		// Gateway binaries
+		"gatekey-gateway-linux-amd64",
+		"gatekey-gateway-linux-arm64",
+		"gatekey-gateway-darwin-amd64",
+		"gatekey-gateway-darwin-arm64",
+		"gatekey-gateway-windows-amd64.exe",
+		// Client binaries
+		"gatekey-linux-amd64",
+		"gatekey-linux-arm64",
+		"gatekey-darwin-amd64",
+		"gatekey-darwin-arm64",
+		"gatekey-windows-amd64.exe",
+	}
+
+	allowed := false
+	for _, pattern := range allowedPatterns {
+		if filename == pattern {
+			allowed = true
+			break
+		}
+	}
+
+	if !allowed {
+		c.JSON(http.StatusNotFound, gin.H{"error": "binary not found"})
+		return
+	}
+
+	// Try to serve the binary from the bin directory
+	binPath := "./bin/" + filename
+	if _, err := os.Stat(binPath); os.IsNotExist(err) {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":    "binary not available",
+			"filename": filename,
+			"hint":     "Build the binary first using make build",
+		})
+		return
+	}
+
+	c.Header("Content-Type", "application/octet-stream")
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.File(binPath)
+}
+
+func (s *Server) handleDownloadsPage(c *gin.Context) {
+	// Return a simple HTML page listing available downloads
+	serverURL := c.Request.Host
+	// Check X-Forwarded-Proto header first (for reverse proxy/Istio)
+	protocol := c.GetHeader("X-Forwarded-Proto")
+	if protocol == "" {
+		if c.Request.TLS != nil {
+			protocol = "https"
+		} else {
+			protocol = "http"
+		}
+	}
+	baseURL := protocol + "://" + serverURL
+
+	html := `<!DOCTYPE html>
+<html>
+<head>
+    <title>GateKey Downloads</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+        h1 { color: #1a56db; }
+        .section { margin: 30px 0; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; }
+        .section h2 { margin-top: 0; color: #374151; }
+        code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; }
+        pre { background: #1f2937; color: #f9fafb; padding: 15px; border-radius: 8px; overflow-x: auto; }
+        a { color: #1a56db; }
+        ul { line-height: 2; }
+    </style>
+</head>
+<body>
+    <h1>GateKey Downloads</h1>
+
+    <div class="section">
+        <h2>VPN Client (gatekey)</h2>
+        <p>The GateKey client allows you to connect to VPN gateways.</p>
+        <h3>Quick Install (Linux/macOS)</h3>
+        <pre>curl -sSL ` + baseURL + `/scripts/install-client.sh | bash</pre>
+        <h3>Manual Downloads</h3>
+        <ul>
+            <li><a href="/downloads/gatekey-linux-amd64">Linux (x86_64)</a></li>
+            <li><a href="/downloads/gatekey-linux-arm64">Linux (ARM64)</a></li>
+            <li><a href="/downloads/gatekey-darwin-amd64">macOS (Intel)</a></li>
+            <li><a href="/downloads/gatekey-darwin-arm64">macOS (Apple Silicon)</a></li>
+            <li><a href="/downloads/gatekey-windows-amd64.exe">Windows (x86_64)</a></li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>Gateway Agent (gatekey-gateway)</h2>
+        <p>The gateway agent runs alongside OpenVPN to provide zero-trust access control.</p>
+        <h3>Quick Install (Linux)</h3>
+        <pre>curl -sSL ` + baseURL + `/scripts/install-gateway.sh | bash -s -- \
+  --server ` + baseURL + ` \
+  --token YOUR_GATEWAY_TOKEN \
+  --name my-gateway</pre>
+        <h3>Manual Downloads</h3>
+        <ul>
+            <li><a href="/downloads/gatekey-gateway-linux-amd64">Linux (x86_64)</a></li>
+            <li><a href="/downloads/gatekey-gateway-linux-arm64">Linux (ARM64)</a></li>
+            <li><a href="/downloads/gatekey-gateway-darwin-amd64">macOS (Intel)</a></li>
+            <li><a href="/downloads/gatekey-gateway-darwin-arm64">macOS (Apple Silicon)</a></li>
+        </ul>
+    </div>
+</body>
+</html>`
+
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.String(http.StatusOK, html)
+}
+
+func (s *Server) handleClientInstallScript(c *gin.Context) {
+	serverURL := c.Request.Host
+	// Check X-Forwarded-Proto header first (for reverse proxy/Istio)
+	protocol := c.GetHeader("X-Forwarded-Proto")
+	if protocol == "" {
+		if c.Request.TLS != nil {
+			protocol = "https"
+		} else {
+			protocol = "http"
+		}
+	}
+
+	script := `#!/bin/bash
+# GateKey Client Installer
+# This script installs the GateKey VPN client.
+#
+# Usage:
+#   curl -sSL ` + protocol + `://` + serverURL + `/scripts/install-client.sh | bash
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+GATEKEY_SERVER="` + protocol + `://` + serverURL + `"
+INSTALL_DIR="/usr/local/bin"
+
+echo -e "${GREEN}GateKey Client Installer${NC}"
+echo "========================="
+echo ""
+
+# Detect OS and architecture
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
+
+case "$ARCH" in
+    x86_64)
+        ARCH="amd64"
+        ;;
+    aarch64|arm64)
+        ARCH="arm64"
+        ;;
+    *)
+        echo -e "${RED}Error: Unsupported architecture: $ARCH${NC}"
+        exit 1
+        ;;
+esac
+
+case "$OS" in
+    linux|darwin)
+        BINARY_NAME="gatekey-${OS}-${ARCH}"
+        ;;
+    *)
+        echo -e "${RED}Error: Unsupported OS: $OS${NC}"
+        exit 1
+        ;;
+esac
+
+DOWNLOAD_URL="${GATEKEY_SERVER}/downloads/${BINARY_NAME}"
+
+echo "Detected: $OS ($ARCH)"
+echo "Downloading from: $DOWNLOAD_URL"
+echo ""
+
+# Check for curl or wget
+if command -v curl &> /dev/null; then
+    DOWNLOADER="curl -fsSL -o"
+elif command -v wget &> /dev/null; then
+    DOWNLOADER="wget -q -O"
+else
+    echo -e "${RED}Error: Neither curl nor wget found. Please install one of them.${NC}"
+    exit 1
+fi
+
+# Create temp file
+TMP_FILE=$(mktemp)
+trap "rm -f $TMP_FILE" EXIT
+
+echo -e "${YELLOW}Downloading GateKey client...${NC}"
+$DOWNLOADER "$TMP_FILE" "$DOWNLOAD_URL"
+
+if [ ! -s "$TMP_FILE" ]; then
+    echo -e "${RED}Error: Download failed or file is empty${NC}"
+    exit 1
+fi
+
+# Install binary
+echo -e "${YELLOW}Installing to $INSTALL_DIR/gatekey...${NC}"
+if [ -w "$INSTALL_DIR" ]; then
+    mv "$TMP_FILE" "$INSTALL_DIR/gatekey"
+    chmod +x "$INSTALL_DIR/gatekey"
+else
+    echo "Root permissions required to install to $INSTALL_DIR"
+    sudo mv "$TMP_FILE" "$INSTALL_DIR/gatekey"
+    sudo chmod +x "$INSTALL_DIR/gatekey"
+fi
+
+echo ""
+echo -e "${GREEN}GateKey client installed successfully!${NC}"
+echo ""
+echo "Getting started:"
+echo "  1. Configure the client:"
+echo "     gatekey config init --server $GATEKEY_SERVER"
+echo ""
+echo "  2. Login to your account:"
+echo "     gatekey login"
+echo ""
+echo "  3. Connect to VPN:"
+echo "     gatekey connect"
+echo ""
+`
+
+	c.Header("Content-Type", "text/x-shellscript")
+	c.String(http.StatusOK, script)
+}
+
+// User management handlers
+
+func (s *Server) handleListUsers(c *gin.Context) {
+	ctx := c.Request.Context()
+	users, err := s.userStore.ListSSOUsers(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list users"})
+		return
+	}
+
+	// Build response with user details
+	response := make([]gin.H, 0, len(users))
+	for _, u := range users {
+		response = append(response, gin.H{
+			"id":            u.ID,
+			"external_id":   u.ExternalID,
+			"provider":      u.Provider,
+			"email":         u.Email,
+			"name":          u.Name,
+			"groups":        u.Groups,
+			"is_admin":      u.IsAdmin,
+			"is_active":     u.IsActive,
+			"last_login_at": u.LastLoginAt,
+			"created_at":    u.CreatedAt,
+			"updated_at":    u.UpdatedAt,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"users": response})
+}
+
+func (s *Server) handleGetUser(c *gin.Context) {
+	userID := c.Param("id")
+	ctx := c.Request.Context()
+
+	user, err := s.userStore.GetSSOUser(ctx, userID)
+	if err != nil {
+		if err == db.ErrUserNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":            user.ID,
+		"external_id":   user.ExternalID,
+		"provider":      user.Provider,
+		"email":         user.Email,
+		"name":          user.Name,
+		"groups":        user.Groups,
+		"is_admin":      user.IsAdmin,
+		"is_active":     user.IsActive,
+		"last_login_at": user.LastLoginAt,
+		"created_at":    user.CreatedAt,
+		"updated_at":    user.UpdatedAt,
+	})
+}
+
+func (s *Server) handleGetUserAccessRules(c *gin.Context) {
+	userID := c.Param("id")
+	ctx := c.Request.Context()
+
+	// First get the user to get their groups
+	user, err := s.userStore.GetSSOUser(ctx, userID)
+	if err != nil {
+		if err == db.ErrUserNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user"})
+		return
+	}
+
+	// Get access rules for this user (direct + via groups)
+	rules, err := s.accessRuleStore.GetUserAccessRules(ctx, userID, user.Groups)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user access rules"})
+		return
+	}
+
+	response := make([]gin.H, 0, len(rules))
+	for _, r := range rules {
+		response = append(response, gin.H{
+			"id":          r.ID,
+			"name":        r.Name,
+			"description": r.Description,
+			"rule_type":   r.RuleType,
+			"value":       r.Value,
+			"port_range":  r.PortRange,
+			"protocol":    r.Protocol,
+			"network_id":  r.NetworkID,
+			"is_active":   r.IsActive,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"access_rules": response})
+}
+
+func (s *Server) handleGetUserGateways(c *gin.Context) {
+	userID := c.Param("id")
+	ctx := c.Request.Context()
+
+	gateways, err := s.gatewayStore.GetGatewaysForUser(ctx, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user gateways"})
+		return
+	}
+
+	response := make([]gin.H, 0, len(gateways))
+	for _, g := range gateways {
+		response = append(response, gin.H{
+			"id":             g.ID,
+			"name":           g.Name,
+			"hostname":       g.Hostname,
+			"public_ip":      g.PublicIP,
+			"vpn_port":       g.VPNPort,
+			"vpn_protocol":   g.VPNProtocol,
+			"is_active":      g.IsActive,
+			"last_heartbeat": g.LastHeartbeat,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"gateways": response})
+}
+
+func (s *Server) handleAssignUserGateway(c *gin.Context) {
+	userID := c.Param("id")
+	var req struct {
+		GatewayID string `json:"gateway_id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := c.Request.Context()
+	if err := s.gatewayStore.AssignUserToGateway(ctx, userID, req.GatewayID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign gateway"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "gateway assigned successfully"})
+}
+
+func (s *Server) handleRemoveUserGateway(c *gin.Context) {
+	userID := c.Param("id")
+	gatewayID := c.Param("gatewayId")
+	ctx := c.Request.Context()
+
+	if err := s.gatewayStore.RemoveUserFromGateway(ctx, userID, gatewayID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove gateway"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "gateway removed successfully"})
+}
+
+func (s *Server) handleListLocalUsers(c *gin.Context) {
+	ctx := c.Request.Context()
+	users, err := s.userStore.ListLocalUsers(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list local users"})
+		return
+	}
+
+	response := make([]gin.H, 0, len(users))
+	for _, u := range users {
+		response = append(response, gin.H{
+			"id":            u.ID,
+			"username":      u.Username,
+			"email":         u.Email,
+			"is_admin":      u.IsAdmin,
+			"last_login_at": u.LastLoginAt,
+			"created_at":    u.CreatedAt,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"users": response})
+}
+
+func (s *Server) handleCreateLocalUser(c *gin.Context) {
+	var req struct {
+		Username string `json:"username" binding:"required"`
+		Password string `json:"password" binding:"required"`
+		Email    string `json:"email" binding:"required"`
+		IsAdmin  bool   `json:"is_admin"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := c.Request.Context()
+	if err := s.userStore.CreateUser(ctx, req.Username, req.Password, req.Email, req.IsAdmin); err != nil {
+		if err == db.ErrUserExists {
+			c.JSON(http.StatusConflict, gin.H{"error": "user already exists"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"message": "user created successfully"})
+}
+
+func (s *Server) handleDeleteLocalUser(c *gin.Context) {
+	userID := c.Param("id")
+	ctx := c.Request.Context()
+
+	// Get the user first to check if it's the admin account
+	user, err := s.userStore.GetUserByID(ctx, userID)
+	if err != nil {
+		if err == db.ErrUserNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user"})
+		return
+	}
+
+	// Prevent deletion of the default admin account
+	if user.Username == "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "cannot delete the default admin account"})
+		return
+	}
+
+	if err := s.userStore.DeleteLocalUser(ctx, userID); err != nil {
+		if err == db.ErrUserNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "user deleted successfully"})
+}
+
+// Group management handlers
+
+func (s *Server) handleListGroups(c *gin.Context) {
+	ctx := c.Request.Context()
+	groups, err := s.userStore.ListAllGroups(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list groups"})
+		return
+	}
+
+	// For each group, get member count
+	response := make([]gin.H, 0, len(groups))
+	for _, g := range groups {
+		members, _ := s.userStore.GetGroupMembers(ctx, g)
+		response = append(response, gin.H{
+			"name":         g,
+			"member_count": len(members),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"groups": response})
+}
+
+func (s *Server) handleGetGroupMembers(c *gin.Context) {
+	groupName := c.Param("name")
+	ctx := c.Request.Context()
+
+	members, err := s.userStore.GetGroupMembers(ctx, groupName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get group members"})
+		return
+	}
+
+	response := make([]gin.H, 0, len(members))
+	for _, u := range members {
+		response = append(response, gin.H{
+			"id":       u.ID,
+			"email":    u.Email,
+			"name":     u.Name,
+			"provider": u.Provider,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"members": response, "group": groupName})
+}
+
+func (s *Server) handleGetGroupAccessRules(c *gin.Context) {
+	groupName := c.Param("name")
+	ctx := c.Request.Context()
+
+	// Get all access rules that are assigned to this group
+	allRules, err := s.accessRuleStore.ListAccessRules(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list access rules"})
+		return
+	}
+
+	// Filter rules that have this group assigned
+	var groupRules []*db.AccessRule
+	for _, rule := range allRules {
+		groups, err := s.accessRuleStore.GetRuleGroups(ctx, rule.ID)
+		if err != nil {
+			continue
+		}
+		for _, g := range groups {
+			if g == groupName {
+				groupRules = append(groupRules, rule)
+				break
+			}
+		}
+	}
+
+	response := make([]gin.H, 0, len(groupRules))
+	for _, r := range groupRules {
+		response = append(response, gin.H{
+			"id":          r.ID,
+			"name":        r.Name,
+			"description": r.Description,
+			"rule_type":   r.RuleType,
+			"value":       r.Value,
+			"port_range":  r.PortRange,
+			"protocol":    r.Protocol,
+			"network_id":  r.NetworkID,
+			"is_active":   r.IsActive,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"access_rules": response, "group": groupName})
+}
+
+// CA management handlers
+
+func (s *Server) handleGetCA(c *gin.Context) {
+	if s.ca == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "CA not initialized"})
+		return
+	}
+
+	cert := s.ca.Certificate()
+	if cert == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "CA certificate not available"})
+		return
+	}
+
+	// Return CA info (but NOT the private key)
+	c.JSON(http.StatusOK, gin.H{
+		"serial_number": cert.SerialNumber.Text(16),
+		"subject":       cert.Subject.String(),
+		"issuer":        cert.Issuer.String(),
+		"not_before":    cert.NotBefore,
+		"not_after":     cert.NotAfter,
+		"is_ca":         cert.IsCA,
+		"fingerprint":   pki.Fingerprint(cert),
+		"certificate":   string(s.ca.CertificatePEM()),
+	})
+}
+
+func (s *Server) handleRotateCA(c *gin.Context) {
+	if s.ca == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "CA not initialized"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Generate new CA
+	if err := s.ca.Rotate(ctx); err != nil {
+		s.logger.Error("Failed to rotate CA", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to rotate CA: " + err.Error()})
+		return
+	}
+
+	// Update config generator with new CA
+	if s.configGen != nil {
+		newConfigGen, err := openvpn.NewConfigGenerator(s.ca, nil)
+		if err != nil {
+			s.logger.Error("Failed to reinitialize config generator", zap.Error(err))
+		} else {
+			s.configGen = newConfigGen
+		}
+	}
+
+	cert := s.ca.Certificate()
+	s.logger.Info("CA rotated successfully",
+		zap.String("serial", cert.SerialNumber.Text(16)),
+		zap.Time("not_after", cert.NotAfter))
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":       "CA rotated successfully",
+		"serial_number": cert.SerialNumber.Text(16),
+		"not_before":    cert.NotBefore,
+		"not_after":     cert.NotAfter,
+		"fingerprint":   pki.Fingerprint(cert),
+	})
+}
+
+func (s *Server) handleUpdateCA(c *gin.Context) {
+	if s.ca == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "CA not initialized"})
+		return
+	}
+
+	var req struct {
+		Certificate string `json:"certificate" binding:"required"`
+		PrivateKey  string `json:"private_key" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: certificate and private_key required"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Update CA with custom cert/key
+	if err := s.ca.UpdateFromPEM(ctx, req.Certificate, req.PrivateKey); err != nil {
+		s.logger.Error("Failed to update CA", zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to update CA: " + err.Error()})
+		return
+	}
+
+	// Update config generator with new CA
+	if s.configGen != nil {
+		newConfigGen, err := openvpn.NewConfigGenerator(s.ca, nil)
+		if err != nil {
+			s.logger.Error("Failed to reinitialize config generator", zap.Error(err))
+		} else {
+			s.configGen = newConfigGen
+		}
+	}
+
+	cert := s.ca.Certificate()
+	s.logger.Info("CA updated with custom certificate",
+		zap.String("serial", cert.SerialNumber.Text(16)),
+		zap.Time("not_after", cert.NotAfter))
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":       "CA updated successfully",
+		"serial_number": cert.SerialNumber.Text(16),
+		"subject":       cert.Subject.String(),
+		"not_before":    cert.NotBefore,
+		"not_after":     cert.NotAfter,
+		"fingerprint":   pki.Fingerprint(cert),
+	})
+}
+
+// validateCryptoProfileAllowed checks if the given crypto profile is allowed by system settings
+func (s *Server) validateCryptoProfileAllowed(ctx context.Context, profile string) error {
+	// Get allowed profiles from settings
+	setting, err := s.settingsStore.Get(ctx, db.SettingAllowedCryptoProfiles)
+	if err != nil {
+		// If setting doesn't exist, allow all profiles (default behavior)
+		return nil
+	}
+
+	allowedProfiles := strings.Split(setting.Value, ",")
+	for _, p := range allowedProfiles {
+		if strings.TrimSpace(p) == profile {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("crypto profile '%s' is not allowed by system policy. Allowed profiles: %s", profile, setting.Value)
+}

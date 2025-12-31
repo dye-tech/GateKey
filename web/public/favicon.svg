@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="shieldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4FC3F7"/>
+      <stop offset="50%" style="stop-color:#1E88E5"/>
+      <stop offset="100%" style="stop-color:#1565C0"/>
+    </linearGradient>
+    <linearGradient id="shieldBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1565C0"/>
+      <stop offset="100%" style="stop-color:#0D47A1"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="1" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Shield outer border -->
+  <path d="M32 4 L56 12 L56 28 C56 44 44 54 32 60 C20 54 8 44 8 28 L8 12 Z"
+        fill="url(#shieldBorder)" filter="url(#glow)"/>
+
+  <!-- Shield inner -->
+  <path d="M32 7 L53 14 L53 28 C53 42 42 51 32 56 C22 51 11 42 11 28 L11 14 Z"
+        fill="url(#shieldGradient)"/>
+
+  <!-- Shield highlight -->
+  <path d="M32 7 L53 14 L53 28 C53 30 52 32 51 34 L32 12 L13 28 C12 26 11 24 11 22 L11 14 Z"
+        fill="rgba(255,255,255,0.15)"/>
+
+  <!-- Keyhole -->
+  <circle cx="32" cy="26" r="7" fill="white"/>
+  <path d="M28 30 L36 30 L34 46 L30 46 Z" fill="white"/>
+</svg>
