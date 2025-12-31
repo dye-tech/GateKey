@@ -77,13 +77,20 @@ CREATE FUNCTION public.update_gateway_config_version() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
-    NEW.config_version := compute_gateway_config_version(
-        NEW.crypto_profile,
-        NEW.vpn_port,
-        NEW.vpn_protocol,
-        NEW.vpn_subnet,
-        NEW.tls_auth_enabled,
-        NEW.tls_auth_key
+    -- Compute config version based on settings that affect gateway config
+    NEW.config_version := encode(
+        sha256(
+            (COALESCE(NEW.crypto_profile, '') || '|' ||
+             COALESCE(NEW.vpn_port::text, '') || '|' ||
+             COALESCE(NEW.vpn_protocol, '') || '|' ||
+             COALESCE(NEW.vpn_subnet::text, '') || '|' ||
+             COALESCE(NEW.tls_auth_enabled::text, '') || '|' ||
+             COALESCE(NEW.tls_auth_key, '') || '|' ||
+             COALESCE(NEW.full_tunnel_mode::text, '') || '|' ||
+             COALESCE(NEW.push_dns::text, '') || '|' ||
+             COALESCE(array_to_string(NEW.dns_servers, ','), ''))::bytea
+        ),
+        'hex'
     );
     RETURN NEW;
 END;
@@ -267,6 +274,9 @@ CREATE TABLE public.gateways (
     tls_auth_enabled boolean DEFAULT true NOT NULL,
     tls_auth_key text,
     config_version character varying(64),
+    full_tunnel_mode boolean DEFAULT false NOT NULL,
+    push_dns boolean DEFAULT false NOT NULL,
+    dns_servers text[] DEFAULT '{}'::text[] NOT NULL,
     CONSTRAINT chk_gateway_address CHECK (((hostname IS NOT NULL) OR (public_ip IS NOT NULL)))
 );
 
@@ -276,6 +286,27 @@ CREATE TABLE public.gateways (
 --
 
 COMMENT ON COLUMN public.gateways.crypto_profile IS 'Cryptographic profile: modern (default), fips (FIPS 140-2 compliant), compatible (legacy support)';
+
+
+--
+-- Name: COLUMN gateways.full_tunnel_mode; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.gateways.full_tunnel_mode IS 'When true, all client traffic routes through VPN (redirect-gateway). When false, only routes for allowed networks are pushed.';
+
+
+--
+-- Name: COLUMN gateways.push_dns; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.gateways.push_dns IS 'When true, push DNS servers to VPN clients. Default is false (don''t override client DNS).';
+
+
+--
+-- Name: COLUMN gateways.dns_servers; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.gateways.dns_servers IS 'Array of DNS server IPs to push to clients.';
 
 
 --
