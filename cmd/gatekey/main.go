@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gatekey-project/gatekey/internal/client"
 	"github.com/spf13/cobra"
+
+	"github.com/gatekey-project/gatekey/internal/client"
 )
 
 var (

@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gatekey-project/gatekey/internal/models"
 	"github.com/google/uuid"
+
+	"github.com/gatekey-project/gatekey/internal/models"
 )
 
 // mockPolicyRepository is a mock implementation for testing.

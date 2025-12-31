@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/gatekey-project/gatekey/internal/config"
 	"github.com/gatekey-project/gatekey/internal/models"
 	"github.com/gatekey-project/gatekey/internal/pki"
-	"github.com/google/uuid"
 )
 
 func TestConfigGenerator_Generate(t *testing.T) {

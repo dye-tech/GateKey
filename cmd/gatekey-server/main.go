@@ -10,11 +10,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gatekey-project/gatekey/internal/api"
-	"github.com/gatekey-project/gatekey/internal/config"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/gatekey-project/gatekey/internal/api"
+	"github.com/gatekey-project/gatekey/internal/config"
 )
 
 var (

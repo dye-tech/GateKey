@@ -149,7 +149,7 @@ func (s *StateStore) GetSSOSession(ctx context.Context, token string) (*SSOSessi
 
 	// Check if expired
 	if time.Now().After(session.ExpiresAt) {
-		s.DeleteSSOSession(ctx, token)
+		_ = s.DeleteSSOSession(ctx, token) // Best effort cleanup
 		return nil, ErrSessionExpired
 	}
 

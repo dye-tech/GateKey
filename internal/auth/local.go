@@ -85,7 +85,7 @@ func (p *LocalAuthProvider) Authenticate(username, password string) (*LocalUser,
 
 	if !exists {
 		// Still do password comparison to prevent timing attacks
-		p.hashPassword(password)
+		_, _ = p.hashPassword(password) // Ignore result, just for timing
 		return nil, ErrInvalidCredentials
 	}
 

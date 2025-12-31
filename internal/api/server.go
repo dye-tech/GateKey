@@ -6,14 +6,15 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
 	"github.com/gatekey-project/gatekey/internal/config"
 	"github.com/gatekey-project/gatekey/internal/db"
 	"github.com/gatekey-project/gatekey/internal/k8s"
 	"github.com/gatekey-project/gatekey/internal/openvpn"
 	"github.com/gatekey-project/gatekey/internal/pki"
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 // Server represents the HTTP API server.
@@ -69,7 +70,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 
 	// Configure trusted proxies
 	if len(cfg.Server.TrustedProxies) > 0 {
-		router.SetTrustedProxies(cfg.Server.TrustedProxies)
+		_ = router.SetTrustedProxies(cfg.Server.TrustedProxies) // Ignore error, will use defaults
 	}
 
 	// Initialize database connection
@@ -393,6 +394,7 @@ func (s *Server) setupRoutes() {
 	// Downloads endpoints
 	s.router.GET("/downloads", s.handleDownloadsPage)
 	s.router.GET("/downloads/:filename", s.handleDownloadBinary)
+	s.router.GET("/bin/:filename", s.handleDownloadBinary) // Alias for /downloads
 }
 
 // ListenAndServe starts the HTTP server.

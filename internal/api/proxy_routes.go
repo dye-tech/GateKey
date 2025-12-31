@@ -6,9 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gatekey-project/gatekey/internal/db"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+
+	"github.com/gatekey-project/gatekey/internal/db"
 )
 
 // Slug validation regex - alphanumeric with dashes, lowercase

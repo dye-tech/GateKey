@@ -16,6 +16,7 @@ import (
 
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
+
 	"github.com/gatekey-project/gatekey/internal/auth"
 	"github.com/gatekey-project/gatekey/internal/config"
 )

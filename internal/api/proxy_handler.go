@@ -14,9 +14,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gatekey-project/gatekey/internal/db"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+
+	"github.com/gatekey-project/gatekey/internal/db"
 )
 
 // Hop-by-hop headers that should not be forwarded
@@ -693,6 +694,7 @@ func (s *Server) handleProxyContextRedirect(c *gin.Context) {
 		strings.HasPrefix(requestPath, "/login") ||
 		strings.HasPrefix(requestPath, "/scripts/") ||
 		strings.HasPrefix(requestPath, "/downloads/") ||
+		strings.HasPrefix(requestPath, "/bin/") ||
 		// Frontend routes - these should NOT be redirected to proxy
 		requestPath == "/" ||
 		strings.HasPrefix(requestPath, "/admin") ||
