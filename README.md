@@ -11,7 +11,7 @@
   <a href="https://github.com/dye-tech/GateKey/actions/workflows/codeql.yml"><img src="https://github.com/dye-tech/GateKey/actions/workflows/codeql.yml/badge.svg" alt="CodeQL"></a>
   <a href="https://goreportcard.com/report/github.com/dye-tech/GateKey"><img src="https://goreportcard.com/badge/github.com/dye-tech/GateKey" alt="Go Report Card"></a>
   <a href="https://github.com/dye-tech/GateKey/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
-  <a href="https://golang.org/doc/go1.23"><img src="https://img.shields.io/badge/Go-1.23-00ADD8?logo=go" alt="Go Version"></a>
+  <a href="https://golang.org/doc/go1.25"><img src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go" alt="Go Version"></a>
 </p>
 
 <p align="center">
@@ -177,7 +177,7 @@ The following is for administrators setting up GateKey infrastructure.
 
 ### Prerequisites
 
-- Go 1.23+
+- Go 1.25+
 - PostgreSQL 14+
 - OpenVPN 2.5+ (on gateway servers)
 
