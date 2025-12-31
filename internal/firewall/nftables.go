@@ -305,6 +305,8 @@ func (b *NFTablesBackend) buildRule(rule Rule) *nftables.Rule {
 			proto = 17
 		case ProtocolICMP:
 			proto = 1
+		case ProtocolAny:
+			// ProtocolAny is already filtered above, but included for exhaustiveness
 		}
 
 		if proto > 0 {

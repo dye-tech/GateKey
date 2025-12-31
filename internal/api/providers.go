@@ -3,9 +3,10 @@ package api
 import (
 	"net/http"
 
-	"github.com/gatekey-project/gatekey/internal/db"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+
+	"github.com/gatekey-project/gatekey/internal/db"
 )
 
 // OIDC Provider HTTP Handlers

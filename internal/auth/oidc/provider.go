@@ -8,9 +8,10 @@ import (
 	"net/http"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"golang.org/x/oauth2"
+
 	"github.com/gatekey-project/gatekey/internal/auth"
 	"github.com/gatekey-project/gatekey/internal/config"
-	"golang.org/x/oauth2"
 )
 
 // Provider implements OIDC authentication.

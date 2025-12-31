@@ -27,27 +27,27 @@ type LoginLog struct {
 
 // LoginLogStats provides aggregated statistics
 type LoginLogStats struct {
-	TotalLogins       int            `json:"total_logins"`
-	SuccessfulLogins  int            `json:"successful_logins"`
-	FailedLogins      int            `json:"failed_logins"`
-	UniqueUsers       int            `json:"unique_users"`
-	UniqueIPs         int            `json:"unique_ips"`
-	LoginsByProvider  map[string]int `json:"logins_by_provider"`
-	LoginsByCountry   map[string]int `json:"logins_by_country,omitempty"`
-	RecentFailures    []*LoginLog    `json:"recent_failures,omitempty"`
+	TotalLogins      int            `json:"total_logins"`
+	SuccessfulLogins int            `json:"successful_logins"`
+	FailedLogins     int            `json:"failed_logins"`
+	UniqueUsers      int            `json:"unique_users"`
+	UniqueIPs        int            `json:"unique_ips"`
+	LoginsByProvider map[string]int `json:"logins_by_provider"`
+	LoginsByCountry  map[string]int `json:"logins_by_country,omitempty"`
+	RecentFailures   []*LoginLog    `json:"recent_failures,omitempty"`
 }
 
 // LoginLogFilter provides filtering options for queries
 type LoginLogFilter struct {
-	UserEmail  string
-	UserID     string
-	IPAddress  string
-	Provider   string
-	Success    *bool
-	StartTime  *time.Time
-	EndTime    *time.Time
-	Limit      int
-	Offset     int
+	UserEmail string
+	UserID    string
+	IPAddress string
+	Provider  string
+	Success   *bool
+	StartTime *time.Time
+	EndTime   *time.Time
+	Limit     int
+	Offset    int
 }
 
 // LoginLogStore handles login log persistence

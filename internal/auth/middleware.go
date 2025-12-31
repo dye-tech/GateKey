@@ -5,8 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gatekey-project/gatekey/internal/models"
 	"github.com/gin-gonic/gin"
+
+	"github.com/gatekey-project/gatekey/internal/models"
 )
 
 const (
