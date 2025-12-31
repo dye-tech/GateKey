@@ -156,8 +156,32 @@ install_dependencies() {
                 yum install -y openvpn easy-rsa curl jq
             fi
             ;;
+        amzn)
+            # Amazon Linux 2 and Amazon Linux 2023
+            if command -v dnf &> /dev/null; then
+                # Amazon Linux 2023 uses dnf
+                dnf install -y openvpn easy-rsa curl jq
+            else
+                # Amazon Linux 2 uses yum and needs EPEL for OpenVPN
+                amazon-linux-extras install -y epel 2>/dev/null || yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+                yum install -y openvpn easy-rsa curl jq
+            fi
+            ;;
+        opensuse*|sles|suse)
+            # openSUSE and SUSE Linux Enterprise
+            zypper install -y openvpn easy-rsa curl jq
+            ;;
+        arch|manjaro)
+            # Arch Linux and Manjaro
+            pacman -Sy --noconfirm openvpn easy-rsa curl jq
+            ;;
+        alpine)
+            # Alpine Linux
+            apk add --no-cache openvpn easy-rsa curl jq bash openssl
+            ;;
         *)
             echo -e "${RED}Unsupported OS: $OS${NC}"
+            echo -e "${YELLOW}Supported: ubuntu, debian, centos, rhel, fedora, rocky, almalinux, amzn (Amazon Linux), opensuse, sles, arch, manjaro, alpine${NC}"
             exit 1
             ;;
     esac
