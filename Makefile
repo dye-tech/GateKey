@@ -1,4 +1,4 @@
-.PHONY: build build-server build-gateway build-admin build-client test lint clean dev migrate-up migrate-down help release release-all
+.PHONY: build build-server build-gateway build-admin build-client build-hub build-mesh-gateway test lint clean dev migrate-up migrate-down help release release-all release-hub release-mesh-gateway
 
 # Go parameters
 GOCMD=go
@@ -12,6 +12,8 @@ SERVER_BINARY=$(BINARY_DIR)/gatekey-server
 GATEWAY_BINARY=$(BINARY_DIR)/gatekey-gateway
 ADMIN_BINARY=$(BINARY_DIR)/gatekey-admin
 CLIENT_BINARY=$(BINARY_DIR)/gatekey
+HUB_BINARY=$(BINARY_DIR)/gatekey-hub
+MESH_GATEWAY_BINARY=$(BINARY_DIR)/gatekey-mesh-gateway
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -29,7 +31,7 @@ all: build
 
 ## Build targets
 
-build: build-server build-gateway build-admin build-client ## Build all binaries
+build: build-server build-gateway build-admin build-client build-hub build-mesh-gateway ## Build all binaries
 	@echo "Build complete"
 
 build-server: ## Build the control plane server
@@ -48,9 +50,17 @@ build-client: ## Build the user VPN client
 	@mkdir -p $(BINARY_DIR)
 	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(CLIENT_BINARY) ./cmd/gatekey
 
+build-hub: ## Build the mesh hub server
+	@mkdir -p $(BINARY_DIR)
+	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(HUB_BINARY) ./cmd/gatekey-hub
+
+build-mesh-gateway: ## Build the mesh gateway agent
+	@mkdir -p $(BINARY_DIR)
+	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(MESH_GATEWAY_BINARY) ./cmd/gatekey-mesh-gateway
+
 ## Release targets for Homebrew
 
-release: release-client release-server release-gateway release-admin ## Build release archives for all binaries
+release: release-client release-server release-gateway release-admin release-hub release-mesh-gateway ## Build release archives for all binaries
 	@echo "Release archives created in $(RELEASE_DIR)/"
 	@echo "SHA256 checksums:"
 	@cat $(RELEASE_DIR)/checksums.txt
@@ -117,6 +127,36 @@ release-admin: ## Build admin CLI release archives for all platforms
 		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
 	done
 	@echo "Admin CLI release complete"
+
+release-hub: ## Build mesh hub release archives for all platforms
+	@mkdir -p $(RELEASE_DIR)
+	@for platform in $(PLATFORMS); do \
+		os=$${platform%/*}; \
+		arch=$${platform#*/}; \
+		echo "Building gatekey-hub for $$os/$$arch..."; \
+		output_name="gatekey-hub-$(VERSION)-$$os-$$arch"; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GOBUILD) $(LDFLAGS) -o $(RELEASE_DIR)/$$output_name/gatekey-hub ./cmd/gatekey-hub; \
+		cp README.md LICENSE $(RELEASE_DIR)/$$output_name/ 2>/dev/null || true; \
+		tar -czf $(RELEASE_DIR)/$$output_name.tar.gz -C $(RELEASE_DIR) $$output_name; \
+		rm -rf $(RELEASE_DIR)/$$output_name; \
+		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
+	done
+	@echo "Mesh hub release complete"
+
+release-mesh-gateway: ## Build mesh gateway release archives for all platforms
+	@mkdir -p $(RELEASE_DIR)
+	@for platform in $(PLATFORMS); do \
+		os=$${platform%/*}; \
+		arch=$${platform#*/}; \
+		echo "Building gatekey-mesh-gateway for $$os/$$arch..."; \
+		output_name="gatekey-mesh-gateway-$(VERSION)-$$os-$$arch"; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GOBUILD) $(LDFLAGS) -o $(RELEASE_DIR)/$$output_name/gatekey-mesh-gateway ./cmd/gatekey-mesh-gateway; \
+		cp README.md LICENSE $(RELEASE_DIR)/$$output_name/ 2>/dev/null || true; \
+		tar -czf $(RELEASE_DIR)/$$output_name.tar.gz -C $(RELEASE_DIR) $$output_name; \
+		rm -rf $(RELEASE_DIR)/$$output_name; \
+		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
+	done
+	@echo "Mesh gateway release complete"
 
 ## Development targets
 
@@ -229,7 +269,23 @@ build-admin-all: ## Build admin CLI for all platforms
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-admin-darwin-arm64 ./cmd/gatekey-admin
 	@echo "Admin CLI binaries built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64"
 
-build-all: build-client-all build-server-all build-gateway-all build-admin-all ## Build all binaries for all platforms
+build-hub-all: ## Build mesh hub for all platforms
+	@mkdir -p $(BINARY_DIR)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-hub-linux-amd64 ./cmd/gatekey-hub
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-hub-linux-arm64 ./cmd/gatekey-hub
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-hub-darwin-amd64 ./cmd/gatekey-hub
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-hub-darwin-arm64 ./cmd/gatekey-hub
+	@echo "Mesh hub binaries built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64"
+
+build-mesh-gateway-all: ## Build mesh gateway for all platforms
+	@mkdir -p $(BINARY_DIR)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-mesh-gateway-linux-amd64 ./cmd/gatekey-mesh-gateway
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-mesh-gateway-linux-arm64 ./cmd/gatekey-mesh-gateway
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-mesh-gateway-darwin-amd64 ./cmd/gatekey-mesh-gateway
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-mesh-gateway-darwin-arm64 ./cmd/gatekey-mesh-gateway
+	@echo "Mesh gateway binaries built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64"
+
+build-all: build-client-all build-server-all build-gateway-all build-admin-all build-hub-all build-mesh-gateway-all ## Build all binaries for all platforms
 	@echo "All binaries built"
 
 ## Docker

@@ -3603,6 +3603,62 @@ func (s *Server) handleInstallScript(c *gin.Context) {
 	c.String(http.StatusOK, string(script))
 }
 
+func (s *Server) handleHubInstallScript(c *gin.Context) {
+	// Serve the hub installer script from file
+	scriptPaths := []string{
+		"/app/scripts/install-hub.sh",
+		"scripts/install-hub.sh",
+		"../scripts/install-hub.sh",
+	}
+
+	var script []byte
+	var err error
+	for _, path := range scriptPaths {
+		script, err = os.ReadFile(path)
+		if err == nil {
+			break
+		}
+	}
+
+	if err != nil {
+		s.logger.Error("Failed to read hub install script", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "hub install script not found"})
+		return
+	}
+
+	c.Header("Content-Type", "text/x-shellscript")
+	c.Header("Content-Disposition", "attachment; filename=install-hub.sh")
+	c.String(http.StatusOK, string(script))
+}
+
+func (s *Server) handleMeshSpokeGenericInstallScript(c *gin.Context) {
+	// Serve the mesh spoke installer script from file
+	scriptPaths := []string{
+		"/app/scripts/install-mesh-spoke.sh",
+		"scripts/install-mesh-spoke.sh",
+		"../scripts/install-mesh-spoke.sh",
+	}
+
+	var script []byte
+	var err error
+	for _, path := range scriptPaths {
+		script, err = os.ReadFile(path)
+		if err == nil {
+			break
+		}
+	}
+
+	if err != nil {
+		s.logger.Error("Failed to read mesh spoke install script", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "mesh spoke install script not found"})
+		return
+	}
+
+	c.Header("Content-Type", "text/x-shellscript")
+	c.Header("Content-Disposition", "attachment; filename=install-mesh-spoke.sh")
+	c.String(http.StatusOK, string(script))
+}
+
 func (s *Server) handleDownloadBinary(c *gin.Context) {
 	filename := c.Param("filename")
 
@@ -3620,6 +3676,16 @@ func (s *Server) handleDownloadBinary(c *gin.Context) {
 		"gatekey-darwin-amd64":      true,
 		"gatekey-darwin-arm64":      true,
 		"gatekey-windows-amd64.exe": true,
+		// Hub binaries
+		"gatekey-hub-linux-amd64":  true,
+		"gatekey-hub-linux-arm64":  true,
+		"gatekey-hub-darwin-amd64": true,
+		"gatekey-hub-darwin-arm64": true,
+		// Mesh spoke binaries
+		"gatekey-mesh-spoke-linux-amd64":  true,
+		"gatekey-mesh-spoke-linux-arm64":  true,
+		"gatekey-mesh-spoke-darwin-amd64": true,
+		"gatekey-mesh-spoke-darwin-arm64": true,
 	}
 
 	if !allowedBinaries[filename] {
@@ -3627,13 +3693,32 @@ func (s *Server) handleDownloadBinary(c *gin.Context) {
 		return
 	}
 
-	// First, try to serve from local bin directory (for development)
-	binPath := "./bin/" + filename
-	if _, err := os.Stat(binPath); err == nil {
-		c.Header("Content-Type", "application/octet-stream")
-		c.Header("Content-Disposition", "attachment; filename="+filename)
-		c.File(binPath)
-		return
+	// Map download names to actual file names (mesh-spoke -> mesh-gateway)
+	actualFilename := filename
+	filenameMapping := map[string]string{
+		"gatekey-mesh-spoke-linux-amd64":  "gatekey-mesh-gateway-linux-amd64",
+		"gatekey-mesh-spoke-linux-arm64":  "gatekey-mesh-gateway-linux-arm64",
+		"gatekey-mesh-spoke-darwin-amd64": "gatekey-mesh-gateway-darwin-amd64",
+		"gatekey-mesh-spoke-darwin-arm64": "gatekey-mesh-gateway-darwin-arm64",
+	}
+	if mapped, ok := filenameMapping[filename]; ok {
+		actualFilename = mapped
+	}
+
+	// Try multiple paths for development and production
+	binPaths := []string{
+		"/app/bin/" + actualFilename,   // Docker container
+		"./bin/" + actualFilename,      // Local development
+		"../bin/" + actualFilename,     // Running from cmd/
+	}
+
+	for _, binPath := range binPaths {
+		if _, err := os.Stat(binPath); err == nil {
+			c.Header("Content-Type", "application/octet-stream")
+			c.Header("Content-Disposition", "attachment; filename="+filename)
+			c.File(binPath)
+			return
+		}
 	}
 
 	// Redirect to GitHub releases for production deployments
