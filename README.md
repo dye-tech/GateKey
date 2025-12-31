@@ -7,6 +7,14 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/dye-tech/GateKey/actions/workflows/ci.yml"><img src="https://github.com/dye-tech/GateKey/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/dye-tech/GateKey/actions/workflows/codeql.yml"><img src="https://github.com/dye-tech/GateKey/actions/workflows/codeql.yml/badge.svg" alt="CodeQL"></a>
+  <a href="https://goreportcard.com/report/github.com/dye-tech/GateKey"><img src="https://goreportcard.com/badge/github.com/dye-tech/GateKey" alt="Go Report Card"></a>
+  <a href="https://github.com/dye-tech/GateKey/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
+  <a href="https://golang.org/doc/go1.23"><img src="https://img.shields.io/badge/Go-1.23-00ADD8?logo=go" alt="Go Version"></a>
+</p>
+
+<p align="center">
   <a href="#installation">Installation</a> •
   <a href="#quick-start">Quick Start</a> •
   <a href="#how-it-works">How It Works</a> •
@@ -29,20 +37,20 @@ brew install gatekey
 
 ```bash
 # Download the latest release
-curl -LO https://github.com/gatekey-project/gatekey/releases/latest/download/gatekey-linux-amd64
+curl -LO https://github.com/dye-tech/GateKey/releases/latest/download/gatekey-linux-amd64
 chmod +x gatekey-linux-amd64
 sudo mv gatekey-linux-amd64 /usr/local/bin/gatekey
 ```
 
 ### Windows
 
-Download the latest `.exe` from the [releases page](https://github.com/gatekey-project/gatekey/releases).
+Download the latest `.exe` from the [releases page](https://github.com/dye-tech/GateKey/releases).
 
 ### From Source
 
 ```bash
-git clone https://github.com/gatekey-project/gatekey.git
-cd gatekey
+git clone https://github.com/dye-tech/GateKey.git
+cd GateKey
 make build-client
 sudo cp bin/gatekey /usr/local/bin/
 ```
@@ -169,7 +177,7 @@ The following is for administrators setting up GateKey infrastructure.
 
 ### Prerequisites
 
-- Go 1.24+
+- Go 1.23+
 - PostgreSQL 14+
 - OpenVPN 2.5+ (on gateway servers)
 
@@ -177,8 +185,8 @@ The following is for administrators setting up GateKey infrastructure.
 
 ```bash
 # Clone
-git clone https://github.com/gatekey-project/gatekey.git
-cd gatekey
+git clone https://github.com/dye-tech/GateKey.git
+cd GateKey
 
 # Build
 make build

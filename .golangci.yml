@@ -1,0 +1,191 @@
+# GolangCI-Lint configuration
+# https://golangci-lint.run/usage/configuration/
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+  allow-parallel-runners: true
+
+linters:
+  enable:
+    # Default linters
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+    # Additional linters
+    - bodyclose
+    - dogsled
+    - dupl
+    - errorlint
+    - exhaustive
+    - exportloopref
+    - gochecknoinits
+    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - gofmt
+    - goimports
+    - goprintffuncname
+    - gosec
+    - misspell
+    - nakedret
+    - noctx
+    - nolintlint
+    - prealloc
+    - predeclared
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - stylecheck
+    - tparallel
+    - unconvert
+    - unparam
+    - whitespace
+
+  disable:
+    - funlen      # Function length - too strict
+    - gocognit    # Cognitive complexity - too strict
+    - godox       # TODO/FIXME comments - we use these intentionally
+    - gomnd       # Magic numbers - too strict for configs
+    - lll         # Line length - handled by gofmt
+    - wsl         # Whitespace linter - too opinionated
+
+linters-settings:
+  dupl:
+    threshold: 150
+
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+
+  errorlint:
+    errorf: true
+    asserts: true
+    comparison: true
+
+  exhaustive:
+    default-signifies-exhaustive: true
+
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - hugeParam
+      - rangeValCopy
+
+  gocyclo:
+    min-complexity: 20
+
+  godot:
+    scope: declarations
+    capital: true
+
+  gofmt:
+    simplify: true
+
+  goimports:
+    local-prefixes: github.com/gatekey-project/gatekey
+
+  gosec:
+    excludes:
+      - G104  # Audit errors not checked - we handle this with errcheck
+      - G304  # File path provided as taint input - necessary for config files
+
+  govet:
+    check-shadowing: true
+    enable-all: true
+
+  misspell:
+    locale: US
+
+  nakedret:
+    max-func-lines: 30
+
+  nolintlint:
+    require-explanation: true
+    require-specific: true
+
+  prealloc:
+    simple: true
+    for-loops: true
+
+  revive:
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: increment-decrement
+      - name: indent-error-flow
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: var-declaration
+      - name: var-naming
+
+  stylecheck:
+    checks:
+      - all
+      - -ST1000  # Package comments - not always needed
+      - -ST1003  # Underscores in names - sometimes needed for consistency
+
+  unparam:
+    check-exported: false
+
+issues:
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - dupl
+        - goconst
+        - gosec
+        - noctx
+
+    # Exclude some linters from running on generated files
+    - path: generated
+      linters:
+        - all
+
+    # Exclude known issues in third-party code
+    - path: vendor/
+      linters:
+        - all
+
+    # Allow longer functions in main packages
+    - path: cmd/
+      linters:
+        - gocyclo
+
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false
+
+severity:
+  default-severity: warning
+  rules:
+    - linters:
+        - gosec
+      severity: error
+    - linters:
+        - govet
+      severity: error
