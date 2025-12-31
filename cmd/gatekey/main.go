@@ -105,12 +105,21 @@ func logoutCmd() *cobra.Command {
 
 func connectCmd() *cobra.Command {
 	var gateway string
+	var mesh string
 
 	cmd := &cobra.Command{
 		Use:   "connect [gateway]",
 		Short: "Connect to VPN",
-		Long: `Connects to a VPN gateway. If no gateway is specified and only one
-is available, it connects to that one. Otherwise, prompts for selection.
+		Long: `Connects to a VPN gateway or mesh hub.
+
+For gateways:
+  gatekey connect <gateway>
+  gatekey connect --gateway <gateway>
+
+For mesh hubs:
+  gatekey connect --mesh <hub>
+
+If no gateway is specified and only one is available, it connects to that one.
 
 This command:
 1. Checks your authentication status
@@ -127,16 +136,24 @@ This command:
 				cfg.ServerURL = serverURL
 			}
 
+			vpn := client.NewVPNManager(cfg)
+
+			// If --mesh flag is provided, connect to mesh hub
+			if mesh != "" {
+				return vpn.ConnectMesh(cmd.Context(), mesh)
+			}
+
+			// Otherwise connect to gateway
 			if len(args) > 0 {
 				gateway = args[0]
 			}
 
-			vpn := client.NewVPNManager(cfg)
 			return vpn.Connect(cmd.Context(), gateway)
 		},
 	}
 
 	cmd.Flags().StringVarP(&gateway, "gateway", "g", "", "Gateway name to connect to")
+	cmd.Flags().StringVarP(&mesh, "mesh", "m", "", "Mesh hub name to connect to")
 
 	return cmd
 }
