@@ -128,6 +128,10 @@ export default function Connect() {
     ? `gatekey connect --gateway ${selectedGateway.name}`
     : 'gatekey connect'
 
+  const cliMeshConnectCommand = selectedMeshHub
+    ? `gatekey connect --mesh ${selectedMeshHub.name}`
+    : 'gatekey connect --mesh'
+
   const cliSetupCommand = `gatekey config init --server ${serverUrl}`
   const cliInstallCommand = `curl -sSL ${serverUrl}/scripts/install-client.sh | bash`
 
@@ -494,55 +498,198 @@ export default function Connect() {
 
           {/* Mesh Connection Instructions */}
           <div className="lg:col-span-2 space-y-6">
+            {/* CLI Connect - Primary Action */}
             <div className="card">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Connect to Mesh Network</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Connect with CLI</h2>
+                <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                  Recommended
+                </span>
+              </div>
+
               <p className="text-gray-600 mb-4">
-                Mesh networks provide access to multiple remote sites through a single VPN connection.
-                Download a configuration file to connect with any OpenVPN client.
+                Use the GateKey CLI for the easiest connection experience. The CLI handles authentication,
+                configuration, and connection automatically.
               </p>
 
-              {selectedMeshHub ? (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <p className="font-medium text-gray-900">{selectedMeshHub.name}</p>
-                      <p className="text-sm text-gray-500">{selectedMeshHub.description}</p>
-                    </div>
-                    <button
-                      onClick={handleMeshConnect}
-                      disabled={generating}
-                      className="btn btn-primary"
-                    >
-                      {generating ? (
-                        <span className="flex items-center">
-                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Generating...
-                        </span>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                          </svg>
-                          Generate Config
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                    <p className="text-sm text-blue-700">
-                      <strong>Note:</strong> Mesh configs provide access to all spoke networks you're authorized for.
-                      Routes are included in the config and will be automatically applied when connected.
-                    </p>
-                  </div>
+              {/* Setup command (if not already configured) */}
+              <div className="mb-4">
+                <p className="text-sm font-medium text-gray-700 mb-2">1. First time setup (run once):</p>
+                <div className="bg-gray-900 rounded-lg p-4 font-mono text-sm text-gray-100 flex items-center justify-between">
+                  <code className="break-all">{cliSetupCommand}</code>
+                  <button
+                    onClick={() => copyCommand(cliSetupCommand, 'mesh-setup')}
+                    className="ml-4 text-gray-400 hover:text-white transition-colors flex-shrink-0"
+                    title="Copy to clipboard"
+                  >
+                    {copied === 'mesh-setup' ? (
+                      <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    )}
+                  </button>
                 </div>
-              ) : (
-                <p className="text-gray-500 text-center py-4">
-                  Select a mesh hub to generate a configuration.
+              </div>
+
+              {/* Connect command */}
+              <div className="mb-4">
+                <p className="text-sm font-medium text-gray-700 mb-2">2. Connect to Mesh Network:</p>
+                <div className="bg-gray-900 rounded-lg p-4 font-mono text-sm text-gray-100 flex items-center justify-between">
+                  <code>{cliMeshConnectCommand}</code>
+                  <button
+                    onClick={() => copyCommand(cliMeshConnectCommand, 'mesh-connect')}
+                    className="ml-4 text-gray-400 hover:text-white transition-colors flex-shrink-0"
+                    title="Copy to clipboard"
+                  >
+                    {copied === 'mesh-connect' ? (
+                      <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* CLI not installed? */}
+              <div className="bg-gray-50 rounded-lg p-4 mt-4">
+                <p className="text-sm font-medium text-gray-700 mb-2">Don't have the CLI installed?</p>
+                <div className="bg-gray-900 rounded-lg p-3 font-mono text-xs text-gray-100 flex items-center justify-between">
+                  <code className="break-all">{cliInstallCommand}</code>
+                  <button
+                    onClick={() => copyCommand(cliInstallCommand, 'mesh-install')}
+                    className="ml-4 text-gray-400 hover:text-white transition-colors flex-shrink-0"
+                    title="Copy to clipboard"
+                  >
+                    {copied === 'mesh-install' ? (
+                      <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Or download from the <a href={`${serverUrl}/downloads/`} className="text-primary-600 hover:underline">downloads page</a>
                 </p>
+              </div>
+            </div>
+
+            {/* Manual Download - Secondary Action */}
+            <div className="card border-gray-200">
+              <button
+                onClick={() => setShowManualDownload(!showManualDownload)}
+                className="w-full flex items-center justify-between text-left"
+              >
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Manual Configuration</h2>
+                  <p className="text-sm text-gray-500">Download an OpenVPN config file for use with any OpenVPN client</p>
+                </div>
+                <svg
+                  className={`w-5 h-5 text-gray-400 transition-transform ${showManualDownload ? 'rotate-180' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {showManualDownload && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  {selectedMeshHub ? (
+                    <div className="space-y-4">
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                        <div className="flex items-start">
+                          <svg className="w-5 h-5 text-amber-600 mr-2 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                          <p className="text-sm text-amber-700">
+                            Manual configs expire after 24 hours. For persistent access, use the CLI.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                          <p className="font-medium text-gray-900">{selectedMeshHub.name}</p>
+                          <p className="text-sm text-gray-500">{selectedMeshHub.description || 'Mesh Network'}</p>
+                        </div>
+                        <button
+                          onClick={handleMeshConnect}
+                          disabled={generating}
+                          className="btn btn-secondary"
+                        >
+                          {generating ? (
+                            <span className="flex items-center">
+                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Generating...
+                            </span>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                              Generate Config
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <p className="text-sm text-blue-700">
+                          <strong>Note:</strong> Mesh configs provide access to all spoke networks you're authorized for.
+                          Routes are included in the config and will be automatically applied when connected.
+                        </p>
+                      </div>
+
+                      {/* Platform-specific instructions */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+                        <div>
+                          <h3 className="font-medium text-gray-900 mb-2">Windows</h3>
+                          <ol className="text-sm text-gray-600 space-y-1">
+                            <li>1. Download OpenVPN GUI</li>
+                            <li>2. Import the .ovpn file</li>
+                            <li>3. Right-click tray icon &rarr; Connect</li>
+                          </ol>
+                        </div>
+                        <div>
+                          <h3 className="font-medium text-gray-900 mb-2">macOS</h3>
+                          <ol className="text-sm text-gray-600 space-y-1">
+                            <li>1. Install Tunnelblick or OpenVPN Connect</li>
+                            <li>2. Double-click the .ovpn file</li>
+                            <li>3. Click Connect</li>
+                          </ol>
+                        </div>
+                        <div>
+                          <h3 className="font-medium text-gray-900 mb-2">Linux</h3>
+                          <ol className="text-sm text-gray-600 space-y-1">
+                            <li>1. Install openvpn package</li>
+                            <li>2. Run: sudo openvpn config.ovpn</li>
+                            <li>3. Or import to NetworkManager</li>
+                          </ol>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-center py-4">
+                      Select a mesh hub first to generate a configuration.
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </div>

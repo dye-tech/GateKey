@@ -46,6 +46,9 @@ type MeshHub struct {
 	VPNProtocol    string
 	VPNSubnet      string // Mesh network subnet (e.g., 172.30.0.0/16)
 
+	// Local networks directly accessible from the hub (pushed to all clients)
+	LocalNetworks []string
+
 	// Crypto configuration
 	CryptoProfile  string
 	TLSAuthEnabled bool
@@ -85,6 +88,11 @@ type MeshSpoke struct {
 
 	// Networks behind this gateway
 	LocalNetworks []string // Array of CIDRs
+
+	// VPN settings
+	FullTunnelMode bool     // Route all traffic through the mesh
+	PushDNS        bool     // Push DNS servers to clients
+	DNSServers     []string // DNS server IPs to push
 
 	// Assigned tunnel IP
 	TunnelIP string
@@ -194,6 +202,7 @@ func (s *MeshStore) GetHub(ctx context.Context, id string) (*MeshHub, error) {
 	err := s.db.Pool.QueryRow(ctx, `
 		SELECT id, name, description,
 			public_endpoint, vpn_port, vpn_protocol, vpn_subnet::text,
+			COALESCE(local_networks, '{}'),
 			crypto_profile, tls_auth_enabled, COALESCE(tls_auth_key, ''),
 			COALESCE(ca_cert, ''), COALESCE(ca_key, ''), COALESCE(server_cert, ''), COALESCE(server_key, ''), COALESCE(dh_params, ''),
 			api_token, control_plane_url,
@@ -204,6 +213,7 @@ func (s *MeshStore) GetHub(ctx context.Context, id string) (*MeshHub, error) {
 	`, id).Scan(
 		&hub.ID, &hub.Name, &hub.Description,
 		&hub.PublicEndpoint, &hub.VPNPort, &hub.VPNProtocol, &vpnSubnet,
+		&hub.LocalNetworks,
 		&hub.CryptoProfile, &hub.TLSAuthEnabled, &hub.TLSAuthKey,
 		&hub.CACert, &hub.CAKey, &hub.ServerCert, &hub.ServerKey, &hub.DHParams,
 		&hub.APIToken, &hub.ControlPlaneURL,
@@ -231,6 +241,7 @@ func (s *MeshStore) GetHubByToken(ctx context.Context, token string) (*MeshHub, 
 	err := s.db.Pool.QueryRow(ctx, `
 		SELECT id, name, description,
 			public_endpoint, vpn_port, vpn_protocol, vpn_subnet::text,
+			COALESCE(local_networks, '{}'),
 			crypto_profile, tls_auth_enabled, COALESCE(tls_auth_key, ''),
 			COALESCE(ca_cert, ''), COALESCE(ca_key, ''), COALESCE(server_cert, ''), COALESCE(server_key, ''), COALESCE(dh_params, ''),
 			api_token, control_plane_url,
@@ -241,6 +252,7 @@ func (s *MeshStore) GetHubByToken(ctx context.Context, token string) (*MeshHub, 
 	`, token).Scan(
 		&hub.ID, &hub.Name, &hub.Description,
 		&hub.PublicEndpoint, &hub.VPNPort, &hub.VPNProtocol, &vpnSubnet,
+		&hub.LocalNetworks,
 		&hub.CryptoProfile, &hub.TLSAuthEnabled, &hub.TLSAuthKey,
 		&hub.CACert, &hub.CAKey, &hub.ServerCert, &hub.ServerKey, &hub.DHParams,
 		&hub.APIToken, &hub.ControlPlaneURL,
@@ -304,11 +316,11 @@ func (s *MeshStore) UpdateHub(ctx context.Context, hub *MeshHub) error {
 		UPDATE mesh_hubs SET
 			name = $2, description = $3,
 			public_endpoint = $4, vpn_port = $5, vpn_protocol = $6, vpn_subnet = $7::cidr,
-			crypto_profile = $8, tls_auth_enabled = $9
+			crypto_profile = $8, tls_auth_enabled = $9, local_networks = $10
 		WHERE id = $1
 	`, hub.ID, hub.Name, hub.Description,
 		hub.PublicEndpoint, hub.VPNPort, hub.VPNProtocol, hub.VPNSubnet,
-		hub.CryptoProfile, hub.TLSAuthEnabled)
+		hub.CryptoProfile, hub.TLSAuthEnabled, hub.LocalNetworks)
 
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {
@@ -731,15 +743,25 @@ func (s *MeshStore) GetAllMeshRoutes(ctx context.Context, hubID string) ([]strin
 }
 
 // GetUserMeshRoutes returns routes a user can access based on their gateway assignments
+// Also includes hub's local_networks (networks directly reachable from the hub)
 func (s *MeshStore) GetUserMeshRoutes(ctx context.Context, hubID, userID string, groups []string) ([]string, error) {
+	// Get routes from spokes the user has access to
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT DISTINCT unnest(g.local_networks) as network
-		FROM mesh_gateways g
-		WHERE g.hub_id = $1 AND g.status = 'connected'
-		AND (
-			EXISTS (SELECT 1 FROM mesh_gateway_users WHERE gateway_id = g.id AND user_id = $2)
-			OR EXISTS (SELECT 1 FROM mesh_gateway_groups WHERE gateway_id = g.id AND group_name = ANY($3))
-		)
+		SELECT DISTINCT network FROM (
+			-- Spoke networks the user has access to
+			SELECT unnest(g.local_networks) as network
+			FROM mesh_gateways g
+			WHERE g.hub_id = $1 AND g.status = 'connected'
+			AND (
+				EXISTS (SELECT 1 FROM mesh_gateway_users WHERE gateway_id = g.id AND user_id = $2)
+				OR EXISTS (SELECT 1 FROM mesh_gateway_groups WHERE gateway_id = g.id AND group_name = ANY($3))
+			)
+			UNION
+			-- Hub's local networks (accessible to all users with hub access)
+			SELECT unnest(COALESCE(local_networks, '{}')) as network
+			FROM mesh_hubs
+			WHERE id = $1
+		) combined
 		ORDER BY network
 	`, hubID, userID, groups)
 	if err != nil {
