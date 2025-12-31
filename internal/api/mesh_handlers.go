@@ -1731,8 +1731,19 @@ func (s *Server) handleGenerateMeshClientConfig(c *gin.Context) {
 		// Continue without routes - not a fatal error
 	}
 
+	// Build full CA chain (Mesh CA + Root CA) for proper TLS verification
+	// The hub's server cert is signed by Mesh CA, which is signed by Root CA
+	fullCAChain := hub.CACert
+	if s.ca != nil {
+		rootCACert := string(s.ca.CertificatePEM())
+		if !strings.HasSuffix(fullCAChain, "\n") {
+			fullCAChain += "\n"
+		}
+		fullCAChain += rootCACert
+	}
+
 	// Generate OpenVPN config
-	config := generateMeshClientOVPNConfig(hub, clientCert, clientKey, routes)
+	config := generateMeshClientOVPNConfig(hub, fullCAChain, clientCert, clientKey, routes)
 
 	c.JSON(http.StatusOK, gin.H{
 		"hubname": hub.Name,
@@ -1834,7 +1845,7 @@ func issueClientCertFromPEM(caCertPEM, caKeyPEM, commonName string, validity tim
 }
 
 // generateMeshClientOVPNConfig generates an OpenVPN client config for mesh hub access
-func generateMeshClientOVPNConfig(hub *db.MeshHub, clientCert, clientKey string, routes []string) string {
+func generateMeshClientOVPNConfig(hub *db.MeshHub, caChain, clientCert, clientKey string, routes []string) string {
 	var sb strings.Builder
 
 	sb.WriteString("# GateKey Mesh VPN Configuration\n")
@@ -1886,10 +1897,10 @@ func generateMeshClientOVPNConfig(hub *db.MeshHub, clientCert, clientKey string,
 	sb.WriteString("verb 3\n")
 	sb.WriteString("\n")
 
-	// Inline certificates
+	// Inline certificates (full CA chain: Mesh CA + Root CA)
 	sb.WriteString("<ca>\n")
-	sb.WriteString(hub.CACert)
-	if !strings.HasSuffix(hub.CACert, "\n") {
+	sb.WriteString(caChain)
+	if !strings.HasSuffix(caChain, "\n") {
 		sb.WriteString("\n")
 	}
 	sb.WriteString("</ca>\n\n")

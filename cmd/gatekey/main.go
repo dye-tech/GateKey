@@ -46,6 +46,7 @@ Quick start:
 		configCmd(),
 		versionCmd(),
 		fipsCheckCmd(),
+		meshCmd(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {
@@ -297,4 +298,77 @@ FIPS 140-3 is the current standard for cryptographic module validation.`,
 			return client.CheckFIPSCompliance()
 		},
 	}
+}
+
+func meshCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mesh",
+		Short: "Mesh VPN hub commands",
+		Long: `Commands for connecting to mesh VPN hubs.
+
+Mesh hubs allow you to access spoke networks through a central hub.
+Use 'gatekey mesh list' to see available hubs and 'gatekey mesh connect' to connect.`,
+	}
+
+	cmd.AddCommand(
+		meshListCmd(),
+		meshConnectCmd(),
+	)
+
+	return cmd
+}
+
+func meshListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List available mesh hubs",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := client.LoadConfig(cfgFile)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			if serverURL != "" {
+				cfg.ServerURL = serverURL
+			}
+
+			vpn := client.NewVPNManager(cfg)
+			return vpn.ListMeshHubs(cmd.Context())
+		},
+	}
+}
+
+func meshConnectCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "connect [hub]",
+		Short: "Connect to a mesh hub",
+		Long: `Connects to a mesh VPN hub. If no hub is specified and only one
+is available, it connects to that one. Otherwise, prompts for selection.
+
+This command:
+1. Checks your authentication status
+2. Downloads a fresh VPN configuration for the mesh hub
+3. Starts OpenVPN with the configuration`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := client.LoadConfig(cfgFile)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			if serverURL != "" {
+				cfg.ServerURL = serverURL
+			}
+
+			hubName := ""
+			if len(args) > 0 {
+				hubName = args[0]
+			}
+
+			vpn := client.NewVPNManager(cfg)
+			return vpn.ConnectMesh(cmd.Context(), hubName)
+		},
+	}
+
+	return cmd
 }
