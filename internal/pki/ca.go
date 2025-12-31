@@ -290,7 +290,7 @@ func (ca *CA) saveToFiles(certPath, keyPath string) error {
 		Type:  "CERTIFICATE",
 		Bytes: ca.certificate.Raw,
 	})
-	if err := os.WriteFile(certPath, certPEM, 0644); err != nil { //nolint:gosec // G306: CA cert must be readable
+	if err := os.WriteFile(certPath, certPEM, 0644); err != nil {
 		return fmt.Errorf("failed to write CA certificate: %w", err)
 	}
 

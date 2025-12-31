@@ -11,9 +11,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/gatekey-project/gatekey/internal/config"
 	"github.com/gatekey-project/gatekey/internal/models"
-	"github.com/google/uuid"
 )
 
 // UserInfo represents authenticated user information from an IdP.

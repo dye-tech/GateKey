@@ -18,12 +18,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gatekey-project/gatekey/internal/firewall"
-	"github.com/gatekey-project/gatekey/internal/openvpn"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
+
+	"github.com/gatekey-project/gatekey/internal/firewall"
+	"github.com/gatekey-project/gatekey/internal/openvpn"
 )
 
 var (
@@ -302,10 +303,10 @@ func handleReprovision(ctx context.Context, cfg *GatewayConfig, client *openvpn.
 	// Update certificate files
 	// Note: Certs need 0644 for OpenVPN to read them (runs as openvpn user)
 	openvpnDir := "/etc/openvpn/server"
-	if err := os.WriteFile(openvpnDir+"/ca.crt", []byte(provResp.CACert), 0644); err != nil { //nolint:gosec // G306: cert must be readable by openvpn
+	if err := os.WriteFile(openvpnDir+"/ca.crt", []byte(provResp.CACert), 0644); err != nil {
 		return fmt.Errorf("failed to write CA cert: %w", err)
 	}
-	if err := os.WriteFile(openvpnDir+"/server.crt", []byte(provResp.ServerCert), 0644); err != nil { //nolint:gosec // G306: cert must be readable by openvpn
+	if err := os.WriteFile(openvpnDir+"/server.crt", []byte(provResp.ServerCert), 0644); err != nil {
 		return fmt.Errorf("failed to write server cert: %w", err)
 	}
 	if err := os.WriteFile(openvpnDir+"/server.key", []byte(provResp.ServerKey), 0600); err != nil {

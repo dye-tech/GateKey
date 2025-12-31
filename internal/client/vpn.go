@@ -539,7 +539,7 @@ func (v *VPNManager) startOpenVPNForGateway(configPath, gatewayName, tunInterfac
 	pidPath := v.config.GatewayPidPath(gatewayName)
 
 	// Pre-create log file with readable permissions so user can view logs
-	if err := os.WriteFile(logPath, []byte{}, 0644); err != nil { //nolint:gosec // G306: log must be user-readable
+	if err := os.WriteFile(logPath, []byte{}, 0644); err != nil {
 		// Not fatal
 	}
 
@@ -1054,7 +1054,7 @@ func (v *VPNManager) startOpenVPN(configPath string) (int, error) {
 	// Pre-create log file with readable permissions before OpenVPN starts
 	// This ensures the user can read it even though OpenVPN runs as root
 	logPath := v.config.LogPath()
-	if err := os.WriteFile(logPath, []byte{}, 0644); err != nil { //nolint:gosec // G306: log must be user-readable
+	if err := os.WriteFile(logPath, []byte{}, 0644); err != nil {
 		// Not fatal, OpenVPN will create it
 	}
 

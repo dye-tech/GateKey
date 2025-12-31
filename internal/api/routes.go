@@ -24,14 +24,15 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
-	"github.com/gatekey-project/gatekey/internal/db"
-	"github.com/gatekey-project/gatekey/internal/models"
-	"github.com/gatekey-project/gatekey/internal/openvpn"
-	"github.com/gatekey-project/gatekey/internal/pki"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
+
+	"github.com/gatekey-project/gatekey/internal/db"
+	"github.com/gatekey-project/gatekey/internal/models"
+	"github.com/gatekey-project/gatekey/internal/openvpn"
+	"github.com/gatekey-project/gatekey/internal/pki"
 )
 
 // cliCallbackStore stores CLI callback URLs by state
@@ -665,10 +666,10 @@ func (s *Server) handleLogout(c *gin.Context) {
 	// Get session token from cookie
 	sessionCookie, err := c.Cookie(s.config.Auth.Session.CookieName)
 	if err == nil && sessionCookie != "" {
-		// Delete from SSO session database
-		s.stateStore.DeleteSSOSession(c.Request.Context(), sessionCookie)
-		// Delete from local session database
-		s.userStore.DeleteSession(c.Request.Context(), sessionCookie)
+		// Delete from SSO session database (best effort cleanup)
+		_ = s.stateStore.DeleteSSOSession(c.Request.Context(), sessionCookie)
+		// Delete from local session database (best effort cleanup)
+		_ = s.userStore.DeleteSession(c.Request.Context(), sessionCookie)
 	}
 
 	// Clear session cookie
@@ -1301,14 +1302,14 @@ func (s *Server) handleDownloadConfig(c *gin.Context) {
 	cliRedirect := c.Query("cli_redirect")
 	if cliRedirect == "true" && vpnConfig.CLICallbackURL != "" {
 		// Redirect to CLI with config data encoded
-		s.configStore.MarkDownloaded(c.Request.Context(), configID)
+		_ = s.configStore.MarkDownloaded(c.Request.Context(), configID) // Best effort
 		redirectURL := vpnConfig.CLICallbackURL + "?config_id=" + configID
 		c.Redirect(http.StatusFound, redirectURL)
 		return
 	}
 
-	// Mark as downloaded
-	s.configStore.MarkDownloaded(c.Request.Context(), configID)
+	// Mark as downloaded (best effort, don't fail download if this fails)
+	_ = s.configStore.MarkDownloaded(c.Request.Context(), configID)
 
 	// Return config file
 	c.Header("Content-Disposition", "attachment; filename="+vpnConfig.FileName)
@@ -1367,34 +1368,6 @@ type authenticatedUser struct {
 	Groups   []string
 	IsAdmin  bool
 	Provider string
-}
-
-type mockGateway struct {
-	ID          string
-	Name        string
-	Hostname    string
-	VPNPort     int
-	VPNProtocol string
-}
-
-func (s *Server) getMockGateway(id string) *mockGateway {
-	gateways := map[string]*mockGateway{
-		"gw-001": {
-			ID:          "gw-001",
-			Name:        "US East Gateway",
-			Hostname:    "vpn-us-east.example.com",
-			VPNPort:     1194,
-			VPNProtocol: "udp",
-		},
-		"gw-002": {
-			ID:          "gw-002",
-			Name:        "EU West Gateway",
-			Hostname:    "vpn-eu-west.example.com",
-			VPNPort:     1194,
-			VPNProtocol: "udp",
-		},
-	}
-	return gateways[id]
 }
 
 func generateConfigID() string {
@@ -1477,8 +1450,8 @@ func (s *Server) handleGetConfigRaw(c *gin.Context) {
 		return
 	}
 
-	// Mark as downloaded
-	s.configStore.MarkDownloaded(c.Request.Context(), configID)
+	// Mark as downloaded (best effort)
+	_ = s.configStore.MarkDownloaded(c.Request.Context(), configID)
 
 	// Return raw config content as text
 	c.Header("Content-Type", "text/plain")
@@ -3599,69 +3572,6 @@ func (s *Server) handleUpdateSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "settings updated"})
 }
 
-func (s *Server) handleGetOIDCProviders(c *gin.Context) {
-	providers := []gin.H{}
-	for _, p := range s.config.Auth.OIDC.Providers {
-		providers = append(providers, gin.H{
-			"name":         p.Name,
-			"display_name": p.DisplayName,
-			"issuer":       p.Issuer,
-			"client_id":    p.ClientID,
-			"redirect_url": p.RedirectURL,
-			"scopes":       p.Scopes,
-			"has_secret":   p.ClientSecret != "",
-		})
-	}
-	c.JSON(http.StatusOK, gin.H{"providers": providers, "enabled": s.config.Auth.OIDC.Enabled})
-}
-
-func (s *Server) handleCreateOIDCProvider(c *gin.Context) {
-	// TODO: Create OIDC provider (requires config file update or database storage)
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "create OIDC provider not yet implemented"})
-}
-
-func (s *Server) handleUpdateOIDCProvider(c *gin.Context) {
-	name := c.Param("name")
-	// TODO: Update OIDC provider
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "update OIDC provider not yet implemented", "name": name})
-}
-
-func (s *Server) handleDeleteOIDCProvider(c *gin.Context) {
-	name := c.Param("name")
-	// TODO: Delete OIDC provider
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "delete OIDC provider not yet implemented", "name": name})
-}
-
-func (s *Server) handleGetSAMLProviders(c *gin.Context) {
-	providers := []gin.H{}
-	for _, p := range s.config.Auth.SAML.Providers {
-		providers = append(providers, gin.H{
-			"name":             p.Name,
-			"display_name":     p.DisplayName,
-			"idp_metadata_url": p.IDPMetadataURL,
-			"entity_id":        p.EntityID,
-		})
-	}
-	c.JSON(http.StatusOK, gin.H{"providers": providers, "enabled": s.config.Auth.SAML.Enabled})
-}
-
-func (s *Server) handleCreateSAMLProvider(c *gin.Context) {
-	// TODO: Create SAML provider
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "create SAML provider not yet implemented"})
-}
-
-func (s *Server) handleUpdateSAMLProvider(c *gin.Context) {
-	name := c.Param("name")
-	// TODO: Update SAML provider
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "update SAML provider not yet implemented", "name": name})
-}
-
-func (s *Server) handleDeleteSAMLProvider(c *gin.Context) {
-	name := c.Param("name")
-	// TODO: Delete SAML provider
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "delete SAML provider not yet implemented", "name": name})
-}
-
 // Install script and binary download handlers
 
 func (s *Server) handleInstallScript(c *gin.Context) {
@@ -3693,629 +3603,42 @@ func (s *Server) handleInstallScript(c *gin.Context) {
 	c.String(http.StatusOK, string(script))
 }
 
-func (s *Server) handleInstallScriptLegacyEmbedded(c *gin.Context) {
-	// Legacy embedded script - kept for reference
-	script := `#!/bin/bash
-# GateKey Gateway Installer (Legacy Embedded Version)
-# This script installs and configures the GateKey gateway agent alongside OpenVPN.
-#
-# Usage:
-#   curl -sSL https://your-gatekey-server/scripts/install-gateway.sh | bash -s -- \
-#     --server https://gatekey.example.com \
-#     --token YOUR_GATEWAY_TOKEN \
-#     --name my-gateway
-
-set -e
-
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
-# Configuration
-GATEKEY_SERVER=""
-GATEWAY_TOKEN=""
-GATEWAY_NAME=""
-INSTALL_DIR="/opt/gatekey"
-CONFIG_DIR="/etc/gatekey"
-BIN_DIR="/usr/local/bin"
-OPENVPN_CONFIG_DIR="/etc/openvpn/server"
-VPN_PORT="1194"
-VPN_PROTOCOL="udp"
-VPN_NETWORK="172.31.255.0/24"
-
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --server)
-            GATEKEY_SERVER="$2"
-            shift 2
-            ;;
-        --token)
-            GATEWAY_TOKEN="$2"
-            shift 2
-            ;;
-        --name)
-            GATEWAY_NAME="$2"
-            shift 2
-            ;;
-        --port)
-            VPN_PORT="$2"
-            shift 2
-            ;;
-        --protocol)
-            VPN_PROTOCOL="$2"
-            shift 2
-            ;;
-        --help)
-            echo "GateKey Gateway Installer"
-            echo ""
-            echo "Usage: $0 [options]"
-            echo ""
-            echo "Required options:"
-            echo "  --server URL      GateKey control plane URL"
-            echo "  --token TOKEN     Gateway authentication token"
-            echo "  --name NAME       Gateway name"
-            echo ""
-            echo "Optional options:"
-            echo "  --port PORT       OpenVPN port (default: 1194)"
-            echo "  --protocol PROTO  Protocol: udp or tcp (default: udp)"
-            exit 0
-            ;;
-        *)
-            echo "Unknown option: $1"
-            exit 1
-            ;;
-    esac
-done
-
-# Validate required arguments
-if [[ -z "$GATEKEY_SERVER" ]]; then
-    echo -e "${RED}Error: --server is required${NC}"
-    exit 1
-fi
-
-if [[ -z "$GATEWAY_TOKEN" ]]; then
-    echo -e "${RED}Error: --token is required${NC}"
-    exit 1
-fi
-
-if [[ -z "$GATEWAY_NAME" ]]; then
-    echo -e "${RED}Error: --name is required${NC}"
-    exit 1
-fi
-
-# Check if running as root
-if [[ $EUID -ne 0 ]]; then
-    echo -e "${RED}Error: This script must be run as root${NC}"
-    exit 1
-fi
-
-echo -e "${GREEN}GateKey Gateway Installer${NC}"
-echo "========================"
-echo "Server: $GATEKEY_SERVER"
-echo "Gateway: $GATEWAY_NAME"
-echo ""
-
-# Detect OS
-detect_os() {
-    if [[ -f /etc/os-release ]]; then
-        . /etc/os-release
-        OS=$ID
-        VERSION=$VERSION_ID
-    else
-        echo -e "${RED}Error: Unable to detect OS${NC}"
-        exit 1
-    fi
-}
-
-# Install dependencies
-install_dependencies() {
-    echo -e "${YELLOW}Installing dependencies...${NC}"
-    case $OS in
-        ubuntu|debian)
-            apt-get update
-            apt-get install -y openvpn easy-rsa curl jq
-            ;;
-        centos|rhel|fedora|rocky|almalinux)
-            if command -v dnf &> /dev/null; then
-                dnf install -y epel-release || true
-                dnf install -y openvpn easy-rsa curl jq
-            else
-                yum install -y epel-release || true
-                yum install -y openvpn easy-rsa curl jq
-            fi
-            ;;
-        amzn)
-            # Amazon Linux 2 and Amazon Linux 2023
-            if command -v dnf &> /dev/null; then
-                # AL2023 has packages in default repos
-                dnf install -y openvpn easy-rsa curl jq
-            else
-                # AL2 needs EPEL for openvpn and easy-rsa
-                amazon-linux-extras install -y epel || true
-                yum install -y openvpn easy-rsa curl jq
-            fi
-            ;;
-        *)
-            echo -e "${RED}Unsupported OS: $OS${NC}"
-            exit 1
-            ;;
-    esac
-}
-
-# Download and install gateway binary
-install_gateway_binary() {
-    echo -e "${YELLOW}Installing GateKey gateway agent...${NC}"
-    mkdir -p "$INSTALL_DIR"
-    mkdir -p "$CONFIG_DIR"
-
-    ARCH=$(uname -m)
-    case $ARCH in
-        x86_64) ARCH="amd64" ;;
-        aarch64|arm64) ARCH="arm64" ;;
-        *) echo -e "${RED}Unsupported architecture: $ARCH${NC}"; exit 1 ;;
-    esac
-
-    DOWNLOAD_URL="${GATEKEY_SERVER}/downloads/gatekey-gateway-linux-${ARCH}"
-    if curl -sSL -o "$BIN_DIR/gatekey-gateway" "$DOWNLOAD_URL"; then
-        chmod +x "$BIN_DIR/gatekey-gateway"
-        echo -e "${GREEN}Gateway binary installed${NC}"
-    else
-        echo -e "${RED}Error: Could not download gateway binary${NC}"
-        exit 1
-    fi
-}
-
-# Create gateway configuration
-create_gateway_config() {
-    echo -e "${YELLOW}Creating gateway configuration...${NC}"
-    cat > "$CONFIG_DIR/gateway.yaml" << EOF
-control_plane_url: "${GATEKEY_SERVER}"
-token: "${GATEWAY_TOKEN}"
-heartbeat_interval: "30s"
-log_level: "info"
-EOF
-    chmod 600 "$CONFIG_DIR/gateway.yaml"
-}
-
-# Provision OpenVPN certificates from control plane
-provision_openvpn() {
-    echo -e "${YELLOW}Provisioning OpenVPN certificates...${NC}"
-
-    # Request certificates from control plane
-    PROVISION_RESPONSE=$(curl -sSk -X POST "${GATEKEY_SERVER}/api/v1/gateway/provision" \
-        -H "Content-Type: application/json" \
-        -d "{\"token\": \"${GATEWAY_TOKEN}\"}")
-
-    if echo "$PROVISION_RESPONSE" | grep -q "error"; then
-        echo -e "${RED}Error provisioning certificates: $PROVISION_RESPONSE${NC}"
-        exit 1
-    fi
-
-    # Extract certificates and config from response
-    mkdir -p /etc/openvpn/server
-
-    echo "$PROVISION_RESPONSE" | jq -r '.ca_cert' > /etc/openvpn/server/ca.crt
-    echo "$PROVISION_RESPONSE" | jq -r '.server_cert' > /etc/openvpn/server/server.crt
-    echo "$PROVISION_RESPONSE" | jq -r '.server_key' > /etc/openvpn/server/server.key
-    chmod 600 /etc/openvpn/server/server.key
-
-    VPN_PORT=$(echo "$PROVISION_RESPONSE" | jq -r '.vpn_port // 1194')
-    VPN_PROTO=$(echo "$PROVISION_RESPONSE" | jq -r '.vpn_protocol // "udp"')
-    VPN_NETWORK=$(echo "$PROVISION_RESPONSE" | jq -r '.vpn_network // "10.8.0.0"')
-    VPN_NETMASK=$(echo "$PROVISION_RESPONSE" | jq -r '.vpn_netmask // "255.255.255.0"')
-    CRYPTO_PROFILE=$(echo "$PROVISION_RESPONSE" | jq -r '.crypto_profile // "modern"')
-
-    # Create OpenVPN server configuration
-    echo -e "${YELLOW}Creating OpenVPN server configuration...${NC}"
-    cat > /etc/openvpn/server/server.conf << OVPNEOF
-# GateKey OpenVPN Server Configuration
-# Auto-generated by GateKey gateway installer
-
-port ${VPN_PORT}
-proto ${VPN_PROTO}
-dev tun
-
-# Certificates
-ca /etc/openvpn/server/ca.crt
-cert /etc/openvpn/server/server.crt
-key /etc/openvpn/server/server.key
-
-# Use ECDH instead of DH (faster, more secure)
-dh none
-ecdh-curve prime256v1
-
-# Network configuration
-server ${VPN_NETWORK} ${VPN_NETMASK}
-topology subnet
-
-# Keep client IP assignments
-ifconfig-pool-persist /var/log/openvpn/ipp.txt
-
-# Push routes to clients will be handled by GateKey gateway agent
-
-# Keepalive
-keepalive 10 120
-
-# Security settings based on crypto profile
-OVPNEOF
-
-    # Detect OpenVPN version for compatibility
-    OPENVPN_VERSION=$(/usr/sbin/openvpn --version 2>/dev/null | head -1 | grep -oP '\d+\.\d+' | head -1)
-    OPENVPN_MAJOR=$(echo "$OPENVPN_VERSION" | cut -d. -f1)
-    OPENVPN_MINOR=$(echo "$OPENVPN_VERSION" | cut -d. -f2)
-
-    # Check if OpenVPN supports data-ciphers (2.5+)
-    SUPPORTS_DATA_CIPHERS=false
-    if [ "$OPENVPN_MAJOR" -gt 2 ] || ([ "$OPENVPN_MAJOR" -eq 2 ] && [ "$OPENVPN_MINOR" -ge 5 ]); then
-        SUPPORTS_DATA_CIPHERS=true
-    fi
-
-    echo "Detected OpenVPN version: $OPENVPN_VERSION (data-ciphers: $SUPPORTS_DATA_CIPHERS)"
-
-    # Add crypto settings based on profile and OpenVPN version
-    case "$CRYPTO_PROFILE" in
-        fips)
-            cat >> /etc/openvpn/server/server.conf << OVPNEOF
-# FIPS 140-3 Compliant Settings
-cipher AES-256-GCM
-OVPNEOF
-            if [ "$SUPPORTS_DATA_CIPHERS" = true ]; then
-                echo "data-ciphers AES-256-GCM:AES-128-GCM" >> /etc/openvpn/server/server.conf
-            else
-                echo "ncp-ciphers AES-256-GCM:AES-128-GCM" >> /etc/openvpn/server/server.conf
-            fi
-            cat >> /etc/openvpn/server/server.conf << OVPNEOF
-auth SHA256
-tls-version-min 1.2
-tls-cipher TLS-ECDHE-RSA-WITH-AES-256-GCM-SHA384:TLS-RSA-WITH-AES-256-GCM-SHA384
-OVPNEOF
-            ;;
-        compatible)
-            cat >> /etc/openvpn/server/server.conf << OVPNEOF
-# Compatible Settings (Legacy Support)
-cipher AES-256-CBC
-OVPNEOF
-            if [ "$SUPPORTS_DATA_CIPHERS" = true ]; then
-                echo "data-ciphers AES-256-GCM:AES-128-GCM:AES-256-CBC:AES-128-CBC" >> /etc/openvpn/server/server.conf
-            else
-                echo "ncp-ciphers AES-256-GCM:AES-128-GCM:AES-256-CBC:AES-128-CBC" >> /etc/openvpn/server/server.conf
-            fi
-            cat >> /etc/openvpn/server/server.conf << OVPNEOF
-auth SHA256
-tls-version-min 1.0
-OVPNEOF
-            ;;
-        *)
-            cat >> /etc/openvpn/server/server.conf << OVPNEOF
-# Modern Secure Settings
-cipher AES-256-GCM
-OVPNEOF
-            if [ "$SUPPORTS_DATA_CIPHERS" = true ]; then
-                echo "data-ciphers AES-256-GCM:CHACHA20-POLY1305" >> /etc/openvpn/server/server.conf
-            else
-                echo "ncp-ciphers AES-256-GCM:AES-256-CBC" >> /etc/openvpn/server/server.conf
-            fi
-            cat >> /etc/openvpn/server/server.conf << OVPNEOF
-auth SHA256
-tls-version-min 1.2
-tls-cipher TLS-ECDHE-ECDSA-WITH-AES-256-GCM-SHA384:TLS-ECDHE-RSA-WITH-AES-256-GCM-SHA384
-OVPNEOF
-            ;;
-    esac
-
-    # Add common settings
-    cat >> /etc/openvpn/server/server.conf << OVPNEOF
-
-# Additional security
-persist-key
-persist-tun
-user nobody
-group nobody
-
-# Verify client certificates
-remote-cert-tls client
-
-# Logging
-status /var/log/openvpn/openvpn-status.log
-log-append /var/log/openvpn/openvpn.log
-verb 3
-mute 20
-
-# Client scripts (GateKey hooks)
-script-security 2
-client-connect /etc/gatekey/hooks/client-connect.sh
-client-disconnect /etc/gatekey/hooks/client-disconnect.sh
-OVPNEOF
-
-    # Create log directory
-    mkdir -p /var/log/openvpn
-
-    # Create hook scripts directory
-    mkdir -p /etc/gatekey/hooks
-
-    # Create client-connect hook
-    cat > /etc/gatekey/hooks/client-connect.sh << 'HOOKEOF'
-#!/bin/bash
-# GateKey client-connect hook
-# Called when a client connects
-
-# Get client info from environment
-CN="${common_name}"
-CLIENT_IP="${ifconfig_pool_remote_ip}"
-
-# Notify control plane (if gateway agent is running)
-if [ -f /etc/gatekey/gateway.yaml ]; then
-    curl -sS -X POST "http://localhost:8081/hooks/connect" \
-        -H "Content-Type: application/json" \
-        -d "{\"common_name\": \"${CN}\", \"client_ip\": \"${CLIENT_IP}\"}" \
-        2>/dev/null || true
-fi
-
-exit 0
-HOOKEOF
-    chmod +x /etc/gatekey/hooks/client-connect.sh
-
-    # Create client-disconnect hook
-    cat > /etc/gatekey/hooks/client-disconnect.sh << 'HOOKEOF'
-#!/bin/bash
-# GateKey client-disconnect hook
-# Called when a client disconnects
-
-CN="${common_name}"
-CLIENT_IP="${ifconfig_pool_remote_ip}"
-
-if [ -f /etc/gatekey/gateway.yaml ]; then
-    curl -sS -X POST "http://localhost:8081/hooks/disconnect" \
-        -H "Content-Type: application/json" \
-        -d "{\"common_name\": \"${CN}\", \"client_ip\": \"${CLIENT_IP}\"}" \
-        2>/dev/null || true
-fi
-
-exit 0
-HOOKEOF
-    chmod +x /etc/gatekey/hooks/client-disconnect.sh
-
-    echo -e "${GREEN}OpenVPN configuration created${NC}"
-}
-
-# Create systemd service
-create_systemd_service() {
-    echo -e "${YELLOW}Creating systemd service...${NC}"
-    cat > /etc/systemd/system/gatekey-gateway.service << EOF
-[Unit]
-Description=GateKey Gateway Agent
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=${BIN_DIR}/gatekey-gateway run --config ${CONFIG_DIR}/gateway.yaml
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-    systemctl daemon-reload
-}
-
-# Enable IP forwarding
-enable_ip_forwarding() {
-    echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/99-gatekey.conf
-    sysctl -p /etc/sysctl.d/99-gatekey.conf
-}
-
-# Create OpenVPN systemd service
-create_openvpn_service() {
-    echo -e "${YELLOW}Configuring OpenVPN service...${NC}"
-
-    # Create systemd service for OpenVPN server
-    cat > /etc/systemd/system/openvpn-server@.service << 'SVCEOF'
-[Unit]
-Description=OpenVPN service for %I
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=notify
-PrivateTmp=true
-WorkingDirectory=/etc/openvpn/server
-ExecStart=/usr/sbin/openvpn --status %t/openvpn-server/status-%i.log --status-version 2 --suppress-timestamps --config %i.conf
-CapabilityBoundingSet=CAP_IPC_LOCK CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_SETGID CAP_SETUID CAP_SYS_CHROOT CAP_DAC_OVERRIDE
-LimitNPROC=10
-DeviceAllow=/dev/null rw
-DeviceAllow=/dev/net/tun rw
-ProtectSystem=true
-ProtectHome=true
-KillMode=process
-RestartSec=5s
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-SVCEOF
-
-    # Create runtime directory
-    mkdir -p /run/openvpn-server
-
-    systemctl daemon-reload
-}
-
-# Start services
-start_services() {
-    echo -e "${YELLOW}Starting services...${NC}"
-
-    # Enable and start OpenVPN
-    systemctl enable openvpn-server@server.service
-    systemctl start openvpn-server@server.service
-
-    # Wait a moment for OpenVPN to start
-    sleep 2
-
-    # Check if OpenVPN started successfully
-    if systemctl is-active --quiet openvpn-server@server.service; then
-        echo -e "${GREEN}OpenVPN server started successfully${NC}"
-    else
-        echo -e "${YELLOW}Warning: OpenVPN may not have started. Checking status...${NC}"
-        systemctl status openvpn-server@server.service --no-pager || true
-    fi
-
-    # Enable and start gateway agent
-    systemctl enable gatekey-gateway.service
-    systemctl start gatekey-gateway.service
-}
-
-# Verify installation
-verify_installation() {
-    echo -e "${YELLOW}Verifying installation...${NC}"
-    local errors=0
-
-    # Check OpenVPN
-    if systemctl is-active --quiet openvpn-server@server.service; then
-        echo -e "${GREEN}✓ OpenVPN server is running${NC}"
-    else
-        echo -e "${RED}✗ OpenVPN server is NOT running${NC}"
-        errors=$((errors + 1))
-    fi
-
-    # Check gateway agent
-    if systemctl is-active --quiet gatekey-gateway.service; then
-        echo -e "${GREEN}✓ GateKey gateway agent is running${NC}"
-    else
-        echo -e "${RED}✗ GateKey gateway agent is NOT running${NC}"
-        errors=$((errors + 1))
-    fi
-
-    # Check IP forwarding
-    if [ "$(cat /proc/sys/net/ipv4/ip_forward)" = "1" ]; then
-        echo -e "${GREEN}✓ IP forwarding is enabled${NC}"
-    else
-        echo -e "${RED}✗ IP forwarding is NOT enabled${NC}"
-        errors=$((errors + 1))
-    fi
-
-    # Check if OpenVPN is listening
-    if command -v ss &> /dev/null; then
-        if ss -uln | grep -q ":1194"; then
-            echo -e "${GREEN}✓ OpenVPN is listening on UDP port 1194${NC}"
-        elif ss -tln | grep -q ":1194"; then
-            echo -e "${GREEN}✓ OpenVPN is listening on TCP port 1194${NC}"
-        else
-            echo -e "${YELLOW}! Could not verify OpenVPN is listening (may need firewall rule)${NC}"
-        fi
-    fi
-
-    return $errors
-}
-
-# Configure NAT/Masquerade for VPN traffic
-setup_nat() {
-    echo -e "${YELLOW}Setting up NAT for VPN traffic...${NC}"
-
-    # Get the default interface
-    DEFAULT_IF=$(ip route | grep default | awk '{print $5}' | head -1)
-
-    if [ -n "$DEFAULT_IF" ]; then
-        # Add masquerade rule for VPN subnet
-        iptables -t nat -C POSTROUTING -s ${VPN_SUBNET} -o "$DEFAULT_IF" -j MASQUERADE 2>/dev/null || \
-        iptables -t nat -A POSTROUTING -s ${VPN_SUBNET} -o "$DEFAULT_IF" -j MASQUERADE
-
-        # Save iptables rules (varies by distro)
-        if command -v iptables-save &> /dev/null; then
-            mkdir -p /etc/iptables
-            iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
-        fi
-
-        echo -e "${GREEN}NAT configured for interface $DEFAULT_IF${NC}"
-    else
-        echo -e "${YELLOW}Warning: Could not determine default interface for NAT${NC}"
-    fi
-}
-
-# Main
-main() {
-    detect_os
-    echo "Detected OS: $OS $VERSION"
-    install_dependencies
-    install_gateway_binary
-    create_gateway_config
-    provision_openvpn
-    create_openvpn_service
-    create_systemd_service
-    enable_ip_forwarding
-    setup_nat
-    start_services
-
-    echo ""
-    verify_installation
-
-    echo ""
-    echo -e "${GREEN}============================================${NC}"
-    echo -e "${GREEN}GateKey Gateway Installation Complete!${NC}"
-    echo -e "${GREEN}============================================${NC}"
-    echo ""
-    echo "Commands:"
-    echo "  Check OpenVPN:  systemctl status openvpn-server@server"
-    echo "  Check Agent:    systemctl status gatekey-gateway"
-    echo "  View VPN logs:  journalctl -u openvpn-server@server -f"
-    echo "  View Agent logs: journalctl -u gatekey-gateway -f"
-}
-
-main
-`
-	c.Header("Content-Type", "text/x-shellscript")
-	c.Header("Content-Disposition", "attachment; filename=install-gateway.sh")
-	c.String(http.StatusOK, script)
-}
-
 func (s *Server) handleDownloadBinary(c *gin.Context) {
 	filename := c.Param("filename")
 
-	// Only allow specific binary patterns
-	allowedPatterns := []string{
+	// Map filename to GitHub release asset
+	allowedBinaries := map[string]bool{
 		// Gateway binaries
-		"gatekey-gateway-linux-amd64",
-		"gatekey-gateway-linux-arm64",
-		"gatekey-gateway-darwin-amd64",
-		"gatekey-gateway-darwin-arm64",
-		"gatekey-gateway-windows-amd64.exe",
+		"gatekey-gateway-linux-amd64":       true,
+		"gatekey-gateway-linux-arm64":       true,
+		"gatekey-gateway-darwin-amd64":      true,
+		"gatekey-gateway-darwin-arm64":      true,
+		"gatekey-gateway-windows-amd64.exe": true,
 		// Client binaries
-		"gatekey-linux-amd64",
-		"gatekey-linux-arm64",
-		"gatekey-darwin-amd64",
-		"gatekey-darwin-arm64",
-		"gatekey-windows-amd64.exe",
+		"gatekey-linux-amd64":       true,
+		"gatekey-linux-arm64":       true,
+		"gatekey-darwin-amd64":      true,
+		"gatekey-darwin-arm64":      true,
+		"gatekey-windows-amd64.exe": true,
 	}
 
-	allowed := false
-	for _, pattern := range allowedPatterns {
-		if filename == pattern {
-			allowed = true
-			break
-		}
-	}
-
-	if !allowed {
+	if !allowedBinaries[filename] {
 		c.JSON(http.StatusNotFound, gin.H{"error": "binary not found"})
 		return
 	}
 
-	// Try to serve the binary from the bin directory
+	// First, try to serve from local bin directory (for development)
 	binPath := "./bin/" + filename
-	if _, err := os.Stat(binPath); os.IsNotExist(err) {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error":    "binary not available",
-			"filename": filename,
-			"hint":     "Build the binary first using make build",
-		})
+	if _, err := os.Stat(binPath); err == nil {
+		c.Header("Content-Type", "application/octet-stream")
+		c.Header("Content-Disposition", "attachment; filename="+filename)
+		c.File(binPath)
 		return
 	}
 
-	c.Header("Content-Type", "application/octet-stream")
-	c.Header("Content-Disposition", "attachment; filename="+filename)
-	c.File(binPath)
+	// Redirect to GitHub releases for production deployments
+	githubReleasesURL := "https://github.com/dye-tech/GateKey/releases/latest/download/" + filename
+	c.Redirect(http.StatusTemporaryRedirect, githubReleasesURL)
 }
 
 func (s *Server) handleDownloadsPage(c *gin.Context) {

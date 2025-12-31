@@ -10,8 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gatekey-project/gatekey/internal/models"
 	"github.com/google/uuid"
+
+	"github.com/gatekey-project/gatekey/internal/models"
 )
 
 // Engine evaluates access control policies.

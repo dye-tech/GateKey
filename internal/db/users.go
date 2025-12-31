@@ -155,7 +155,7 @@ func (s *UserStore) Authenticate(ctx context.Context, username, password string)
 	user, err := s.GetUser(ctx, username)
 	if err == ErrUserNotFound {
 		// Still do password comparison to prevent timing attacks
-		s.hashPassword(password)
+		_, _ = s.hashPassword(password) // Ignore result, just for timing
 		return nil, ErrInvalidCredentials
 	}
 	if err != nil {
@@ -166,8 +166,8 @@ func (s *UserStore) Authenticate(ctx context.Context, username, password string)
 		return nil, ErrInvalidCredentials
 	}
 
-	// Update last login
-	s.db.Pool.Exec(ctx, `UPDATE local_users SET last_login_at = NOW() WHERE id = $1`, user.ID)
+	// Update last login (best effort, don't fail auth if this fails)
+	_, _ = s.db.Pool.Exec(ctx, `UPDATE local_users SET last_login_at = NOW() WHERE id = $1`, user.ID)
 
 	return user, nil
 }
@@ -248,8 +248,8 @@ func (s *UserStore) GetSession(ctx context.Context, token string) (*AdminSession
 	}
 
 	if time.Now().After(session.ExpiresAt) {
-		// Clean up expired session
-		s.DeleteSession(ctx, token)
+		// Clean up expired session (best effort)
+		_ = s.DeleteSession(ctx, token)
 		return nil, nil, ErrSessionExpired
 	}
 
