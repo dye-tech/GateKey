@@ -33,6 +33,7 @@ type Server struct {
 	settingsStore   *db.SettingsStore
 	pkiStore        *db.PKIStore
 	proxyAppStore   *db.ProxyApplicationStore
+	loginLogStore   *db.LoginLogStore
 	ca              *pki.CA
 	configGen       *openvpn.ConfigGenerator
 	adminPassword   string             // Initial admin password (shown once at startup)
@@ -89,6 +90,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	settingsStore := db.NewSettingsStore(database)
 	pkiStore := db.NewPKIStore(database)
 	proxyAppStore := db.NewProxyApplicationStore(database)
+	loginLogStore := db.NewLoginLogStore(database)
 
 	// Initialize PKI with database store for CA persistence
 	// This ensures all pods share the same CA
@@ -127,6 +129,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 		settingsStore:   settingsStore,
 		pkiStore:        pkiStore,
 		proxyAppStore:   proxyAppStore,
+		loginLogStore:   loginLogStore,
 		ca:              ca,
 		configGen:       configGen,
 		adminPassword:   adminPassword,
@@ -169,6 +172,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	srv.bgCancel = bgCancel
 	go srv.runGatewayHealthCheck(bgCtx)
 	go srv.runConfigCleanup(bgCtx)
+	go srv.runLoginLogCleanup(bgCtx)
 
 	return srv, nil
 }
@@ -354,6 +358,13 @@ func (s *Server) setupRoutes() {
 			admin.POST("/proxy-apps/:id/groups", s.handleAssignProxyAppToGroup)
 			admin.DELETE("/proxy-apps/:id/groups/:groupName", s.handleRemoveProxyAppFromGroup)
 			admin.GET("/proxy-apps/:id/logs", s.handleGetProxyAppLogs)
+
+			// Login logs / monitoring
+			admin.GET("/login-logs", s.handleListLoginLogs)
+			admin.GET("/login-logs/stats", s.handleGetLoginLogStats)
+			admin.DELETE("/login-logs", s.handlePurgeLoginLogs)
+			admin.GET("/login-logs/retention", s.handleGetLoginLogRetention)
+			admin.PUT("/login-logs/retention", s.handleSetLoginLogRetention)
 		}
 
 		// User proxy applications portal
@@ -491,6 +502,51 @@ func (s *Server) cleanupExpiredConfigs(ctx context.Context) {
 			zap.Int64("deleted", count),
 			zap.Int("validity_hours", validityHours),
 			zap.Duration("buffer", olderThan))
+	}
+}
+
+// runLoginLogCleanup periodically deletes old login logs based on retention setting
+func (s *Server) runLoginLogCleanup(ctx context.Context) {
+	// Run cleanup every 6 hours
+	ticker := time.NewTicker(6 * time.Hour)
+	defer ticker.Stop()
+
+	s.logger.Info("Started login log cleanup background task", zap.Duration("interval", 6*time.Hour))
+
+	// Run once at startup
+	s.cleanupOldLoginLogs(ctx)
+
+	for {
+		select {
+		case <-ctx.Done():
+			s.logger.Info("Login log cleanup stopped")
+			return
+		case <-ticker.C:
+			s.cleanupOldLoginLogs(ctx)
+		}
+	}
+}
+
+// cleanupOldLoginLogs deletes login logs older than the retention setting
+func (s *Server) cleanupOldLoginLogs(ctx context.Context) {
+	// Get retention setting (default 30 days, 0 = forever)
+	retentionDays := s.settingsStore.GetInt(ctx, db.SettingLoginLogRetentionDays, 30)
+
+	// Skip cleanup if retention is 0 (keep forever)
+	if retentionDays <= 0 {
+		return
+	}
+
+	count, err := s.loginLogStore.DeleteOlderThan(ctx, retentionDays)
+	if err != nil {
+		s.logger.Error("Failed to cleanup old login logs", zap.Error(err))
+		return
+	}
+
+	if count > 0 {
+		s.logger.Info("Cleaned up old login logs",
+			zap.Int64("deleted", count),
+			zap.Int("retention_days", retentionDays))
 	}
 }
 
