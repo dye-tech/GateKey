@@ -1,6 +1,6 @@
 module github.com/gatekey-project/gatekey
 
-go 1.25.0
+go 1.23
 
 require (
 	github.com/coreos/go-oidc/v3 v3.17.0

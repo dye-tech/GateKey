@@ -1,3 +1,5 @@
+//go:build linux
+
 // Package firewall provides nftables backend implementation.
 package firewall
 
