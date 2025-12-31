@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Vulnerability
+    url: https://github.com/dye-tech/GateKey/security/policy
+    about: Please report security vulnerabilities through our security policy
+  - name: Documentation
+    url: https://github.com/dye-tech/GateKey/tree/main/docs
+    about: Check the documentation before opening an issue
