@@ -932,3 +932,327 @@ export async function getLoginLogRetention(): Promise<{ days: number }> {
 export async function setLoginLogRetention(days: number): Promise<void> {
   await api.put('/api/v1/admin/login-logs/retention', { days })
 }
+
+// ==================== Mesh Networking ====================
+
+export type MeshHubStatus = 'pending' | 'online' | 'offline' | 'error'
+export type MeshSpokeStatus = 'pending' | 'connected' | 'disconnected' | 'error'
+
+export interface MeshHub {
+  id: string
+  name: string
+  description: string
+  publicEndpoint: string
+  vpnPort: number
+  vpnProtocol: string
+  vpnSubnet: string
+  cryptoProfile: CryptoProfile
+  tlsAuthEnabled: boolean
+  status: MeshHubStatus
+  statusMessage: string
+  connectedSpokes: number
+  connectedClients: number
+  lastHeartbeat: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MeshHubWithToken extends MeshHub {
+  apiToken: string
+  controlPlaneUrl: string
+}
+
+export interface CreateMeshHubRequest {
+  name: string
+  description?: string
+  publicEndpoint: string
+  vpnPort?: number
+  vpnProtocol?: string
+  vpnSubnet?: string
+  cryptoProfile?: CryptoProfile
+  tlsAuthEnabled?: boolean
+}
+
+export interface MeshSpoke {
+  id: string
+  hubId: string
+  name: string
+  description: string
+  localNetworks: string[]
+  tunnelIp: string
+  status: MeshSpokeStatus
+  statusMessage: string
+  bytesSent: number
+  bytesReceived: number
+  remoteIp: string
+  lastSeen: string | null
+  hasClientCert: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MeshSpokeWithToken extends MeshSpoke {
+  token: string
+}
+
+export interface CreateMeshSpokeRequest {
+  name: string
+  description?: string
+  localNetworks: string[]
+}
+
+// Mesh Hub Management
+export async function getMeshHubs(): Promise<MeshHub[]> {
+  const response = await api.get('/api/v1/admin/mesh/hubs')
+  return (response.data.hubs || []).map((hub: Record<string, unknown>) => ({
+    id: hub.id,
+    name: hub.name,
+    description: hub.description || '',
+    publicEndpoint: hub.publicEndpoint,
+    vpnPort: hub.vpnPort,
+    vpnProtocol: hub.vpnProtocol,
+    vpnSubnet: hub.vpnSubnet,
+    cryptoProfile: hub.cryptoProfile,
+    tlsAuthEnabled: hub.tlsAuthEnabled,
+    status: hub.status,
+    statusMessage: hub.statusMessage || '',
+    connectedSpokes: hub.connectedSpokes || 0,
+    connectedClients: hub.connectedClients || 0,
+    lastHeartbeat: hub.lastHeartbeat,
+    createdAt: hub.createdAt,
+    updatedAt: hub.updatedAt,
+  }))
+}
+
+export async function getMeshHub(id: string): Promise<MeshHub> {
+  const response = await api.get(`/api/v1/admin/mesh/hubs/${id}`)
+  const hub = response.data.hub
+  return {
+    id: hub.id,
+    name: hub.name,
+    description: hub.description || '',
+    publicEndpoint: hub.publicEndpoint,
+    vpnPort: hub.vpnPort,
+    vpnProtocol: hub.vpnProtocol,
+    vpnSubnet: hub.vpnSubnet,
+    cryptoProfile: hub.cryptoProfile,
+    tlsAuthEnabled: hub.tlsAuthEnabled,
+    status: hub.status,
+    statusMessage: hub.statusMessage || '',
+    connectedSpokes: hub.connectedSpokes || 0,
+    connectedClients: hub.connectedClients || 0,
+    lastHeartbeat: hub.lastHeartbeat,
+    createdAt: hub.createdAt,
+    updatedAt: hub.updatedAt,
+  }
+}
+
+export async function createMeshHub(req: CreateMeshHubRequest): Promise<MeshHubWithToken> {
+  const response = await api.post('/api/v1/admin/mesh/hubs', req)
+  const hub = response.data.hub
+  return {
+    id: hub.id,
+    name: hub.name,
+    description: hub.description || '',
+    publicEndpoint: hub.publicEndpoint,
+    vpnPort: hub.vpnPort,
+    vpnProtocol: hub.vpnProtocol,
+    vpnSubnet: hub.vpnSubnet,
+    cryptoProfile: hub.cryptoProfile,
+    tlsAuthEnabled: hub.tlsAuthEnabled,
+    apiToken: hub.apiToken,
+    controlPlaneUrl: hub.controlPlaneUrl,
+    status: hub.status,
+    statusMessage: '',
+    connectedSpokes: 0,
+    connectedClients: 0,
+    lastHeartbeat: null,
+    createdAt: hub.createdAt || new Date().toISOString(),
+    updatedAt: hub.updatedAt || new Date().toISOString(),
+  }
+}
+
+export async function updateMeshHub(id: string, req: Partial<CreateMeshHubRequest>): Promise<void> {
+  await api.put(`/api/v1/admin/mesh/hubs/${id}`, req)
+}
+
+export async function deleteMeshHub(id: string): Promise<void> {
+  await api.delete(`/api/v1/admin/mesh/hubs/${id}`)
+}
+
+export async function provisionMeshHub(id: string): Promise<{ configVersion: string }> {
+  const response = await api.post(`/api/v1/admin/mesh/hubs/${id}/provision`)
+  return { configVersion: response.data.configVersion }
+}
+
+export async function getMeshHubInstallScript(id: string): Promise<string> {
+  const response = await api.get(`/api/v1/admin/mesh/hubs/${id}/install-script`)
+  return response.data
+}
+
+// Mesh Hub Access Control
+export async function getMeshHubUsers(hubId: string): Promise<string[]> {
+  const response = await api.get(`/api/v1/admin/mesh/hubs/${hubId}/users`)
+  return response.data.users || []
+}
+
+export async function assignMeshHubUser(hubId: string, userId: string): Promise<void> {
+  await api.post(`/api/v1/admin/mesh/hubs/${hubId}/users`, { userId })
+}
+
+export async function removeMeshHubUser(hubId: string, userId: string): Promise<void> {
+  await api.delete(`/api/v1/admin/mesh/hubs/${hubId}/users/${userId}`)
+}
+
+export async function getMeshHubGroups(hubId: string): Promise<string[]> {
+  const response = await api.get(`/api/v1/admin/mesh/hubs/${hubId}/groups`)
+  return response.data.groups || []
+}
+
+export async function assignMeshHubGroup(hubId: string, groupName: string): Promise<void> {
+  await api.post(`/api/v1/admin/mesh/hubs/${hubId}/groups`, { groupName })
+}
+
+export async function removeMeshHubGroup(hubId: string, groupName: string): Promise<void> {
+  await api.delete(`/api/v1/admin/mesh/hubs/${hubId}/groups/${encodeURIComponent(groupName)}`)
+}
+
+// Mesh Spoke Management
+export async function getMeshSpokes(hubId: string): Promise<MeshSpoke[]> {
+  const response = await api.get(`/api/v1/admin/mesh/hubs/${hubId}/spokes`)
+  return (response.data.spokes || []).map((spoke: Record<string, unknown>) => ({
+    id: spoke.id,
+    hubId: spoke.hubId,
+    name: spoke.name,
+    description: spoke.description || '',
+    localNetworks: spoke.localNetworks || [],
+    tunnelIp: spoke.tunnelIp || '',
+    status: spoke.status,
+    statusMessage: spoke.statusMessage || '',
+    bytesSent: spoke.bytesSent || 0,
+    bytesReceived: spoke.bytesReceived || 0,
+    remoteIp: spoke.remoteIp || '',
+    lastSeen: spoke.lastSeen,
+    hasClientCert: spoke.hasClientCert || false,
+    createdAt: spoke.createdAt,
+    updatedAt: spoke.updatedAt,
+  }))
+}
+
+export async function getMeshSpoke(id: string): Promise<MeshSpoke> {
+  const response = await api.get(`/api/v1/admin/mesh/spokes/${id}`)
+  const spoke = response.data.spoke
+  return {
+    id: spoke.id,
+    hubId: spoke.hubId,
+    name: spoke.name,
+    description: spoke.description || '',
+    localNetworks: spoke.localNetworks || [],
+    tunnelIp: spoke.tunnelIp || '',
+    status: spoke.status,
+    statusMessage: spoke.statusMessage || '',
+    bytesSent: spoke.bytesSent || 0,
+    bytesReceived: spoke.bytesReceived || 0,
+    remoteIp: spoke.remoteIp || '',
+    lastSeen: spoke.lastSeen,
+    hasClientCert: spoke.hasClientCert || false,
+    createdAt: spoke.createdAt,
+    updatedAt: spoke.updatedAt,
+  }
+}
+
+export async function createMeshSpoke(hubId: string, req: CreateMeshSpokeRequest): Promise<MeshSpokeWithToken> {
+  const response = await api.post(`/api/v1/admin/mesh/hubs/${hubId}/spokes`, req)
+  const spoke = response.data.spoke
+  return {
+    id: spoke.id,
+    hubId: spoke.hubId,
+    name: spoke.name,
+    description: spoke.description || '',
+    localNetworks: spoke.localNetworks || [],
+    tunnelIp: '',
+    token: spoke.token,
+    status: spoke.status,
+    statusMessage: '',
+    bytesSent: 0,
+    bytesReceived: 0,
+    remoteIp: '',
+    lastSeen: null,
+    hasClientCert: false,
+    createdAt: spoke.createdAt || new Date().toISOString(),
+    updatedAt: spoke.updatedAt || new Date().toISOString(),
+  }
+}
+
+export async function updateMeshSpoke(id: string, req: Partial<CreateMeshSpokeRequest>): Promise<void> {
+  await api.put(`/api/v1/admin/mesh/spokes/${id}`, req)
+}
+
+export async function deleteMeshSpoke(id: string): Promise<void> {
+  await api.delete(`/api/v1/admin/mesh/spokes/${id}`)
+}
+
+export async function provisionMeshSpoke(id: string): Promise<{ tunnelIp: string }> {
+  const response = await api.post(`/api/v1/admin/mesh/spokes/${id}/provision`)
+  return { tunnelIp: response.data.tunnelIp }
+}
+
+export async function getMeshSpokeInstallScript(id: string): Promise<string> {
+  const response = await api.get(`/api/v1/admin/mesh/spokes/${id}/install-script`)
+  return response.data
+}
+
+// Mesh Spoke Access Control
+export async function getMeshSpokeUsers(spokeId: string): Promise<string[]> {
+  const response = await api.get(`/api/v1/admin/mesh/spokes/${spokeId}/users`)
+  return response.data.users || []
+}
+
+export async function assignMeshSpokeUser(spokeId: string, userId: string): Promise<void> {
+  await api.post(`/api/v1/admin/mesh/spokes/${spokeId}/users`, { userId })
+}
+
+export async function removeMeshSpokeUser(spokeId: string, userId: string): Promise<void> {
+  await api.delete(`/api/v1/admin/mesh/spokes/${spokeId}/users/${userId}`)
+}
+
+export async function getMeshSpokeGroups(spokeId: string): Promise<string[]> {
+  const response = await api.get(`/api/v1/admin/mesh/spokes/${spokeId}/groups`)
+  return response.data.groups || []
+}
+
+export async function assignMeshSpokeGroup(spokeId: string, groupName: string): Promise<void> {
+  await api.post(`/api/v1/admin/mesh/spokes/${spokeId}/groups`, { groupName })
+}
+
+export async function removeMeshSpokeGroup(spokeId: string, groupName: string): Promise<void> {
+  await api.delete(`/api/v1/admin/mesh/spokes/${spokeId}/groups/${encodeURIComponent(groupName)}`)
+}
+
+// ==================== User Mesh Hub Access ====================
+
+export interface UserMeshHub {
+  id: string
+  name: string
+  description: string
+  status: string
+  connectedspokes: number
+}
+
+export interface MeshClientConfig {
+  hubname: string
+  config: string
+}
+
+export async function getUserMeshHubs(): Promise<UserMeshHub[]> {
+  const response = await api.get('/api/v1/mesh/hubs')
+  return response.data.hubs || []
+}
+
+export async function generateMeshClientConfig(hubId: string): Promise<MeshClientConfig> {
+  const response = await api.post('/api/v1/mesh/generate-config', { hubid: hubId })
+  return {
+    hubname: response.data.hubname,
+    config: response.data.config,
+  }
+}
