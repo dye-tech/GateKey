@@ -32,7 +32,7 @@ RUN mkdir -p /client-binaries && \
     CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o /client-binaries/gatekey-darwin-arm64 ./cmd/gatekey
 
 # Runtime stage
-FROM alpine:3.19
+FROM alpine:3.23
 
 WORKDIR /app
 
