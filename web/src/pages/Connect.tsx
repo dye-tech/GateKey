@@ -1,16 +1,22 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
-import { getGateways, generateConfig, Gateway, GeneratedConfig } from '../api/client'
+import { getGateways, generateConfig, getUserMeshHubs, generateMeshClientConfig, Gateway, GeneratedConfig, UserMeshHub } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
+
+type ConnectionType = 'gateways' | 'mesh'
 
 export default function Connect() {
   const { user } = useAuth()
   const [searchParams] = useSearchParams()
+  const [connectionType, setConnectionType] = useState<ConnectionType>('gateways')
   const [gateways, setGateways] = useState<Gateway[]>([])
+  const [meshHubs, setMeshHubs] = useState<UserMeshHub[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedGateway, setSelectedGateway] = useState<Gateway | null>(null)
+  const [selectedMeshHub, setSelectedMeshHub] = useState<UserMeshHub | null>(null)
   const [generating, setGenerating] = useState(false)
   const [generatedConfig, setGeneratedConfig] = useState<GeneratedConfig | null>(null)
+  const [meshConfig, setMeshConfig] = useState<{ hubname: string; config: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   const [showManualDownload, setShowManualDownload] = useState(false)
@@ -24,20 +30,28 @@ export default function Connect() {
   const serverUrl = window.location.origin
 
   useEffect(() => {
-    loadGateways()
+    loadData()
   }, [])
 
-  async function loadGateways() {
+  async function loadData() {
     try {
-      const data = await getGateways()
-      setGateways(data)
+      const [gatewayData, meshData] = await Promise.all([
+        getGateways(),
+        getUserMeshHubs().catch(() => []) // Don't fail if mesh hubs unavailable
+      ])
+      setGateways(gatewayData)
+      setMeshHubs(meshData)
       // Auto-select first online gateway if available
-      const firstOnline = data.find(g => g.isActive)
+      const firstOnline = gatewayData.find(g => g.isActive)
       if (firstOnline) {
         setSelectedGateway(firstOnline)
       }
+      // Auto-select first mesh hub if available
+      if (meshData.length > 0) {
+        setSelectedMeshHub(meshData[0])
+      }
     } catch (err) {
-      setError('Failed to load gateways')
+      setError('Failed to load connection options')
     } finally {
       setLoading(false)
     }
@@ -57,6 +71,36 @@ export default function Connect() {
     } finally {
       setGenerating(false)
     }
+  }
+
+  async function handleMeshConnect() {
+    if (!selectedMeshHub) return
+
+    setGenerating(true)
+    setError(null)
+
+    try {
+      const config = await generateMeshClientConfig(selectedMeshHub.id)
+      setMeshConfig(config)
+    } catch (err) {
+      setError('Failed to generate mesh configuration')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  function handleMeshDownload() {
+    if (!meshConfig) return
+    const blob = new Blob([meshConfig.config], { type: 'application/x-openvpn-profile' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `mesh-${meshConfig.hubname}.ovpn`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    setMeshConfig(null)
   }
 
   function handleDownload() {
@@ -93,7 +137,7 @@ export default function Connect() {
       <div className="card">
         <h1 className="text-2xl font-bold text-gray-900">Connect to VPN</h1>
         <p className="text-gray-500 mt-1">
-          Select a gateway and connect using the GateKey CLI.
+          Select a gateway or mesh hub and connect using the GateKey CLI.
         </p>
         {isCliFlow && (
           <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -106,6 +150,36 @@ export default function Connect() {
             <p className="text-sm text-blue-600 mt-1">
               Select a gateway and the configuration will be automatically sent to your CLI client.
             </p>
+          </div>
+        )}
+
+        {/* Connection Type Tabs */}
+        {(gateways.length > 0 || meshHubs.length > 0) && (
+          <div className="mt-4 border-b border-gray-200">
+            <nav className="-mb-px flex space-x-8">
+              <button
+                onClick={() => setConnectionType('gateways')}
+                className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
+                  connectionType === 'gateways'
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Gateways ({gateways.length})
+              </button>
+              {meshHubs.length > 0 && (
+                <button
+                  onClick={() => setConnectionType('mesh')}
+                  className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
+                    connectionType === 'mesh'
+                      ? 'border-primary-500 text-primary-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Mesh Networks ({meshHubs.length})
+                </button>
+              )}
+            </nav>
           </div>
         )}
       </div>
@@ -122,7 +196,7 @@ export default function Connect() {
         <div className="card flex justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
         </div>
-      ) : gateways.length === 0 ? (
+      ) : connectionType === 'gateways' && gateways.length === 0 ? (
         <div className="card text-center py-12">
           <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
@@ -149,7 +223,7 @@ export default function Connect() {
             </p>
           )}
         </div>
-      ) : (
+      ) : connectionType === 'gateways' ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Gateway Selection */}
           <div className="lg:col-span-1">
@@ -382,11 +456,148 @@ export default function Connect() {
             </div>
           </div>
         </div>
+      ) : connectionType === 'mesh' ? (
+        /* Mesh Hub Section */
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Mesh Hub Selection */}
+          <div className="lg:col-span-1">
+            <div className="card">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Select Mesh Hub</h2>
+              <div className="space-y-2">
+                {meshHubs.map((hub) => (
+                  <button
+                    key={hub.id}
+                    onClick={() => setSelectedMeshHub(hub)}
+                    className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
+                      selectedMeshHub?.id === hub.id
+                        ? 'border-primary-500 bg-primary-50'
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-gray-900">{hub.name}</p>
+                        <p className="text-sm text-gray-500">{hub.description || 'Mesh Network'}</p>
+                      </div>
+                      <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                        Online
+                      </span>
+                    </div>
+                    <div className="mt-2 text-xs text-gray-400">
+                      {hub.connectedspokes} spoke{hub.connectedspokes !== 1 ? 's' : ''} connected
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Mesh Connection Instructions */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="card">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Connect to Mesh Network</h2>
+              <p className="text-gray-600 mb-4">
+                Mesh networks provide access to multiple remote sites through a single VPN connection.
+                Download a configuration file to connect with any OpenVPN client.
+              </p>
+
+              {selectedMeshHub ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div>
+                      <p className="font-medium text-gray-900">{selectedMeshHub.name}</p>
+                      <p className="text-sm text-gray-500">{selectedMeshHub.description}</p>
+                    </div>
+                    <button
+                      onClick={handleMeshConnect}
+                      disabled={generating}
+                      className="btn btn-primary"
+                    >
+                      {generating ? (
+                        <span className="flex items-center">
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Generating...
+                        </span>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          Generate Config
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="text-sm text-blue-700">
+                      <strong>Note:</strong> Mesh configs provide access to all spoke networks you're authorized for.
+                      Routes are included in the config and will be automatically applied when connected.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-gray-500 text-center py-4">
+                  Select a mesh hub to generate a configuration.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Mesh config modal */}
+      {meshConfig && (
+        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <div className="text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+                <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                Mesh Configuration Ready
+              </h3>
+              <p className="text-gray-500 mb-4">
+                Your mesh VPN configuration has been generated.
+              </p>
+              <div className="bg-gray-50 rounded-lg p-4 mb-4 text-left">
+                <p className="text-sm text-gray-600">
+                  <strong>Hub:</strong> {meshConfig.hubname}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <strong>File:</strong> mesh-{meshConfig.hubname}.ovpn
+                </p>
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setMeshConfig(null)}
+                  className="flex-1 btn btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleMeshDownload}
+                  className="flex-1 btn btn-primary"
+                >
+                  <svg className="w-4 h-4 mr-2 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Download
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Generated config modal */}
       {generatedConfig && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
             <div className="text-center">
               <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
