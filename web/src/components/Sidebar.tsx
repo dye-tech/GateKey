@@ -23,6 +23,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
     { name: 'Networks', href: '/admin/networks', icon: 'globe' },
     { name: 'Access Rules', href: '/admin/access-rules', icon: 'shield' },
     { name: 'Proxy Apps', href: '/admin/proxy-apps', icon: 'apps' },
+    { name: 'Monitoring', href: '/admin/monitoring', icon: 'monitoring' },
     { name: 'OIDC Providers', href: '/admin/settings/oidc', icon: 'oidc' },
     { name: 'SAML Providers', href: '/admin/settings/saml', icon: 'saml' },
     { name: 'General', href: '/admin/settings/general', icon: 'cog' },
@@ -113,6 +114,12 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
         return (
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        )
+      case 'monitoring':
+        return (
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
           </svg>
         )
       default:

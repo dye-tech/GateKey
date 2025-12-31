@@ -262,6 +262,8 @@ See [docs/api.md](docs/api.md) for full API documentation.
 - `GET /api/v1/gateways` - List available gateways
 - `GET /api/v1/admin/networks` - Manage networks
 - `GET /api/v1/admin/access-rules` - Manage access rules
+- `GET /api/v1/admin/login-logs` - View login activity
+- `GET /api/v1/admin/login-logs/stats` - Login statistics
 
 ## Security Features
 
@@ -270,6 +272,7 @@ See [docs/api.md](docs/api.md) for full API documentation.
 - **Per-Identity Firewall**: Each user gets their own firewall rules
 - **FIPS Compliance**: Built with FIPS-validated crypto (when enabled)
 - **Audit Logging**: All access is logged
+- **Login Monitoring**: Track all authentication events with IP, location, and status
 
 ## Development
 
