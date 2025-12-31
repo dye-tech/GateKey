@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -289,7 +291,7 @@ func (s *Server) handleOIDCCallback(c *gin.Context) {
 	userID := "oidc:" + stateData.Provider + ":" + idToken.Subject
 
 	expiresAt := time.Now().Add(s.config.Auth.Session.Validity)
-	ipAddress := c.ClientIP()
+	ipAddress := getRealClientIP(c)
 	userAgent := c.GetHeader("User-Agent")
 
 	// Store SSO session (using a modified approach since SSO users aren't in local_users)
@@ -317,6 +319,9 @@ func (s *Server) handleOIDCCallback(c *gin.Context) {
 		zap.String("user", username),
 		zap.String("email", email),
 	)
+
+	// Log the successful login
+	s.logUserLogin(c.Request.Context(), userID, email, name, "oidc", stateData.Provider, ipAddress, userAgent, token, true, "")
 
 	// Check if this is a CLI login flow
 	if stateData.CLICallbackURL != "" {
@@ -575,7 +580,7 @@ func (s *Server) handleSAMLACS(c *gin.Context) {
 	// Create session
 	userID := "saml:" + stateData.Provider + ":" + nameID
 	expiresAt := time.Now().Add(s.config.Auth.Session.Validity)
-	ipAddress := c.ClientIP()
+	ipAddress := getRealClientIP(c)
 	userAgent := c.GetHeader("User-Agent")
 
 	if err := s.createSSOSession(c.Request.Context(), userID, token, expiresAt, ipAddress, userAgent, username, email, name, groups); err != nil {
@@ -600,6 +605,9 @@ func (s *Server) handleSAMLACS(c *gin.Context) {
 		zap.String("user", username),
 		zap.String("email", email),
 	)
+
+	// Log the successful login
+	s.logUserLogin(c.Request.Context(), userID, email, name, "saml", stateData.Provider, ipAddress, userAgent, token, true, "")
 
 	// Redirect to dashboard
 	c.Redirect(http.StatusFound, "/")
@@ -881,8 +889,13 @@ func (s *Server) handleLocalLogin(c *gin.Context) {
 		return
 	}
 
+	ipAddress := getRealClientIP(c)
+	userAgent := c.GetHeader("User-Agent")
+
 	user, err := s.userStore.Authenticate(c.Request.Context(), req.Username, req.Password)
 	if err != nil {
+		// Log failed login attempt
+		s.logUserLogin(c.Request.Context(), "", req.Username, "", "local", "", ipAddress, userAgent, "", false, "invalid credentials")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
@@ -897,8 +910,6 @@ func (s *Server) handleLocalLogin(c *gin.Context) {
 
 	// Store session in database
 	expiresAt := time.Now().Add(s.config.Auth.Session.Validity)
-	ipAddress := c.ClientIP()
-	userAgent := c.GetHeader("User-Agent")
 	if err := s.userStore.CreateSession(c.Request.Context(), user.ID, token, expiresAt, ipAddress, userAgent); err != nil {
 		s.logger.Error("Failed to create session", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create session"})
@@ -915,6 +926,9 @@ func (s *Server) handleLocalLogin(c *gin.Context) {
 		s.config.Auth.Session.Secure,
 		true, // httpOnly
 	)
+
+	// Log successful login
+	s.logUserLogin(c.Request.Context(), user.ID, user.Email, user.Username, "local", "", ipAddress, userAgent, token, true, "")
 
 	c.JSON(http.StatusOK, gin.H{
 		"user": gin.H{
@@ -4958,4 +4972,256 @@ func (s *Server) validateCryptoProfileAllowed(ctx context.Context, profile strin
 	}
 
 	return fmt.Errorf("crypto profile '%s' is not allowed by system policy. Allowed profiles: %s", profile, setting.Value)
+}
+
+// Login Log handlers
+
+func (s *Server) handleListLoginLogs(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Parse filter parameters
+	filter := &db.LoginLogFilter{
+		UserEmail: c.Query("email"),
+		UserID:    c.Query("user_id"),
+		IPAddress: c.Query("ip"),
+		Provider:  c.Query("provider"),
+		Limit:     50,
+		Offset:    0,
+	}
+
+	// Parse success filter
+	if successStr := c.Query("success"); successStr != "" {
+		success := successStr == "true"
+		filter.Success = &success
+	}
+
+	// Parse pagination
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 && limit <= 100 {
+			filter.Limit = limit
+		}
+	}
+	if offsetStr := c.Query("offset"); offsetStr != "" {
+		if offset, err := strconv.Atoi(offsetStr); err == nil && offset >= 0 {
+			filter.Offset = offset
+		}
+	}
+
+	// Parse time filters
+	if startStr := c.Query("start"); startStr != "" {
+		if start, err := time.Parse(time.RFC3339, startStr); err == nil {
+			filter.StartTime = &start
+		}
+	}
+	if endStr := c.Query("end"); endStr != "" {
+		if end, err := time.Parse(time.RFC3339, endStr); err == nil {
+			filter.EndTime = &end
+		}
+	}
+
+	logs, total, err := s.loginLogStore.List(ctx, filter)
+	if err != nil {
+		s.logger.Error("Failed to list login logs", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list login logs"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"logs":   logs,
+		"total":  total,
+		"limit":  filter.Limit,
+		"offset": filter.Offset,
+	})
+}
+
+func (s *Server) handleGetLoginLogStats(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Default to 30 days if not specified
+	days := 30
+	if daysStr := c.Query("days"); daysStr != "" {
+		if d, err := strconv.Atoi(daysStr); err == nil && d > 0 && d <= 365 {
+			days = d
+		}
+	}
+
+	stats, err := s.loginLogStore.GetStats(ctx, days)
+	if err != nil {
+		s.logger.Error("Failed to get login log stats", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get login log stats"})
+		return
+	}
+
+	c.JSON(http.StatusOK, stats)
+}
+
+func (s *Server) handlePurgeLoginLogs(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Parse days parameter (required)
+	daysStr := c.Query("days")
+	if daysStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "days parameter is required"})
+		return
+	}
+
+	days, err := strconv.Atoi(daysStr)
+	if err != nil || days < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid days parameter"})
+		return
+	}
+
+	deleted, err := s.loginLogStore.DeleteOlderThan(ctx, days)
+	if err != nil {
+		s.logger.Error("Failed to purge login logs", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to purge login logs"})
+		return
+	}
+
+	s.logger.Info("Purged login logs", zap.Int("days", days), zap.Int64("deleted", deleted))
+	c.JSON(http.StatusOK, gin.H{
+		"message": "login logs purged",
+		"deleted": deleted,
+	})
+}
+
+func (s *Server) handleGetLoginLogRetention(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	days := s.settingsStore.GetInt(ctx, db.SettingLoginLogRetentionDays, 30)
+
+	c.JSON(http.StatusOK, gin.H{
+		"retention_days": days,
+	})
+}
+
+func (s *Server) handleSetLoginLogRetention(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var req struct {
+		RetentionDays int `json:"retention_days"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	// Validate retention days (0 = forever, otherwise 1-365)
+	if req.RetentionDays < 0 || req.RetentionDays > 365 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "retention_days must be between 0 and 365 (0 = forever)"})
+		return
+	}
+
+	if err := s.settingsStore.Set(ctx, db.SettingLoginLogRetentionDays, strconv.Itoa(req.RetentionDays)); err != nil {
+		s.logger.Error("Failed to set login log retention", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to set retention"})
+		return
+	}
+
+	s.logger.Info("Login log retention updated", zap.Int("days", req.RetentionDays))
+	c.JSON(http.StatusOK, gin.H{
+		"message":        "retention setting updated",
+		"retention_days": req.RetentionDays,
+	})
+}
+
+// geoIPResult holds the result from IP geolocation lookup
+type geoIPResult struct {
+	Country     string `json:"country"`
+	CountryCode string `json:"countryCode"`
+	City        string `json:"city"`
+}
+
+// lookupGeoIP performs a geolocation lookup for an IP address using ip-api.com
+// Returns country, countryCode, and city, or empty strings on error
+func lookupGeoIP(ip string) (country, countryCode, city string) {
+	// Skip lookup for private/local IPs
+	if strings.HasPrefix(ip, "10.") || strings.HasPrefix(ip, "192.168.") ||
+		strings.HasPrefix(ip, "172.16.") || strings.HasPrefix(ip, "172.17.") ||
+		strings.HasPrefix(ip, "172.18.") || strings.HasPrefix(ip, "172.19.") ||
+		strings.HasPrefix(ip, "172.2") || strings.HasPrefix(ip, "172.30.") ||
+		strings.HasPrefix(ip, "172.31.") || strings.HasPrefix(ip, "127.") ||
+		ip == "::1" || ip == "localhost" {
+		return "", "", ""
+	}
+
+	// Use ip-api.com (free, no API key required, 45 requests/minute limit)
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get("http://ip-api.com/json/" + ip + "?fields=country,countryCode,city")
+	if err != nil {
+		return "", "", ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", "", ""
+	}
+
+	var result geoIPResult
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", "", ""
+	}
+
+	return result.Country, result.CountryCode, result.City
+}
+
+// getRealClientIP extracts the real client IP from headers or falls back to c.ClientIP()
+// This handles cases where requests come through load balancers, ingress controllers, or proxies
+func getRealClientIP(c *gin.Context) string {
+	// Check X-Forwarded-For header (standard for proxies, may contain multiple IPs)
+	if xff := c.GetHeader("X-Forwarded-For"); xff != "" {
+		// X-Forwarded-For can contain multiple IPs: "client, proxy1, proxy2"
+		// The first one is the original client IP
+		ips := strings.Split(xff, ",")
+		if len(ips) > 0 {
+			clientIP := strings.TrimSpace(ips[0])
+			if clientIP != "" {
+				return clientIP
+			}
+		}
+	}
+
+	// Check X-Real-IP header (used by nginx)
+	if xri := c.GetHeader("X-Real-IP"); xri != "" {
+		return strings.TrimSpace(xri)
+	}
+
+	// Check CF-Connecting-IP (Cloudflare)
+	if cfip := c.GetHeader("CF-Connecting-IP"); cfip != "" {
+		return strings.TrimSpace(cfip)
+	}
+
+	// Check True-Client-IP (Akamai, Cloudflare Enterprise)
+	if tcip := c.GetHeader("True-Client-IP"); tcip != "" {
+		return strings.TrimSpace(tcip)
+	}
+
+	// Fall back to Gin's ClientIP which respects trusted proxies
+	return c.ClientIP()
+}
+
+// logUserLogin creates a login log entry (helper for auth handlers)
+func (s *Server) logUserLogin(ctx context.Context, userID, userEmail, userName, provider, providerName, ipAddress, userAgent, sessionID string, success bool, failureReason string) {
+	// Look up geolocation for the IP address
+	country, countryCode, city := lookupGeoIP(ipAddress)
+
+	log := &db.LoginLog{
+		UserID:        userID,
+		UserEmail:     userEmail,
+		UserName:      userName,
+		Provider:      provider,
+		ProviderName:  providerName,
+		IPAddress:     ipAddress,
+		UserAgent:     userAgent,
+		Country:       country,
+		CountryCode:   countryCode,
+		City:          city,
+		Success:       success,
+		FailureReason: failureReason,
+		SessionID:     sessionID,
+	}
+
+	if err := s.loginLogStore.Create(ctx, log); err != nil {
+		s.logger.Error("Failed to create login log", zap.Error(err), zap.String("user_email", userEmail))
+	}
 }

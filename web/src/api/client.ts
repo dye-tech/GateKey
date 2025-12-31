@@ -805,3 +805,130 @@ export async function adminRevokeUserConfigs(userId: string, reason?: string): P
   const response = await api.post(`/api/v1/admin/users/${userId}/revoke-configs`, { reason })
   return { revokedCount: response.data.revokedCount || 0 }
 }
+
+// Login Logs and Monitoring
+export interface LoginLog {
+  id: string
+  userId: string
+  userEmail: string
+  userName: string
+  provider: string
+  providerName: string
+  ipAddress: string
+  userAgent: string
+  country: string
+  countryCode: string
+  city: string
+  success: boolean
+  failureReason: string
+  sessionId: string
+  createdAt: string
+}
+
+export interface LoginLogStats {
+  totalLogins: number
+  successfulLogins: number
+  failedLogins: number
+  uniqueUsers: number
+  uniqueIps: number
+  loginsByProvider: Record<string, number>
+  loginsByCountry: Record<string, number>
+  recentFailures: LoginLog[]
+}
+
+export interface LoginLogFilter {
+  userEmail?: string
+  userId?: string
+  ipAddress?: string
+  provider?: string
+  success?: boolean
+  startTime?: string
+  endTime?: string
+  limit?: number
+  offset?: number
+}
+
+// Get login logs with filtering
+export async function getLoginLogs(filter?: LoginLogFilter): Promise<{ logs: LoginLog[]; total: number }> {
+  const params = new URLSearchParams()
+  if (filter?.userEmail) params.append('user_email', filter.userEmail)
+  if (filter?.userId) params.append('user_id', filter.userId)
+  if (filter?.ipAddress) params.append('ip_address', filter.ipAddress)
+  if (filter?.provider) params.append('provider', filter.provider)
+  if (filter?.success !== undefined) params.append('success', String(filter.success))
+  if (filter?.startTime) params.append('start_time', filter.startTime)
+  if (filter?.endTime) params.append('end_time', filter.endTime)
+  if (filter?.limit) params.append('limit', String(filter.limit))
+  if (filter?.offset) params.append('offset', String(filter.offset))
+
+  const response = await api.get(`/api/v1/admin/login-logs?${params.toString()}`)
+  return {
+    logs: (response.data.logs || []).map((log: Record<string, unknown>) => ({
+      id: log.id,
+      userId: log.user_id,
+      userEmail: log.user_email,
+      userName: log.user_name || '',
+      provider: log.provider,
+      providerName: log.provider_name || '',
+      ipAddress: log.ip_address,
+      userAgent: log.user_agent || '',
+      country: log.country || '',
+      countryCode: log.country_code || '',
+      city: log.city || '',
+      success: log.success,
+      failureReason: log.failure_reason || '',
+      sessionId: log.session_id || '',
+      createdAt: log.created_at,
+    })),
+    total: response.data.total || 0,
+  }
+}
+
+// Get login statistics
+export async function getLoginLogStats(days?: number): Promise<LoginLogStats> {
+  const params = days ? `?days=${days}` : ''
+  const response = await api.get(`/api/v1/admin/login-logs/stats${params}`)
+  return {
+    totalLogins: response.data.total_logins || 0,
+    successfulLogins: response.data.successful_logins || 0,
+    failedLogins: response.data.failed_logins || 0,
+    uniqueUsers: response.data.unique_users || 0,
+    uniqueIps: response.data.unique_ips || 0,
+    loginsByProvider: response.data.logins_by_provider || {},
+    loginsByCountry: response.data.logins_by_country || {},
+    recentFailures: (response.data.recent_failures || []).map((log: Record<string, unknown>) => ({
+      id: log.id,
+      userId: log.user_id,
+      userEmail: log.user_email,
+      userName: log.user_name || '',
+      provider: log.provider,
+      providerName: log.provider_name || '',
+      ipAddress: log.ip_address,
+      userAgent: log.user_agent || '',
+      country: log.country || '',
+      countryCode: log.country_code || '',
+      city: log.city || '',
+      success: log.success,
+      failureReason: log.failure_reason || '',
+      sessionId: log.session_id || '',
+      createdAt: log.created_at,
+    })),
+  }
+}
+
+// Purge old login logs
+export async function purgeLoginLogs(days: number): Promise<{ deletedCount: number }> {
+  const response = await api.delete(`/api/v1/admin/login-logs?days=${days}`)
+  return { deletedCount: response.data.deleted_count || 0 }
+}
+
+// Get login log retention setting
+export async function getLoginLogRetention(): Promise<{ days: number }> {
+  const response = await api.get('/api/v1/admin/login-logs/retention')
+  return { days: response.data.days || 30 }
+}
+
+// Set login log retention setting
+export async function setLoginLogRetention(days: number): Promise<void> {
+  await api.put('/api/v1/admin/login-logs/retention', { days })
+}

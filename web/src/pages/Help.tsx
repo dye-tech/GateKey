@@ -81,6 +81,15 @@ const sections: Section[] = [
     ),
   },
   {
+    id: 'monitoring',
+    title: 'Monitoring',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      </svg>
+    ),
+  },
+  {
     id: 'general',
     title: 'General Settings',
     icon: (
@@ -190,12 +199,29 @@ export default function Help() {
                   download="gatekey"
                 >
                   {/* Tux Linux Penguin */}
-                  <svg className="h-8 w-8 mr-3" viewBox="0 0 24 24" fill="none">
-                    <path d="M12 2C9.5 2 8 4.5 8 7c0 1.5.5 2.8 1.2 3.8-.7.5-1.2 1.2-1.2 2.2 0 1.5 1.2 2.7 2.7 2.9-.4.8-.7 1.7-.7 2.6 0 1.9 1.6 3.5 3.5 3.5h1c1.9 0 3.5-1.6 3.5-3.5 0-.9-.3-1.8-.7-2.6 1.5-.2 2.7-1.4 2.7-2.9 0-1-.5-1.7-1.2-2.2.7-1 1.2-2.3 1.2-3.8 0-2.5-1.5-5-4-5z" fill="#FFC107"/>
-                    <ellipse cx="10" cy="7" rx="1" ry="1.5" fill="#1a1a1a"/>
-                    <ellipse cx="14" cy="7" rx="1" ry="1.5" fill="#1a1a1a"/>
-                    <path d="M12 9.5c-.8 0-1.5.3-1.5.8s.7.7 1.5.7 1.5-.2 1.5-.7-.7-.8-1.5-.8z" fill="#FF9800"/>
-                    <ellipse cx="12" cy="17" rx="2.5" ry="2" fill="#FFF8E1"/>
+                  <svg className="h-8 w-8 mr-3" viewBox="0 0 256 256" fill="none">
+                    {/* Body */}
+                    <ellipse cx="128" cy="156" rx="72" ry="84" fill="#1a1a1a"/>
+                    {/* Belly */}
+                    <ellipse cx="128" cy="176" rx="48" ry="60" fill="#FFFFFF"/>
+                    {/* Head */}
+                    <circle cx="128" cy="72" r="48" fill="#1a1a1a"/>
+                    {/* Face/mask */}
+                    <ellipse cx="128" cy="80" rx="32" ry="28" fill="#FFFFFF"/>
+                    {/* Eyes */}
+                    <ellipse cx="114" cy="68" rx="8" ry="12" fill="#FFFFFF"/>
+                    <ellipse cx="142" cy="68" rx="8" ry="12" fill="#FFFFFF"/>
+                    <circle cx="116" cy="70" r="4" fill="#1a1a1a"/>
+                    <circle cx="140" cy="70" r="4" fill="#1a1a1a"/>
+                    {/* Beak */}
+                    <path d="M128 76 L116 92 L140 92 Z" fill="#F4A103"/>
+                    <path d="M128 84 L118 92 L138 92 Z" fill="#E08A00"/>
+                    {/* Feet */}
+                    <ellipse cx="96" cy="236" rx="24" ry="12" fill="#F4A103"/>
+                    <ellipse cx="160" cy="236" rx="24" ry="12" fill="#F4A103"/>
+                    {/* Wings/flippers */}
+                    <ellipse cx="56" cy="156" rx="16" ry="48" fill="#1a1a1a" transform="rotate(-15 56 156)"/>
+                    <ellipse cx="200" cy="156" rx="16" ry="48" fill="#1a1a1a" transform="rotate(15 200 156)"/>
                   </svg>
                   <div>
                     <p className="font-medium text-gray-900">Linux (x64)</p>
@@ -720,6 +746,123 @@ curl -sSL ${baseUrl}/scripts/install-gateway.sh | \\
               <div>
                 <p className="text-sm font-medium text-gray-700">ACS URL:</p>
                 <code className="text-sm text-gray-600">{baseUrl}/api/v1/auth/saml/acs</code>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Monitoring Section */}
+        <section id="monitoring" className="scroll-mt-24">
+          <div className="card">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Login Monitoring</h1>
+            <p className="text-gray-600 mb-6">
+              Monitor user authentication events, track login activity, and configure log retention policies.
+            </p>
+
+            {/* Overview */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Overview</h3>
+            <p className="text-gray-600 mb-4">
+              The Monitoring page provides visibility into all authentication events across your GateKey deployment.
+              Track successful and failed logins, identify suspicious activity, and maintain compliance with audit requirements.
+            </p>
+
+            {/* Features */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Features</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Login Logs</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• View all authentication events</li>
+                  <li>• Filter by user, IP, provider, status</li>
+                  <li>• See IP address and location data</li>
+                  <li>• Track failed login attempts with reasons</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Statistics</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• Total logins (successful/failed)</li>
+                  <li>• Unique users and IP addresses</li>
+                  <li>• Logins by provider (OIDC/SAML/Local)</li>
+                  <li>• Logins by country/location</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Data Captured */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Data Captured</h3>
+            <div className="overflow-x-auto mb-6">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Field</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200 text-sm">
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Timestamp</td>
+                    <td className="px-4 py-3">Date and time of the login attempt</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">User Email</td>
+                    <td className="px-4 py-3">Email address of the user</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Provider</td>
+                    <td className="px-4 py-3">Authentication provider (OIDC, SAML, Local)</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">IP Address</td>
+                    <td className="px-4 py-3">Client's public IP address</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Location</td>
+                    <td className="px-4 py-3">Country and city (when available)</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Status</td>
+                    <td className="px-4 py-3">Success or failure with reason</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">User Agent</td>
+                    <td className="px-4 py-3">Browser/client information</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Log Retention */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Log Retention</h3>
+            <p className="text-gray-600 mb-4">
+              Configure how long login logs are retained in the database. Logs older than the retention period
+              are automatically deleted by a background job that runs every 6 hours.
+            </p>
+            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <ul className="space-y-2 text-gray-600 text-sm">
+                <li><strong>Default:</strong> 30 days</li>
+                <li><strong>Minimum:</strong> 1 day</li>
+                <li><strong>Forever:</strong> Set to 0 to keep logs indefinitely</li>
+              </ul>
+            </div>
+
+            {/* Manual Purge */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Manual Purge</h3>
+            <p className="text-gray-600 mb-4">
+              You can manually purge logs older than a specified number of days from the Settings tab.
+              This is useful for immediately clearing old data or complying with data retention policies.
+            </p>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="flex">
+                <svg className="h-5 w-5 text-yellow-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-yellow-800">Warning</h3>
+                  <p className="mt-1 text-sm text-yellow-700">
+                    Purging logs is irreversible. Once deleted, login history cannot be recovered.
+                  </p>
+                </div>
               </div>
             </div>
           </div>

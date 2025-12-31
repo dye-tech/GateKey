@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict gxKnj7ZpO1j3T8z9MtVi14TuP2ylU7lSmXq1XxWDvBgFPwLFMl6BHtqNK1Vfq8O
+\restrict ZFHPIb0pj1Etg2PJ7sfDEHofrf1E2nEd7sU6hZAeoBRMqxMSbY6K51XBSK7bm9W
 
 -- Dumped from database version 16.10
 -- Dumped by pg_dump version 16.10
@@ -77,20 +77,13 @@ CREATE FUNCTION public.update_gateway_config_version() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
-    -- Compute config version based on settings that affect gateway config
-    NEW.config_version := encode(
-        sha256(
-            (COALESCE(NEW.crypto_profile, '') || '|' ||
-             COALESCE(NEW.vpn_port::text, '') || '|' ||
-             COALESCE(NEW.vpn_protocol, '') || '|' ||
-             COALESCE(NEW.vpn_subnet::text, '') || '|' ||
-             COALESCE(NEW.tls_auth_enabled::text, '') || '|' ||
-             COALESCE(NEW.tls_auth_key, '') || '|' ||
-             COALESCE(NEW.full_tunnel_mode::text, '') || '|' ||
-             COALESCE(NEW.push_dns::text, '') || '|' ||
-             COALESCE(array_to_string(NEW.dns_servers, ','), ''))::bytea
-        ),
-        'hex'
+    NEW.config_version := compute_gateway_config_version(
+        NEW.crypto_profile,
+        NEW.vpn_port,
+        NEW.vpn_protocol,
+        NEW.vpn_subnet,
+        NEW.tls_auth_enabled,
+        NEW.tls_auth_key
     );
     RETURN NEW;
 END;
@@ -289,27 +282,6 @@ COMMENT ON COLUMN public.gateways.crypto_profile IS 'Cryptographic profile: mode
 
 
 --
--- Name: COLUMN gateways.full_tunnel_mode; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.gateways.full_tunnel_mode IS 'When true, all client traffic routes through VPN (redirect-gateway). When false, only routes for allowed networks are pushed.';
-
-
---
--- Name: COLUMN gateways.push_dns; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.gateways.push_dns IS 'When true, push DNS servers to VPN clients. Default is false (don''t override client DNS).';
-
-
---
--- Name: COLUMN gateways.dns_servers; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.gateways.dns_servers IS 'Array of DNS server IPs to push to clients.';
-
-
---
 -- Name: generated_configs; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -379,6 +351,29 @@ CREATE TABLE public.local_users (
     last_login_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: login_logs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.login_logs (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id character varying(255) NOT NULL,
+    user_email character varying(255) NOT NULL,
+    user_name character varying(255),
+    provider character varying(50) NOT NULL,
+    provider_name character varying(100),
+    ip_address inet NOT NULL,
+    user_agent text,
+    country character varying(100),
+    city character varying(100),
+    success boolean DEFAULT true NOT NULL,
+    failure_reason character varying(255),
+    session_id character varying(255),
+    created_at timestamp with time zone DEFAULT now(),
+    country_code character varying(2)
 );
 
 
@@ -775,6 +770,14 @@ ALTER TABLE ONLY public.local_users
 
 ALTER TABLE ONLY public.local_users
     ADD CONSTRAINT local_users_username_key UNIQUE (username);
+
+
+--
+-- Name: login_logs login_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.login_logs
+    ADD CONSTRAINT login_logs_pkey PRIMARY KEY (id);
 
 
 --
@@ -1219,6 +1222,41 @@ CREATE INDEX idx_group_proxy_apps_group ON public.group_proxy_applications USING
 --
 
 CREATE INDEX idx_local_users_username ON public.local_users USING btree (username);
+
+
+--
+-- Name: idx_login_logs_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_login_logs_created_at ON public.login_logs USING btree (created_at DESC);
+
+
+--
+-- Name: idx_login_logs_ip_address; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_login_logs_ip_address ON public.login_logs USING btree (ip_address);
+
+
+--
+-- Name: idx_login_logs_success; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_login_logs_success ON public.login_logs USING btree (success);
+
+
+--
+-- Name: idx_login_logs_user_email; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_login_logs_user_email ON public.login_logs USING btree (user_email);
+
+
+--
+-- Name: idx_login_logs_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_login_logs_user_id ON public.login_logs USING btree (user_id);
 
 
 --
@@ -1707,5 +1745,5 @@ ALTER TABLE ONLY public.user_proxy_applications
 -- PostgreSQL database dump complete
 --
 
-\unrestrict gxKnj7ZpO1j3T8z9MtVi14TuP2ylU7lSmXq1XxWDvBgFPwLFMl6BHtqNK1Vfq8O
+\unrestrict ZFHPIb0pj1Etg2PJ7sfDEHofrf1E2nEd7sU6hZAeoBRMqxMSbY6K51XBSK7bm9W
 
