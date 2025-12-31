@@ -105,10 +105,12 @@ make frontend-build
 
 - Follow [Effective Go](https://golang.org/doc/effective_go) guidelines
 - Use `gofmt` for formatting
-- Use `golangci-lint` for linting
+- Use `golangci-lint` for linting (see [docs/development.md](docs/development.md) for configuration details)
 - Write meaningful comments for exported functions
 - Keep functions focused and small
 - Handle errors explicitly
+
+For detailed linting configuration, exclusions, and common fixes, see the [Development Guide](docs/development.md).
 
 ```go
 // Good
@@ -119,6 +121,9 @@ func (s *Server) GetUser(ctx context.Context, id string) (*User, error) {
     }
     return user, nil
 }
+
+// Intentionally ignoring errors (use explicit assignment)
+_ = s.store.Cleanup(ctx) // Best effort cleanup
 ```
 
 ### TypeScript/React

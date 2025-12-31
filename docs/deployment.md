@@ -88,6 +88,25 @@ firestar/gitops/
 - **Downloads**: https://gatekey.dye.tech/downloads
 - **Install Script**: https://gatekey.dye.tech/scripts/install-gateway.sh
 
+### Binary Downloads
+
+Binaries can be downloaded from:
+- **Primary**: `/downloads/<binary-name>` or `/bin/<binary-name>`
+- **Fallback**: Redirects to GitHub Releases when local binaries not found
+
+Available binaries:
+| Binary | Platform | Download URL |
+|--------|----------|--------------|
+| `gatekey-linux-amd64` | Linux x86_64 | `/downloads/gatekey-linux-amd64` |
+| `gatekey-linux-arm64` | Linux ARM64 | `/downloads/gatekey-linux-arm64` |
+| `gatekey-darwin-amd64` | macOS Intel | `/downloads/gatekey-darwin-amd64` |
+| `gatekey-darwin-arm64` | macOS Apple Silicon | `/downloads/gatekey-darwin-arm64` |
+| `gatekey-windows-amd64.exe` | Windows | `/downloads/gatekey-windows-amd64.exe` |
+| `gatekey-gateway-linux-amd64` | Gateway Linux x86_64 | `/downloads/gatekey-gateway-linux-amd64` |
+| `gatekey-gateway-linux-arm64` | Gateway Linux ARM64 | `/downloads/gatekey-gateway-linux-arm64` |
+
+**Note**: In production Kubernetes deployments, the server automatically redirects to GitHub Releases (`https://github.com/dye-tech/GateKey/releases/latest/download/`) when local binaries are not present. Ensure your GitHub releases contain the binaries with the correct filenames.
+
 ### Gateway Installation via Script
 
 The easiest way to install a gateway is using the install script:
@@ -124,6 +143,7 @@ The VirtualService (`virtualservice.yaml`) routes traffic between the frontend (
 | `/proxy/*` | gatekey-server | Reverse proxy for web apps |
 | `/scripts/*` | gatekey-server | Install scripts |
 | `/downloads/*` | gatekey-server | Binary downloads |
+| `/bin/*` | gatekey-server | Binary downloads (alias) |
 | `/install.sh` | gatekey-server | Gateway install script (alias) |
 | `/health` | gatekey-server | Health check |
 | `/metrics` | gatekey-server | Prometheus metrics |
