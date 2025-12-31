@@ -39,16 +39,16 @@ type Backend interface {
 
 // Rule represents a firewall rule.
 type Rule struct {
-	ID           string   `json:"id"`
-	ConnectionID string   `json:"connection_id"`
+	ID           string    `json:"id"`
+	ConnectionID string    `json:"connection_id"`
 	UserID       uuid.UUID `json:"user_id"`
-	SourceIP     net.IP   `json:"source_ip"`
-	Action       Action   `json:"action"`
-	Protocol     Protocol `json:"protocol"`
+	SourceIP     net.IP    `json:"source_ip"`
+	Action       Action    `json:"action"`
+	Protocol     Protocol  `json:"protocol"`
 	DestNetwork  net.IPNet `json:"dest_network"`
-	DestPort     int      `json:"dest_port,omitempty"`
-	DestPortEnd  int      `json:"dest_port_end,omitempty"` // For port ranges
-	Comment      string   `json:"comment,omitempty"`
+	DestPort     int       `json:"dest_port,omitempty"`
+	DestPortEnd  int       `json:"dest_port_end,omitempty"` // For port ranges
+	Comment      string    `json:"comment,omitempty"`
 }
 
 // Action represents the firewall action.

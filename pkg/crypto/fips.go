@@ -95,11 +95,11 @@ func ConstantTimeCompare(a, b []byte) bool {
 type KeyAlgorithm string
 
 const (
-	RSA2048   KeyAlgorithm = "rsa2048"
-	RSA3072   KeyAlgorithm = "rsa3072"
-	RSA4096   KeyAlgorithm = "rsa4096"
-	ECDSA256  KeyAlgorithm = "ecdsa256"
-	ECDSA384  KeyAlgorithm = "ecdsa384"
+	RSA2048  KeyAlgorithm = "rsa2048"
+	RSA3072  KeyAlgorithm = "rsa3072"
+	RSA4096  KeyAlgorithm = "rsa4096"
+	ECDSA256 KeyAlgorithm = "ecdsa256"
+	ECDSA384 KeyAlgorithm = "ecdsa384"
 )
 
 // ValidateKeyAlgorithm checks if a key algorithm is FIPS-approved.
@@ -132,9 +132,9 @@ func MinimumKeySize(alg KeyAlgorithm) int {
 
 // FIPSCompliance contains information about FIPS compliance status.
 type FIPSCompliance struct {
-	Enabled    bool   `json:"enabled"`
-	Provider   string `json:"provider"`
-	Version    string `json:"version"`
+	Enabled    bool     `json:"enabled"`
+	Provider   string   `json:"provider"`
+	Version    string   `json:"version"`
 	Algorithms []string `json:"algorithms"`
 }
 

@@ -56,6 +56,7 @@ func (a *AuthManager) Login(ctx context.Context, noBrowser bool) error {
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			a.handleCallback(w, r, tokenChan, errChan)
 		}),
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	go func() {

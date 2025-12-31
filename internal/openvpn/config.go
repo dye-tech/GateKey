@@ -76,12 +76,12 @@ type GeneratedConfig struct {
 
 // CryptoSettings contains crypto-specific configuration for each profile.
 type CryptoSettings struct {
-	Cipher         string
-	Auth           string
-	TLSVersionMin  string
-	TLSCipher      string
-	DataCiphers    string // OpenVPN 2.5+ data-ciphers directive
-	CryptoProfile  string // For display in config
+	Cipher        string
+	Auth          string
+	TLSVersionMin string
+	TLSCipher     string
+	DataCiphers   string // OpenVPN 2.5+ data-ciphers directive
+	CryptoProfile string // For display in config
 }
 
 // GetCryptoSettings returns the crypto settings for a given profile.
@@ -163,21 +163,21 @@ func (g *ConfigGenerator) Generate(req GenerateRequest) (*GeneratedConfig, error
 	crypto := GetCryptoSettings(cryptoProfile)
 
 	data := configData{
-		GatewayHostname:  gatewayAddress,
-		GatewayPort:      req.Gateway.VPNPort,
-		Protocol:         protocol,
-		CACert:           string(g.caPEM),
-		ClientCert:       string(req.Certificate.CertificatePEM),
-		ClientKey:        string(req.Certificate.PrivateKeyPEM),
-		AuthUsername:     req.User.Email,   // Use email as username
-		AuthPassword:     req.AuthToken,    // Use unique token as password
-		Routes:           req.Routes,
-		DNS:              req.DNS,
-		ExpiresAt:        req.ExpiresAt.UTC().Format(time.RFC3339),
-		UserEmail:        req.User.Email,
-		GatewayName:      req.Gateway.Name,
-		Options:          req.Options,
-		Crypto:           crypto,
+		GatewayHostname: gatewayAddress,
+		GatewayPort:     req.Gateway.VPNPort,
+		Protocol:        protocol,
+		CACert:          string(g.caPEM),
+		ClientCert:      string(req.Certificate.CertificatePEM),
+		ClientKey:       string(req.Certificate.PrivateKeyPEM),
+		AuthUsername:    req.User.Email, // Use email as username
+		AuthPassword:    req.AuthToken,  // Use unique token as password
+		Routes:          req.Routes,
+		DNS:             req.DNS,
+		ExpiresAt:       req.ExpiresAt.UTC().Format(time.RFC3339),
+		UserEmail:       req.User.Email,
+		GatewayName:     req.Gateway.Name,
+		Options:         req.Options,
+		Crypto:          crypto,
 	}
 
 	// Only include TLS-Auth if enabled for this gateway
@@ -356,18 +356,18 @@ func GenerateTLSAuthKey() ([]byte, error) {
 
 // ServerConfig represents OpenVPN server configuration.
 type ServerConfig struct {
-	Port           int
-	Protocol       string
-	Device         string
-	ServerNetwork  string
-	ServerNetmask  string
-	CACertPath     string
-	ServerCertPath string
-	ServerKeyPath  string
-	DHPath         string
-	TLSAuthPath    string
-	CRLPath        string
-	StatusLog      string
+	Port            int
+	Protocol        string
+	Device          string
+	ServerNetwork   string
+	ServerNetmask   string
+	CACertPath      string
+	ServerCertPath  string
+	ServerKeyPath   string
+	DHPath          string
+	TLSAuthPath     string
+	CRLPath         string
+	StatusLog       string
 	ClientConfigDir string
 	ManagementAddr  string
 	PushOptions     []string
