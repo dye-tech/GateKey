@@ -1,0 +1,41 @@
+# GateKey Gateway Agent Configuration
+# This file configures the gateway agent that runs alongside OpenVPN.
+
+# Control plane URL
+control_plane_url: "https://gatex.example.com"
+
+# Gateway authentication token (obtain from control plane)
+token: "${GATEX_GATEWAY_TOKEN}"
+
+# Heartbeat interval
+heartbeat_interval: "30s"
+
+# Log level: debug, info, warn, error
+log_level: "info"
+
+# OpenVPN integration
+openvpn:
+  # Path to OpenVPN status file
+  status_file: "/var/log/openvpn/status.log"
+  # Path to management socket
+  management_socket: "/var/run/openvpn/management.sock"
+  # Client config directory
+  client_config_dir: "/etc/openvpn/ccd"
+
+# Firewall configuration
+firewall:
+  # Firewall backend: nftables or iptables
+  backend: "nftables"
+  # Chain name for gatex rules
+  chain: "GATEX"
+  # Table name (nftables only)
+  table: "gatex"
+  # Default policy: accept or drop
+  default_policy: "drop"
+
+# Network configuration
+network:
+  # VPN interface name
+  interface: "tun0"
+  # VPN network CIDR
+  network: "172.31.255.0/24"

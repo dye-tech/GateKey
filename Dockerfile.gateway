@@ -1,0 +1,63 @@
+# Gatex Gateway Dockerfile
+# Multi-stage build for minimal image size
+
+# Build stage
+FROM golang:1.24-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache git ca-certificates tzdata
+
+# Allow auto-download of newer toolchain if needed
+ENV GOTOOLCHAIN=auto
+
+WORKDIR /build
+
+# Copy go mod files first for layer caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build the gateway binary
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-s -w -X main.version=$(git describe --tags --always --dirty 2>/dev/null || echo 'dev')" \
+    -o gatekey-gateway \
+    ./cmd/gatekey-gateway
+
+# Runtime stage
+FROM alpine:3.19
+
+# Install runtime dependencies including OpenVPN and nftables
+RUN apk add --no-cache \
+    ca-certificates \
+    tzdata \
+    openvpn \
+    nftables \
+    iptables \
+    bash
+
+# Create non-root user (gateway needs root for firewall, but we'll use capabilities)
+RUN addgroup -g 1000 gatex && \
+    adduser -u 1000 -G gatex -s /bin/sh -D gatex
+
+WORKDIR /app
+
+# Copy binary from builder
+COPY --from=builder /build/gatekey-gateway /app/gatekey-gateway
+
+# Copy hook scripts
+COPY scripts/hooks/ /app/scripts/hooks/
+RUN chmod +x /app/scripts/hooks/*.sh
+
+# Copy default config
+COPY configs/gateway.yaml /app/configs/gateway.yaml
+
+# Create directories for OpenVPN
+RUN mkdir -p /etc/openvpn /var/log/openvpn
+
+EXPOSE 1194/udp 1194/tcp
+
+# Gateway needs to run as root for firewall management
+ENTRYPOINT ["/app/gatekey-gateway"]
+CMD ["--config", "/app/configs/gateway.yaml"]
