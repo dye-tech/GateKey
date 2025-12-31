@@ -305,7 +305,7 @@ function RuleModal({ rule, onClose, onSuccess }: RuleModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">
           {rule ? 'Edit Access Rule' : 'Add New Access Rule'}
@@ -557,7 +557,7 @@ function AssignmentModal({ rule, onClose, onUpdate }: AssignmentModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-semibold text-gray-900 mb-2">
           Assign Access Rule
@@ -658,9 +658,12 @@ function AssignmentModal({ rule, onClose, onUpdate }: AssignmentModalProps) {
                         </div>
                         <button
                           onClick={() => handleRemoveUser(userId)}
-                          className="text-red-600 hover:text-red-800 text-sm"
+                          className="p-1.5 rounded-full bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-800 transition-colors"
+                          title="Remove user"
                         >
-                          Remove
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
                         </button>
                       </div>
                     )
@@ -746,9 +749,12 @@ function AssignmentModal({ rule, onClose, onUpdate }: AssignmentModalProps) {
                         </div>
                         <button
                           onClick={() => handleRemoveGroup(groupName)}
-                          className="text-red-600 hover:text-red-800 text-sm"
+                          className="p-1.5 rounded-full bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-800 transition-colors"
+                          title="Remove group"
                         >
-                          Remove
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
                         </button>
                       </div>
                     )

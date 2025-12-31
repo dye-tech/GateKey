@@ -3,9 +3,9 @@ package api
 
 import (
 	"context"
+	cryptoRand "crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
-	cryptoRand "crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/xml"
@@ -23,11 +23,11 @@ import (
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
 	"github.com/gatekey-project/gatekey/internal/db"
-	"github.com/google/uuid"
 	"github.com/gatekey-project/gatekey/internal/models"
 	"github.com/gatekey-project/gatekey/internal/openvpn"
 	"github.com/gatekey-project/gatekey/internal/pki"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 )
@@ -722,11 +722,11 @@ func (s *Server) handleGetSession(c *gin.Context) {
 	// Return user info
 	c.JSON(http.StatusOK, gin.H{
 		"user": gin.H{
-			"id":       user.Username,
-			"email":    user.Email,
-			"name":     user.Username,
-			"groups":   []string{},
-			"isAdmin":  user.IsAdmin,
+			"id":      user.Username,
+			"email":   user.Email,
+			"name":    user.Username,
+			"groups":  []string{},
+			"isAdmin": user.IsAdmin,
 		},
 		"authenticated": true,
 	})
@@ -1255,12 +1255,12 @@ func (s *Server) handleGenerateConfig(c *gin.Context) {
 
 	// Return config metadata
 	c.JSON(http.StatusOK, gin.H{
-		"id":           configID,
-		"fileName":     vpnConfig.FileName,
-		"gatewayName":  gateway.Name,
-		"expiresAt":    vpnConfig.ExpiresAt.Format(time.RFC3339),
-		"downloadUrl":  "/api/v1/configs/download/" + configID,
-		"cliCallback":  req.CLICallbackURL != "",
+		"id":          configID,
+		"fileName":    vpnConfig.FileName,
+		"gatewayName": gateway.Name,
+		"expiresAt":   vpnConfig.ExpiresAt.Format(time.RFC3339),
+		"downloadUrl": "/api/v1/configs/download/" + configID,
+		"cliCallback": req.CLICallbackURL != "",
 	})
 }
 
@@ -1614,8 +1614,8 @@ func (s *Server) handleAdminRevokeUserConfigs(c *gin.Context) {
 		zap.Int64("count", count))
 
 	c.JSON(http.StatusOK, gin.H{
-		"success":       true,
-		"message":       "User configs revoked successfully",
+		"success":      true,
+		"message":      "User configs revoked successfully",
 		"revokedCount": count,
 	})
 }
@@ -1667,12 +1667,12 @@ func (s *Server) handleDeletePolicy(c *gin.Context) {
 func (s *Server) handleGatewayVerify(c *gin.Context) {
 	// Verify a client connection request from gateway agent
 	var req struct {
-		Token          string `json:"token" binding:"required"`
-		CommonName     string `json:"common_name" binding:"required"`
-		Username       string `json:"username"`       // auth-user-pass username (email)
-		Password       string `json:"password"`       // auth-user-pass password (auth token)
-		SerialNumber   string `json:"serial_number"`
-		ClientIP       string `json:"client_ip"`
+		Token        string `json:"token" binding:"required"`
+		CommonName   string `json:"common_name" binding:"required"`
+		Username     string `json:"username"` // auth-user-pass username (email)
+		Password     string `json:"password"` // auth-user-pass password (auth token)
+		SerialNumber string `json:"serial_number"`
+		ClientIP     string `json:"client_ip"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1986,12 +1986,12 @@ func (s *Server) handleGatewayConnect(c *gin.Context) {
 func (s *Server) handleGatewayDisconnect(c *gin.Context) {
 	// Record a client disconnection from gateway agent
 	var req struct {
-		Token        string `json:"token" binding:"required"`
-		CommonName   string `json:"common_name" binding:"required"`
-		ClientIP     string `json:"client_ip"`
-		Duration     int64  `json:"duration_seconds"`
-		BytesSent    int64  `json:"bytes_sent"`
-		BytesRecv    int64  `json:"bytes_received"`
+		Token      string `json:"token" binding:"required"`
+		CommonName string `json:"common_name" binding:"required"`
+		ClientIP   string `json:"client_ip"`
+		Duration   int64  `json:"duration_seconds"`
+		BytesSent  int64  `json:"bytes_sent"`
+		BytesRecv  int64  `json:"bytes_received"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -2017,8 +2017,8 @@ func (s *Server) handleGatewayDisconnect(c *gin.Context) {
 	// TODO: Update connection record in database and remove firewall rules
 
 	c.JSON(http.StatusOK, gin.H{
-		"status":      "disconnected",
-		"gateway_id":  gateway.ID,
+		"status":       "disconnected",
+		"gateway_id":   gateway.ID,
 		"gateway_name": gateway.Name,
 	})
 }
@@ -2026,13 +2026,13 @@ func (s *Server) handleGatewayDisconnect(c *gin.Context) {
 func (s *Server) handleGatewayHeartbeat(c *gin.Context) {
 	// Process gateway heartbeat
 	var req struct {
-		Token           string  `json:"token" binding:"required"`
-		PublicIP        string  `json:"public_ip"`
-		ActiveClients   int     `json:"active_clients"`
-		CPUUsage        float64 `json:"cpu_usage"`
-		MemoryUsage     float64 `json:"memory_usage"`
-		OpenVPNRunning  bool    `json:"openvpn_running"`
-		ConfigVersion   string  `json:"config_version"` // Gateway's current config version
+		Token          string  `json:"token" binding:"required"`
+		PublicIP       string  `json:"public_ip"`
+		ActiveClients  int     `json:"active_clients"`
+		CPUUsage       float64 `json:"cpu_usage"`
+		MemoryUsage    float64 `json:"memory_usage"`
+		OpenVPNRunning bool    `json:"openvpn_running"`
+		ConfigVersion  string  `json:"config_version"` // Gateway's current config version
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -2212,11 +2212,11 @@ func parseSubnetToNetworkMask(cidr string) (string, string) {
 // Called by gateway agent when a client connects to determine allowed destinations
 func (s *Server) handleGatewayClientRules(c *gin.Context) {
 	var req struct {
-		Token      string `json:"token" binding:"required"`
-		UserID     string `json:"user_id" binding:"required"`
-		UserEmail  string `json:"user_email"`
+		Token      string   `json:"token" binding:"required"`
+		UserID     string   `json:"user_id" binding:"required"`
+		UserEmail  string   `json:"user_email"`
 		UserGroups []string `json:"user_groups"`
-		ClientIP   string `json:"client_ip"` // VPN IP assigned to client
+		ClientIP   string   `json:"client_ip"` // VPN IP assigned to client
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -2234,31 +2234,28 @@ func (s *Server) handleGatewayClientRules(c *gin.Context) {
 
 	// The UserID from the certificate common name is actually the user's email
 	// We need to look up the user by email to get their UUID for rule lookup
-	userID := req.UserID
-	userGroups := req.UserGroups
+	var userID string
+	var userGroups []string
 
 	// Try to find user by email (the common name in the cert is the email)
 	ssoUser, err := s.userStore.GetSSOUserByEmail(ctx, req.UserID)
 	if err == nil && ssoUser != nil {
 		userID = ssoUser.ID
 		userGroups = ssoUser.Groups
-	} else {
+	} else if localUser, localErr := s.userStore.GetLocalUserByEmail(ctx, req.UserID); localErr == nil && localUser != nil {
 		// Check if it's a local user
-		localUser, err := s.userStore.GetLocalUserByEmail(ctx, req.UserID)
-		if err == nil && localUser != nil {
-			userID = localUser.ID
-			userGroups = []string{} // Local users don't have groups
-		} else {
-			// If no user found, return empty rules (deny all)
-			s.logger.Warn("User not found for access rules", zap.String("user_id", req.UserID))
-			c.JSON(http.StatusOK, gin.H{
-				"user_id":   req.UserID,
-				"client_ip": req.ClientIP,
-				"allowed":   []interface{}{},
-				"default":   "deny",
-			})
-			return
-		}
+		userID = localUser.ID
+		userGroups = []string{} // Local users don't have groups
+	} else {
+		// If no user found, return empty rules (deny all)
+		s.logger.Warn("User not found for access rules", zap.String("user_id", req.UserID))
+		c.JSON(http.StatusOK, gin.H{
+			"user_id":   req.UserID,
+			"client_ip": req.ClientIP,
+			"allowed":   []interface{}{},
+			"default":   "deny",
+		})
+		return
 	}
 
 	// Get access rules for this user
@@ -2272,10 +2269,10 @@ func (s *Server) handleGatewayClientRules(c *gin.Context) {
 
 	// Convert rules to firewall-friendly format
 	type AllowedDestination struct {
-		Type     string `json:"type"`      // "ip", "cidr", "hostname"
-		Value    string `json:"value"`     // IP address, CIDR, or hostname
-		Port     string `json:"port"`      // Port or port range (empty = all)
-		Protocol string `json:"protocol"`  // tcp, udp, or empty for both
+		Type     string `json:"type"`     // "ip", "cidr", "hostname"
+		Value    string `json:"value"`    // IP address, CIDR, or hostname
+		Port     string `json:"port"`     // Port or port range (empty = all)
+		Protocol string `json:"protocol"` // tcp, udp, or empty for both
 	}
 
 	allowed := make([]AllowedDestination, 0)
@@ -2528,13 +2525,13 @@ func (s *Server) handleListGateways(c *gin.Context) {
 			"publicIp":       gw.PublicIP,
 			"vpnPort":        gw.VPNPort,
 			"vpnProtocol":    gw.VPNProtocol,
-			"cryptoProfile":   gw.CryptoProfile,
-			"vpnSubnet":       gw.VPNSubnet,
-			"tlsAuthEnabled":  gw.TLSAuthEnabled,
-			"fullTunnelMode":  gw.FullTunnelMode,
-			"pushDns":         gw.PushDNS,
-			"dnsServers":      gw.DNSServers,
-			"isActive":        isActive,
+			"cryptoProfile":  gw.CryptoProfile,
+			"vpnSubnet":      gw.VPNSubnet,
+			"tlsAuthEnabled": gw.TLSAuthEnabled,
+			"fullTunnelMode": gw.FullTunnelMode,
+			"pushDns":        gw.PushDNS,
+			"dnsServers":     gw.DNSServers,
+			"isActive":       isActive,
 			"createdAt":      gw.CreatedAt.Format(time.RFC3339),
 			"updatedAt":      gw.UpdatedAt.Format(time.RFC3339),
 		}
@@ -2550,13 +2547,13 @@ func (s *Server) handleListGateways(c *gin.Context) {
 func (s *Server) handleRegisterGateway(c *gin.Context) {
 	// Register a new gateway (admin only)
 	var req struct {
-		Name           string `json:"name" binding:"required"`
-		Hostname       string `json:"hostname"`
-		PublicIP       string `json:"public_ip"`
-		VPNPort        int    `json:"vpn_port"`
-		VPNProtocol    string `json:"vpn_protocol"`
-		CryptoProfile  string `json:"crypto_profile"`   // modern, fips, or compatible
-		VPNSubnet      string `json:"vpn_subnet"`       // VPN client subnet (e.g., "10.8.0.0/24")
+		Name           string   `json:"name" binding:"required"`
+		Hostname       string   `json:"hostname"`
+		PublicIP       string   `json:"public_ip"`
+		VPNPort        int      `json:"vpn_port"`
+		VPNProtocol    string   `json:"vpn_protocol"`
+		CryptoProfile  string   `json:"crypto_profile"`   // modern, fips, or compatible
+		VPNSubnet      string   `json:"vpn_subnet"`       // VPN client subnet (e.g., "10.8.0.0/24")
 		TLSAuthEnabled *bool    `json:"tls_auth_enabled"` // Enable TLS-Auth (default: true)
 		FullTunnelMode *bool    `json:"full_tunnel_mode"` // Route all traffic through VPN (default: false)
 		PushDNS        *bool    `json:"push_dns"`         // Push DNS servers to clients (default: false)
@@ -2670,18 +2667,18 @@ func (s *Server) handleRegisterGateway(c *gin.Context) {
 		zap.String("hostname", req.Hostname))
 
 	c.JSON(http.StatusCreated, gin.H{
-		"id":              createdGateway.ID,
-		"name":            createdGateway.Name,
-		"hostname":        createdGateway.Hostname,
-		"vpnPort":         createdGateway.VPNPort,
-		"vpnProtocol":     createdGateway.VPNProtocol,
-		"cryptoProfile":   createdGateway.CryptoProfile,
-		"tlsAuthEnabled":  createdGateway.TLSAuthEnabled,
-		"fullTunnelMode":  createdGateway.FullTunnelMode,
-		"pushDns":         createdGateway.PushDNS,
-		"dnsServers":      createdGateway.DNSServers,
-		"token":           token, // Only returned on creation
-		"message":         "Gateway registered successfully. Save the token - it will not be shown again.",
+		"id":             createdGateway.ID,
+		"name":           createdGateway.Name,
+		"hostname":       createdGateway.Hostname,
+		"vpnPort":        createdGateway.VPNPort,
+		"vpnProtocol":    createdGateway.VPNProtocol,
+		"cryptoProfile":  createdGateway.CryptoProfile,
+		"tlsAuthEnabled": createdGateway.TLSAuthEnabled,
+		"fullTunnelMode": createdGateway.FullTunnelMode,
+		"pushDns":        createdGateway.PushDNS,
+		"dnsServers":     createdGateway.DNSServers,
+		"token":          token, // Only returned on creation
+		"message":        "Gateway registered successfully. Save the token - it will not be shown again.",
 	})
 }
 
@@ -2707,13 +2704,13 @@ func (s *Server) handleUpdateGateway(c *gin.Context) {
 	gatewayID := c.Param("id")
 
 	var req struct {
-		Name           string `json:"name" binding:"required"`
-		Hostname       string `json:"hostname"`
-		PublicIP       string `json:"public_ip"`
-		VPNPort        int    `json:"vpn_port"`
-		VPNProtocol    string `json:"vpn_protocol"`
-		CryptoProfile  string `json:"crypto_profile"`   // modern, fips, or compatible
-		VPNSubnet      string `json:"vpn_subnet"`       // VPN client subnet (e.g., "10.8.0.0/24")
+		Name           string   `json:"name" binding:"required"`
+		Hostname       string   `json:"hostname"`
+		PublicIP       string   `json:"public_ip"`
+		VPNPort        int      `json:"vpn_port"`
+		VPNProtocol    string   `json:"vpn_protocol"`
+		CryptoProfile  string   `json:"crypto_profile"`   // modern, fips, or compatible
+		VPNSubnet      string   `json:"vpn_subnet"`       // VPN client subnet (e.g., "10.8.0.0/24")
 		TLSAuthEnabled *bool    `json:"tls_auth_enabled"` // Enable TLS-Auth
 		FullTunnelMode *bool    `json:"full_tunnel_mode"` // Route all traffic through VPN
 		PushDNS        *bool    `json:"push_dns"`         // Push DNS servers to clients
@@ -3592,13 +3589,13 @@ func (s *Server) handleGetOIDCProviders(c *gin.Context) {
 	providers := []gin.H{}
 	for _, p := range s.config.Auth.OIDC.Providers {
 		providers = append(providers, gin.H{
-			"name":          p.Name,
-			"display_name":  p.DisplayName,
-			"issuer":        p.Issuer,
-			"client_id":     p.ClientID,
-			"redirect_url":  p.RedirectURL,
-			"scopes":        p.Scopes,
-			"has_secret":    p.ClientSecret != "",
+			"name":         p.Name,
+			"display_name": p.DisplayName,
+			"issuer":       p.Issuer,
+			"client_id":    p.ClientID,
+			"redirect_url": p.RedirectURL,
+			"scopes":       p.Scopes,
+			"has_secret":   p.ClientSecret != "",
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{"providers": providers, "enabled": s.config.Auth.OIDC.Enabled})
@@ -3657,9 +3654,9 @@ func (s *Server) handleInstallScript(c *gin.Context) {
 	// Serve the gateway installer script from file
 	// Try multiple paths for development and production
 	scriptPaths := []string{
-		"/app/scripts/install-gateway.sh",      // Docker container
-		"scripts/install-gateway.sh",           // Local development
-		"../scripts/install-gateway.sh",        // Running from cmd/
+		"/app/scripts/install-gateway.sh", // Docker container
+		"scripts/install-gateway.sh",      // Local development
+		"../scripts/install-gateway.sh",   // Running from cmd/
 	}
 
 	var script []byte

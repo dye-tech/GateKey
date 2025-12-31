@@ -86,11 +86,11 @@ func (e *Engine) Refresh(ctx context.Context) error {
 
 // EvaluationRequest contains the context for policy evaluation.
 type EvaluationRequest struct {
-	User       *models.User
-	Gateway    *models.Gateway
-	Resource   Resource
-	SourceIP   net.IP
-	Time       time.Time
+	User     *models.User
+	Gateway  *models.Gateway
+	Resource Resource
+	SourceIP net.IP
+	Time     time.Time
 }
 
 // Resource represents a network resource being accessed.
@@ -103,11 +103,11 @@ type Resource struct {
 
 // EvaluationResult contains the result of policy evaluation.
 type EvaluationResult struct {
-	Allowed      bool
+	Allowed       bool
 	MatchedPolicy string
 	MatchedRule   string
-	Reason       string
-	AppliedRules []AppliedRule
+	Reason        string
+	AppliedRules  []AppliedRule
 }
 
 // AppliedRule represents a rule that was evaluated.

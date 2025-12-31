@@ -98,13 +98,13 @@ func (s *SettingsStore) GetBool(ctx context.Context, key string, defaultVal bool
 
 // Common setting keys
 const (
-	SettingSessionDurationHours    = "session_duration_hours"
-	SettingSecureCookies           = "secure_cookies"
-	SettingVPNCertValidityHours    = "vpn_cert_validity_hours"
-	SettingRequireFIPS             = "require_fips"
-	SettingAllowedCryptoProfiles   = "allowed_crypto_profiles"   // Comma-separated: modern,fips,compatible
-	SettingMinTLSVersion           = "min_tls_version"           // 1.0, 1.1, 1.2, 1.3
-	SettingAllowedCiphers          = "allowed_ciphers"           // Comma-separated cipher list
+	SettingSessionDurationHours  = "session_duration_hours"
+	SettingSecureCookies         = "secure_cookies"
+	SettingVPNCertValidityHours  = "vpn_cert_validity_hours"
+	SettingRequireFIPS           = "require_fips"
+	SettingAllowedCryptoProfiles = "allowed_crypto_profiles" // Comma-separated: modern,fips,compatible
+	SettingMinTLSVersion         = "min_tls_version"         // 1.0, 1.1, 1.2, 1.3
+	SettingAllowedCiphers        = "allowed_ciphers"         // Comma-separated cipher list
 )
 
 // Default crypto profiles (all enabled by default)

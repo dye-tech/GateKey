@@ -15,13 +15,13 @@ import (
 
 // NFTablesBackend implements the firewall backend using nftables.
 type NFTablesBackend struct {
-	conn       *nftables.Conn
-	table      *nftables.Table
-	chain      *nftables.Chain
-	tableName  string
-	chainName  string
-	rules      map[string][]*nftables.Rule // connectionID -> nftables rules
-	mu         sync.Mutex
+	conn      *nftables.Conn
+	table     *nftables.Table
+	chain     *nftables.Chain
+	tableName string
+	chainName string
+	rules     map[string][]*nftables.Rule // connectionID -> nftables rules
+	mu        sync.Mutex
 }
 
 // NFTablesConfig holds nftables configuration.

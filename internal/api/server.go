@@ -232,12 +232,12 @@ func (s *Server) setupRoutes() {
 		// Config generation routes
 		configs := v1.Group("/configs")
 		{
-			configs.GET("", s.handleListUserConfigs)            // List user's configs
+			configs.GET("", s.handleListUserConfigs) // List user's configs
 			configs.POST("/generate", s.handleGenerateConfig)
 			configs.GET("/download/:id", s.handleDownloadConfig)
-			configs.GET("/:id", s.handleGetConfigMetadata)      // Get config metadata (for CLI polling)
-			configs.GET("/:id/raw", s.handleGetConfigRaw)       // Get raw config content (for CLI)
-			configs.POST("/:id/revoke", s.handleRevokeConfig)   // Revoke user's own config
+			configs.GET("/:id", s.handleGetConfigMetadata)    // Get config metadata (for CLI polling)
+			configs.GET("/:id/raw", s.handleGetConfigRaw)     // Get raw config content (for CLI)
+			configs.POST("/:id/revoke", s.handleRevokeConfig) // Revoke user's own config
 		}
 
 		// Certificate routes
