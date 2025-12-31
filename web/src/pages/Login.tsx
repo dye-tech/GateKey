@@ -96,7 +96,7 @@ export default function Login() {
           {/* Logo and title */}
           <div className="text-center mb-8">
             <div className="flex justify-center mb-4">
-              <img src="/logo.png" alt="GateKey" className="h-20" />
+              <img src="/logo.png" alt="GateKey" className="h-32" />
             </div>
             <p className="text-gray-500 mt-2">Zero Trust VPN Access</p>
           </div>

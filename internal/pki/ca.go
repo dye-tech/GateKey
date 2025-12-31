@@ -474,6 +474,11 @@ func generatePrivateKey(algorithm string) (crypto.Signer, error) {
 	}
 }
 
+// GenerateECDSAKey generates an ECDSA P-256 private key
+func GenerateECDSAKey() (*ecdsa.PrivateKey, error) {
+	return ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+}
+
 // generateSerialNumber generates a random serial number.
 func generateSerialNumber() (*big.Int, error) {
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
