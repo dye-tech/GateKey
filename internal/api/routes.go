@@ -3761,6 +3761,11 @@ func (s *Server) handleDownloadBinary(c *gin.Context) {
 		"gatekey-darwin-amd64":      true,
 		"gatekey-darwin-arm64":      true,
 		"gatekey-windows-amd64.exe": true,
+		// Admin CLI binaries
+		"gatekey-admin-linux-amd64":  true,
+		"gatekey-admin-linux-arm64":  true,
+		"gatekey-admin-darwin-amd64": true,
+		"gatekey-admin-darwin-arm64": true,
 		// Hub binaries
 		"gatekey-hub-linux-amd64":  true,
 		"gatekey-hub-linux-arm64":  true,
