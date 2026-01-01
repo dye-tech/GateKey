@@ -97,6 +97,7 @@ type ProvisionResponse struct {
 	TLSAuthEnabled bool     `json:"tlsAuthEnabled"`
 	TLSAuthKey     string   `json:"tlsAuthKey"`
 	CryptoProfile  string   `json:"cryptoProfile"`
+	ConfigVersion  string   `json:"configVersion"`
 }
 
 func loadConfig() (*GatewayConfig, error) {
@@ -214,6 +215,14 @@ func heartbeatLoop(ctx context.Context, cfg *GatewayConfig) {
 	}
 }
 
+// HeartbeatResponse from control plane
+type HeartbeatResponse struct {
+	OK               bool   `json:"ok"`
+	ConfigVersion    string `json:"configVersion"`
+	NeedsReprovision bool   `json:"needsReprovision"`
+	TLSAuthEnabled   bool   `json:"tlsAuthEnabled"`
+}
+
 func sendHeartbeat(ctx context.Context, cfg *GatewayConfig) {
 	status := "disconnected"
 	if isOpenVPNConnected() {
@@ -226,12 +235,14 @@ func sendHeartbeat(ctx context.Context, cfg *GatewayConfig) {
 		RemoteIP      string `json:"remoteIp"`
 		BytesSent     int64  `json:"bytesSent"`
 		BytesReceived int64  `json:"bytesReceived"`
+		ConfigVersion string `json:"configVersion"`
 	}{
 		Token:         cfg.GatewayToken,
 		Status:        status,
 		RemoteIP:      getPublicIP(),
 		BytesSent:     getBytesSent(),
 		BytesReceived: getBytesReceived(),
+		ConfigVersion: currentConfigVer,
 	}
 
 	body, err := json.Marshal(reqBody)
@@ -253,6 +264,41 @@ func sendHeartbeat(ctx context.Context, cfg *GatewayConfig) {
 		logger.Warn("Heartbeat returned error",
 			zap.Int("status", resp.StatusCode),
 			zap.String("body", string(respBody)))
+		return
+	}
+
+	// Parse heartbeat response
+	var hbResp HeartbeatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&hbResp); err != nil {
+		logger.Warn("Failed to decode heartbeat response", zap.Error(err))
+		return
+	}
+
+	// Check if we need to reprovision (config changed on control plane)
+	if hbResp.NeedsReprovision {
+		logger.Info("Config version mismatch detected, reprovisioning...",
+			zap.String("local_version", currentConfigVer),
+			zap.String("hub_version", hbResp.ConfigVersion))
+
+		// Reprovision from control plane
+		if err := doProvision(ctx, cfg); err != nil {
+			logger.Error("Failed to reprovision", zap.Error(err))
+			return
+		}
+
+		// Update local config version
+		currentConfigVer = hbResp.ConfigVersion
+		if err := saveConfigVersion(currentConfigVer); err != nil {
+			logger.Warn("Failed to save config version", zap.Error(err))
+		}
+
+		// Restart OpenVPN to apply new configuration
+		logger.Info("Restarting OpenVPN with new configuration...")
+		if err := restartOpenVPN(); err != nil {
+			logger.Error("Failed to restart OpenVPN", zap.Error(err))
+		} else {
+			logger.Info("OpenVPN restarted successfully")
+		}
 	}
 }
 
@@ -357,7 +403,11 @@ func doProvision(ctx context.Context, cfg *GatewayConfig) error {
 	}
 
 	// Save config version
-	currentConfigVer = provResp.GatewayID
+	currentConfigVer = provResp.ConfigVersion
+	if currentConfigVer == "" {
+		// Fallback to gateway ID if config version not provided
+		currentConfigVer = provResp.GatewayID
+	}
 	if err := saveConfigVersion(currentConfigVer); err != nil {
 		logger.Warn("Failed to save config version", zap.Error(err))
 	}
@@ -365,6 +415,7 @@ func doProvision(ctx context.Context, cfg *GatewayConfig) error {
 	logger.Info("Gateway provisioned successfully",
 		zap.String("hub_endpoint", hubEndpoint),
 		zap.String("tunnel_ip", provResp.TunnelIP),
+		zap.String("config_version", currentConfigVer),
 	)
 
 	return nil
@@ -499,6 +550,24 @@ func startOpenVPN() error {
 		// Try direct openvpn start
 		cmd = exec.Command("openvpn", "--daemon", "--config", "/etc/openvpn/client/mesh-hub.conf")
 		return cmd.Run()
+	}
+	return nil
+}
+
+func restartOpenVPN() error {
+	// Try systemctl restart first
+	cmd := exec.Command("systemctl", "restart", "openvpn-client@mesh-hub")
+	if err := cmd.Run(); err != nil {
+		// Fall back to killing and restarting manually
+		stopCmd := exec.Command("pkill", "-f", "openvpn.*mesh-hub")
+		stopCmd.Run() // Ignore error, process might not exist
+
+		// Wait a moment for process to die
+		time.Sleep(time.Second)
+
+		// Start again
+		startCmd := exec.Command("openvpn", "--daemon", "--config", "/etc/openvpn/client/mesh-hub.conf")
+		return startCmd.Run()
 	}
 	return nil
 }

@@ -8,8 +8,17 @@ interface Section {
 
 const sections: Section[] = [
   {
+    id: 'downloads',
+    title: 'Downloads',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+      </svg>
+    ),
+  },
+  {
     id: 'install',
-    title: 'Install',
+    title: 'Install Client',
     icon: (
       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -86,6 +95,24 @@ const sections: Section[] = [
     icon: (
       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'api-keys',
+    title: 'API Keys',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'admin-cli',
+    title: 'Admin CLI',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
       </svg>
     ),
   },
@@ -180,6 +207,177 @@ export default function Help() {
 
       {/* Main Content */}
       <div className="flex-1 max-w-4xl space-y-12">
+        {/* Downloads Section */}
+        <section id="downloads" className="scroll-mt-24">
+          <div className="card">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Download GateKey CLIs</h1>
+            <p className="text-gray-600 mb-6">
+              Download the GateKey command-line tools for your platform.
+            </p>
+
+            {/* GateKey Client */}
+            <div className="mb-8">
+              <h3 className="text-lg font-medium text-gray-900 mb-3">GateKey Client (gatekey)</h3>
+              <p className="text-gray-600 mb-4">
+                The VPN client for connecting to gateways. Required for end users.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <a
+                  href={`${baseUrl}/bin/gatekey-linux-amd64`}
+                  className="flex items-center p-4 border border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors"
+                  download="gatekey"
+                >
+                  <svg className="h-8 w-8 mr-3" viewBox="0 0 256 256" fill="none">
+                    <ellipse cx="128" cy="156" rx="72" ry="84" fill="#1a1a1a"/>
+                    <ellipse cx="128" cy="176" rx="48" ry="60" fill="#FFFFFF"/>
+                    <circle cx="128" cy="72" r="48" fill="#1a1a1a"/>
+                    <ellipse cx="128" cy="80" rx="32" ry="28" fill="#FFFFFF"/>
+                    <circle cx="116" cy="70" r="4" fill="#1a1a1a"/>
+                    <circle cx="140" cy="70" r="4" fill="#1a1a1a"/>
+                    <path d="M128 76 L116 92 L140 92 Z" fill="#F4A103"/>
+                  </svg>
+                  <div>
+                    <p className="font-medium text-gray-900">Linux (x64)</p>
+                    <p className="text-xs text-gray-500">gatekey-linux-amd64</p>
+                  </div>
+                </a>
+                <a
+                  href={`${baseUrl}/bin/gatekey-linux-arm64`}
+                  className="flex items-center p-4 border border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors"
+                  download="gatekey"
+                >
+                  <svg className="h-8 w-8 mr-3" viewBox="0 0 256 256" fill="none">
+                    <ellipse cx="128" cy="156" rx="72" ry="84" fill="#1a1a1a"/>
+                    <ellipse cx="128" cy="176" rx="48" ry="60" fill="#FFFFFF"/>
+                    <circle cx="128" cy="72" r="48" fill="#1a1a1a"/>
+                    <ellipse cx="128" cy="80" rx="32" ry="28" fill="#FFFFFF"/>
+                    <circle cx="116" cy="70" r="4" fill="#1a1a1a"/>
+                    <circle cx="140" cy="70" r="4" fill="#1a1a1a"/>
+                    <path d="M128 76 L116 92 L140 92 Z" fill="#F4A103"/>
+                  </svg>
+                  <div>
+                    <p className="font-medium text-gray-900">Linux (ARM64)</p>
+                    <p className="text-xs text-gray-500">gatekey-linux-arm64</p>
+                  </div>
+                </a>
+                <a
+                  href={`${baseUrl}/bin/gatekey-darwin-amd64`}
+                  className="flex items-center p-4 border border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors"
+                  download="gatekey"
+                >
+                  <svg className="h-8 w-8 mr-3" fill="#555555" viewBox="0 0 24 24">
+                    <path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 22 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.1 22C7.79 22.05 6.8 20.68 5.96 19.47C4.25 17 2.94 12.45 4.7 9.39C5.57 7.87 7.13 6.91 8.82 6.88C10.1 6.86 11.32 7.75 12.11 7.75C12.89 7.75 14.37 6.68 15.92 6.84C16.57 6.87 18.39 7.1 19.56 8.82C19.47 8.88 17.39 10.1 17.41 12.63C17.44 15.65 20.06 16.66 20.09 16.67C20.06 16.74 19.67 18.11 18.71 19.5M13 3.5C13.73 2.67 14.94 2.04 15.94 2C16.07 3.17 15.6 4.35 14.9 5.19C14.21 6.04 13.07 6.7 11.95 6.61C11.8 5.46 12.36 4.26 13 3.5Z"/>
+                  </svg>
+                  <div>
+                    <p className="font-medium text-gray-900">macOS (Intel)</p>
+                    <p className="text-xs text-gray-500">gatekey-darwin-amd64</p>
+                  </div>
+                </a>
+                <a
+                  href={`${baseUrl}/bin/gatekey-darwin-arm64`}
+                  className="flex items-center p-4 border border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors"
+                  download="gatekey"
+                >
+                  <svg className="h-8 w-8 mr-3" fill="#555555" viewBox="0 0 24 24">
+                    <path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 22 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.1 22C7.79 22.05 6.8 20.68 5.96 19.47C4.25 17 2.94 12.45 4.7 9.39C5.57 7.87 7.13 6.91 8.82 6.88C10.1 6.86 11.32 7.75 12.11 7.75C12.89 7.75 14.37 6.68 15.92 6.84C16.57 6.87 18.39 7.1 19.56 8.82C19.47 8.88 17.39 10.1 17.41 12.63C17.44 15.65 20.06 16.66 20.09 16.67C20.06 16.74 19.67 18.11 18.71 19.5M13 3.5C13.73 2.67 14.94 2.04 15.94 2C16.07 3.17 15.6 4.35 14.9 5.19C14.21 6.04 13.07 6.7 11.95 6.61C11.8 5.46 12.36 4.26 13 3.5Z"/>
+                  </svg>
+                  <div>
+                    <p className="font-medium text-gray-900">macOS (Apple Silicon)</p>
+                    <p className="text-xs text-gray-500">gatekey-darwin-arm64</p>
+                  </div>
+                </a>
+              </div>
+            </div>
+
+            {/* GateKey Admin CLI */}
+            <div className="mb-8">
+              <h3 className="text-lg font-medium text-gray-900 mb-3">GateKey Admin CLI (gatekey-admin)</h3>
+              <p className="text-gray-600 mb-4">
+                Administrative CLI for managing gateways, networks, users, API keys, and more. For administrators only.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <a
+                  href={`${baseUrl}/bin/gatekey-admin-linux-amd64`}
+                  className="flex items-center p-4 border border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors"
+                  download="gatekey-admin"
+                >
+                  <svg className="h-8 w-8 mr-3" viewBox="0 0 256 256" fill="none">
+                    <ellipse cx="128" cy="156" rx="72" ry="84" fill="#1a1a1a"/>
+                    <ellipse cx="128" cy="176" rx="48" ry="60" fill="#FFFFFF"/>
+                    <circle cx="128" cy="72" r="48" fill="#1a1a1a"/>
+                    <ellipse cx="128" cy="80" rx="32" ry="28" fill="#FFFFFF"/>
+                    <circle cx="116" cy="70" r="4" fill="#1a1a1a"/>
+                    <circle cx="140" cy="70" r="4" fill="#1a1a1a"/>
+                    <path d="M128 76 L116 92 L140 92 Z" fill="#F4A103"/>
+                  </svg>
+                  <div>
+                    <p className="font-medium text-gray-900">Linux (x64)</p>
+                    <p className="text-xs text-gray-500">gatekey-admin-linux-amd64</p>
+                  </div>
+                </a>
+                <a
+                  href={`${baseUrl}/bin/gatekey-admin-linux-arm64`}
+                  className="flex items-center p-4 border border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors"
+                  download="gatekey-admin"
+                >
+                  <svg className="h-8 w-8 mr-3" viewBox="0 0 256 256" fill="none">
+                    <ellipse cx="128" cy="156" rx="72" ry="84" fill="#1a1a1a"/>
+                    <ellipse cx="128" cy="176" rx="48" ry="60" fill="#FFFFFF"/>
+                    <circle cx="128" cy="72" r="48" fill="#1a1a1a"/>
+                    <ellipse cx="128" cy="80" rx="32" ry="28" fill="#FFFFFF"/>
+                    <circle cx="116" cy="70" r="4" fill="#1a1a1a"/>
+                    <circle cx="140" cy="70" r="4" fill="#1a1a1a"/>
+                    <path d="M128 76 L116 92 L140 92 Z" fill="#F4A103"/>
+                  </svg>
+                  <div>
+                    <p className="font-medium text-gray-900">Linux (ARM64)</p>
+                    <p className="text-xs text-gray-500">gatekey-admin-linux-arm64</p>
+                  </div>
+                </a>
+                <a
+                  href={`${baseUrl}/bin/gatekey-admin-darwin-amd64`}
+                  className="flex items-center p-4 border border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors"
+                  download="gatekey-admin"
+                >
+                  <svg className="h-8 w-8 mr-3" fill="#555555" viewBox="0 0 24 24">
+                    <path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 22 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.1 22C7.79 22.05 6.8 20.68 5.96 19.47C4.25 17 2.94 12.45 4.7 9.39C5.57 7.87 7.13 6.91 8.82 6.88C10.1 6.86 11.32 7.75 12.11 7.75C12.89 7.75 14.37 6.68 15.92 6.84C16.57 6.87 18.39 7.1 19.56 8.82C19.47 8.88 17.39 10.1 17.41 12.63C17.44 15.65 20.06 16.66 20.09 16.67C20.06 16.74 19.67 18.11 18.71 19.5M13 3.5C13.73 2.67 14.94 2.04 15.94 2C16.07 3.17 15.6 4.35 14.9 5.19C14.21 6.04 13.07 6.7 11.95 6.61C11.8 5.46 12.36 4.26 13 3.5Z"/>
+                  </svg>
+                  <div>
+                    <p className="font-medium text-gray-900">macOS (Intel)</p>
+                    <p className="text-xs text-gray-500">gatekey-admin-darwin-amd64</p>
+                  </div>
+                </a>
+                <a
+                  href={`${baseUrl}/bin/gatekey-admin-darwin-arm64`}
+                  className="flex items-center p-4 border border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors"
+                  download="gatekey-admin"
+                >
+                  <svg className="h-8 w-8 mr-3" fill="#555555" viewBox="0 0 24 24">
+                    <path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 22 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.1 22C7.79 22.05 6.8 20.68 5.96 19.47C4.25 17 2.94 12.45 4.7 9.39C5.57 7.87 7.13 6.91 8.82 6.88C10.1 6.86 11.32 7.75 12.11 7.75C12.89 7.75 14.37 6.68 15.92 6.84C16.57 6.87 18.39 7.1 19.56 8.82C19.47 8.88 17.39 10.1 17.41 12.63C17.44 15.65 20.06 16.66 20.09 16.67C20.06 16.74 19.67 18.11 18.71 19.5M13 3.5C13.73 2.67 14.94 2.04 15.94 2C16.07 3.17 15.6 4.35 14.9 5.19C14.21 6.04 13.07 6.7 11.95 6.61C11.8 5.46 12.36 4.26 13 3.5Z"/>
+                  </svg>
+                  <div>
+                    <p className="font-medium text-gray-900">macOS (Apple Silicon)</p>
+                    <p className="text-xs text-gray-500">gatekey-admin-darwin-arm64</p>
+                  </div>
+                </a>
+              </div>
+            </div>
+
+            {/* Quick Install */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Quick Install (Linux/macOS)</h3>
+              <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto mb-4">
+                <code className="text-green-400 text-sm">
+                  curl -sSL {baseUrl}/scripts/install-client.sh | bash
+                </code>
+              </div>
+              <p className="text-sm text-gray-600">
+                Or download the binary manually, make it executable with <code className="bg-gray-200 px-1 rounded">chmod +x</code>, and move it to your PATH.
+              </p>
+            </div>
+          </div>
+        </section>
+
         {/* Install Section */}
         <section id="install" className="scroll-mt-24">
           <div className="card">
@@ -353,6 +551,77 @@ gatekey config set server ${baseUrl}
 
 # Reset configuration
 gatekey config reset`}</pre>
+            </div>
+
+            {/* CLI Command Reference */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3 mt-6">CLI Command Reference</h3>
+            <div className="overflow-x-auto mb-6">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Command</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200 text-sm">
+                  <tr>
+                    <td className="px-4 py-3 font-medium font-mono">gatekey login</td>
+                    <td className="px-4 py-3">Authenticate with SSO (opens browser) or API key (--api-key)</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium font-mono">gatekey logout</td>
+                    <td className="px-4 py-3">Clear saved credentials and session</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium font-mono">gatekey connect [gateway]</td>
+                    <td className="px-4 py-3">Connect to VPN gateway. Use --mesh &lt;hub&gt; for mesh hubs</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium font-mono">gatekey disconnect [gateway]</td>
+                    <td className="px-4 py-3">Disconnect from VPN. Use --all to disconnect all</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium font-mono">gatekey status</td>
+                    <td className="px-4 py-3">Show current connection status and session info</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium font-mono">gatekey list</td>
+                    <td className="px-4 py-3">List available gateways and mesh hubs</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium font-mono">gatekey config init</td>
+                    <td className="px-4 py-3">Initialize config with --server URL</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium font-mono">gatekey config show</td>
+                    <td className="px-4 py-3">Display current configuration</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium font-mono">gatekey config set &lt;key&gt; &lt;value&gt;</td>
+                    <td className="px-4 py-3">Update configuration setting</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium font-mono">gatekey version</td>
+                    <td className="px-4 py-3">Show version information</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium font-mono">gatekey fips-check</td>
+                    <td className="px-4 py-3">Verify FIPS 140-2 compliant OpenSSL library</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Common Flags */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Common Flags</h3>
+            <div className="bg-gray-50 rounded-lg p-4 mb-6 font-mono text-sm overflow-x-auto">
+              <pre className="text-gray-700">{`--server URL     Override server URL from config
+--config PATH    Use alternate config file
+--api-key KEY    Use API key for authentication (login command)
+--no-browser     Print login URL instead of opening browser
+--all            Disconnect from all gateways
+--mesh HUB       Connect to mesh hub instead of gateway
+-o, --output     Output format: table, json, yaml`}</pre>
             </div>
           </div>
         </section>
@@ -877,6 +1146,220 @@ curl -sSL ${baseUrl}/scripts/install-gateway.sh | \\
           </div>
         </section>
 
+        {/* API Keys Section */}
+        <section id="api-keys" className="scroll-mt-24">
+          <div className="card">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">API Keys</h1>
+            <p className="text-gray-600 mb-6">
+              API keys provide programmatic access to GateKey without browser-based SSO. They're ideal for automation, CI/CD pipelines, headless servers, and CLI usage.
+            </p>
+
+            {/* API Key Format */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">API Key Format</h3>
+            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <code className="text-sm text-gray-700 font-mono">gk_&lt;base64-encoded-random-bytes&gt;</code>
+              <p className="text-sm text-gray-600 mt-2">
+                Example: <code className="bg-gray-200 px-1 rounded">gk_dGhpcyBpcyBhIHNhbXBsZSBhcGkga2V5...</code>
+              </p>
+            </div>
+
+            {/* Security Notice */}
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+              <div className="flex">
+                <svg className="h-5 w-5 text-yellow-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-yellow-800">Security Notice</h3>
+                  <p className="mt-1 text-sm text-yellow-700">
+                    The full API key is only shown <strong>once</strong> at creation time. Store it securely - it cannot be retrieved later.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Creating API Keys */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Creating API Keys</h3>
+            <ol className="list-decimal list-inside space-y-2 text-gray-600 mb-6">
+              <li>Navigate to your <strong>User Profile</strong> (click your name in the top right)</li>
+              <li>Go to the <strong>API Keys</strong> tab</li>
+              <li>Click <strong>Create API Key</strong></li>
+              <li>Enter a descriptive name (e.g., "CI/CD Pipeline", "Laptop CLI")</li>
+              <li>Optionally set an expiration time</li>
+              <li>Click <strong>Create</strong></li>
+              <li><strong>Copy and save the API key immediately</strong></li>
+            </ol>
+
+            {/* Using API Keys */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Using API Keys</h3>
+            <div className="bg-gray-50 rounded-lg p-4 mb-6 font-mono text-sm overflow-x-auto">
+              <pre className="text-gray-700">{`# GateKey Client
+gatekey login --api-key gk_your_api_key_here
+gatekey connect
+
+# Admin CLI
+gatekey-admin login --api-key gk_your_api_key_here
+gatekey-admin gateway list
+
+# Direct API Access
+curl -H "Authorization: Bearer gk_your_api_key_here" \\
+  ${baseUrl}/api/v1/gateways`}</pre>
+            </div>
+
+            {/* Scopes */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Available Scopes</h3>
+            <div className="overflow-x-auto mb-6">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scope</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200 text-sm">
+                  <tr>
+                    <td className="px-4 py-3 font-medium font-mono">*</td>
+                    <td className="px-4 py-3">Full access (default for user-created keys)</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium font-mono">read:gateways</td>
+                    <td className="px-4 py-3">List and view gateways</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium font-mono">write:gateways</td>
+                    <td className="px-4 py-3">Create, update, delete gateways</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium font-mono">vpn:connect</td>
+                    <td className="px-4 py-3">Generate VPN configurations and connect</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Best Practices */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Best Practices</h3>
+            <ul className="list-disc list-inside space-y-2 text-gray-600">
+              <li>Use scopes to limit what each key can do (principle of least privilege)</li>
+              <li>Rotate keys periodically (every 90 days recommended)</li>
+              <li>Never commit API keys to version control</li>
+              <li>Use secrets management systems (Vault, AWS Secrets Manager)</li>
+              <li>Monitor "Last Used" timestamps and revoke unused keys</li>
+            </ul>
+          </div>
+        </section>
+
+        {/* Admin CLI Section */}
+        <section id="admin-cli" className="scroll-mt-24">
+          <div className="card">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Admin CLI (gatekey-admin)</h1>
+            <p className="text-gray-600 mb-6">
+              The Admin CLI provides command-line administration for GateKey deployments, enabling management of gateways, networks, access rules, users, API keys, and mesh networking.
+            </p>
+
+            {/* Quick Start */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Quick Start</h3>
+            <div className="bg-gray-50 rounded-lg p-4 mb-6 font-mono text-sm overflow-x-auto">
+              <pre className="text-gray-700">{`# 1. Download and install (see Downloads section above)
+chmod +x gatekey-admin && sudo mv gatekey-admin /usr/local/bin/
+
+# 2. Initialize with your server URL
+gatekey-admin config init --server ${baseUrl}
+
+# 3. Authenticate (opens browser for SSO)
+gatekey-admin login
+
+# Or authenticate with API key
+gatekey-admin login --api-key gk_your_api_key_here
+
+# 4. Start managing
+gatekey-admin gateway list
+gatekey-admin user list`}</pre>
+            </div>
+
+            {/* Commands Overview */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Available Commands</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Gateway Management</h4>
+                <ul className="text-sm text-gray-600 space-y-1 font-mono">
+                  <li>gateway list</li>
+                  <li>gateway create</li>
+                  <li>gateway update &lt;id&gt;</li>
+                  <li>gateway delete &lt;id&gt;</li>
+                  <li>gateway reprovision &lt;id&gt;</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Network & Access</h4>
+                <ul className="text-sm text-gray-600 space-y-1 font-mono">
+                  <li>network list|create|delete</li>
+                  <li>access-rule list|create|delete</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">User Management</h4>
+                <ul className="text-sm text-gray-600 space-y-1 font-mono">
+                  <li>user list</li>
+                  <li>user get &lt;id&gt;</li>
+                  <li>user revoke-configs &lt;id&gt;</li>
+                  <li>local-user list|create|delete</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">API Key Management</h4>
+                <ul className="text-sm text-gray-600 space-y-1 font-mono">
+                  <li>api-key list [--user EMAIL]</li>
+                  <li>api-key create NAME</li>
+                  <li>api-key revoke &lt;id&gt;</li>
+                  <li>api-key revoke-all --user EMAIL</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Mesh Networking</h4>
+                <ul className="text-sm text-gray-600 space-y-1 font-mono">
+                  <li>mesh hub list|create|delete</li>
+                  <li>mesh hub provision &lt;id&gt;</li>
+                  <li>mesh spoke list|create|delete</li>
+                  <li>mesh spoke provision &lt;id&gt;</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Certificates & Audit</h4>
+                <ul className="text-sm text-gray-600 space-y-1 font-mono">
+                  <li>ca show|rotate|list</li>
+                  <li>audit list [--action X]</li>
+                  <li>connection list|disconnect</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Output Formats */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Output Formats</h3>
+            <div className="bg-gray-50 rounded-lg p-4 mb-6 font-mono text-sm overflow-x-auto">
+              <pre className="text-gray-700">{`# Table format (default)
+gatekey-admin gateway list
+
+# JSON format
+gatekey-admin gateway list -o json
+
+# YAML format
+gatekey-admin gateway list -o yaml`}</pre>
+            </div>
+
+            {/* Config File */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Configuration</h3>
+            <p className="text-gray-600 mb-4">
+              Configuration is stored in <code className="bg-gray-100 px-1 rounded">~/.gatekey-admin/config.yaml</code>:
+            </p>
+            <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm overflow-x-auto">
+              <pre className="text-gray-700">{`server_url: ${baseUrl}
+api_key: gk_your_api_key_here
+output: table`}</pre>
+            </div>
+          </div>
+        </section>
+
         {/* Mesh Networking Section */}
         <section id="mesh" className="scroll-mt-24">
           <div className="card">
@@ -903,7 +1386,7 @@ curl -sSL ${baseUrl}/scripts/install-gateway.sh | \\
          │                │                │
          ▼                ▼                ▼
 ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│  Gateway A  │  │  Gateway B  │  │  Gateway C  │
+│   Spoke A   │  │   Spoke B   │  │   Spoke C   │
 │  10.0.0.0/8 │  │ 192.168.0/24│  │ 172.16.0/16 │
 └─────────────┘  └─────────────┘  └─────────────┘
   Home Lab         AWS VPC         Office Network`}</pre>
@@ -913,11 +1396,11 @@ curl -sSL ${baseUrl}/scripts/install-gateway.sh | \\
             <h3 className="text-lg font-medium text-gray-900 mb-3">Key Features</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               <div className="p-4 border border-gray-200 rounded-lg">
-                <h4 className="font-medium text-gray-900 mb-2">Gateway-Initiated Connections</h4>
+                <h4 className="font-medium text-gray-900 mb-2">Spoke-Initiated Connections</h4>
                 <ul className="text-sm text-gray-600 space-y-1">
-                  <li>• Gateways connect TO the hub (outbound)</li>
+                  <li>• Spokes connect TO the hub (outbound)</li>
                   <li>• Works behind NAT/firewalls</li>
-                  <li>• No inbound ports required on gateways</li>
+                  <li>• No inbound ports required on spokes</li>
                 </ul>
               </div>
               <div className="p-4 border border-gray-200 rounded-lg">
@@ -929,17 +1412,17 @@ curl -sSL ${baseUrl}/scripts/install-gateway.sh | \\
                 </ul>
               </div>
               <div className="p-4 border border-gray-200 rounded-lg">
-                <h4 className="font-medium text-gray-900 mb-2">FIPS Compliant</h4>
+                <h4 className="font-medium text-gray-900 mb-2">Zero-Trust Access</h4>
                 <ul className="text-sm text-gray-600 space-y-1">
-                  <li>• Uses OpenVPN with AES-256-GCM</li>
-                  <li>• Configurable crypto profiles</li>
-                  <li>• Optional TLS-Auth for added security</li>
+                  <li>• Fine-grained user/group access control</li>
+                  <li>• Per-spoke network permissions</li>
+                  <li>• Routes pushed based on access rules</li>
                 </ul>
               </div>
               <div className="p-4 border border-gray-200 rounded-lg">
                 <h4 className="font-medium text-gray-900 mb-2">Dynamic Routing</h4>
                 <ul className="text-sm text-gray-600 space-y-1">
-                  <li>• Gateways advertise local networks</li>
+                  <li>• Spokes advertise local networks</li>
                   <li>• Hub aggregates and distributes routes</li>
                   <li>• Automatic route updates</li>
                 </ul>
@@ -952,11 +1435,17 @@ curl -sSL ${baseUrl}/scripts/install-gateway.sh | \\
               <li>Navigate to <strong>Administration → Mesh</strong></li>
               <li>Click <strong>Add Hub</strong> and configure:
                 <ul className="list-disc list-inside ml-6 mt-2 space-y-1 text-sm">
-                  <li><strong>Name:</strong> Display name for the hub</li>
-                  <li><strong>Public Endpoint:</strong> Hostname or IP where gateways will connect</li>
+                  <li><strong>Name:</strong> Display name for the hub (e.g., "primary-hub")</li>
+                  <li><strong>Public Endpoint:</strong> Hostname or IP where spokes will connect</li>
                   <li><strong>VPN Port:</strong> OpenVPN port (default: 1194)</li>
+                  <li><strong>VPN Protocol:</strong> UDP (recommended) or TCP</li>
                   <li><strong>VPN Subnet:</strong> Tunnel IP range (e.g., 172.30.0.0/16)</li>
                   <li><strong>Crypto Profile:</strong> FIPS, Modern, or Compatible</li>
+                  <li><strong>TLS-Auth:</strong> Enable for additional HMAC security layer (recommended)</li>
+                  <li><strong>Full Tunnel Mode:</strong> Route all client traffic through hub</li>
+                  <li><strong>Push DNS:</strong> Push DNS servers to connected clients</li>
+                  <li><strong>DNS Servers:</strong> Custom DNS servers (defaults to 1.1.1.1, 8.8.8.8)</li>
+                  <li><strong>Local Networks:</strong> Networks directly reachable from the hub</li>
                 </ul>
               </li>
               <li><strong>Save the API Token</strong> - shown only once at creation</li>
@@ -968,22 +1457,23 @@ curl -sSL ${baseUrl}/scripts/install-gateway.sh | \\
               </li>
             </ol>
 
-            {/* Setting Up Gateways */}
-            <h3 className="text-lg font-medium text-gray-900 mb-3">Adding Mesh Gateways</h3>
+            {/* Setting Up Spokes */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Adding Mesh Spokes</h3>
             <ol className="list-decimal list-inside space-y-3 text-gray-600 mb-6">
-              <li>In the <strong>Mesh</strong> page, switch to the <strong>Gateways</strong> tab</li>
-              <li>Select the hub this gateway will connect to</li>
-              <li>Click <strong>Add Gateway</strong> and configure:
+              <li>In the <strong>Mesh</strong> page, switch to the <strong>Spokes</strong> tab</li>
+              <li>Select the hub this spoke will connect to</li>
+              <li>Click <strong>Add Spoke</strong> and configure:
                 <ul className="list-disc list-inside ml-6 mt-2 space-y-1 text-sm">
-                  <li><strong>Name:</strong> Identifier for this gateway</li>
-                  <li><strong>Local Networks:</strong> CIDR blocks behind this gateway (e.g., 10.0.0.0/8)</li>
+                  <li><strong>Name:</strong> Identifier for this spoke (e.g., "home-lab")</li>
+                  <li><strong>Description:</strong> Optional description</li>
+                  <li><strong>Local Networks:</strong> CIDR blocks behind this spoke (e.g., 10.0.0.0/8)</li>
                 </ul>
               </li>
-              <li><strong>Save the Gateway Token</strong> - shown only once</li>
+              <li><strong>Save the Spoke Token</strong> - shown only once</li>
               <li>Click <strong>Install Script</strong> for the deployment script</li>
-              <li>Run on your gateway server:
+              <li>Run on your spoke server:
                 <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto mt-2">
-                  <code className="text-green-400 text-sm">sudo bash install-gateway.sh</code>
+                  <code className="text-green-400 text-sm">sudo bash install-mesh-spoke.sh</code>
                 </div>
               </li>
             </ol>
@@ -992,10 +1482,10 @@ curl -sSL ${baseUrl}/scripts/install-gateway.sh | \\
             <h3 className="text-lg font-medium text-gray-900 mb-3">How It Works</h3>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
               <ol className="list-decimal list-inside space-y-2 text-blue-800 text-sm">
-                <li><strong>Gateway Connects:</strong> Mesh gateway initiates OpenVPN connection to hub</li>
-                <li><strong>Authentication:</strong> Gateway authenticates using its provisioned certificate</li>
-                <li><strong>Route Advertisement:</strong> Gateway tells hub about its local networks via <code className="bg-blue-100 px-1 rounded">iroute</code></li>
-                <li><strong>Hub Aggregates:</strong> Hub collects routes from all gateways</li>
+                <li><strong>Spoke Connects:</strong> Mesh spoke initiates OpenVPN connection to hub</li>
+                <li><strong>Authentication:</strong> Spoke authenticates using its provisioned certificate</li>
+                <li><strong>Route Advertisement:</strong> Spoke tells hub about its local networks via <code className="bg-blue-100 px-1 rounded">iroute</code></li>
+                <li><strong>Hub Aggregates:</strong> Hub collects routes from all spokes</li>
                 <li><strong>Traffic Routing:</strong> Traffic between sites flows through the hub</li>
                 <li><strong>Control Plane Sync:</strong> Hub periodically syncs access rules and config</li>
               </ol>
@@ -1104,15 +1594,34 @@ curl -sSL ${baseUrl}/scripts/install-gateway.sh | \\
               <li>Import the <code className="bg-gray-100 px-1 rounded">.ovpn</code> file into your OpenVPN client</li>
             </ol>
 
+            {/* CLI Commands */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Using the GateKey CLI</h3>
+            <p className="text-gray-600 mb-4">
+              The GateKey CLI provides commands for connecting to mesh networks:
+            </p>
+            <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto mb-6">
+              <pre className="text-green-400 text-sm">{`# List available mesh hubs
+gatekey mesh list
+
+# Connect to a mesh hub
+gatekey connect --mesh primary-hub
+
+# Check connection status
+gatekey status
+
+# Disconnect
+gatekey disconnect primary-hub`}</pre>
+            </div>
+
             {/* Troubleshooting */}
             <h3 className="text-lg font-medium text-gray-900 mb-3">Troubleshooting</h3>
             <div className="space-y-4">
               <div className="p-4 border border-gray-200 rounded-lg">
-                <h4 className="font-medium text-gray-900 mb-2">Gateway Won't Connect</h4>
+                <h4 className="font-medium text-gray-900 mb-2">Spoke Won't Connect</h4>
                 <ul className="text-sm text-gray-600 space-y-1">
-                  <li>• Verify hub endpoint is reachable from gateway</li>
+                  <li>• Verify hub endpoint is reachable from spoke</li>
                   <li>• Check firewall allows outbound UDP/1194 (or configured port)</li>
-                  <li>• Verify gateway token is correct</li>
+                  <li>• Verify spoke token is correct</li>
                   <li>• Check logs: <code className="bg-gray-100 px-1 rounded">journalctl -u gatekey-mesh-gateway -f</code></li>
                 </ul>
               </div>
@@ -1128,10 +1637,19 @@ curl -sSL ${baseUrl}/scripts/install-gateway.sh | \\
               <div className="p-4 border border-gray-200 rounded-lg">
                 <h4 className="font-medium text-gray-900 mb-2">Routes Not Working</h4>
                 <ul className="text-sm text-gray-600 space-y-1">
-                  <li>• Verify gateway's local networks are correctly configured</li>
-                  <li>• Check IP forwarding is enabled on hub and gateways</li>
+                  <li>• Verify spoke's local networks are correctly configured</li>
+                  <li>• Check IP forwarding is enabled on hub and spokes</li>
                   <li>• Verify firewall rules allow forwarded traffic</li>
                   <li>• Check OpenVPN routing: <code className="bg-gray-100 px-1 rounded">ip route show</code></li>
+                </ul>
+              </div>
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Client Can't Access Spoke Networks</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• Verify user has hub access (Manage Access → Users/Groups)</li>
+                  <li>• Check network is assigned to hub (Manage Access → Networks)</li>
+                  <li>• Verify user has access rules for the target network</li>
+                  <li>• Regenerate VPN config after making access changes</li>
                 </ul>
               </div>
             </div>

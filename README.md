@@ -67,6 +67,9 @@ gatekey config init --server https://vpn.yourcompany.com
 
 ```bash
 gatekey login
+
+# Or use an API key for headless/automated environments
+gatekey login --api-key gk_your_api_key_here
 ```
 
 **3. Connect to VPN**
@@ -258,8 +261,10 @@ See [docs/api.md](docs/api.md) for full API documentation.
 ### Key Endpoints
 
 - `POST /api/v1/auth/oidc/login` - Initiate SSO login
+- `GET /api/v1/auth/api-key/validate` - Validate API key
 - `POST /api/v1/configs/generate` - Generate VPN config
 - `GET /api/v1/gateways` - List available gateways
+- `GET /api/v1/api-keys` - Manage API keys
 - `GET /api/v1/admin/networks` - Manage networks
 - `GET /api/v1/admin/access-rules` - Manage access rules
 - `GET /api/v1/admin/login-logs` - View login activity
@@ -270,6 +275,7 @@ See [docs/api.md](docs/api.md) for full API documentation.
 - **Zero Trust**: No network access without authentication
 - **Short-Lived Certificates**: Auto-expire after 24 hours (configurable)
 - **Per-Identity Firewall**: Each user gets their own firewall rules
+- **API Key Authentication**: Programmatic access for CLI, automation, and CI/CD
 - **FIPS Compliance**: Built with FIPS-validated crypto (when enabled)
 - **Audit Logging**: All access is logged
 - **Login Monitoring**: Track all authentication events with IP, location, and status

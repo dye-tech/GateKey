@@ -33,6 +33,68 @@ func NewAuthManager(config *Config) *AuthManager {
 	return &AuthManager{config: config}
 }
 
+// LoginAPIKey validates and stores an API key for authentication.
+func (a *AuthManager) LoginAPIKey(ctx context.Context, apiKey string) error {
+	if a.config.ServerURL == "" {
+		return fmt.Errorf("server URL not configured")
+	}
+
+	// Validate the API key by calling the server
+	validateURL, err := url.Parse(a.config.ServerURL)
+	if err != nil {
+		return fmt.Errorf("invalid server URL: %w", err)
+	}
+	validateURL.Path = "/api/v1/auth/api-key/validate"
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, validateURL.String(), nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to validate API key: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("invalid API key")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("API key validation failed with status %d", resp.StatusCode)
+	}
+
+	// Parse the response to get user info
+	var result struct {
+		User struct {
+			Email string `json:"email"`
+			Name  string `json:"name"`
+		} `json:"user"`
+		APIKey struct {
+			Name string `json:"name"`
+		} `json:"api_key"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// Store the API key in config
+	a.config.APIKey = apiKey
+	if err := a.config.Save(); err != nil {
+		return fmt.Errorf("failed to save API key: %w", err)
+	}
+
+	// Clear any session token
+	os.Remove(a.config.TokenPath())
+
+	fmt.Println("API key validated successfully!")
+	fmt.Printf("Logged in as: %s (%s)\n", result.User.Name, result.User.Email)
+	fmt.Printf("API Key: %s\n", result.APIKey.Name)
+	return nil
+}
+
 // Login performs browser-based authentication.
 func (a *AuthManager) Login(ctx context.Context, noBrowser bool) error {
 	if a.config.ServerURL == "" {
@@ -238,6 +300,14 @@ func (a *AuthManager) Logout() error {
 		return fmt.Errorf("failed to remove token: %w", err)
 	}
 
+	// Clear API key if set
+	if a.config.APIKey != "" {
+		a.config.APIKey = ""
+		if err := a.config.Save(); err != nil {
+			return fmt.Errorf("failed to clear API key: %w", err)
+		}
+	}
+
 	fmt.Println("Logged out successfully.")
 	return nil
 }
@@ -282,10 +352,30 @@ func (a *AuthManager) saveToken(token *TokenData) error {
 	return nil
 }
 
-// IsLoggedIn checks if there's a valid token.
+// IsLoggedIn checks if there's a valid token or API key.
 func (a *AuthManager) IsLoggedIn() bool {
+	if a.config.APIKey != "" {
+		return true
+	}
 	token, err := a.GetToken()
 	return err == nil && token != nil
+}
+
+// GetAuthHeader returns the Authorization header value.
+// Prefers API key over session token.
+func (a *AuthManager) GetAuthHeader() (string, error) {
+	// Prefer API key if configured
+	if a.config.APIKey != "" {
+		return "Bearer " + a.config.APIKey, nil
+	}
+
+	// Fall back to session token
+	token, err := a.GetToken()
+	if err != nil {
+		return "", err
+	}
+
+	return "Bearer " + token.AccessToken, nil
 }
 
 // openBrowser opens the specified URL in the default browser.

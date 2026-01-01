@@ -213,6 +213,82 @@ After certificate expiration, users must:
 2. Generate a new configuration
 3. Reconnect with the new certificate
 
+## CA Rotation
+
+GateKey supports graceful CA rotation with zero-downtime using a dual-trust period.
+
+### CA Lifecycle States
+
+| Status | Issuing | Trusted | Description |
+|--------|---------|---------|-------------|
+| `active` | Yes | Yes | Currently issuing new certificates |
+| `pending` | No | Yes | Prepared for rotation, not yet activated |
+| `retired` | No | Yes | No longer issuing, but still trusted for verification |
+| `revoked` | No | No | Completely untrusted |
+
+### Rotation Process
+
+```
+Phase 1: Preparation
+┌─────────────────────────────────────────────────────────┐
+│  POST /settings/ca/prepare-rotation                     │
+│  - Generates new CA with status "pending"               │
+│  - Both old and new CAs are trusted                     │
+│  - No impact to existing connections                    │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+Phase 2: Activation
+┌─────────────────────────────────────────────────────────┐
+│  POST /settings/ca/activate/:id                         │
+│  - Old CA → "retired" (still trusted)                   │
+│  - New CA → "active" (now issuing)                      │
+│  - Gateways detect change via ca_fingerprint            │
+│  - Auto-reprovision triggered on next heartbeat         │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+Phase 3: Grace Period
+┌─────────────────────────────────────────────────────────┐
+│  - Existing certs from old CA still work                │
+│  - New certs issued by new CA                           │
+│  - Clients regenerate configs naturally                 │
+│  - Wait for old certs to expire (24h default)           │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+Phase 4: Cleanup (Optional)
+┌─────────────────────────────────────────────────────────┐
+│  POST /settings/ca/revoke/:old-ca-id                    │
+│  - Old CA becomes completely untrusted                  │
+│  - Any remaining old certs are rejected                 │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Automatic CA Rotation Detection
+
+Gateways, Mesh Hubs, and Mesh Spokes automatically detect CA rotation:
+
+1. **Heartbeat Response**: Each heartbeat includes `ca_fingerprint` (SHA256 of active CA)
+2. **Fingerprint Comparison**: Agent compares with local CA fingerprint
+3. **Auto-Reprovision**: If fingerprints differ, agent triggers reprovisioning
+4. **Certificate Update**: Agent receives new CA and server certificates
+5. **Service Restart**: OpenVPN restarts with new certificates
+
+### Audit Trail
+
+All CA rotation events are logged to `ca_rotation_events` table:
+- CA preparation
+- CA activation (with old/new fingerprints)
+- CA revocation
+
+### Best Practices
+
+1. **Plan rotation during low-traffic periods** - Though zero-downtime, reduces complexity
+2. **Allow grace period** - Keep old CA retired (not revoked) for 24-48 hours
+3. **Monitor heartbeats** - Verify all gateways detected the change
+4. **Test with one gateway first** - Verify rotation works before activating for all
+
 ## Firewall Implementation
 
 The gateway agent applies per-user firewall rules using nftables:

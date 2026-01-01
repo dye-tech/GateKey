@@ -80,18 +80,18 @@ func (v *VPNManager) Connect(ctx context.Context, gatewayName string) error {
 	v.cleanupStaleConnections(multiState)
 
 	// Ensure we're logged in
-	token, err := v.auth.GetToken()
+	authHeader, err := v.auth.GetAuthHeader()
 	if err != nil {
 		return fmt.Errorf("authentication required: %w\nRun 'gatekey login' to authenticate", err)
 	}
 
 	// Check server FIPS requirements
-	if err := v.checkServerFIPSRequirement(ctx, token); err != nil {
+	if err := v.checkServerFIPSRequirement(ctx, authHeader); err != nil {
 		return err
 	}
 
 	// Get available gateways
-	gateways, err := v.fetchGateways(ctx, token)
+	gateways, err := v.fetchGateways(ctx, authHeader)
 	if err != nil {
 		return fmt.Errorf("failed to fetch gateways: %w", err)
 	}
@@ -134,7 +134,7 @@ func (v *VPNManager) Connect(ctx context.Context, gatewayName string) error {
 	tunInterface := fmt.Sprintf("tun%d", tunNum)
 
 	// Download VPN configuration to gateway-specific path
-	configPath, err := v.downloadConfigForGateway(ctx, token, selectedGateway.ID, selectedGateway.Name)
+	configPath, err := v.downloadConfigForGateway(ctx, authHeader, selectedGateway.ID, selectedGateway.Name)
 	if err != nil {
 		return fmt.Errorf("failed to download VPN configuration: %w", err)
 	}
@@ -407,7 +407,7 @@ func (v *VPNManager) saveMultiState(state *MultiConnectionState) error {
 }
 
 // downloadConfigForGateway downloads the VPN config to a gateway-specific path.
-func (v *VPNManager) downloadConfigForGateway(ctx context.Context, token *TokenData, gatewayID, gatewayName string) (string, error) {
+func (v *VPNManager) downloadConfigForGateway(ctx context.Context, authHeader, gatewayID, gatewayName string) (string, error) {
 	configPath := v.config.GatewayConfigPath(gatewayName)
 	client := &http.Client{Timeout: 60 * time.Second}
 
@@ -420,7 +420,7 @@ func (v *VPNManager) downloadConfigForGateway(ctx context.Context, token *TokenD
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	req.Header.Set("Authorization", authHeader)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -448,7 +448,7 @@ func (v *VPNManager) downloadConfigForGateway(ctx context.Context, token *TokenD
 	if err != nil {
 		return "", err
 	}
-	downloadReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	downloadReq.Header.Set("Authorization", authHeader)
 
 	downloadResp, err := client.Do(downloadReq)
 	if err != nil {
@@ -474,13 +474,13 @@ func (v *VPNManager) downloadConfigForGateway(ctx context.Context, token *TokenD
 }
 
 // checkServerFIPSRequirement checks if the server requires FIPS mode and verifies compliance.
-func (v *VPNManager) checkServerFIPSRequirement(ctx context.Context, token *TokenData) error {
+func (v *VPNManager) checkServerFIPSRequirement(ctx context.Context, authHeader string) error {
 	reqURL := fmt.Sprintf("%s/api/v1/server/info", v.config.ServerURL)
 	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
 		return nil // Don't fail if we can't check
 	}
-	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	req.Header.Set("Authorization", authHeader)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
@@ -879,12 +879,12 @@ func netmaskToCIDR(netmask string) string {
 
 // ListGateways lists available gateways.
 func (v *VPNManager) ListGateways(ctx context.Context) error {
-	token, err := v.auth.GetToken()
+	authHeader, err := v.auth.GetAuthHeader()
 	if err != nil {
 		return fmt.Errorf("authentication required: %w\nRun 'gatekey login' to authenticate", err)
 	}
 
-	gateways, err := v.fetchGateways(ctx, token)
+	gateways, err := v.fetchGateways(ctx, authHeader)
 	if err != nil {
 		return fmt.Errorf("failed to fetch gateways: %w", err)
 	}
@@ -917,7 +917,7 @@ func (v *VPNManager) ListGateways(ctx context.Context) error {
 }
 
 // fetchGateways retrieves the list of available gateways from the server.
-func (v *VPNManager) fetchGateways(ctx context.Context, token *TokenData) ([]Gateway, error) {
+func (v *VPNManager) fetchGateways(ctx context.Context, authHeader string) ([]Gateway, error) {
 	gatewaysURL, err := url.Parse(v.config.ServerURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid server URL: %w", err)
@@ -929,7 +929,7 @@ func (v *VPNManager) fetchGateways(ctx context.Context, token *TokenData) ([]Gat
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	req.Header.Set("Authorization", authHeader)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -957,7 +957,7 @@ func (v *VPNManager) fetchGateways(ctx context.Context, token *TokenData) ([]Gat
 }
 
 // downloadConfig downloads the VPN configuration for a gateway.
-func (v *VPNManager) downloadConfig(ctx context.Context, token *TokenData, gatewayID string) (string, error) {
+func (v *VPNManager) downloadConfig(ctx context.Context, authHeader, gatewayID string) (string, error) {
 	configURL, err := url.Parse(v.config.ServerURL)
 	if err != nil {
 		return "", fmt.Errorf("invalid server URL: %w", err)
@@ -972,7 +972,7 @@ func (v *VPNManager) downloadConfig(ctx context.Context, token *TokenData, gatew
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	req.Header.Set("Authorization", authHeader)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
@@ -1011,7 +1011,7 @@ func (v *VPNManager) downloadConfig(ctx context.Context, token *TokenData, gatew
 	if err != nil {
 		return "", fmt.Errorf("failed to create download request: %w", err)
 	}
-	downloadReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	downloadReq.Header.Set("Authorization", authHeader)
 
 	downloadResp, err := client.Do(downloadReq)
 	if err != nil {
@@ -1303,12 +1303,12 @@ type MeshHub struct {
 
 // ListMeshHubs lists available mesh hubs.
 func (v *VPNManager) ListMeshHubs(ctx context.Context) error {
-	token, err := v.auth.GetToken()
+	authHeader, err := v.auth.GetAuthHeader()
 	if err != nil {
 		return fmt.Errorf("authentication required: %w\nRun 'gatekey login' to authenticate", err)
 	}
 
-	hubs, err := v.fetchMeshHubs(ctx, token)
+	hubs, err := v.fetchMeshHubs(ctx, authHeader)
 	if err != nil {
 		return fmt.Errorf("failed to fetch mesh hubs: %w", err)
 	}
@@ -1339,7 +1339,7 @@ func (v *VPNManager) ListMeshHubs(ctx context.Context) error {
 }
 
 // fetchMeshHubs retrieves the list of available mesh hubs from the server.
-func (v *VPNManager) fetchMeshHubs(ctx context.Context, token *TokenData) ([]MeshHub, error) {
+func (v *VPNManager) fetchMeshHubs(ctx context.Context, authHeader string) ([]MeshHub, error) {
 	hubsURL, err := url.Parse(v.config.ServerURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid server URL: %w", err)
@@ -1351,7 +1351,7 @@ func (v *VPNManager) fetchMeshHubs(ctx context.Context, token *TokenData) ([]Mes
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	req.Header.Set("Authorization", authHeader)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -1399,13 +1399,13 @@ func (v *VPNManager) ConnectMesh(ctx context.Context, hubName string) error {
 	v.cleanupStaleConnections(multiState)
 
 	// Ensure we're logged in
-	token, err := v.auth.GetToken()
+	authHeader, err := v.auth.GetAuthHeader()
 	if err != nil {
 		return fmt.Errorf("authentication required: %w\nRun 'gatekey login' to authenticate", err)
 	}
 
 	// Get available mesh hubs
-	hubs, err := v.fetchMeshHubs(ctx, token)
+	hubs, err := v.fetchMeshHubs(ctx, authHeader)
 	if err != nil {
 		return fmt.Errorf("failed to fetch mesh hubs: %w", err)
 	}
@@ -1456,7 +1456,7 @@ func (v *VPNManager) ConnectMesh(ctx context.Context, hubName string) error {
 	tunInterface := fmt.Sprintf("tun%d", tunNum)
 
 	// Download mesh VPN configuration
-	configPath, err := v.downloadMeshConfig(ctx, token, selectedHub.ID, selectedHub.Name)
+	configPath, err := v.downloadMeshConfig(ctx, authHeader, selectedHub.ID, selectedHub.Name)
 	if err != nil {
 		return fmt.Errorf("failed to download mesh VPN configuration: %w", err)
 	}
@@ -1492,7 +1492,7 @@ func (v *VPNManager) ConnectMesh(ctx context.Context, hubName string) error {
 }
 
 // downloadMeshConfig downloads the mesh VPN config for a hub.
-func (v *VPNManager) downloadMeshConfig(ctx context.Context, token *TokenData, hubID, hubName string) (string, error) {
+func (v *VPNManager) downloadMeshConfig(ctx context.Context, authHeader, hubID, hubName string) (string, error) {
 	configPath := v.config.GatewayConfigPath("mesh-" + hubName)
 	client := &http.Client{Timeout: 60 * time.Second}
 
@@ -1505,7 +1505,7 @@ func (v *VPNManager) downloadMeshConfig(ctx context.Context, token *TokenData, h
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	req.Header.Set("Authorization", authHeader)
 
 	resp, err := client.Do(req)
 	if err != nil {

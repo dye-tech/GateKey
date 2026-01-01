@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard'
 import Connect from './pages/Connect'
 import WebAccess from './pages/WebAccess'
 import MyConfigs from './pages/MyConfigs'
+import APIKeys from './pages/APIKeys'
 import AdminSettings from './pages/AdminSettings'
 import AdminUsers from './pages/AdminUsers'
 import AdminGateways from './pages/AdminGateways'
@@ -85,6 +86,13 @@ function AppRoutes() {
         <ProtectedRoute>
           <Layout>
             <MyConfigs />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/api-keys" element={
+        <ProtectedRoute>
+          <Layout>
+            <APIKeys />
           </Layout>
         </ProtectedRoute>
       } />
