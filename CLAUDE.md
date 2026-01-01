@@ -150,6 +150,12 @@ gatekey disconnect --all      # Disconnect from all gateways
 - `PUT /api/v1/admin/gateways/:id` - Update gateway
 - `DELETE /api/v1/admin/gateways/:id` - Delete gateway
 
+### VPN Configs (Admin)
+- `GET /api/v1/admin/configs` - List all gateway configs with user info
+- `DELETE /api/v1/admin/configs/:id` - Revoke a gateway config
+- `GET /api/v1/admin/mesh/configs` - List all mesh configs with user info
+- `DELETE /api/v1/admin/mesh/configs/:id` - Revoke a mesh config
+
 ### Gateway Internal (for gateway agents)
 - `POST /api/v1/gateway/heartbeat` - Send heartbeat status
 - `POST /api/v1/gateway/verify` - Verify client connection
@@ -193,7 +199,8 @@ gatekey disconnect --all      # Disconnect from all gateways
 - `access_rules` - IP/hostname whitelist rules
 - `user_access_rules` - User to rule assignments
 - `group_access_rules` - Group to rule assignments
-- `vpn_configs` - Generated VPN configurations
+- `generated_configs` - Generated gateway VPN configurations (with user, gateway, expiry, revocation tracking)
+- `mesh_generated_configs` - Generated mesh VPN configurations (with user, hub, expiry, revocation tracking)
 - `audit_logs` - Audit trail
 - `pki_ca` - CA certificates with status, fingerprint, description
 - `ca_rotation_events` - CA rotation audit trail
@@ -344,3 +351,26 @@ gatekey mesh list                   # List available mesh hubs
 gatekey status                      # Show connection status
 gatekey disconnect                  # Disconnect from VPN
 ```
+
+## Admin Config Management
+
+Centralized management of all VPN configurations across all users.
+
+### Features
+- **Gateway Configs**: View all gateway VPN configurations with user attribution
+- **Mesh Configs**: View all mesh hub configurations with user attribution
+- **Filtering**: Filter by user (email/name) and status (active/revoked/expired)
+- **Revocation**: Revoke any active config with reason tracking
+- **User Attribution**: Each config shows user email and name (from users or local_users table)
+
+### Database Queries
+Config listings join with both `users` (OIDC/SAML) and `local_users` tables to display:
+- User email (from `users.email` or `local_users.email`)
+- User name (from `users.name` or `local_users.username`)
+
+### Web UI
+Navigate to **Administration → All Configs** to:
+- View all gateway configs (Gateway Configs tab)
+- View all mesh configs (Mesh Configs tab)
+- Filter by user or status
+- Revoke active configs with reason

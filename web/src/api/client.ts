@@ -1338,12 +1338,179 @@ export async function getUserMeshHubs(): Promise<UserMeshHub[]> {
   return response.data.hubs || []
 }
 
-export async function generateMeshClientConfig(hubId: string): Promise<MeshClientConfig> {
+export interface MeshClientConfigWithId {
+  id: string
+  hubname: string
+  config: string
+  expiresAt: string
+}
+
+export async function generateMeshClientConfig(hubId: string): Promise<MeshClientConfigWithId> {
   const response = await api.post('/api/v1/mesh/generate-config', { hubid: hubId })
   return {
+    id: response.data.id,
     hubname: response.data.hubname,
     config: response.data.config,
+    expiresAt: response.data.expiresAt,
   }
+}
+
+// ==================== User Mesh Config Management ====================
+
+export interface MeshVPNConfig {
+  id: string
+  hubId: string
+  hubName: string
+  fileName: string
+  expiresAt: string
+  createdAt: string
+  isRevoked: boolean
+  revokedAt: string | null
+  downloaded: boolean
+}
+
+// Get current user's mesh VPN configs
+export async function getUserMeshConfigs(): Promise<MeshVPNConfig[]> {
+  const response = await api.get('/api/v1/mesh-configs')
+  return (response.data.configs || []).map((cfg: Record<string, unknown>) => ({
+    id: cfg.id,
+    hubId: cfg.hubId,
+    hubName: cfg.hubName,
+    fileName: cfg.fileName,
+    expiresAt: cfg.expiresAt,
+    createdAt: cfg.createdAt,
+    isRevoked: cfg.isRevoked,
+    revokedAt: cfg.revokedAt,
+    downloaded: cfg.downloaded,
+  }))
+}
+
+// Revoke user's own mesh config
+export async function revokeMeshConfig(configId: string): Promise<void> {
+  await api.post(`/api/v1/mesh-configs/${configId}/revoke`)
+}
+
+// Download mesh config file
+export async function downloadMeshConfig(configId: string): Promise<Blob> {
+  const response = await api.get(`/api/v1/mesh-configs/${configId}/download`, {
+    responseType: 'blob',
+  })
+  return response.data
+}
+
+// Admin VPN Config with user info
+export interface AdminVPNConfig extends VPNConfig {
+  userId: string
+  userEmail: string
+  userName: string
+  serialNumber?: string
+  fingerprint?: string
+  revokedReason?: string
+}
+
+// Admin Mesh VPN Config with user info
+export interface AdminMeshVPNConfig extends MeshVPNConfig {
+  userId: string
+  userEmail: string
+  userName: string
+  serialNumber?: string
+  fingerprint?: string
+  revokedReason?: string
+}
+
+// Admin: List all gateway configs with user info
+export async function adminListAllConfigs(): Promise<{ configs: AdminVPNConfig[]; total: number }> {
+  const response = await api.get('/api/v1/admin/configs')
+  const configs = (response.data.configs || []).map((cfg: Record<string, unknown>) => ({
+    id: cfg.id,
+    userId: cfg.userId,
+    userEmail: cfg.userEmail,
+    userName: cfg.userName,
+    gatewayId: cfg.gatewayId,
+    gatewayName: cfg.gatewayName,
+    fileName: cfg.fileName,
+    serialNumber: cfg.serialNumber,
+    fingerprint: cfg.fingerprint,
+    expiresAt: cfg.expiresAt,
+    createdAt: cfg.createdAt,
+    isRevoked: cfg.isRevoked,
+    revokedAt: cfg.revokedAt,
+    revokedReason: cfg.revokedReason,
+    downloaded: cfg.downloaded,
+  }))
+  return { configs, total: response.data.total || configs.length }
+}
+
+// Admin: List all mesh configs with user info
+export async function adminListMeshConfigs(): Promise<{ configs: AdminMeshVPNConfig[]; total: number }> {
+  const response = await api.get('/api/v1/admin/mesh-configs')
+  const configs = (response.data.configs || []).map((cfg: Record<string, unknown>) => ({
+    id: cfg.id,
+    userId: cfg.userId,
+    userEmail: cfg.userEmail,
+    userName: cfg.userName,
+    hubId: cfg.hubId,
+    hubName: cfg.hubName,
+    fileName: cfg.fileName,
+    serialNumber: cfg.serialNumber,
+    fingerprint: cfg.fingerprint,
+    expiresAt: cfg.expiresAt,
+    createdAt: cfg.createdAt,
+    isRevoked: cfg.isRevoked,
+    revokedAt: cfg.revokedAt,
+    revokedReason: cfg.revokedReason,
+    downloaded: cfg.downloaded,
+  }))
+  return { configs, total: response.data.total || configs.length }
+}
+
+// Admin: Revoke any mesh config
+export async function adminRevokeMeshConfig(configId: string, reason?: string): Promise<void> {
+  await api.post(`/api/v1/admin/mesh-configs/${configId}/revoke`, { reason })
+}
+
+// Admin: Revoke all mesh configs for a user
+export async function adminRevokeUserMeshConfigs(userId: string, reason?: string): Promise<{ revokedCount: number }> {
+  const response = await api.post(`/api/v1/admin/users/${userId}/revoke-mesh-configs`, { reason })
+  return { revokedCount: response.data.revokedCount || 0 }
+}
+
+// Admin: Get all gateway configs for a specific user
+export async function getAdminUserConfigs(userId: string): Promise<VPNConfig[]> {
+  const response = await api.get(`/api/v1/admin/users/${userId}/configs`)
+  return (response.data.configs || []).map((cfg: Record<string, unknown>) => ({
+    id: cfg.id,
+    gatewayId: cfg.gatewayId,
+    gatewayName: cfg.gatewayName,
+    fileName: cfg.fileName,
+    expiresAt: cfg.expiresAt,
+    createdAt: cfg.createdAt,
+    isRevoked: cfg.isRevoked,
+    revokedAt: cfg.revokedAt,
+    downloaded: cfg.downloaded,
+  }))
+}
+
+// Admin: Get all mesh configs for a specific user
+export async function getAdminUserMeshConfigs(userId: string): Promise<MeshVPNConfig[]> {
+  const response = await api.get(`/api/v1/admin/users/${userId}/mesh-configs`)
+  return (response.data.configs || []).map((cfg: Record<string, unknown>) => ({
+    id: cfg.id,
+    hubId: cfg.hubId,
+    hubName: cfg.hubName,
+    fileName: cfg.fileName,
+    expiresAt: cfg.expiresAt,
+    createdAt: cfg.createdAt,
+    isRevoked: cfg.isRevoked,
+    revokedAt: cfg.revokedAt,
+    downloaded: cfg.downloaded,
+  }))
+}
+
+// Admin: Delete all API keys for a user
+export async function adminDeleteUserAPIKeys(userId: string): Promise<{ deletedCount: number }> {
+  const response = await api.delete(`/api/v1/admin/users/${userId}/api-keys/all`)
+  return { deletedCount: response.data.deletedCount || 0 }
 }
 
 // ==================== API Keys ====================
