@@ -56,9 +56,12 @@ func (s *Server) handleListMeshHubs(c *gin.Context) {
 			"vpnSubnet":         hub.VPNSubnet,
 			"cryptoProfile":     hub.CryptoProfile,
 			"tlsAuthEnabled":    hub.TLSAuthEnabled,
+			"fullTunnelMode":    hub.FullTunnelMode,
+			"pushDns":           hub.PushDNS,
+			"dnsServers":        hub.DNSServers,
 			"status":            status,
 			"statusMessage":     hub.StatusMessage,
-			"connectedSpokes": hub.ConnectedSpokes,
+			"connectedSpokes":   hub.ConnectedSpokes,
 			"connectedClients":  hub.ConnectedClients,
 			"createdAt":         hub.CreatedAt.Format(time.RFC3339),
 			"updatedAt":         hub.UpdatedAt.Format(time.RFC3339),
@@ -181,10 +184,14 @@ func (s *Server) handleGetMeshHub(c *gin.Context) {
 			"vpnSubnet":         hub.VPNSubnet,
 			"cryptoProfile":     hub.CryptoProfile,
 			"tlsAuthEnabled":    hub.TLSAuthEnabled,
+			"fullTunnelMode":    hub.FullTunnelMode,
+			"pushDns":           hub.PushDNS,
+			"dnsServers":        hub.DNSServers,
+			"localNetworks":     hub.LocalNetworks,
 			"controlPlaneUrl":   hub.ControlPlaneURL,
 			"status":            hub.Status,
 			"statusMessage":     hub.StatusMessage,
-			"connectedSpokes": hub.ConnectedSpokes,
+			"connectedSpokes":   hub.ConnectedSpokes,
 			"connectedClients":  hub.ConnectedClients,
 			"hasCACert":         hub.CACert != "",
 			"hasServerCert":     hub.ServerCert != "",
@@ -207,6 +214,9 @@ func (s *Server) handleUpdateMeshHub(c *gin.Context) {
 		VPNSubnet      string   `json:"vpnSubnet"`
 		CryptoProfile  string   `json:"cryptoProfile"`
 		TLSAuthEnabled *bool    `json:"tlsAuthEnabled"`
+		FullTunnelMode *bool    `json:"fullTunnelMode"`
+		PushDNS        *bool    `json:"pushDns"`
+		DNSServers     []string `json:"dnsServers"`
 		LocalNetworks  []string `json:"localNetworks"`
 	}
 
@@ -251,6 +261,16 @@ func (s *Server) handleUpdateMeshHub(c *gin.Context) {
 	}
 	if req.TLSAuthEnabled != nil {
 		hub.TLSAuthEnabled = *req.TLSAuthEnabled
+	}
+	if req.FullTunnelMode != nil {
+		hub.FullTunnelMode = *req.FullTunnelMode
+	}
+	if req.PushDNS != nil {
+		hub.PushDNS = *req.PushDNS
+	}
+	// DNSServers can be updated to an empty array, so always set it if provided
+	if req.DNSServers != nil {
+		hub.DNSServers = req.DNSServers
 	}
 	// LocalNetworks can be updated to an empty array, so always set it if provided
 	if req.LocalNetworks != nil {
@@ -481,6 +501,68 @@ func (s *Server) handleRemoveMeshHubGroup(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "group removed from hub"})
 }
 
+// Hub network access control
+
+func (s *Server) handleGetMeshHubNetworks(c *gin.Context) {
+	ctx := c.Request.Context()
+	hubID := c.Param("id")
+
+	networks, err := s.meshStore.GetHubNetworks(ctx, hubID)
+	if err != nil {
+		s.logger.Error("Failed to get hub networks", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get hub networks"})
+		return
+	}
+
+	result := make([]gin.H, 0, len(networks))
+	for _, n := range networks {
+		result = append(result, gin.H{
+			"id":          n.ID,
+			"name":        n.Name,
+			"description": n.Description,
+			"cidr":        n.CIDR,
+			"isActive":    n.IsActive,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"networks": result})
+}
+
+func (s *Server) handleAssignMeshHubNetwork(c *gin.Context) {
+	ctx := c.Request.Context()
+	hubID := c.Param("id")
+
+	var req struct {
+		NetworkID string `json:"networkId" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := s.meshStore.AssignNetworkToHub(ctx, hubID, req.NetworkID); err != nil {
+		s.logger.Error("Failed to assign network to hub", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign network to hub"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "network assigned to hub"})
+}
+
+func (s *Server) handleRemoveMeshHubNetwork(c *gin.Context) {
+	ctx := c.Request.Context()
+	hubID := c.Param("id")
+	networkID := c.Param("networkId")
+
+	if err := s.meshStore.RemoveNetworkFromHub(ctx, hubID, networkID); err != nil {
+		s.logger.Error("Failed to remove network from hub", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove network from hub"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "network removed from hub"})
+}
+
 // ==================== Admin Mesh Spoke Management ====================
 
 func (s *Server) handleListMeshSpokes(c *gin.Context) {
@@ -508,19 +590,22 @@ func (s *Server) handleListMeshSpokes(c *gin.Context) {
 		}
 
 		gwData := gin.H{
-			"id":            gw.ID,
-			"hubId":         gw.HubID,
-			"name":          gw.Name,
-			"description":   gw.Description,
-			"localNetworks": gw.LocalNetworks,
-			"tunnelIp":      gw.TunnelIP,
-			"status":        status,
-			"statusMessage": gw.StatusMessage,
-			"bytesSent":     gw.BytesSent,
-			"bytesReceived": gw.BytesReceived,
-			"remoteIp":      gw.RemoteIP,
-			"createdAt":     gw.CreatedAt.Format(time.RFC3339),
-			"updatedAt":     gw.UpdatedAt.Format(time.RFC3339),
+			"id":             gw.ID,
+			"hubId":          gw.HubID,
+			"name":           gw.Name,
+			"description":    gw.Description,
+			"localNetworks":  gw.LocalNetworks,
+			"fullTunnelMode": gw.FullTunnelMode,
+			"pushDns":        gw.PushDNS,
+			"dnsServers":     gw.DNSServers,
+			"tunnelIp":       gw.TunnelIP,
+			"status":         status,
+			"statusMessage":  gw.StatusMessage,
+			"bytesSent":      gw.BytesSent,
+			"bytesReceived":  gw.BytesReceived,
+			"remoteIp":       gw.RemoteIP,
+			"createdAt":      gw.CreatedAt.Format(time.RFC3339),
+			"updatedAt":      gw.UpdatedAt.Format(time.RFC3339),
 		}
 		if gw.LastSeen != nil {
 			gwData["lastSeen"] = gw.LastSeen.Format(time.RFC3339)
@@ -616,20 +701,23 @@ func (s *Server) handleGetMeshSpoke(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"spoke": gin.H{
-			"id":            gw.ID,
-			"hubId":         gw.HubID,
-			"name":          gw.Name,
-			"description":   gw.Description,
-			"localNetworks": gw.LocalNetworks,
-			"tunnelIp":      gw.TunnelIP,
-			"status":        gw.Status,
-			"statusMessage": gw.StatusMessage,
-			"bytesSent":     gw.BytesSent,
-			"bytesReceived": gw.BytesReceived,
-			"remoteIp":      gw.RemoteIP,
-			"hasClientCert": gw.ClientCert != "",
-			"createdAt":     gw.CreatedAt.Format(time.RFC3339),
-			"updatedAt":     gw.UpdatedAt.Format(time.RFC3339),
+			"id":             gw.ID,
+			"hubId":          gw.HubID,
+			"name":           gw.Name,
+			"description":    gw.Description,
+			"localNetworks":  gw.LocalNetworks,
+			"fullTunnelMode": gw.FullTunnelMode,
+			"pushDns":        gw.PushDNS,
+			"dnsServers":     gw.DNSServers,
+			"tunnelIp":       gw.TunnelIP,
+			"status":         gw.Status,
+			"statusMessage":  gw.StatusMessage,
+			"bytesSent":      gw.BytesSent,
+			"bytesReceived":  gw.BytesReceived,
+			"remoteIp":       gw.RemoteIP,
+			"hasClientCert":  gw.ClientCert != "",
+			"createdAt":      gw.CreatedAt.Format(time.RFC3339),
+			"updatedAt":      gw.UpdatedAt.Format(time.RFC3339),
 		},
 	})
 }
@@ -639,9 +727,12 @@ func (s *Server) handleUpdateMeshSpoke(c *gin.Context) {
 	gwID := c.Param("id")
 
 	var req struct {
-		Name          string   `json:"name"`
-		Description   string   `json:"description"`
-		LocalNetworks []string `json:"localNetworks"`
+		Name           string   `json:"name"`
+		Description    string   `json:"description"`
+		LocalNetworks  []string `json:"localNetworks"`
+		FullTunnelMode *bool    `json:"fullTunnelMode"`
+		PushDNS        *bool    `json:"pushDns"`
+		DNSServers     []string `json:"dnsServers"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -668,6 +759,15 @@ func (s *Server) handleUpdateMeshSpoke(c *gin.Context) {
 	}
 	if req.LocalNetworks != nil {
 		gw.LocalNetworks = req.LocalNetworks
+	}
+	if req.FullTunnelMode != nil {
+		gw.FullTunnelMode = *req.FullTunnelMode
+	}
+	if req.PushDNS != nil {
+		gw.PushDNS = *req.PushDNS
+	}
+	if req.DNSServers != nil {
+		gw.DNSServers = req.DNSServers
 	}
 
 	if err := s.meshStore.UpdateMeshSpoke(ctx, gw); err != nil {
@@ -1219,6 +1319,86 @@ func (s *Server) handleMeshClientDisconnected(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// handleMeshClientRules returns the access rules for a connected client
+// Used by the mesh hub for firewall enforcement
+func (s *Server) handleMeshClientRules(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var req struct {
+		Token       string `json:"token" binding:"required"`
+		ClientEmail string `json:"clientEmail" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	hub, err := s.meshStore.GetHubByToken(ctx, req.Token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
+
+	// Get detailed access rules for this client (includes type, port, protocol)
+	rules, err := s.meshStore.GetUserMeshAccessRulesDetailedByEmail(ctx, hub.ID, req.ClientEmail)
+	if err != nil {
+		s.logger.Warn("Failed to get client access rules",
+			zap.String("email", req.ClientEmail),
+			zap.Error(err))
+		// Return empty rules rather than error - client might not be in system yet
+		rules = []db.MeshAccessRule{}
+	}
+
+	s.logger.Debug("Returning client access rules",
+		zap.String("hub", hub.Name),
+		zap.String("client", req.ClientEmail),
+		zap.Int("ruleCount", len(rules)))
+
+	c.JSON(http.StatusOK, gin.H{
+		"rules": rules,
+	})
+}
+
+// handleMeshAllClientRules returns all client access rules for firewall sync
+// Used by the mesh hub to periodically refresh firewall rules
+func (s *Server) handleMeshAllClientRules(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var req struct {
+		Token   string   `json:"token" binding:"required"`
+		Clients []string `json:"clients"` // List of client emails to get rules for
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	hub, err := s.meshStore.GetHubByToken(ctx, req.Token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
+
+	// Get detailed access rules for each client
+	clientRules := make(map[string][]db.MeshAccessRule)
+	for _, email := range req.Clients {
+		rules, err := s.meshStore.GetUserMeshAccessRulesDetailedByEmail(ctx, hub.ID, email)
+		if err != nil {
+			s.logger.Debug("Failed to get access rules for client",
+				zap.String("email", email),
+				zap.Error(err))
+			continue
+		}
+		clientRules[email] = rules
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"clientRules": clientRules,
+	})
+}
+
 // ==================== Spoke Internal API (Spoke → Control Plane) ====================
 
 func (s *Server) handleMeshSpokeProvisionRequest(c *gin.Context) {
@@ -1735,10 +1915,11 @@ func (s *Server) handleGenerateMeshClientConfig(c *gin.Context) {
 		return
 	}
 
-	// Get routes the user can access
-	routes, err := s.meshStore.GetUserMeshRoutes(ctx, hub.ID, user.UserID, user.Groups)
+	// Get routes the user can access via access rules (zero-trust)
+	// Only routes defined in access rules assigned to the user are allowed
+	routes, err := s.meshStore.GetUserMeshAccessRules(ctx, hub.ID, user.UserID, user.Groups)
 	if err != nil {
-		s.logger.Warn("Failed to get user mesh routes", zap.Error(err))
+		s.logger.Warn("Failed to get user mesh access rules", zap.Error(err))
 		// Continue without routes - not a fatal error
 	}
 
@@ -1893,9 +2074,14 @@ func generateMeshClientOVPNConfig(hub *db.MeshHub, caChain, clientCert, clientKe
 	sb.WriteString("remote-cert-tls server\n")
 	sb.WriteString("\n")
 
-	// Add routes for spoke networks
-	if len(routes) > 0 {
-		sb.WriteString("# Routes to spoke networks\n")
+	// Full tunnel mode: route all traffic through VPN
+	if hub.FullTunnelMode {
+		sb.WriteString("# Full tunnel mode - route all traffic through VPN\n")
+		sb.WriteString("redirect-gateway def1 bypass-dhcp\n")
+		sb.WriteString("\n")
+	} else if len(routes) > 0 {
+		// Split tunnel: add routes only for allowed networks
+		sb.WriteString("# Routes to allowed networks (access rules)\n")
 		for _, route := range routes {
 			netIP, netmask, err := cidrToNetmask(route)
 			if err == nil {
@@ -1905,7 +2091,22 @@ func generateMeshClientOVPNConfig(hub *db.MeshHub, caChain, clientCert, clientKe
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString("verb 3\n")
+	// DNS settings
+	if hub.PushDNS {
+		sb.WriteString("# DNS servers\n")
+		if len(hub.DNSServers) > 0 {
+			for _, dns := range hub.DNSServers {
+				sb.WriteString(fmt.Sprintf("dhcp-option DNS %s\n", dns))
+			}
+		} else {
+			// Default DNS servers
+			sb.WriteString("dhcp-option DNS 1.1.1.1\n")
+			sb.WriteString("dhcp-option DNS 8.8.8.8\n")
+		}
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString("verb 1\n")
 	sb.WriteString("\n")
 
 	// Inline certificates (full CA chain: Mesh CA + Root CA)

@@ -156,6 +156,11 @@ export async function deleteGateway(id: string): Promise<void> {
   await api.delete(`/api/v1/admin/gateways/${id}`)
 }
 
+export async function reprovisionGateway(id: string): Promise<{ message: string; configVersion: string }> {
+  const response = await api.post(`/api/v1/admin/gateways/${id}/reprovision`)
+  return response.data
+}
+
 export interface UpdateGatewayRequest {
   name: string
   hostname?: string
@@ -948,6 +953,10 @@ export interface MeshHub {
   vpnSubnet: string
   cryptoProfile: CryptoProfile
   tlsAuthEnabled: boolean
+  fullTunnelMode: boolean
+  pushDns: boolean
+  dnsServers: string[]
+  localNetworks: string[]
   status: MeshHubStatus
   statusMessage: string
   connectedSpokes: number
@@ -971,6 +980,10 @@ export interface CreateMeshHubRequest {
   vpnSubnet?: string
   cryptoProfile?: CryptoProfile
   tlsAuthEnabled?: boolean
+  fullTunnelMode?: boolean
+  pushDns?: boolean
+  dnsServers?: string[]
+  localNetworks?: string[]
 }
 
 export interface MeshSpoke {
@@ -979,6 +992,9 @@ export interface MeshSpoke {
   name: string
   description: string
   localNetworks: string[]
+  fullTunnelMode: boolean
+  pushDns: boolean
+  dnsServers: string[]
   tunnelIp: string
   status: MeshSpokeStatus
   statusMessage: string
@@ -1014,6 +1030,10 @@ export async function getMeshHubs(): Promise<MeshHub[]> {
     vpnSubnet: hub.vpnSubnet,
     cryptoProfile: hub.cryptoProfile,
     tlsAuthEnabled: hub.tlsAuthEnabled,
+    fullTunnelMode: hub.fullTunnelMode || false,
+    pushDns: hub.pushDns || false,
+    dnsServers: (hub.dnsServers as string[]) || [],
+    localNetworks: (hub.localNetworks as string[]) || [],
     status: hub.status,
     statusMessage: hub.statusMessage || '',
     connectedSpokes: hub.connectedSpokes || 0,
@@ -1037,6 +1057,10 @@ export async function getMeshHub(id: string): Promise<MeshHub> {
     vpnSubnet: hub.vpnSubnet,
     cryptoProfile: hub.cryptoProfile,
     tlsAuthEnabled: hub.tlsAuthEnabled,
+    fullTunnelMode: hub.fullTunnelMode || false,
+    pushDns: hub.pushDns || false,
+    dnsServers: hub.dnsServers || [],
+    localNetworks: hub.localNetworks || [],
     status: hub.status,
     statusMessage: hub.statusMessage || '',
     connectedSpokes: hub.connectedSpokes || 0,
@@ -1060,6 +1084,10 @@ export async function createMeshHub(req: CreateMeshHubRequest): Promise<MeshHubW
     vpnSubnet: hub.vpnSubnet,
     cryptoProfile: hub.cryptoProfile,
     tlsAuthEnabled: hub.tlsAuthEnabled,
+    fullTunnelMode: hub.fullTunnelMode || false,
+    pushDns: hub.pushDns || false,
+    dnsServers: hub.dnsServers || [],
+    localNetworks: hub.localNetworks || [],
     apiToken: hub.apiToken,
     controlPlaneUrl: hub.controlPlaneUrl,
     status: hub.status,
@@ -1117,6 +1145,28 @@ export async function removeMeshHubGroup(hubId: string, groupName: string): Prom
   await api.delete(`/api/v1/admin/mesh/hubs/${hubId}/groups/${encodeURIComponent(groupName)}`)
 }
 
+// Mesh Hub Network Access (Zero-Trust)
+export interface MeshHubNetwork {
+  id: string
+  name: string
+  description: string
+  cidr: string
+  isActive: boolean
+}
+
+export async function getMeshHubNetworks(hubId: string): Promise<MeshHubNetwork[]> {
+  const response = await api.get(`/api/v1/admin/mesh/hubs/${hubId}/networks`)
+  return response.data.networks || []
+}
+
+export async function assignMeshHubNetwork(hubId: string, networkId: string): Promise<void> {
+  await api.post(`/api/v1/admin/mesh/hubs/${hubId}/networks`, { networkId })
+}
+
+export async function removeMeshHubNetwork(hubId: string, networkId: string): Promise<void> {
+  await api.delete(`/api/v1/admin/mesh/hubs/${hubId}/networks/${networkId}`)
+}
+
 // Mesh Spoke Management
 export async function getMeshSpokes(hubId: string): Promise<MeshSpoke[]> {
   const response = await api.get(`/api/v1/admin/mesh/hubs/${hubId}/spokes`)
@@ -1125,7 +1175,10 @@ export async function getMeshSpokes(hubId: string): Promise<MeshSpoke[]> {
     hubId: spoke.hubId,
     name: spoke.name,
     description: spoke.description || '',
-    localNetworks: spoke.localNetworks || [],
+    localNetworks: (spoke.localNetworks as string[]) || [],
+    fullTunnelMode: spoke.fullTunnelMode || false,
+    pushDns: spoke.pushDns || false,
+    dnsServers: (spoke.dnsServers as string[]) || [],
     tunnelIp: spoke.tunnelIp || '',
     status: spoke.status,
     statusMessage: spoke.statusMessage || '',
@@ -1148,6 +1201,9 @@ export async function getMeshSpoke(id: string): Promise<MeshSpoke> {
     name: spoke.name,
     description: spoke.description || '',
     localNetworks: spoke.localNetworks || [],
+    fullTunnelMode: spoke.fullTunnelMode || false,
+    pushDns: spoke.pushDns || false,
+    dnsServers: spoke.dnsServers || [],
     tunnelIp: spoke.tunnelIp || '',
     status: spoke.status,
     statusMessage: spoke.statusMessage || '',
@@ -1170,6 +1226,9 @@ export async function createMeshSpoke(hubId: string, req: CreateMeshSpokeRequest
     name: spoke.name,
     description: spoke.description || '',
     localNetworks: spoke.localNetworks || [],
+    fullTunnelMode: spoke.fullTunnelMode || false,
+    pushDns: spoke.pushDns || false,
+    dnsServers: spoke.dnsServers || [],
     tunnelIp: '',
     token: spoke.token,
     status: spoke.status,

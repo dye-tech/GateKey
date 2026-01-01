@@ -265,7 +265,7 @@ connect-timeout 30
 server-poll-timeout 10
 
 # Logging
-verb 3
+verb 1
 mute 10
 
 {{- if .Options.keepalive }}
@@ -431,7 +431,7 @@ persist-tun
 
 # Logging
 status {{ .StatusLog }} 10
-verb 3
+verb 1
 mute 20
 
 {{- if .ClientConfigDir }}

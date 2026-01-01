@@ -338,6 +338,22 @@ func (s *GatewayStore) UpdateGateway(ctx context.Context, gw *Gateway) error {
 	return nil
 }
 
+// UpdateGatewayConfigVersion updates only the config_version field to trigger reprovision
+func (s *GatewayStore) UpdateGatewayConfigVersion(ctx context.Context, id, configVersion string) error {
+	result, err := s.db.Pool.Exec(ctx, `
+		UPDATE gateways
+		SET config_version = $2, updated_at = NOW()
+		WHERE id = $1
+	`, id, configVersion)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return ErrGatewayNotFound
+	}
+	return nil
+}
+
 // AssignUserToGateway assigns a user to a gateway
 func (s *GatewayStore) AssignUserToGateway(ctx context.Context, userID, gatewayID string) error {
 	_, err := s.db.Pool.Exec(ctx, `

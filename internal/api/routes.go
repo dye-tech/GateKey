@@ -2687,6 +2687,45 @@ func (s *Server) handleDeleteGateway(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "gateway deleted successfully"})
 }
 
+// handleReprovisionGateway forces a gateway to re-provision its certificates
+// This is useful after CA rotation or to regenerate TLS-Auth keys
+func (s *Server) handleReprovisionGateway(c *gin.Context) {
+	gatewayID := c.Param("id")
+	ctx := c.Request.Context()
+
+	// Get current gateway
+	gateway, err := s.gatewayStore.GetGateway(ctx, gatewayID)
+	if err != nil {
+		if err == db.ErrGatewayNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "gateway not found"})
+			return
+		}
+		s.logger.Error("Failed to get gateway", zap.Error(err), zap.String("id", gatewayID))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get gateway"})
+		return
+	}
+
+	// Generate a new config version to trigger reprovision on next heartbeat
+	// Using a UUID ensures it will never match the gateway's current version
+	newConfigVersion := fmt.Sprintf("reprovision-%d", time.Now().UnixNano())
+
+	if err := s.gatewayStore.UpdateGatewayConfigVersion(ctx, gatewayID, newConfigVersion); err != nil {
+		s.logger.Error("Failed to update gateway config version", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to trigger reprovision"})
+		return
+	}
+
+	s.logger.Info("Gateway reprovision triggered",
+		zap.String("id", gatewayID),
+		zap.String("gateway", gateway.Name),
+		zap.String("new_config_version", newConfigVersion))
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":        "reprovision triggered - gateway will reprovision on next heartbeat",
+		"config_version": newConfigVersion,
+	})
+}
+
 func (s *Server) handleUpdateGateway(c *gin.Context) {
 	gatewayID := c.Param("id")
 

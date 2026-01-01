@@ -324,7 +324,10 @@ func meshCmd() *cobra.Command {
 		Long: `Commands for connecting to mesh VPN hubs.
 
 Mesh hubs allow you to access spoke networks through a central hub.
-Use 'gatekey mesh list' to see available hubs and 'gatekey mesh connect' to connect.`,
+Routes are determined by your access rules (zero-trust model).
+
+Use 'gatekey mesh list' to see available hubs.
+Use 'gatekey connect --mesh <hub>' to connect (recommended).`,
 	}
 
 	cmd.AddCommand(
@@ -365,7 +368,11 @@ is available, it connects to that one. Otherwise, prompts for selection.
 This command:
 1. Checks your authentication status
 2. Downloads a fresh VPN configuration for the mesh hub
-3. Starts OpenVPN with the configuration`,
+3. Routes are based on your access rules (zero-trust)
+4. Starts OpenVPN with the configuration
+
+Note: You will only receive routes to networks you have explicit access
+rules for. Contact your administrator if you cannot reach expected networks.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := client.LoadConfig(cfgFile)

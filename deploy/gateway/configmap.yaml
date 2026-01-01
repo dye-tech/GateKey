@@ -45,7 +45,7 @@ data:
 
     # Logging
     status /tmp/openvpn-status.log
-    verb 3
+    verb 1
 
     # Hook scripts (GateKey integration)
     auth-user-pass-verify "/etc/gatex/scripts/hook.sh auth-user-pass-verify" via-file
