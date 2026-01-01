@@ -41,6 +41,14 @@ type APIKeyResponse struct {
 	CreatedAt          time.Time  `json:"created_at"`
 }
 
+// AdminAPIKeyResponse extends APIKeyResponse with user information for admin views
+type AdminAPIKeyResponse struct {
+	APIKeyResponse
+	UserID    string `json:"user_id"`
+	UserEmail string `json:"user_email"`
+	UserName  string `json:"user_name"`
+}
+
 // CreateAPIKeyResponse includes the raw key (only shown once)
 type CreateAPIKeyResponse struct {
 	APIKeyResponse
@@ -114,6 +122,16 @@ func toAPIKeyResponse(key *db.APIKey) APIKeyResponse {
 		LastUsedAt:         key.LastUsedAt,
 		IsRevoked:          key.IsRevoked,
 		CreatedAt:          key.CreatedAt,
+	}
+}
+
+// toAdminAPIKeyResponse converts an APIKeyWithUser to an admin response
+func toAdminAPIKeyResponse(key *db.APIKeyWithUser) AdminAPIKeyResponse {
+	return AdminAPIKeyResponse{
+		APIKeyResponse: toAPIKeyResponse(&key.APIKey),
+		UserID:         key.UserID,
+		UserEmail:      key.UserEmail,
+		UserName:       key.UserName,
 	}
 }
 
@@ -263,16 +281,22 @@ func (s *Server) handleRevokeUserAPIKey(c *gin.Context) {
 
 // handleAdminListAPIKeys lists all API keys (admin only)
 func (s *Server) handleAdminListAPIKeys(c *gin.Context) {
-	keys, err := s.apiKeyStore.ListAll(c.Request.Context())
+	admin, err := s.getAuthenticatedUser(c)
+	if err != nil || admin == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
+		return
+	}
+
+	keys, err := s.apiKeyStore.ListAllWithUserInfo(c.Request.Context())
 	if err != nil {
-		s.logger.Error("Failed to list API keys")
+		s.logger.Error("Failed to list API keys", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list API keys"})
 		return
 	}
 
-	response := make([]APIKeyResponse, len(keys))
+	response := make([]AdminAPIKeyResponse, len(keys))
 	for i, key := range keys {
-		response[i] = toAPIKeyResponse(key)
+		response[i] = toAdminAPIKeyResponse(key)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"api_keys": response})
@@ -342,6 +366,12 @@ func (s *Server) handleAdminCreateAPIKey(c *gin.Context) {
 
 // handleAdminGetAPIKey gets a specific API key (admin only)
 func (s *Server) handleAdminGetAPIKey(c *gin.Context) {
+	admin, err := s.getAuthenticatedUser(c)
+	if err != nil || admin == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
+		return
+	}
+
 	keyID := c.Param("id")
 	key, err := s.apiKeyStore.GetByID(c.Request.Context(), keyID)
 	if err != nil {
@@ -349,7 +379,7 @@ func (s *Server) handleAdminGetAPIKey(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "API key not found"})
 			return
 		}
-		s.logger.Error("Failed to get API key")
+		s.logger.Error("Failed to get API key", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get API key"})
 		return
 	}
@@ -392,11 +422,17 @@ func (s *Server) handleAdminRevokeAPIKey(c *gin.Context) {
 
 // handleAdminListUserAPIKeys lists API keys for a specific user (admin only)
 func (s *Server) handleAdminListUserAPIKeys(c *gin.Context) {
+	admin, err := s.getAuthenticatedUser(c)
+	if err != nil || admin == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
+		return
+	}
+
 	userID := c.Param("id")
 
 	keys, err := s.apiKeyStore.ListByUser(c.Request.Context(), userID)
 	if err != nil {
-		s.logger.Error("Failed to list API keys")
+		s.logger.Error("Failed to list API keys", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list API keys"})
 		return
 	}

@@ -296,7 +296,10 @@ export default function APIKeys() {
                     {activeAdminKeys.map((key) => (
                       <tr key={key.id}>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <span className="text-sm text-gray-900">{key.userEmail}</span>
+                          <div className="text-sm font-medium text-gray-900">{key.userEmail}</div>
+                          {key.userName && (
+                            <div className="text-xs text-gray-500">{key.userName}</div>
+                          )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span className="font-medium text-gray-900">{key.name}</span>
@@ -351,8 +354,11 @@ export default function APIKeys() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {revokedAdminKeys.map((key) => (
                       <tr key={key.id} className="bg-gray-50">
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                          {key.userEmail}
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="text-sm text-gray-500">{key.userEmail}</div>
+                          {key.userName && (
+                            <div className="text-xs text-gray-400">{key.userName}</div>
+                          )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span className="font-medium text-gray-500">{key.name}</span>
