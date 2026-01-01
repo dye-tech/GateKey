@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -54,6 +55,11 @@ type MeshHub struct {
 	TLSAuthEnabled bool
 	TLSAuthKey     string
 
+	// VPN client configuration
+	FullTunnelMode bool     // Route all client traffic through hub
+	PushDNS        bool     // Push DNS servers to clients
+	DNSServers     []string // DNS server IPs to push
+
 	// PKI - Hub's own CA for mesh
 	CACert     string
 	CAKey      string
@@ -66,10 +72,10 @@ type MeshHub struct {
 	ControlPlaneURL string // URL of the GateKey control plane
 
 	// Status
-	Status          string
-	StatusMessage   string
-	LastHeartbeat   *time.Time
-	ConnectedSpokes int
+	Status           string
+	StatusMessage    string
+	LastHeartbeat    *time.Time
+	ConnectedSpokes  int
 	ConnectedClients int
 
 	// Config versioning
@@ -204,6 +210,7 @@ func (s *MeshStore) GetHub(ctx context.Context, id string) (*MeshHub, error) {
 			public_endpoint, vpn_port, vpn_protocol, vpn_subnet::text,
 			COALESCE(local_networks, '{}'),
 			crypto_profile, tls_auth_enabled, COALESCE(tls_auth_key, ''),
+			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
 			COALESCE(ca_cert, ''), COALESCE(ca_key, ''), COALESCE(server_cert, ''), COALESCE(server_key, ''), COALESCE(dh_params, ''),
 			api_token, control_plane_url,
 			status, COALESCE(status_message, ''), last_heartbeat, connected_gateways, connected_clients,
@@ -215,6 +222,7 @@ func (s *MeshStore) GetHub(ctx context.Context, id string) (*MeshHub, error) {
 		&hub.PublicEndpoint, &hub.VPNPort, &hub.VPNProtocol, &vpnSubnet,
 		&hub.LocalNetworks,
 		&hub.CryptoProfile, &hub.TLSAuthEnabled, &hub.TLSAuthKey,
+		&hub.FullTunnelMode, &hub.PushDNS, &hub.DNSServers,
 		&hub.CACert, &hub.CAKey, &hub.ServerCert, &hub.ServerKey, &hub.DHParams,
 		&hub.APIToken, &hub.ControlPlaneURL,
 		&hub.Status, &hub.StatusMessage, &hub.LastHeartbeat, &hub.ConnectedSpokes, &hub.ConnectedClients,
@@ -243,6 +251,7 @@ func (s *MeshStore) GetHubByToken(ctx context.Context, token string) (*MeshHub, 
 			public_endpoint, vpn_port, vpn_protocol, vpn_subnet::text,
 			COALESCE(local_networks, '{}'),
 			crypto_profile, tls_auth_enabled, COALESCE(tls_auth_key, ''),
+			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
 			COALESCE(ca_cert, ''), COALESCE(ca_key, ''), COALESCE(server_cert, ''), COALESCE(server_key, ''), COALESCE(dh_params, ''),
 			api_token, control_plane_url,
 			status, COALESCE(status_message, ''), last_heartbeat, connected_gateways, connected_clients,
@@ -254,6 +263,7 @@ func (s *MeshStore) GetHubByToken(ctx context.Context, token string) (*MeshHub, 
 		&hub.PublicEndpoint, &hub.VPNPort, &hub.VPNProtocol, &vpnSubnet,
 		&hub.LocalNetworks,
 		&hub.CryptoProfile, &hub.TLSAuthEnabled, &hub.TLSAuthKey,
+		&hub.FullTunnelMode, &hub.PushDNS, &hub.DNSServers,
 		&hub.CACert, &hub.CAKey, &hub.ServerCert, &hub.ServerKey, &hub.DHParams,
 		&hub.APIToken, &hub.ControlPlaneURL,
 		&hub.Status, &hub.StatusMessage, &hub.LastHeartbeat, &hub.ConnectedSpokes, &hub.ConnectedClients,
@@ -279,6 +289,7 @@ func (s *MeshStore) ListHubs(ctx context.Context) ([]*MeshHub, error) {
 		SELECT id, name, description,
 			public_endpoint, vpn_port, vpn_protocol, vpn_subnet::text,
 			crypto_profile, tls_auth_enabled,
+			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
 			status, COALESCE(status_message, ''), last_heartbeat, connected_gateways, connected_clients,
 			created_at, updated_at
 		FROM mesh_hubs
@@ -297,6 +308,7 @@ func (s *MeshStore) ListHubs(ctx context.Context) ([]*MeshHub, error) {
 			&hub.ID, &hub.Name, &hub.Description,
 			&hub.PublicEndpoint, &hub.VPNPort, &hub.VPNProtocol, &vpnSubnet,
 			&hub.CryptoProfile, &hub.TLSAuthEnabled,
+			&hub.FullTunnelMode, &hub.PushDNS, &hub.DNSServers,
 			&hub.Status, &hub.StatusMessage, &hub.LastHeartbeat, &hub.ConnectedSpokes, &hub.ConnectedClients,
 			&hub.CreatedAt, &hub.UpdatedAt,
 		); err != nil {
@@ -316,11 +328,13 @@ func (s *MeshStore) UpdateHub(ctx context.Context, hub *MeshHub) error {
 		UPDATE mesh_hubs SET
 			name = $2, description = $3,
 			public_endpoint = $4, vpn_port = $5, vpn_protocol = $6, vpn_subnet = $7::cidr,
-			crypto_profile = $8, tls_auth_enabled = $9, local_networks = $10
+			crypto_profile = $8, tls_auth_enabled = $9, local_networks = $10,
+			full_tunnel_mode = $11, push_dns = $12, dns_servers = $13
 		WHERE id = $1
 	`, hub.ID, hub.Name, hub.Description,
 		hub.PublicEndpoint, hub.VPNPort, hub.VPNProtocol, hub.VPNSubnet,
-		hub.CryptoProfile, hub.TLSAuthEnabled, hub.LocalNetworks)
+		hub.CryptoProfile, hub.TLSAuthEnabled, hub.LocalNetworks,
+		hub.FullTunnelMode, hub.PushDNS, hub.DNSServers)
 
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {
@@ -414,6 +428,7 @@ func (s *MeshStore) GetMeshSpoke(ctx context.Context, id string) (*MeshSpoke, er
 	var tunnelIP, remoteIP *string
 	err := s.db.Pool.QueryRow(ctx, `
 		SELECT id, hub_id, name, description, local_networks,
+			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
 			host(tunnel_ip), COALESCE(client_cert, ''), COALESCE(client_key, ''), token,
 			status, COALESCE(status_message, ''), last_seen, bytes_sent, bytes_received,
 			host(remote_ip),
@@ -421,6 +436,7 @@ func (s *MeshStore) GetMeshSpoke(ctx context.Context, id string) (*MeshSpoke, er
 		FROM mesh_gateways WHERE id = $1
 	`, id).Scan(
 		&gw.ID, &gw.HubID, &gw.Name, &gw.Description, &gw.LocalNetworks,
+		&gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers,
 		&tunnelIP, &gw.ClientCert, &gw.ClientKey, &gw.Token,
 		&gw.Status, &gw.StatusMessage, &gw.LastSeen, &gw.BytesSent, &gw.BytesReceived,
 		&remoteIP,
@@ -448,6 +464,7 @@ func (s *MeshStore) GetMeshSpokeByToken(ctx context.Context, token string) (*Mes
 	var tunnelIP, remoteIP *string
 	err := s.db.Pool.QueryRow(ctx, `
 		SELECT id, hub_id, name, description, local_networks,
+			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
 			host(tunnel_ip), COALESCE(client_cert, ''), COALESCE(client_key, ''), token,
 			status, COALESCE(status_message, ''), last_seen, bytes_sent, bytes_received,
 			host(remote_ip),
@@ -455,6 +472,7 @@ func (s *MeshStore) GetMeshSpokeByToken(ctx context.Context, token string) (*Mes
 		FROM mesh_gateways WHERE token = $1
 	`, token).Scan(
 		&gw.ID, &gw.HubID, &gw.Name, &gw.Description, &gw.LocalNetworks,
+		&gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers,
 		&tunnelIP, &gw.ClientCert, &gw.ClientKey, &gw.Token,
 		&gw.Status, &gw.StatusMessage, &gw.LastSeen, &gw.BytesSent, &gw.BytesReceived,
 		&remoteIP,
@@ -480,6 +498,7 @@ func (s *MeshStore) GetMeshSpokeByToken(ctx context.Context, token string) (*Mes
 func (s *MeshStore) ListMeshSpokesByHub(ctx context.Context, hubID string) ([]*MeshSpoke, error) {
 	rows, err := s.db.Pool.Query(ctx, `
 		SELECT id, hub_id, name, description, local_networks,
+			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
 			host(tunnel_ip), status, COALESCE(status_message, ''), last_seen,
 			bytes_sent, bytes_received, host(remote_ip),
 			created_at, updated_at
@@ -498,6 +517,7 @@ func (s *MeshStore) ListMeshSpokesByHub(ctx context.Context, hubID string) ([]*M
 		var tunnelIP, remoteIP *string
 		if err := rows.Scan(
 			&gw.ID, &gw.HubID, &gw.Name, &gw.Description, &gw.LocalNetworks,
+			&gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers,
 			&tunnelIP, &gw.Status, &gw.StatusMessage, &gw.LastSeen,
 			&gw.BytesSent, &gw.BytesReceived, &remoteIP,
 			&gw.CreatedAt, &gw.UpdatedAt,
@@ -519,9 +539,11 @@ func (s *MeshStore) ListMeshSpokesByHub(ctx context.Context, hubID string) ([]*M
 func (s *MeshStore) UpdateMeshSpoke(ctx context.Context, gw *MeshSpoke) error {
 	result, err := s.db.Pool.Exec(ctx, `
 		UPDATE mesh_gateways SET
-			name = $2, description = $3, local_networks = $4
+			name = $2, description = $3, local_networks = $4,
+			full_tunnel_mode = $5, push_dns = $6, dns_servers = $7
 		WHERE id = $1
-	`, gw.ID, gw.Name, gw.Description, gw.LocalNetworks)
+	`, gw.ID, gw.Name, gw.Description, gw.LocalNetworks,
+		gw.FullTunnelMode, gw.PushDNS, gw.DNSServers)
 
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {
@@ -858,4 +880,164 @@ func (s *MeshStore) GetSpokeGroups(ctx context.Context, spokeID string) ([]strin
 		groups = append(groups, groupName)
 	}
 	return groups, rows.Err()
+}
+
+// ==================== Hub Network Assignment ====================
+
+// AssignNetworkToHub assigns a network to a mesh hub
+func (s *MeshStore) AssignNetworkToHub(ctx context.Context, hubID, networkID string) error {
+	_, err := s.db.Pool.Exec(ctx, `
+		INSERT INTO mesh_hub_networks (hub_id, network_id)
+		VALUES ($1, $2)
+		ON CONFLICT DO NOTHING
+	`, hubID, networkID)
+	return err
+}
+
+// RemoveNetworkFromHub removes a network from a mesh hub
+func (s *MeshStore) RemoveNetworkFromHub(ctx context.Context, hubID, networkID string) error {
+	_, err := s.db.Pool.Exec(ctx, `
+		DELETE FROM mesh_hub_networks WHERE hub_id = $1 AND network_id = $2
+	`, hubID, networkID)
+	return err
+}
+
+// GetHubNetworks returns all networks assigned to a mesh hub
+func (s *MeshStore) GetHubNetworks(ctx context.Context, hubID string) ([]*Network, error) {
+	rows, err := s.db.Pool.Query(ctx, `
+		SELECT n.id, n.name, n.description, n.cidr::text, n.is_active, n.created_at, n.updated_at
+		FROM networks n
+		JOIN mesh_hub_networks hn ON n.id = hn.network_id
+		WHERE hn.hub_id = $1
+		ORDER BY n.name
+	`, hubID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var networks []*Network
+	for rows.Next() {
+		var n Network
+		if err := rows.Scan(&n.ID, &n.Name, &n.Description, &n.CIDR,
+			&n.IsActive, &n.CreatedAt, &n.UpdatedAt); err != nil {
+			return nil, err
+		}
+		networks = append(networks, &n)
+	}
+	return networks, rows.Err()
+}
+
+// GetUserMeshAccessRules returns access rules a user has through hub networks
+// Zero-trust: Only routes defined in access rules the user is assigned to are allowed
+// Returns both CIDR and IP rules (IP rules are converted to /32 CIDR)
+func (s *MeshStore) GetUserMeshAccessRules(ctx context.Context, hubID, userID string, groups []string) ([]string, error) {
+	rows, err := s.db.Pool.Query(ctx, `
+		SELECT DISTINCT
+			CASE
+				WHEN ar.rule_type = 'ip' THEN ar.value || '/32'
+				ELSE ar.value
+			END as route
+		FROM access_rules ar
+		JOIN mesh_hub_networks hn ON ar.network_id = hn.network_id
+		WHERE hn.hub_id = $1
+		AND ar.rule_type IN ('cidr', 'ip')
+		AND ar.is_active = true
+		AND (
+			-- User has direct access to the rule
+			EXISTS (SELECT 1 FROM user_access_rules uar WHERE uar.access_rule_id = ar.id AND uar.user_id = $2::uuid)
+			-- Or user's group has access to the rule
+			OR EXISTS (SELECT 1 FROM group_access_rules gar WHERE gar.access_rule_id = ar.id AND gar.group_name = ANY($3))
+		)
+		ORDER BY route
+	`, hubID, userID, groups)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var routes []string
+	for rows.Next() {
+		var route string
+		if err := rows.Scan(&route); err != nil {
+			return nil, err
+		}
+		routes = append(routes, route)
+	}
+	return routes, rows.Err()
+}
+
+// GetUserMeshAccessRulesByEmail returns access rules for a user by email through hub networks
+// Used by mesh hub firewall enforcement to look up rules for connected clients
+func (s *MeshStore) GetUserMeshAccessRulesByEmail(ctx context.Context, hubID, email string) ([]string, error) {
+	// First, get the user's ID and groups from the email
+	var userID string
+	var groups []string
+	err := s.db.Pool.QueryRow(ctx, `
+		SELECT id::text, COALESCE(groups, '{}'::text[])
+		FROM users
+		WHERE email = $1
+	`, email).Scan(&userID, &groups)
+	if err != nil {
+		return nil, fmt.Errorf("user not found: %w", err)
+	}
+
+	return s.GetUserMeshAccessRules(ctx, hubID, userID, groups)
+}
+
+// MeshAccessRule represents an access rule for firewall enforcement
+type MeshAccessRule struct {
+	Type     string `json:"type"`     // ip, cidr, hostname, hostname_wildcard
+	Value    string `json:"value"`    // The rule value
+	Port     string `json:"port"`     // Port or port range (optional, * for all)
+	Protocol string `json:"protocol"` // tcp, udp, * for all
+}
+
+// GetUserMeshAccessRulesDetailed returns detailed access rules for firewall enforcement
+// Includes all rule types: ip, cidr, hostname, hostname_wildcard
+func (s *MeshStore) GetUserMeshAccessRulesDetailed(ctx context.Context, hubID, userID string, groups []string) ([]MeshAccessRule, error) {
+	rows, err := s.db.Pool.Query(ctx, `
+		SELECT DISTINCT ar.rule_type, ar.value, COALESCE(ar.port, '*'), COALESCE(ar.protocol, '*')
+		FROM access_rules ar
+		JOIN mesh_hub_networks hn ON ar.network_id = hn.network_id
+		WHERE hn.hub_id = $1
+		AND ar.is_active = true
+		AND (
+			-- User has direct access to the rule
+			EXISTS (SELECT 1 FROM user_access_rules uar WHERE uar.access_rule_id = ar.id AND uar.user_id = $2::uuid)
+			-- Or user's group has access to the rule
+			OR EXISTS (SELECT 1 FROM group_access_rules gar WHERE gar.access_rule_id = ar.id AND gar.group_name = ANY($3))
+		)
+		ORDER BY ar.rule_type, ar.value
+	`, hubID, userID, groups)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var rules []MeshAccessRule
+	for rows.Next() {
+		var rule MeshAccessRule
+		if err := rows.Scan(&rule.Type, &rule.Value, &rule.Port, &rule.Protocol); err != nil {
+			return nil, err
+		}
+		rules = append(rules, rule)
+	}
+	return rules, rows.Err()
+}
+
+// GetUserMeshAccessRulesDetailedByEmail returns detailed access rules for a user by email
+func (s *MeshStore) GetUserMeshAccessRulesDetailedByEmail(ctx context.Context, hubID, email string) ([]MeshAccessRule, error) {
+	var userID string
+	var groups []string
+	err := s.db.Pool.QueryRow(ctx, `
+		SELECT id::text, COALESCE(groups, '{}'::text[])
+		FROM users
+		WHERE email = $1
+	`, email).Scan(&userID, &groups)
+	if err != nil {
+		return nil, fmt.Errorf("user not found: %w", err)
+	}
+
+	return s.GetUserMeshAccessRulesDetailed(ctx, hubID, userID, groups)
 }

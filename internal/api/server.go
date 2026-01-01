@@ -288,6 +288,8 @@ func (s *Server) setupRoutes() {
 			meshHub.POST("/spoke-disconnected", s.handleMeshSpokeDisconnected)
 			meshHub.POST("/client-connected", s.handleMeshClientConnected)
 			meshHub.POST("/client-disconnected", s.handleMeshClientDisconnected)
+			meshHub.POST("/client-rules", s.handleMeshClientRules)        // Get access rules for a client
+			meshHub.POST("/all-client-rules", s.handleMeshAllClientRules) // Get access rules for all clients
 		}
 
 		// Mesh Spoke internal routes (spoke → control plane for initial setup)
@@ -324,6 +326,7 @@ func (s *Server) setupRoutes() {
 			admin.POST("/gateways", s.handleRegisterGateway)
 			admin.PUT("/gateways/:id", s.handleUpdateGateway)
 			admin.DELETE("/gateways/:id", s.handleDeleteGateway)
+			admin.POST("/gateways/:id/reprovision", s.handleReprovisionGateway)
 			admin.GET("/gateways/:id/networks", s.handleGetGatewayNetworks)
 			admin.POST("/gateways/:id/networks", s.handleAssignGatewayNetwork)
 			admin.DELETE("/gateways/:id/networks/:networkId", s.handleRemoveGatewayNetwork)
@@ -411,6 +414,9 @@ func (s *Server) setupRoutes() {
 			admin.GET("/mesh/hubs/:id/groups", s.handleGetMeshHubGroups)
 			admin.POST("/mesh/hubs/:id/groups", s.handleAssignMeshHubGroup)
 			admin.DELETE("/mesh/hubs/:id/groups/:groupName", s.handleRemoveMeshHubGroup)
+			admin.GET("/mesh/hubs/:id/networks", s.handleGetMeshHubNetworks)
+			admin.POST("/mesh/hubs/:id/networks", s.handleAssignMeshHubNetwork)
+			admin.DELETE("/mesh/hubs/:id/networks/:networkId", s.handleRemoveMeshHubNetwork)
 
 			// Mesh Spoke management
 			admin.GET("/mesh/hubs/:id/spokes", s.handleListMeshSpokes)
