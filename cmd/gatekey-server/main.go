@@ -3,7 +3,9 @@ package main
 
 import (
 	"context"
+	"embed"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,7 +18,11 @@ import (
 
 	"github.com/gatekey-project/gatekey/internal/api"
 	"github.com/gatekey-project/gatekey/internal/config"
+	"github.com/gatekey-project/gatekey/internal/db"
 )
+
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
 
 var (
 	configPath string
@@ -59,6 +65,17 @@ func run(cmd *cobra.Command, args []string) error {
 		zap.String("version", "0.1.0"),
 		zap.Bool("tls_enabled", cfg.Server.TLSEnabled),
 	)
+
+	// Run database migrations
+	logger.Info("Running database migrations...")
+	migrationsSubFS, err := fs.Sub(migrationsFS, "migrations")
+	if err != nil {
+		return fmt.Errorf("failed to access embedded migrations: %w", err)
+	}
+	if err := db.RunMigrations(migrationsSubFS, cfg.Database.URL); err != nil {
+		return fmt.Errorf("failed to run migrations: %w", err)
+	}
+	logger.Info("Database migrations completed")
 
 	// Create server
 	srv, err := api.NewServer(cfg, logger)

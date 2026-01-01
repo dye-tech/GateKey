@@ -36,6 +36,7 @@ type Server struct {
 	proxyAppStore   *db.ProxyApplicationStore
 	loginLogStore   *db.LoginLogStore
 	meshStore       *db.MeshStore
+	apiKeyStore     *db.APIKeyStore
 	ca              *pki.CA
 	configGen       *openvpn.ConfigGenerator
 	adminPassword   string             // Initial admin password (shown once at startup)
@@ -94,6 +95,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	proxyAppStore := db.NewProxyApplicationStore(database)
 	loginLogStore := db.NewLoginLogStore(database)
 	meshStore := db.NewMeshStore(database)
+	apiKeyStore := db.NewAPIKeyStore(database)
 
 	// Initialize PKI with database store for CA persistence
 	// This ensures all pods share the same CA
@@ -134,6 +136,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 		proxyAppStore:   proxyAppStore,
 		loginLogStore:   loginLogStore,
 		meshStore:       meshStore,
+		apiKeyStore:     apiKeyStore,
 		ca:              ca,
 		configGen:       configGen,
 		adminPassword:   adminPassword,
@@ -235,6 +238,12 @@ func (s *Server) setupRoutes() {
 			settings.GET("/ca", s.handleGetCA)
 			settings.POST("/ca/rotate", s.handleRotateCA)
 			settings.PUT("/ca", s.handleUpdateCA)
+			// Graceful CA rotation
+			settings.GET("/ca/list", s.handleListCAs)
+			settings.POST("/ca/prepare-rotation", s.handlePrepareCARotation)
+			settings.POST("/ca/activate/:id", s.handleActivateCA)
+			settings.POST("/ca/revoke/:id", s.handleRevokeCA)
+			settings.GET("/ca/fingerprint", s.handleGetCAFingerprint)
 		}
 
 		// Config generation routes
@@ -432,7 +441,28 @@ func (s *Server) setupRoutes() {
 			admin.GET("/mesh/spokes/:id/groups", s.handleGetMeshSpokeGroups)
 			admin.POST("/mesh/spokes/:id/groups", s.handleAssignMeshSpokeGroup)
 			admin.DELETE("/mesh/spokes/:id/groups/:groupName", s.handleRemoveMeshSpokeGroup)
+
+			// API key management (admin)
+			admin.GET("/api-keys", s.handleAdminListAPIKeys)
+			admin.POST("/api-keys", s.handleAdminCreateAPIKey)
+			admin.GET("/api-keys/:id", s.handleAdminGetAPIKey)
+			admin.DELETE("/api-keys/:id", s.handleAdminRevokeAPIKey)
+			admin.GET("/users/:id/api-keys", s.handleAdminListUserAPIKeys)
+			admin.POST("/users/:id/api-keys", s.handleAdminCreateUserAPIKey)
+			admin.DELETE("/users/:id/api-keys", s.handleAdminRevokeUserAPIKeys)
 		}
+
+		// User API key management
+		apiKeys := v1.Group("/api-keys")
+		{
+			apiKeys.GET("", s.handleListUserAPIKeys)
+			apiKeys.POST("", s.handleCreateUserAPIKey)
+			apiKeys.GET("/:id", s.handleGetUserAPIKey)
+			apiKeys.DELETE("/:id", s.handleRevokeUserAPIKey)
+		}
+
+		// API key validation (for CLI login)
+		v1.GET("/auth/api-key/validate", s.handleValidateAPIKey)
 
 		// User proxy applications portal
 		v1.GET("/proxy-apps", s.handleListUserProxyApps)

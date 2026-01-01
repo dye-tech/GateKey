@@ -175,6 +175,13 @@ gatekey disconnect --all      # Disconnect from all gateways
 - `GET /api/v1/mesh/hubs` - List hubs user can access
 - `POST /api/v1/mesh/generate-config` - Generate client VPN config with zero-trust routes
 
+### CA Management (Admin)
+- `GET /api/v1/settings/ca/list` - List all CAs
+- `POST /api/v1/settings/ca/prepare-rotation` - Prepare new CA for rotation
+- `POST /api/v1/settings/ca/activate/:id` - Activate a pending CA
+- `POST /api/v1/settings/ca/revoke/:id` - Revoke a CA
+- `GET /api/v1/settings/ca/fingerprint` - Get active CA fingerprint
+
 ## Database Tables
 
 - `local_users` - Local admin users
@@ -188,6 +195,8 @@ gatekey disconnect --all      # Disconnect from all gateways
 - `group_access_rules` - Group to rule assignments
 - `vpn_configs` - Generated VPN configurations
 - `audit_logs` - Audit trail
+- `pki_ca` - CA certificates with status, fingerprint, description
+- `ca_rotation_events` - CA rotation audit trail
 - `mesh_hubs` - Mesh hub servers (TLS Auth, Full Tunnel, DNS settings, local networks)
 - `mesh_gateways` - Mesh spokes/gateways (Full Tunnel, DNS settings, local networks)
 - `mesh_hub_networks` - Networks assigned to hubs (zero-trust access control)
@@ -214,6 +223,7 @@ When running in Kubernetes:
 - **Configurable VPN Subnet**: Per-gateway VPN subnet configuration (default: 172.31.255.0/24)
 - **TLS-Auth**: Optional TLS-Auth key for additional security layer
 - **Push-Based Config Updates**: Gateway auto-reprovisions when settings change
+- **Graceful CA Rotation**: Zero-downtime CA rotation with dual-trust period
 
 ## Crypto Profiles
 
@@ -241,6 +251,34 @@ When gateway settings change (crypto profile, port, protocol, subnet, TLS-Auth):
 5. OpenVPN restarts automatically to apply changes
 
 This enables centralized management - change settings in the UI and gateways update automatically within 30 seconds.
+
+## CA Rotation
+
+GateKey supports graceful CA rotation with zero-downtime using a dual-trust period.
+
+### CA Status Lifecycle
+- `active`: Currently issuing certificates
+- `pending`: Generated but not yet activated (for rotation)
+- `retired`: No longer issuing, but still trusted for verification
+- `revoked`: Revoked, no longer trusted
+
+### Rotation Process
+1. **Prepare**: `POST /settings/ca/prepare-rotation` creates new CA in pending state
+2. **Activate**: `POST /settings/ca/activate/:id` retires old CA, activates new one
+3. **Auto-detect**: Gateways detect change via `ca_fingerprint` in heartbeat response
+4. **Reprovision**: Gateways automatically reprovision with new certificates
+5. **Cleanup**: Optionally revoke old CA after grace period
+
+### API Endpoints
+- `GET /settings/ca/list` - List all CAs
+- `POST /settings/ca/prepare-rotation` - Generate new pending CA
+- `POST /settings/ca/activate/:id` - Activate pending CA
+- `POST /settings/ca/revoke/:id` - Revoke a CA
+- `GET /settings/ca/fingerprint` - Get active CA fingerprint
+
+### Database Tables
+- `pki_ca` - CA storage with status, fingerprint, description
+- `ca_rotation_events` - Audit trail for rotation events
 
 ## TLS-Auth Support
 

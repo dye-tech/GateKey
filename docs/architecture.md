@@ -69,6 +69,63 @@ The gateway agent runs alongside OpenVPN on each gateway node:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### Mesh Hub (`gatekey-hub`)
+
+The mesh hub enables site-to-site VPN connectivity using a hub-and-spoke topology:
+
+- **OpenVPN Server**: Runs the mesh OpenVPN server for spoke connections
+- **Route Aggregation**: Collects routes from all connected spokes
+- **Client VPN Access**: Allows authorized users to connect as VPN clients
+- **Control Plane Sync**: Syncs configuration and access rules from control plane
+- **Health Monitoring**: Sends heartbeats to control plane
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      MESH HUB NODE                               │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────┐  ┌──────────────────┐                     │
+│  │  OpenVPN Server  │  │   GateKey Hub    │                     │
+│  │    (Mesh)        │◄─┤   (gatekey-hub)  │                     │
+│  └────────┬─────────┘  └────────┬─────────┘                     │
+│           │                      │                               │
+│           │ Spoke/Client         │ API Sync                      │
+│           │ Connections          │                               │
+│           │                      │                               │
+│  ┌────────┴──────────────────────┴──────────────────────────┐   │
+│  │              Route Aggregation & Distribution             │   │
+│  │         Collects spoke routes, pushes to clients          │   │
+│  └───────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Mesh Spoke (`gatekey-mesh-gateway`)
+
+The mesh spoke connects remote sites to the mesh hub:
+
+- **Outbound Connection**: Initiates connection to hub (works behind NAT)
+- **Local Network Advertisement**: Advertises local networks to the hub
+- **Automatic Reconnection**: Maintains persistent connection to hub
+- **Control Plane Sync**: Receives configuration updates
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      MESH SPOKE NODE                             │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────┐  ┌──────────────────┐                     │
+│  │  OpenVPN Client  │  │   Mesh Gateway   │                     │
+│  │  (to Hub)        │◄─┤ (gatekey-mesh-gw)│                     │
+│  └────────┬─────────┘  └────────┬─────────┘                     │
+│           │                      │                               │
+│           │ VPN Tunnel           │ Local Network                 │
+│           │ to Hub               │ Routing                       │
+│           │                      │                               │
+│  ┌────────┴──────────────────────┴──────────────────────────┐   │
+│  │              Local Network Access (10.0.0.0/8, etc.)      │   │
+│  │         Routes traffic between hub and local networks     │   │
+│  └───────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
 ## Data Flow
 
 ### User Authentication Flow
@@ -127,6 +184,37 @@ The gateway agent runs alongside OpenVPN on each gateway node:
     │              │                   │                   │
     │  10. Tunnel  │                   │                   │
     │◀────────────▶│◀─────────────────▶│                   │
+```
+
+### Mesh Networking Flow
+
+```
+┌──────┐     ┌────────────┐     ┌──────────────┐     ┌─────────┐
+│ Spoke│────▶│    Hub     │────▶│   Control    │     │  User   │
+│      │     │            │     │   Plane      │     │ Client  │
+└──────┘     └────────────┘     └──────────────┘     └─────────┘
+    │              │                   │                   │
+    │  1. Connect  │                   │                   │
+    │─────────────▶│                   │                   │
+    │              │  2. Verify Token  │                   │
+    │              │──────────────────▶│                   │
+    │              │  3. Auth OK       │                   │
+    │              │◀──────────────────│                   │
+    │              │                   │                   │
+    │  4. Advertise│                   │                   │
+    │  local nets  │                   │                   │
+    │─────────────▶│                   │                   │
+    │              │                   │                   │
+    │              │                   │  5. User connects │
+    │              │◀──────────────────┼──────────────────│
+    │              │                   │                   │
+    │              │  6. Push routes   │                   │
+    │              │  (based on access)│                   │
+    │              │──────────────────▶│                   │
+    │              │                   │                   │
+    │  7. Traffic  │◀────────────────────────────────────▶│
+    │   flows via  │                   │                   │
+    │     hub      │                   │                   │
 ```
 
 ## Security Model
@@ -209,6 +297,16 @@ table inet gatekey {
 - **connections**: Active and historical VPN connections
 - **audit_logs**: Audit trail
 
+### Mesh Networking Tables
+
+- **mesh_hubs**: Mesh hub configurations and status
+- **mesh_spokes**: Spoke gateways connected to hubs
+- **mesh_hub_users**: User access assignments to hubs
+- **mesh_hub_groups**: Group access assignments to hubs
+- **mesh_hub_networks**: Network assignments to hubs (zero-trust)
+- **mesh_spoke_users**: User access assignments to spokes
+- **mesh_spoke_groups**: Group access assignments to spokes
+
 ### Entity Relationships
 
 ```
@@ -277,7 +375,7 @@ table inet gatekey {
 ## Technology Stack
 
 ### Backend
-- **Language**: Go 1.23+
+- **Language**: Go 1.25+
 - **Web Framework**: Gin
 - **Database**: PostgreSQL
 - **Authentication**: OIDC (go-oidc), SAML (crewjam/saml)
@@ -293,3 +391,10 @@ table inet gatekey {
 - **VPN**: OpenVPN (stock)
 - **Container**: Docker (optional)
 - **Orchestration**: Kubernetes (optional)
+
+## See Also
+
+- [Mesh Networking Guide](mesh-networking.md) - Hub-and-spoke VPN topology
+- [Security Documentation](security.md) - Security model and best practices
+- [API Reference](api.md) - REST API documentation
+- [Client Guide](client.md) - CLI client usage

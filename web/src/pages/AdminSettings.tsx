@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { api, getCA, rotateCA, updateCA, CAInfo } from '../api/client'
+import { api, getCA, rotateCA, updateCA, CAInfo, listCAs, CAListItem, prepareCARotation, activateCA, revokeCA } from '../api/client'
 
 interface OIDCProvider {
   name: string
@@ -29,7 +29,7 @@ type TabType = 'oidc' | 'saml' | 'general' | 'ca'
 const tabTitles: Record<TabType, string> = {
   oidc: 'OIDC Providers',
   saml: 'SAML Providers',
-  general: 'General Settings',
+  general: 'VPN Settings',
   ca: 'Certificate Authority',
 }
 
@@ -155,7 +155,7 @@ export default function AdminSettings() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">{tabTitles[activeTab]}</h1>
-        <p className="text-gray-500 mt-1">Configure authentication providers and system settings</p>
+        <p className="text-gray-500 mt-1">Configure VPN settings, authentication providers, and security options</p>
       </div>
 
       {/* Alerts */}
@@ -648,12 +648,17 @@ function SAMLTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
 // CA Tab Component
 function CATab() {
   const [caInfo, setCaInfo] = useState<CAInfo | null>(null)
+  const [caList, setCaList] = useState<CAListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [rotating, setRotating] = useState(false)
+  const [activating, setActivating] = useState<string | null>(null)
+  const [revoking, setRevoking] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [showUpload, setShowUpload] = useState(false)
+  const [showPrepareRotation, setShowPrepareRotation] = useState(false)
+  const [rotationDescription, setRotationDescription] = useState('')
   const [certPem, setCertPem] = useState('')
   const [keyPem, setKeyPem] = useState('')
 
@@ -665,13 +670,75 @@ function CATab() {
     try {
       setLoading(true)
       setError(null)
-      const data = await getCA()
-      setCaInfo(data)
+      const [caData, caListData] = await Promise.all([
+        getCA().catch(() => null),
+        listCAs().catch(() => [])
+      ])
+      setCaInfo(caData)
+      setCaList(caListData)
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } }
       setError(error.response?.data?.error || 'Failed to load CA information')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handlePrepareRotation() {
+    try {
+      setRotating(true)
+      setError(null)
+      await prepareCARotation(rotationDescription || undefined)
+      setSuccess('New CA prepared. Activate it when ready to complete the rotation.')
+      setShowPrepareRotation(false)
+      setRotationDescription('')
+      await loadCA()
+      setTimeout(() => setSuccess(null), 10000)
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } }
+      setError(error.response?.data?.error || 'Failed to prepare CA rotation')
+    } finally {
+      setRotating(false)
+    }
+  }
+
+  async function handleActivate(id: string) {
+    if (!confirm('Are you sure you want to activate this CA? The current active CA will be retired.')) {
+      return
+    }
+
+    try {
+      setActivating(id)
+      setError(null)
+      await activateCA(id)
+      setSuccess('CA activated successfully. Gateways and hubs will reprovision automatically.')
+      await loadCA()
+      setTimeout(() => setSuccess(null), 10000)
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } }
+      setError(error.response?.data?.error || 'Failed to activate CA')
+    } finally {
+      setActivating(null)
+    }
+  }
+
+  async function handleRevoke(id: string) {
+    if (!confirm('Are you sure you want to revoke this CA? Components still using this CA will no longer be able to connect.')) {
+      return
+    }
+
+    try {
+      setRevoking(id)
+      setError(null)
+      await revokeCA(id)
+      setSuccess('CA revoked successfully.')
+      await loadCA()
+      setTimeout(() => setSuccess(null), 10000)
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } }
+      setError(error.response?.data?.error || 'Failed to revoke CA')
+    } finally {
+      setRevoking(null)
     }
   }
 
@@ -686,6 +753,7 @@ function CATab() {
       const data = await rotateCA()
       setCaInfo(data)
       setSuccess('CA rotated successfully. Please re-provision all gateways.')
+      await loadCA()
       setTimeout(() => setSuccess(null), 10000)
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } }
@@ -710,6 +778,7 @@ function CATab() {
       setShowUpload(false)
       setCertPem('')
       setKeyPem('')
+      await loadCA()
       setTimeout(() => setSuccess(null), 10000)
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } }
@@ -732,6 +801,21 @@ function CATab() {
     a.download = 'gatekey-ca.crt'
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  function getStatusBadge(status: string) {
+    switch (status) {
+      case 'active':
+        return <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">Active</span>
+      case 'pending':
+        return <span className="px-2 py-0.5 text-xs rounded-full bg-yellow-100 text-yellow-700">Pending</span>
+      case 'retired':
+        return <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">Retired</span>
+      case 'revoked':
+        return <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700">Revoked</span>
+      default:
+        return <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">{status}</span>
+    }
   }
 
   if (loading) {
@@ -762,11 +846,69 @@ function CATab() {
         </div>
       )}
 
+      {/* CA List */}
+      {caList.length > 0 && (
+        <div className="border rounded-lg p-4">
+          <h4 className="font-medium mb-4">All Certificate Authorities</h4>
+          <div className="space-y-3">
+            {caList.map((ca) => (
+              <div key={ca.id} className={`border rounded-lg p-4 ${ca.status === 'active' ? 'border-green-300 bg-green-50' : ''}`}>
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <span className="font-medium">{ca.id}</span>
+                      {getStatusBadge(ca.status)}
+                    </div>
+                    {ca.description && (
+                      <p className="text-sm text-gray-600 mb-2">{ca.description}</p>
+                    )}
+                    <div className="grid gap-1 text-sm text-gray-500">
+                      <div>
+                        <span className="text-gray-400">Fingerprint: </span>
+                        <span className="font-mono text-xs">{ca.fingerprint || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400">Valid: </span>
+                        {formatDate(ca.not_before)} - {formatDate(ca.not_after)}
+                      </div>
+                      <div>
+                        <span className="text-gray-400">Created: </span>
+                        {formatDate(ca.created_at)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex space-x-2">
+                    {ca.status === 'pending' && (
+                      <button
+                        onClick={() => handleActivate(ca.id)}
+                        disabled={activating === ca.id}
+                        className="btn btn-primary text-sm"
+                      >
+                        {activating === ca.id ? 'Activating...' : 'Activate'}
+                      </button>
+                    )}
+                    {ca.status === 'retired' && (
+                      <button
+                        onClick={() => handleRevoke(ca.id)}
+                        disabled={revoking === ca.id}
+                        className="btn text-sm text-red-600 bg-red-50 border border-red-200 hover:bg-red-100"
+                      >
+                        {revoking === ca.id ? 'Revoking...' : 'Revoke'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {caInfo ? (
         <div className="space-y-6">
           {/* Current CA Info */}
           <div className="border rounded-lg p-4">
-            <h4 className="font-medium mb-4">Current CA Certificate</h4>
+            <h4 className="font-medium mb-4">Active CA Certificate Details</h4>
             <div className="grid gap-3 text-sm">
               <div className="flex">
                 <span className="text-gray-500 w-32">Subject:</span>
@@ -805,18 +947,58 @@ function CATab() {
             <div className="space-y-4">
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <div>
-                  <p className="font-medium">Generate New CA</p>
-                  <p className="text-sm text-gray-500">Create a new self-signed CA certificate</p>
+                  <p className="font-medium">Graceful CA Rotation</p>
+                  <p className="text-sm text-gray-500">Prepare a new CA, then activate it when ready (recommended)</p>
                 </div>
                 <button
-                  onClick={handleRotate}
-                  disabled={rotating}
+                  onClick={() => setShowPrepareRotation(!showPrepareRotation)}
                   className="btn btn-primary inline-flex items-center"
                 >
                   <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
-                  {rotating ? 'Rotating...' : 'Rotate CA'}
+                  Prepare New CA
+                </button>
+              </div>
+
+              {showPrepareRotation && (
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <h5 className="font-medium mb-3">Prepare CA Rotation</h5>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
+                      <input
+                        type="text"
+                        value={rotationDescription}
+                        onChange={(e) => setRotationDescription(e.target.value)}
+                        placeholder="e.g., Quarterly CA rotation - January 2026"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                      />
+                    </div>
+                    <div className="flex justify-end space-x-2">
+                      <button onClick={() => setShowPrepareRotation(false)} className="btn btn-secondary">Cancel</button>
+                      <button onClick={handlePrepareRotation} disabled={rotating} className="btn btn-primary">
+                        {rotating ? 'Preparing...' : 'Prepare CA'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div>
+                  <p className="font-medium">Immediate CA Rotation</p>
+                  <p className="text-sm text-gray-500">Generate and activate a new CA immediately</p>
+                </div>
+                <button
+                  onClick={handleRotate}
+                  disabled={rotating}
+                  className="btn btn-secondary inline-flex items-center"
+                >
+                  <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  {rotating ? 'Rotating...' : 'Rotate Now'}
                 </button>
               </div>
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
@@ -877,11 +1059,11 @@ function CATab() {
             </div>
           )}
 
-          {/* Warning */}
-          <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <p className="text-yellow-800 text-sm">
-              <strong>Warning:</strong> Changing the CA will invalidate all existing VPN certificates.
-              After rotating or importing a new CA, you must re-provision all gateways and users will need to download new VPN configurations.
+          {/* Info */}
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-blue-800 text-sm">
+              <strong>Graceful Rotation:</strong> When you activate a new CA, the old CA is retired but remains trusted.
+              Gateways and mesh hubs will automatically reprovision with the new CA on their next heartbeat.
             </p>
           </div>
         </div>
@@ -943,8 +1125,8 @@ function GeneralTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-medium">General Settings</h3>
-        <p className="text-sm text-gray-500">Configure general system settings</p>
+        <h3 className="text-lg font-medium">VPN Settings</h3>
+        <p className="text-sm text-gray-500">Configure VPN session and security settings</p>
       </div>
 
       {error && (

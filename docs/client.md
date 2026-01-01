@@ -58,7 +58,7 @@ gatekey disconnect
 
 ### login
 
-Authenticate with the GateKey server using your identity provider (OIDC/SAML).
+Authenticate with the GateKey server using your identity provider (OIDC/SAML) or an API key.
 
 ```bash
 gatekey login [flags]
@@ -66,21 +66,37 @@ gatekey login [flags]
 
 **Flags:**
 - `--no-browser` - Print the login URL instead of opening a browser (useful for headless systems)
+- `--api-key string` - Authenticate with an API key instead of browser-based SSO
 
-**How it works:**
+**Browser-based SSO Login:**
 1. Opens your default browser to the GateKey login page
 2. You authenticate with your identity provider (Okta, Azure AD, Google, etc.)
 3. After successful authentication, the token is saved locally
 4. The browser shows a success message and you can close it
 
-**Example:**
+**API Key Login:**
+API keys provide a way to authenticate without a browser. Ideal for:
+- Automated scripts and CI/CD pipelines
+- Headless servers without browser access
+- Service accounts and integrations
+
+**Examples:**
 ```bash
 # Normal login (opens browser)
 gatekey login
 
 # Headless/SSH login (copy URL to another browser)
 gatekey login --no-browser
+
+# Login with API key
+gatekey login --api-key gk_your_api_key_here
 ```
+
+**API Key Notes:**
+- API keys are created via the web UI or admin CLI
+- The key is stored in your config file after login
+- Subsequent commands use the stored API key automatically
+- Use `gatekey logout` to clear the saved API key
 
 ### logout
 
@@ -249,6 +265,56 @@ Available Gateways:
   Hostname:    vpn-eu-west.example.com
   Status:      online
 ```
+
+### mesh
+
+Manage mesh network connections. Mesh networks use a hub-and-spoke topology for site-to-site VPN connectivity.
+
+#### mesh list
+
+List available mesh hubs that you have access to.
+
+```bash
+gatekey mesh list
+```
+
+**Example output:**
+```
+Available Mesh Hubs:
+--------------------
+✓ primary-hub
+  Endpoint:    hub.example.com:1194
+  Protocol:    UDP
+  Status:      online
+  Networks:    3 networks available
+
+✓ backup-hub
+  Endpoint:    hub2.example.com:1194
+  Protocol:    UDP
+  Status:      online
+  Networks:    2 networks available
+```
+
+#### Connecting to Mesh Networks
+
+Use the `--mesh` flag with the connect command to connect to a mesh hub:
+
+```bash
+# Connect to a mesh hub
+gatekey connect --mesh primary-hub
+
+# Check status (shows mesh connections too)
+gatekey status
+
+# Disconnect from mesh
+gatekey disconnect primary-hub
+```
+
+**Behavior:**
+- Downloads a fresh VPN configuration for the mesh hub
+- Starts OpenVPN with the mesh configuration
+- Routes are pushed based on your access rules (zero-trust)
+- Works alongside regular gateway connections
 
 ### config
 
@@ -535,7 +601,10 @@ gatekey login --no-browser
 
 ## See Also
 
+- [API Keys Guide](api-keys.md) - API key authentication
+- [Admin CLI Guide](admin-cli.md) - Administrative CLI tool
 - [Architecture Overview](architecture.md)
+- [Mesh Networking Guide](mesh-networking.md) - Hub-and-spoke VPN topology
 - [Deployment Guide](deployment.md)
 - [API Reference](api.md)
 - [FIPS Compliance](fips-compliance.md)

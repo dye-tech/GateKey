@@ -559,6 +559,36 @@ export async function updateCA(req: UpdateCARequest): Promise<CAInfo> {
   return response.data
 }
 
+// CA List and Management
+export interface CAListItem {
+  id: string
+  status: 'active' | 'pending' | 'retired' | 'revoked'
+  serial_number: string
+  not_before: string
+  not_after: string
+  fingerprint: string
+  description: string
+  created_at: string
+}
+
+export async function listCAs(): Promise<CAListItem[]> {
+  const response = await api.get('/api/v1/admin/settings/ca/list')
+  return response.data.cas || []
+}
+
+export async function prepareCARotation(description?: string): Promise<{ id: string; fingerprint: string }> {
+  const response = await api.post('/api/v1/admin/settings/ca/prepare-rotation', { description })
+  return response.data
+}
+
+export async function activateCA(id: string): Promise<void> {
+  await api.post(`/api/v1/admin/settings/ca/activate/${id}`)
+}
+
+export async function revokeCA(id: string): Promise<void> {
+  await api.post(`/api/v1/admin/settings/ca/revoke/${id}`)
+}
+
 // Proxy Application API (Web Access)
 export interface ProxyApplication {
   id: string
@@ -1314,4 +1344,154 @@ export async function generateMeshClientConfig(hubId: string): Promise<MeshClien
     hubname: response.data.hubname,
     config: response.data.config,
   }
+}
+
+// ==================== API Keys ====================
+
+export interface APIKey {
+  id: string
+  name: string
+  description: string
+  keyPrefix: string
+  scopes: string[]
+  isAdminProvisioned: boolean
+  provisionedBy?: string
+  expiresAt: string | null
+  lastUsedAt: string | null
+  lastUsedIp: string | null
+  isRevoked: boolean
+  revokedAt: string | null
+  createdAt: string
+}
+
+export interface CreateAPIKeyRequest {
+  name: string
+  description?: string
+  scopes?: string[]
+  expires_in?: string // e.g., "30d", "90d", "1y", "never"
+}
+
+export interface CreateAPIKeyResponse extends APIKey {
+  rawKey: string // Only returned on creation
+}
+
+// User API Keys - self-service
+export async function getUserAPIKeys(): Promise<APIKey[]> {
+  const response = await api.get('/api/v1/api-keys')
+  return (response.data.api_keys || []).map((key: Record<string, unknown>) => ({
+    id: key.id,
+    name: key.name,
+    description: key.description || '',
+    keyPrefix: key.key_prefix,
+    scopes: key.scopes || [],
+    isAdminProvisioned: key.is_admin_provisioned,
+    provisionedBy: key.provisioned_by,
+    expiresAt: key.expires_at,
+    lastUsedAt: key.last_used_at,
+    lastUsedIp: key.last_used_ip,
+    isRevoked: key.is_revoked,
+    revokedAt: key.revoked_at,
+    createdAt: key.created_at,
+  }))
+}
+
+export async function createUserAPIKey(req: CreateAPIKeyRequest): Promise<CreateAPIKeyResponse> {
+  const response = await api.post('/api/v1/api-keys', req)
+  const key = response.data
+  return {
+    id: key.id,
+    name: key.name,
+    description: key.description || '',
+    keyPrefix: key.key_prefix,
+    scopes: key.scopes || [],
+    isAdminProvisioned: key.is_admin_provisioned,
+    provisionedBy: key.provisioned_by,
+    expiresAt: key.expires_at,
+    lastUsedAt: key.last_used_at,
+    lastUsedIp: key.last_used_ip,
+    isRevoked: key.is_revoked,
+    revokedAt: key.revoked_at,
+    createdAt: key.created_at,
+    rawKey: key.raw_key,
+  }
+}
+
+export async function revokeUserAPIKey(keyId: string): Promise<void> {
+  await api.delete(`/api/v1/api-keys/${keyId}`)
+}
+
+// Admin API Keys - manage all users' keys
+export async function getAdminAPIKeys(): Promise<AdminAPIKey[]> {
+  const response = await api.get('/api/v1/admin/api-keys')
+  return (response.data.api_keys || []).map((key: Record<string, unknown>) => ({
+    id: key.id,
+    name: key.name,
+    description: key.description || '',
+    keyPrefix: key.key_prefix,
+    scopes: key.scopes || [],
+    isAdminProvisioned: key.is_admin_provisioned,
+    provisionedBy: key.provisioned_by,
+    expiresAt: key.expires_at,
+    lastUsedAt: key.last_used_at,
+    lastUsedIp: key.last_used_ip,
+    isRevoked: key.is_revoked,
+    revokedAt: key.revoked_at,
+    createdAt: key.created_at,
+    userId: key.user_id,
+    userEmail: key.user_email,
+  }))
+}
+
+export interface AdminAPIKey extends APIKey {
+  userId: string
+  userEmail: string
+}
+
+export async function getAdminUserAPIKeys(userId: string): Promise<APIKey[]> {
+  const response = await api.get(`/api/v1/admin/users/${userId}/api-keys`)
+  return (response.data.api_keys || []).map((key: Record<string, unknown>) => ({
+    id: key.id,
+    name: key.name,
+    description: key.description || '',
+    keyPrefix: key.key_prefix,
+    scopes: key.scopes || [],
+    isAdminProvisioned: key.is_admin_provisioned,
+    provisionedBy: key.provisioned_by,
+    expiresAt: key.expires_at,
+    lastUsedAt: key.last_used_at,
+    lastUsedIp: key.last_used_ip,
+    isRevoked: key.is_revoked,
+    revokedAt: key.revoked_at,
+    createdAt: key.created_at,
+  }))
+}
+
+export async function createAdminUserAPIKey(userId: string, req: CreateAPIKeyRequest): Promise<CreateAPIKeyResponse> {
+  const response = await api.post(`/api/v1/admin/users/${userId}/api-keys`, req)
+  const key = response.data
+  return {
+    id: key.id,
+    name: key.name,
+    description: key.description || '',
+    keyPrefix: key.key_prefix,
+    scopes: key.scopes || [],
+    isAdminProvisioned: key.is_admin_provisioned,
+    provisionedBy: key.provisioned_by,
+    expiresAt: key.expires_at,
+    lastUsedAt: key.last_used_at,
+    lastUsedIp: key.last_used_ip,
+    isRevoked: key.is_revoked,
+    revokedAt: key.revoked_at,
+    createdAt: key.created_at,
+    rawKey: key.raw_key,
+  }
+}
+
+export async function revokeAdminAPIKey(keyId: string): Promise<void> {
+  await api.delete(`/api/v1/admin/api-keys/${keyId}`)
+}
+
+export async function revokeAdminUserAPIKeys(userId: string): Promise<{ revokedCount: number }> {
+  const response = await api.delete(`/api/v1/admin/users/${userId}/api-keys`)
+  return { revokedCount: response.data.revoked_count || 0 }
 }

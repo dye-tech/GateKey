@@ -1,172 +1,1478 @@
-// GateKey CLI - Administrative command-line interface for GateKey
+// GateKey Admin CLI - Administrative command-line interface for GateKey
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
+	"text/tabwriter"
+	"time"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
+
+	"github.com/gatekey-project/gatekey/internal/adminclient"
+)
+
+var (
+	// Build information (set by ldflags)
+	version   = "dev"
+	commit    = "unknown"
+	buildDate = "unknown"
+)
+
+var (
+	cfgFile      string
+	serverURL    string
+	apiKey       string
+	outputFormat string
+	client       *adminclient.Client
+	cfg          *adminclient.Config
 )
 
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "gatekey-admin",
-		Short: "GateKey CLI - Zero Trust VPN Management",
-		Long: `GateKey is a software-defined perimeter solution that wraps OpenVPN
-to provide zero-trust VPN capabilities.
+		Short: "GateKey Admin CLI - Zero Trust VPN Management",
+		Long: `GateKey Admin CLI provides administrative functions for managing
+gateways, networks, access rules, users, API keys, mesh VPN, and certificates.
 
-This CLI tool provides administrative functions for managing
-gateways, policies, users, and certificates.`,
+Authentication:
+  Use 'gatekey-admin login' to authenticate via browser (SSO)
+  Use 'gatekey-admin login --api-key KEY' to authenticate with an API key
+
+Configuration:
+  Use 'gatekey-admin config init --server URL' to initialize configuration
+  Configuration is stored in ~/.gatekey-admin/config.yaml`,
+		PersistentPreRunE: initClient,
+		SilenceUsage:      true,
 	}
 
-	// Gateway commands
-	gatewayCmd := &cobra.Command{
-		Use:   "gateway",
-		Short: "Manage VPN gateways",
-	}
+	// Global flags
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "Config file (default: ~/.gatekey-admin/config.yaml)")
+	rootCmd.PersistentFlags().StringVar(&serverURL, "server", "", "GateKey server URL")
+	rootCmd.PersistentFlags().StringVar(&apiKey, "api-key", "", "API key for authentication")
+	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "table", "Output format (table, json, yaml)")
 
-	gatewayCmd.AddCommand(
-		&cobra.Command{
-			Use:   "list",
-			Short: "List all gateways",
-			RunE: func(cmd *cobra.Command, args []string) error {
-				fmt.Println("Listing gateways...")
-				// TODO: Implement
-				return nil
-			},
-		},
-		&cobra.Command{
-			Use:   "register [name]",
-			Short: "Register a new gateway",
-			Args:  cobra.ExactArgs(1),
-			RunE: func(cmd *cobra.Command, args []string) error {
-				fmt.Printf("Registering gateway: %s\n", args[0])
-				// TODO: Implement
-				return nil
-			},
-		},
+	// Add commands
+	rootCmd.AddCommand(
+		newLoginCmd(),
+		newLogoutCmd(),
+		newConfigCmd(),
+		newGatewayCmd(),
+		newNetworkCmd(),
+		newAccessRuleCmd(),
+		newUserCmd(),
+		newLocalUserCmd(),
+		newGroupCmd(),
+		newAPIKeyCmd(),
+		newMeshCmd(),
+		newCACmd(),
+		newAuditCmd(),
+		newConnectionCmd(),
+		newVersionCmd(),
 	)
 
-	// Policy commands
-	policyCmd := &cobra.Command{
-		Use:   "policy",
-		Short: "Manage access policies",
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+func initClient(cmd *cobra.Command, args []string) error {
+	// Skip for commands that don't need auth
+	skipAuth := cmd.Name() == "init" || cmd.Name() == "show" || cmd.Name() == "set" ||
+		cmd.Name() == "login" || cmd.Name() == "version" || cmd.Name() == "help"
+	if cmd.Parent() != nil && cmd.Parent().Name() == "config" {
+		skipAuth = true
 	}
 
-	policyCmd.AddCommand(
-		&cobra.Command{
-			Use:   "list",
-			Short: "List all policies",
-			RunE: func(cmd *cobra.Command, args []string) error {
-				fmt.Println("Listing policies...")
-				// TODO: Implement
-				return nil
-			},
-		},
-		&cobra.Command{
-			Use:   "create [name]",
-			Short: "Create a new policy",
-			Args:  cobra.ExactArgs(1),
-			RunE: func(cmd *cobra.Command, args []string) error {
-				fmt.Printf("Creating policy: %s\n", args[0])
-				// TODO: Implement
-				return nil
-			},
-		},
-	)
-
-	// Certificate commands
-	certCmd := &cobra.Command{
-		Use:   "cert",
-		Short: "Manage certificates",
+	var err error
+	cfg, err = adminclient.LoadConfig(cfgFile)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	certCmd.AddCommand(
-		&cobra.Command{
-			Use:   "list",
-			Short: "List issued certificates",
-			RunE: func(cmd *cobra.Command, args []string) error {
-				fmt.Println("Listing certificates...")
-				// TODO: Implement
-				return nil
-			},
-		},
-		&cobra.Command{
-			Use:   "revoke [serial]",
-			Short: "Revoke a certificate",
-			Args:  cobra.ExactArgs(1),
-			RunE: func(cmd *cobra.Command, args []string) error {
-				fmt.Printf("Revoking certificate: %s\n", args[0])
-				// TODO: Implement
-				return nil
-			},
-		},
-	)
+	// Override with flags
+	if serverURL != "" {
+		cfg.ServerURL = serverURL
+	}
+	if apiKey != "" {
+		cfg.APIKey = apiKey
+	}
 
-	// User commands
-	userCmd := &cobra.Command{
+	if cfg.ServerURL == "" && !skipAuth {
+		return fmt.Errorf("server URL not configured. Run 'gatekey-admin config init --server URL' first")
+	}
+
+	client = adminclient.NewClient(cfg)
+	return nil
+}
+
+// === Login Command ===
+
+func newLoginCmd() *cobra.Command {
+	var noBrowser bool
+	var useAPIKey string
+
+	cmd := &cobra.Command{
+		Use:   "login",
+		Short: "Authenticate with GateKey server",
+		Long: `Authenticate with the GateKey server.
+
+By default, opens a browser for SSO authentication.
+Use --api-key to authenticate with an API key instead.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if cfg.ServerURL == "" {
+				return fmt.Errorf("server URL not configured. Run 'gatekey-admin config init --server URL' first")
+			}
+
+			ctx := context.Background()
+			auth := client.Auth()
+
+			if useAPIKey != "" {
+				return auth.LoginAPIKey(ctx, useAPIKey)
+			}
+			return auth.Login(ctx, noBrowser)
+		},
+	}
+
+	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "Don't open browser, display URL instead")
+	cmd.Flags().StringVar(&useAPIKey, "api-key", "", "Authenticate with API key")
+
+	return cmd
+}
+
+func newLogoutCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "logout",
+		Short: "Clear saved credentials",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return client.Auth().Logout()
+		},
+	}
+}
+
+// === Config Command ===
+
+func newConfigCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "config",
+		Short: "Manage CLI configuration",
+	}
+
+	// Init subcommand
+	initCmd := &cobra.Command{
+		Use:   "init",
+		Short: "Initialize configuration",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			server, _ := cmd.Flags().GetString("server")
+			if server == "" {
+				return fmt.Errorf("--server is required")
+			}
+			return adminclient.InitConfig(cfgFile, server)
+		},
+	}
+	initCmd.Flags().String("server", "", "GateKey server URL (required)")
+	initCmd.MarkFlagRequired("server")
+
+	// Show subcommand
+	showCmd := &cobra.Command{
+		Use:   "show",
+		Short: "Show current configuration",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cfg.Print()
+		},
+	}
+
+	// Set subcommand
+	setCmd := &cobra.Command{
+		Use:   "set KEY VALUE",
+		Short: "Set a configuration value",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cfg.Set(args[0], args[1])
+		},
+	}
+
+	cmd.AddCommand(initCmd, showCmd, setCmd)
+	return cmd
+}
+
+// === Gateway Command ===
+
+func newGatewayCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "gateway",
+		Aliases: []string{"gw"},
+		Short:   "Manage VPN gateways",
+	}
+
+	// List
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all gateways",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			gateways, err := client.ListGateways(ctx)
+			if err != nil {
+				return err
+			}
+			return outputResult(gateways, []string{"ID", "Name", "Endpoint", "Status", "Clients", "Mesh Hub"}, func(item interface{}) []string {
+				gw := item.(adminclient.Gateway)
+				meshHub := "No"
+				if gw.IsMeshHub {
+					meshHub = "Yes"
+				}
+				return []string{gw.ID, gw.Name, gw.Endpoint, gw.Status, fmt.Sprintf("%d", gw.ClientCount), meshHub}
+			})
+		},
+	}
+
+	// Get
+	getCmd := &cobra.Command{
+		Use:   "get ID",
+		Short: "Get gateway details",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			gw, err := client.GetGateway(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			return outputSingle(gw)
+		},
+	}
+
+	// Create
+	createCmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a new gateway",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name, _ := cmd.Flags().GetString("name")
+			endpoint, _ := cmd.Flags().GetString("endpoint")
+			port, _ := cmd.Flags().GetInt("port")
+			protocol, _ := cmd.Flags().GetString("protocol")
+			description, _ := cmd.Flags().GetString("description")
+
+			if name == "" || endpoint == "" {
+				return fmt.Errorf("--name and --endpoint are required")
+			}
+
+			ctx := context.Background()
+			gw, err := client.CreateGateway(ctx, map[string]interface{}{
+				"name":        name,
+				"endpoint":    endpoint,
+				"port":        port,
+				"protocol":    protocol,
+				"description": description,
+			})
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Gateway created: %s (%s)\n", gw.Name, gw.ID)
+			return nil
+		},
+	}
+	createCmd.Flags().String("name", "", "Gateway name (required)")
+	createCmd.Flags().String("endpoint", "", "Gateway endpoint/hostname (required)")
+	createCmd.Flags().Int("port", 1194, "VPN port")
+	createCmd.Flags().String("protocol", "udp", "Protocol (udp/tcp)")
+	createCmd.Flags().String("description", "", "Description")
+
+	// Update
+	updateCmd := &cobra.Command{
+		Use:   "update ID",
+		Short: "Update a gateway",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			req := make(map[string]interface{})
+			if name, _ := cmd.Flags().GetString("name"); name != "" {
+				req["name"] = name
+			}
+			if endpoint, _ := cmd.Flags().GetString("endpoint"); endpoint != "" {
+				req["endpoint"] = endpoint
+			}
+			if port, _ := cmd.Flags().GetInt("port"); port > 0 {
+				req["port"] = port
+			}
+			if description, _ := cmd.Flags().GetString("description"); description != "" {
+				req["description"] = description
+			}
+
+			ctx := context.Background()
+			gw, err := client.UpdateGateway(ctx, args[0], req)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Gateway updated: %s\n", gw.Name)
+			return nil
+		},
+	}
+	updateCmd.Flags().String("name", "", "Gateway name")
+	updateCmd.Flags().String("endpoint", "", "Gateway endpoint")
+	updateCmd.Flags().Int("port", 0, "VPN port")
+	updateCmd.Flags().String("description", "", "Description")
+
+	// Delete
+	deleteCmd := &cobra.Command{
+		Use:   "delete ID",
+		Short: "Delete a gateway",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			if err := client.DeleteGateway(ctx, args[0]); err != nil {
+				return err
+			}
+			fmt.Println("Gateway deleted")
+			return nil
+		},
+	}
+
+	// Provision
+	provisionCmd := &cobra.Command{
+		Use:   "provision ID",
+		Short: "Provision a gateway (generate config)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			result, err := client.ProvisionGateway(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Gateway provisioned: %s\n", result.Gateway.Name)
+			if result.Token != "" {
+				fmt.Printf("Token: %s\n", result.Token)
+			}
+			fmt.Println("\n--- Gateway Configuration ---")
+			fmt.Println(result.Config)
+			return nil
+		},
+	}
+
+	// Reprovision
+	reprovisionCmd := &cobra.Command{
+		Use:   "reprovision ID",
+		Short: "Reprovision a gateway (regenerate certificates)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			result, err := client.ReprovisionGateway(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Gateway reprovisioned: %s\n", result.Gateway.Name)
+			fmt.Println("\n--- Gateway Configuration ---")
+			fmt.Println(result.Config)
+			return nil
+		},
+	}
+
+	cmd.AddCommand(listCmd, getCmd, createCmd, updateCmd, deleteCmd, provisionCmd, reprovisionCmd)
+	return cmd
+}
+
+// === Network Command ===
+
+func newNetworkCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "network",
+		Aliases: []string{"net"},
+		Short:   "Manage networks",
+	}
+
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all networks",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			networks, err := client.ListNetworks(ctx)
+			if err != nil {
+				return err
+			}
+			return outputResult(networks, []string{"ID", "Name", "CIDR", "Gateway", "Default"}, func(item interface{}) []string {
+				n := item.(adminclient.Network)
+				def := "No"
+				if n.IsDefault {
+					def = "Yes"
+				}
+				return []string{n.ID, n.Name, n.CIDR, n.GatewayName, def}
+			})
+		},
+	}
+
+	getCmd := &cobra.Command{
+		Use:   "get ID",
+		Short: "Get network details",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			net, err := client.GetNetwork(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			return outputSingle(net)
+		},
+	}
+
+	createCmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a new network",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name, _ := cmd.Flags().GetString("name")
+			cidr, _ := cmd.Flags().GetString("cidr")
+			gatewayID, _ := cmd.Flags().GetString("gateway")
+			description, _ := cmd.Flags().GetString("description")
+
+			if name == "" || cidr == "" || gatewayID == "" {
+				return fmt.Errorf("--name, --cidr, and --gateway are required")
+			}
+
+			ctx := context.Background()
+			net, err := client.CreateNetwork(ctx, map[string]interface{}{
+				"name":        name,
+				"cidr":        cidr,
+				"gateway_id":  gatewayID,
+				"description": description,
+			})
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Network created: %s (%s)\n", net.Name, net.ID)
+			return nil
+		},
+	}
+	createCmd.Flags().String("name", "", "Network name (required)")
+	createCmd.Flags().String("cidr", "", "Network CIDR (required)")
+	createCmd.Flags().String("gateway", "", "Gateway ID (required)")
+	createCmd.Flags().String("description", "", "Description")
+
+	updateCmd := &cobra.Command{
+		Use:   "update ID",
+		Short: "Update a network",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			req := make(map[string]interface{})
+			if name, _ := cmd.Flags().GetString("name"); name != "" {
+				req["name"] = name
+			}
+			if cidr, _ := cmd.Flags().GetString("cidr"); cidr != "" {
+				req["cidr"] = cidr
+			}
+			if description, _ := cmd.Flags().GetString("description"); description != "" {
+				req["description"] = description
+			}
+
+			ctx := context.Background()
+			net, err := client.UpdateNetwork(ctx, args[0], req)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Network updated: %s\n", net.Name)
+			return nil
+		},
+	}
+	updateCmd.Flags().String("name", "", "Network name")
+	updateCmd.Flags().String("cidr", "", "Network CIDR")
+	updateCmd.Flags().String("description", "", "Description")
+
+	deleteCmd := &cobra.Command{
+		Use:   "delete ID",
+		Short: "Delete a network",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			if err := client.DeleteNetwork(ctx, args[0]); err != nil {
+				return err
+			}
+			fmt.Println("Network deleted")
+			return nil
+		},
+	}
+
+	cmd.AddCommand(listCmd, getCmd, createCmd, updateCmd, deleteCmd)
+	return cmd
+}
+
+// === Access Rule Command ===
+
+func newAccessRuleCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "access-rule",
+		Aliases: []string{"rule", "ar"},
+		Short:   "Manage access rules",
+	}
+
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all access rules",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			rules, err := client.ListAccessRules(ctx)
+			if err != nil {
+				return err
+			}
+			return outputResult(rules, []string{"ID", "Name", "Network", "Groups", "Active", "Priority"}, func(item interface{}) []string {
+				r := item.(adminclient.AccessRule)
+				active := "No"
+				if r.IsActive {
+					active = "Yes"
+				}
+				return []string{r.ID, r.Name, r.NetworkName, strings.Join(r.Groups, ","), active, fmt.Sprintf("%d", r.Priority)}
+			})
+		},
+	}
+
+	getCmd := &cobra.Command{
+		Use:   "get ID",
+		Short: "Get access rule details",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			rule, err := client.GetAccessRule(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			return outputSingle(rule)
+		},
+	}
+
+	createCmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a new access rule",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name, _ := cmd.Flags().GetString("name")
+			networkID, _ := cmd.Flags().GetString("network")
+			groups, _ := cmd.Flags().GetStringSlice("groups")
+			cidrs, _ := cmd.Flags().GetStringSlice("cidrs")
+			priority, _ := cmd.Flags().GetInt("priority")
+			description, _ := cmd.Flags().GetString("description")
+
+			if name == "" || networkID == "" {
+				return fmt.Errorf("--name and --network are required")
+			}
+
+			ctx := context.Background()
+			rule, err := client.CreateAccessRule(ctx, map[string]interface{}{
+				"name":          name,
+				"network_id":    networkID,
+				"groups":        groups,
+				"allowed_cidrs": cidrs,
+				"priority":      priority,
+				"description":   description,
+				"is_active":     true,
+			})
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Access rule created: %s (%s)\n", rule.Name, rule.ID)
+			return nil
+		},
+	}
+	createCmd.Flags().String("name", "", "Rule name (required)")
+	createCmd.Flags().String("network", "", "Network ID (required)")
+	createCmd.Flags().StringSlice("groups", nil, "Allowed groups")
+	createCmd.Flags().StringSlice("cidrs", nil, "Allowed CIDRs")
+	createCmd.Flags().Int("priority", 100, "Priority")
+	createCmd.Flags().String("description", "", "Description")
+
+	updateCmd := &cobra.Command{
+		Use:   "update ID",
+		Short: "Update an access rule",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			req := make(map[string]interface{})
+			if name, _ := cmd.Flags().GetString("name"); name != "" {
+				req["name"] = name
+			}
+			if groups, _ := cmd.Flags().GetStringSlice("groups"); len(groups) > 0 {
+				req["groups"] = groups
+			}
+			if cidrs, _ := cmd.Flags().GetStringSlice("cidrs"); len(cidrs) > 0 {
+				req["allowed_cidrs"] = cidrs
+			}
+			if priority, _ := cmd.Flags().GetInt("priority"); priority > 0 {
+				req["priority"] = priority
+			}
+			if active, _ := cmd.Flags().GetBool("active"); cmd.Flags().Changed("active") {
+				req["is_active"] = active
+			}
+
+			ctx := context.Background()
+			rule, err := client.UpdateAccessRule(ctx, args[0], req)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Access rule updated: %s\n", rule.Name)
+			return nil
+		},
+	}
+	updateCmd.Flags().String("name", "", "Rule name")
+	updateCmd.Flags().StringSlice("groups", nil, "Allowed groups")
+	updateCmd.Flags().StringSlice("cidrs", nil, "Allowed CIDRs")
+	updateCmd.Flags().Int("priority", 0, "Priority")
+	updateCmd.Flags().Bool("active", true, "Active status")
+
+	deleteCmd := &cobra.Command{
+		Use:   "delete ID",
+		Short: "Delete an access rule",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			if err := client.DeleteAccessRule(ctx, args[0]); err != nil {
+				return err
+			}
+			fmt.Println("Access rule deleted")
+			return nil
+		},
+	}
+
+	cmd.AddCommand(listCmd, getCmd, createCmd, updateCmd, deleteCmd)
+	return cmd
+}
+
+// === User Command ===
+
+func newUserCmd() *cobra.Command {
+	cmd := &cobra.Command{
 		Use:   "user",
 		Short: "Manage users",
 	}
 
-	userCmd.AddCommand(
-		&cobra.Command{
-			Use:   "list",
-			Short: "List all users",
-			RunE: func(cmd *cobra.Command, args []string) error {
-				fmt.Println("Listing users...")
-				// TODO: Implement
-				return nil
-			},
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all users",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			users, err := client.ListUsers(ctx)
+			if err != nil {
+				return err
+			}
+			return outputResult(users, []string{"ID", "Email", "Name", "Provider", "Admin", "Active"}, func(item interface{}) []string {
+				u := item.(adminclient.User)
+				admin := "No"
+				if u.IsAdmin {
+					admin = "Yes"
+				}
+				active := "No"
+				if u.IsActive {
+					active = "Yes"
+				}
+				return []string{u.ID, u.Email, u.Name, u.Provider, admin, active}
+			})
 		},
-	)
-
-	// Connection commands
-	connCmd := &cobra.Command{
-		Use:     "connection",
-		Short:   "Manage VPN connections",
-		Aliases: []string{"conn"},
 	}
 
-	connCmd.AddCommand(
-		&cobra.Command{
-			Use:   "list",
-			Short: "List active connections",
-			RunE: func(cmd *cobra.Command, args []string) error {
-				fmt.Println("Listing active connections...")
-				// TODO: Implement
-				return nil
-			},
+	getCmd := &cobra.Command{
+		Use:   "get ID",
+		Short: "Get user details",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			user, err := client.GetUser(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			return outputSingle(user)
 		},
-		&cobra.Command{
-			Use:   "disconnect [id]",
-			Short: "Disconnect a client",
-			Args:  cobra.ExactArgs(1),
-			RunE: func(cmd *cobra.Command, args []string) error {
-				fmt.Printf("Disconnecting: %s\n", args[0])
-				// TODO: Implement
-				return nil
-			},
-		},
-	)
+	}
 
-	// Version command
-	versionCmd := &cobra.Command{
+	updateCmd := &cobra.Command{
+		Use:   "update ID",
+		Short: "Update a user",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			req := make(map[string]interface{})
+			if admin, _ := cmd.Flags().GetBool("admin"); cmd.Flags().Changed("admin") {
+				req["is_admin"] = admin
+			}
+			if active, _ := cmd.Flags().GetBool("active"); cmd.Flags().Changed("active") {
+				req["is_active"] = active
+			}
+
+			ctx := context.Background()
+			user, err := client.UpdateUser(ctx, args[0], req)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("User updated: %s\n", user.Email)
+			return nil
+		},
+	}
+	updateCmd.Flags().Bool("admin", false, "Admin status")
+	updateCmd.Flags().Bool("active", true, "Active status")
+
+	revokeConfigsCmd := &cobra.Command{
+		Use:   "revoke-configs ID",
+		Short: "Revoke all VPN configs for a user",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			if err := client.RevokeUserConfigs(ctx, args[0]); err != nil {
+				return err
+			}
+			fmt.Println("User configs revoked")
+			return nil
+		},
+	}
+
+	cmd.AddCommand(listCmd, getCmd, updateCmd, revokeConfigsCmd)
+	return cmd
+}
+
+// === Local User Command ===
+
+func newLocalUserCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "local-user",
+		Aliases: []string{"lu"},
+		Short:   "Manage local users",
+	}
+
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all local users",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			users, err := client.ListLocalUsers(ctx)
+			if err != nil {
+				return err
+			}
+			return outputResult(users, []string{"ID", "Username", "Email", "Admin", "Active"}, func(item interface{}) []string {
+				u := item.(adminclient.LocalUser)
+				admin := "No"
+				if u.IsAdmin {
+					admin = "Yes"
+				}
+				active := "No"
+				if u.IsActive {
+					active = "Yes"
+				}
+				return []string{u.ID, u.Username, u.Email, admin, active}
+			})
+		},
+	}
+
+	createCmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a local user",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			username, _ := cmd.Flags().GetString("username")
+			email, _ := cmd.Flags().GetString("email")
+			password, _ := cmd.Flags().GetString("password")
+			admin, _ := cmd.Flags().GetBool("admin")
+
+			if username == "" || email == "" || password == "" {
+				return fmt.Errorf("--username, --email, and --password are required")
+			}
+
+			ctx := context.Background()
+			user, err := client.CreateLocalUser(ctx, map[string]interface{}{
+				"username": username,
+				"email":    email,
+				"password": password,
+				"is_admin": admin,
+			})
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Local user created: %s (%s)\n", user.Username, user.ID)
+			return nil
+		},
+	}
+	createCmd.Flags().String("username", "", "Username (required)")
+	createCmd.Flags().String("email", "", "Email (required)")
+	createCmd.Flags().String("password", "", "Password (required)")
+	createCmd.Flags().Bool("admin", false, "Admin user")
+
+	deleteCmd := &cobra.Command{
+		Use:   "delete ID",
+		Short: "Delete a local user",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			if err := client.DeleteLocalUser(ctx, args[0]); err != nil {
+				return err
+			}
+			fmt.Println("Local user deleted")
+			return nil
+		},
+	}
+
+	resetPwdCmd := &cobra.Command{
+		Use:   "reset-password ID",
+		Short: "Reset local user password",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			password, _ := cmd.Flags().GetString("password")
+			if password == "" {
+				return fmt.Errorf("--password is required")
+			}
+
+			ctx := context.Background()
+			if err := client.ResetLocalUserPassword(ctx, args[0], map[string]string{"password": password}); err != nil {
+				return err
+			}
+			fmt.Println("Password reset successfully")
+			return nil
+		},
+	}
+	resetPwdCmd.Flags().String("password", "", "New password (required)")
+
+	cmd.AddCommand(listCmd, createCmd, deleteCmd, resetPwdCmd)
+	return cmd
+}
+
+// === Group Command ===
+
+func newGroupCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "group",
+		Short: "View group information",
+	}
+
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all groups",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			groups, err := client.ListGroups(ctx)
+			if err != nil {
+				return err
+			}
+			return outputResult(groups, []string{"Name", "Members", "Rules"}, func(item interface{}) []string {
+				g := item.(adminclient.Group)
+				return []string{g.Name, fmt.Sprintf("%d", g.MemberCount), fmt.Sprintf("%d", g.RuleCount)}
+			})
+		},
+	}
+
+	membersCmd := &cobra.Command{
+		Use:   "members NAME",
+		Short: "List group members",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			members, err := client.GetGroupMembers(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			return outputResult(members, []string{"ID", "Email", "Name"}, func(item interface{}) []string {
+				u := item.(adminclient.User)
+				return []string{u.ID, u.Email, u.Name}
+			})
+		},
+	}
+
+	rulesCmd := &cobra.Command{
+		Use:   "rules NAME",
+		Short: "List group access rules",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			rules, err := client.GetGroupRules(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			return outputResult(rules, []string{"ID", "Name", "Network", "Active"}, func(item interface{}) []string {
+				r := item.(adminclient.AccessRule)
+				active := "No"
+				if r.IsActive {
+					active = "Yes"
+				}
+				return []string{r.ID, r.Name, r.NetworkName, active}
+			})
+		},
+	}
+
+	cmd.AddCommand(listCmd, membersCmd, rulesCmd)
+	return cmd
+}
+
+// === API Key Command ===
+
+func newAPIKeyCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "api-key",
+		Aliases: []string{"key"},
+		Short:   "Manage API keys",
+	}
+
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all API keys",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			userID, _ := cmd.Flags().GetString("user")
+
+			ctx := context.Background()
+			var keys []adminclient.APIKey
+			var err error
+
+			if userID != "" {
+				keys, err = client.ListUserAPIKeys(ctx, userID)
+			} else {
+				keys, err = client.ListAPIKeys(ctx)
+			}
+			if err != nil {
+				return err
+			}
+
+			return outputResult(keys, []string{"ID", "Name", "User", "Prefix", "Scopes", "Last Used", "Revoked"}, func(item interface{}) []string {
+				k := item.(adminclient.APIKey)
+				lastUsed := "Never"
+				if k.LastUsedAt != nil {
+					lastUsed = k.LastUsedAt.Format("2006-01-02 15:04")
+				}
+				revoked := "No"
+				if k.IsRevoked {
+					revoked = "Yes"
+				}
+				return []string{k.ID, k.Name, k.UserEmail, k.KeyPrefix, strings.Join(k.Scopes, ","), lastUsed, revoked}
+			})
+		},
+	}
+	listCmd.Flags().String("user", "", "Filter by user ID")
+
+	createCmd := &cobra.Command{
+		Use:   "create NAME",
+		Short: "Create an API key",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			userID, _ := cmd.Flags().GetString("user")
+			scopes, _ := cmd.Flags().GetStringSlice("scopes")
+			expires, _ := cmd.Flags().GetString("expires")
+			description, _ := cmd.Flags().GetString("description")
+
+			req := map[string]interface{}{
+				"name":        args[0],
+				"scopes":      scopes,
+				"description": description,
+			}
+
+			if expires != "" {
+				duration, err := parseDuration(expires)
+				if err != nil {
+					return fmt.Errorf("invalid expires format: %w", err)
+				}
+				req["expires_at"] = time.Now().Add(duration).Format(time.RFC3339)
+			}
+
+			ctx := context.Background()
+			var result *adminclient.APIKeyCreateResponse
+			var err error
+
+			if userID != "" {
+				result, err = client.CreateUserAPIKey(ctx, userID, req)
+			} else {
+				result, err = client.CreateAPIKey(ctx, req)
+			}
+			if err != nil {
+				return err
+			}
+
+			fmt.Println("API key created successfully!")
+			fmt.Println("")
+			fmt.Printf("Name:   %s\n", result.APIKey.Name)
+			fmt.Printf("ID:     %s\n", result.APIKey.ID)
+			fmt.Printf("Scopes: %s\n", strings.Join(result.APIKey.Scopes, ", "))
+			fmt.Println("")
+			fmt.Println("IMPORTANT: Save this API key now. You won't be able to see it again!")
+			fmt.Printf("\n  %s\n\n", result.RawKey)
+			return nil
+		},
+	}
+	createCmd.Flags().String("user", "", "Create for specific user ID")
+	createCmd.Flags().StringSlice("scopes", []string{"*"}, "Scopes (default: all)")
+	createCmd.Flags().String("expires", "", "Expiration (e.g., 30d, 90d, 1y)")
+	createCmd.Flags().String("description", "", "Description")
+
+	revokeCmd := &cobra.Command{
+		Use:   "revoke ID",
+		Short: "Revoke an API key",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			reason, _ := cmd.Flags().GetString("reason")
+			ctx := context.Background()
+			if err := client.RevokeAPIKey(ctx, args[0], reason); err != nil {
+				return err
+			}
+			fmt.Println("API key revoked")
+			return nil
+		},
+	}
+	revokeCmd.Flags().String("reason", "", "Revocation reason")
+
+	revokeAllCmd := &cobra.Command{
+		Use:   "revoke-all",
+		Short: "Revoke all API keys for a user",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			userID, _ := cmd.Flags().GetString("user")
+			reason, _ := cmd.Flags().GetString("reason")
+
+			if userID == "" {
+				return fmt.Errorf("--user is required")
+			}
+
+			ctx := context.Background()
+			if err := client.RevokeUserAPIKeys(ctx, userID, reason); err != nil {
+				return err
+			}
+			fmt.Println("All API keys revoked for user")
+			return nil
+		},
+	}
+	revokeAllCmd.Flags().String("user", "", "User ID (required)")
+	revokeAllCmd.Flags().String("reason", "", "Revocation reason")
+
+	cmd.AddCommand(listCmd, createCmd, revokeCmd, revokeAllCmd)
+	return cmd
+}
+
+// === Mesh Command ===
+
+func newMeshCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mesh",
+		Short: "Manage mesh VPN topology",
+	}
+
+	// Hub subcommands
+	hubCmd := &cobra.Command{
+		Use:   "hub",
+		Short: "Manage mesh hubs",
+	}
+
+	hubListCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List mesh hubs",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			hubs, err := client.ListMeshHubs(ctx)
+			if err != nil {
+				return err
+			}
+			return outputResult(hubs, []string{"ID", "Gateway", "Hub Network", "Provisioned", "Spokes"}, func(item interface{}) []string {
+				h := item.(adminclient.MeshHub)
+				prov := "No"
+				if h.IsProvisioned {
+					prov = "Yes"
+				}
+				return []string{h.ID, h.GatewayName, h.HubNetwork, prov, fmt.Sprintf("%d", h.ConnectedSpokes)}
+			})
+		},
+	}
+
+	hubCreateCmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a mesh hub",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			gatewayID, _ := cmd.Flags().GetString("gateway")
+			network, _ := cmd.Flags().GetString("network")
+
+			if gatewayID == "" || network == "" {
+				return fmt.Errorf("--gateway and --network are required")
+			}
+
+			ctx := context.Background()
+			hub, err := client.CreateMeshHub(ctx, map[string]interface{}{
+				"gateway_id":  gatewayID,
+				"hub_network": network,
+			})
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Mesh hub created: %s\n", hub.ID)
+			return nil
+		},
+	}
+	hubCreateCmd.Flags().String("gateway", "", "Gateway ID (required)")
+	hubCreateCmd.Flags().String("network", "", "Hub network CIDR (required)")
+
+	hubDeleteCmd := &cobra.Command{
+		Use:   "delete ID",
+		Short: "Delete a mesh hub",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			if err := client.DeleteMeshHub(ctx, args[0]); err != nil {
+				return err
+			}
+			fmt.Println("Mesh hub deleted")
+			return nil
+		},
+	}
+
+	hubProvisionCmd := &cobra.Command{
+		Use:   "provision ID",
+		Short: "Provision a mesh hub",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			result, err := client.ProvisionMeshHub(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			fmt.Println("Mesh hub provisioned")
+			fmt.Println("\n--- Hub Configuration ---")
+			fmt.Println(result.Config)
+			return nil
+		},
+	}
+
+	hubCmd.AddCommand(hubListCmd, hubCreateCmd, hubDeleteCmd, hubProvisionCmd)
+
+	// Spoke subcommands
+	spokeCmd := &cobra.Command{
+		Use:   "spoke",
+		Short: "Manage mesh spokes",
+	}
+
+	spokeListCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List mesh spokes",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			spokes, err := client.ListMeshSpokes(ctx)
+			if err != nil {
+				return err
+			}
+			return outputResult(spokes, []string{"ID", "Gateway", "Hub", "Spoke Network", "Provisioned", "Connected"}, func(item interface{}) []string {
+				s := item.(adminclient.MeshSpoke)
+				prov := "No"
+				if s.IsProvisioned {
+					prov = "Yes"
+				}
+				conn := "No"
+				if s.IsConnected {
+					conn = "Yes"
+				}
+				return []string{s.ID, s.GatewayName, s.HubName, s.SpokeNetwork, prov, conn}
+			})
+		},
+	}
+
+	spokeCreateCmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a mesh spoke",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			gatewayID, _ := cmd.Flags().GetString("gateway")
+			hubID, _ := cmd.Flags().GetString("hub")
+			network, _ := cmd.Flags().GetString("network")
+
+			if gatewayID == "" || hubID == "" || network == "" {
+				return fmt.Errorf("--gateway, --hub, and --network are required")
+			}
+
+			ctx := context.Background()
+			spoke, err := client.CreateMeshSpoke(ctx, map[string]interface{}{
+				"gateway_id":    gatewayID,
+				"hub_id":        hubID,
+				"spoke_network": network,
+			})
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Mesh spoke created: %s\n", spoke.ID)
+			return nil
+		},
+	}
+	spokeCreateCmd.Flags().String("gateway", "", "Gateway ID (required)")
+	spokeCreateCmd.Flags().String("hub", "", "Hub ID (required)")
+	spokeCreateCmd.Flags().String("network", "", "Spoke network CIDR (required)")
+
+	spokeDeleteCmd := &cobra.Command{
+		Use:   "delete ID",
+		Short: "Delete a mesh spoke",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			if err := client.DeleteMeshSpoke(ctx, args[0]); err != nil {
+				return err
+			}
+			fmt.Println("Mesh spoke deleted")
+			return nil
+		},
+	}
+
+	spokeProvisionCmd := &cobra.Command{
+		Use:   "provision ID",
+		Short: "Provision a mesh spoke",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			result, err := client.ProvisionMeshSpoke(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			fmt.Println("Mesh spoke provisioned")
+			fmt.Println("\n--- Spoke Configuration ---")
+			fmt.Println(result.Config)
+			return nil
+		},
+	}
+
+	spokeCmd.AddCommand(spokeListCmd, spokeCreateCmd, spokeDeleteCmd, spokeProvisionCmd)
+
+	cmd.AddCommand(hubCmd, spokeCmd)
+	return cmd
+}
+
+// === CA Command ===
+
+func newCACmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "ca",
+		Short: "Manage Certificate Authority",
+	}
+
+	showCmd := &cobra.Command{
+		Use:   "show",
+		Short: "Show current CA information",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			ca, err := client.GetCA(ctx)
+			if err != nil {
+				return err
+			}
+			return outputSingle(ca)
+		},
+	}
+
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all CAs",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			cas, err := client.ListCAs(ctx)
+			if err != nil {
+				return err
+			}
+			return outputResult(cas, []string{"ID", "Name", "Serial", "Active", "Current", "Valid Until"}, func(item interface{}) []string {
+				ca := item.(adminclient.CA)
+				active := "No"
+				if ca.IsActive {
+					active = "Yes"
+				}
+				current := "No"
+				if ca.IsCurrent {
+					current = "Yes"
+				}
+				return []string{ca.ID, ca.Name, ca.SerialNumber, active, current, ca.NotAfter.Format("2006-01-02")}
+			})
+		},
+	}
+
+	rotateCmd := &cobra.Command{
+		Use:   "rotate",
+		Short: "Rotate the CA certificate",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name, _ := cmd.Flags().GetString("name")
+			years, _ := cmd.Flags().GetInt("years")
+
+			req := map[string]interface{}{}
+			if name != "" {
+				req["name"] = name
+			}
+			if years > 0 {
+				req["validity_years"] = years
+			}
+
+			ctx := context.Background()
+			ca, err := client.RotateCA(ctx, req)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("CA rotated successfully: %s\n", ca.Name)
+			fmt.Printf("New CA valid until: %s\n", ca.NotAfter.Format("2006-01-02"))
+			return nil
+		},
+	}
+	rotateCmd.Flags().String("name", "", "New CA name")
+	rotateCmd.Flags().Int("years", 10, "Validity in years")
+
+	activateCmd := &cobra.Command{
+		Use:   "activate ID",
+		Short: "Activate a CA",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			if err := client.ActivateCA(ctx, args[0]); err != nil {
+				return err
+			}
+			fmt.Println("CA activated")
+			return nil
+		},
+	}
+
+	revokeCmd := &cobra.Command{
+		Use:   "revoke ID",
+		Short: "Revoke a CA",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			if err := client.RevokeCA(ctx, args[0]); err != nil {
+				return err
+			}
+			fmt.Println("CA revoked")
+			return nil
+		},
+	}
+
+	cmd.AddCommand(showCmd, listCmd, rotateCmd, activateCmd, revokeCmd)
+	return cmd
+}
+
+// === Audit Command ===
+
+func newAuditCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "audit",
+		Short: "View audit logs",
+	}
+
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List audit log entries",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			limit, _ := cmd.Flags().GetInt("limit")
+
+			ctx := context.Background()
+			logs, err := client.ListAuditLogs(ctx, limit)
+			if err != nil {
+				return err
+			}
+			return outputResult(logs, []string{"Time", "Action", "Resource", "User", "IP"}, func(item interface{}) []string {
+				l := item.(adminclient.AuditLog)
+				return []string{l.CreatedAt.Format("2006-01-02 15:04:05"), l.Action, l.Resource, l.UserEmail, l.IPAddress}
+			})
+		},
+	}
+	listCmd.Flags().Int("limit", 50, "Number of entries to show")
+
+	cmd.AddCommand(listCmd)
+	return cmd
+}
+
+// === Connection Command ===
+
+func newConnectionCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "connection",
+		Aliases: []string{"conn"},
+		Short:   "Manage active VPN connections",
+	}
+
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List active connections",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			conns, err := client.ListConnections(ctx)
+			if err != nil {
+				return err
+			}
+			return outputResult(conns, []string{"ID", "User", "Gateway", "Client IP", "VPN IP", "Connected"}, func(item interface{}) []string {
+				c := item.(adminclient.Connection)
+				return []string{c.ID, c.UserEmail, c.GatewayName, c.ClientIP, c.VPNAddress, c.ConnectedAt.Format("2006-01-02 15:04")}
+			})
+		},
+	}
+
+	disconnectCmd := &cobra.Command{
+		Use:   "disconnect ID",
+		Short: "Disconnect a client",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			if err := client.DisconnectUser(ctx, args[0]); err != nil {
+				return err
+			}
+			fmt.Println("Client disconnected")
+			return nil
+		},
+	}
+
+	cmd.AddCommand(listCmd, disconnectCmd)
+	return cmd
+}
+
+// === Version Command ===
+
+func newVersionCmd() *cobra.Command {
+	return &cobra.Command{
 		Use:   "version",
 		Short: "Print version information",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("GateKey CLI v0.1.0")
+			fmt.Printf("GateKey Admin CLI\n")
+			fmt.Printf("  Version:    %s\n", version)
+			fmt.Printf("  Commit:     %s\n", commit)
+			fmt.Printf("  Build Date: %s\n", buildDate)
 		},
 	}
+}
 
-	rootCmd.AddCommand(gatewayCmd, policyCmd, certCmd, userCmd, connCmd, versionCmd)
+// === Output Helpers ===
 
-	// Global flags
-	rootCmd.PersistentFlags().String("server", "http://localhost:8080", "Control plane server URL")
-	rootCmd.PersistentFlags().String("token", "", "Authentication token")
-
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+func outputResult[T any](items []T, headers []string, rowFunc func(interface{}) []string) error {
+	switch outputFormat {
+	case "json":
+		return json.NewEncoder(os.Stdout).Encode(items)
+	case "yaml":
+		return yaml.NewEncoder(os.Stdout).Encode(items)
+	default:
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, strings.Join(headers, "\t"))
+		for _, item := range items {
+			fmt.Fprintln(w, strings.Join(rowFunc(item), "\t"))
+		}
+		return w.Flush()
 	}
+}
+
+func outputSingle(item interface{}) error {
+	switch outputFormat {
+	case "json":
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(item)
+	case "yaml":
+		return yaml.NewEncoder(os.Stdout).Encode(item)
+	default:
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(item)
+	}
+}
+
+func parseDuration(s string) (time.Duration, error) {
+	// Handle custom formats like "30d", "90d", "1y"
+	if len(s) < 2 {
+		return 0, fmt.Errorf("invalid duration format")
+	}
+
+	unit := s[len(s)-1]
+	value := s[:len(s)-1]
+
+	var multiplier time.Duration
+	switch unit {
+	case 'd':
+		multiplier = 24 * time.Hour
+	case 'w':
+		multiplier = 7 * 24 * time.Hour
+	case 'm':
+		multiplier = 30 * 24 * time.Hour
+	case 'y':
+		multiplier = 365 * 24 * time.Hour
+	default:
+		// Try standard duration parsing
+		return time.ParseDuration(s)
+	}
+
+	var num int
+	if _, err := fmt.Sscanf(value, "%d", &num); err != nil {
+		return 0, fmt.Errorf("invalid duration value: %s", value)
+	}
+
+	return time.Duration(num) * multiplier, nil
 }

@@ -1317,7 +1317,7 @@ func (s *Server) handleDownloadConfig(c *gin.Context) {
 	c.Data(http.StatusOK, "application/x-openvpn-profile", vpnConfig.ConfigData)
 }
 
-// Helper function to get authenticated user from session
+// Helper function to get authenticated user from session or API key
 func (s *Server) getAuthenticatedUser(c *gin.Context) (*authenticatedUser, error) {
 	token := ""
 	sessionCookie, err := c.Cookie(s.config.Auth.Session.CookieName)
@@ -1332,6 +1332,30 @@ func (s *Server) getAuthenticatedUser(c *gin.Context) (*authenticatedUser, error
 
 	if token == "" {
 		return nil, errors.New("no session token")
+	}
+
+	// Check if it's an API key (starts with gk_)
+	if strings.HasPrefix(token, "gk_") {
+		keyHash := db.HashAPIKey(token)
+		apiKey, ssoUser, err := s.apiKeyStore.ValidateKey(c.Request.Context(), keyHash)
+		if err != nil {
+			return nil, err
+		}
+		if apiKey == nil || ssoUser == nil {
+			return nil, errors.New("invalid API key")
+		}
+
+		// Update last used (async)
+		go s.apiKeyStore.UpdateLastUsed(context.Background(), apiKey.ID, c.ClientIP())
+
+		return &authenticatedUser{
+			UserID:   ssoUser.ID,
+			Email:    ssoUser.Email,
+			Name:     ssoUser.Name,
+			Groups:   ssoUser.Groups,
+			IsAdmin:  ssoUser.IsAdmin,
+			Provider: "api_key",
+		}, nil
 	}
 
 	// Check SSO session
@@ -2068,12 +2092,19 @@ func (s *Server) handleGatewayHeartbeat(c *gin.Context) {
 		}
 	}
 
+	// Get CA fingerprint for rotation detection
+	caFingerprint := ""
+	if s.ca != nil && s.ca.Certificate() != nil {
+		caFingerprint = pki.Fingerprint(s.ca.Certificate())
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status":            "ok",
 		"gateway_id":        gateway.ID,
 		"gateway_name":      gateway.Name,
 		"config_version":    gateway.ConfigVersion,
 		"needs_reprovision": needsReprovision,
+		"ca_fingerprint":    caFingerprint,
 	})
 }
 
@@ -2466,6 +2497,21 @@ func (s *Server) getCurrentUserInfo(c *gin.Context) (string, []string, error) {
 
 	if token == "" {
 		return "", nil, errors.New("no session token")
+	}
+
+	// Check if it's an API key (starts with gk_)
+	if strings.HasPrefix(token, "gk_") {
+		keyHash := db.HashAPIKey(token)
+		apiKey, ssoUser, err := s.apiKeyStore.ValidateKey(c.Request.Context(), keyHash)
+		if err != nil {
+			return "", nil, fmt.Errorf("invalid API key: %w", err)
+		}
+		if apiKey == nil || ssoUser == nil {
+			return "", nil, errors.New("invalid API key")
+		}
+		// Update last used in background
+		go s.apiKeyStore.UpdateLastUsed(c.Request.Context(), apiKey.ID, c.ClientIP())
+		return ssoUser.ID, ssoUser.Groups, nil
 	}
 
 	// First, check SSO session
@@ -3746,9 +3792,9 @@ func (s *Server) handleDownloadBinary(c *gin.Context) {
 
 	// Try multiple paths for development and production
 	binPaths := []string{
-		"/app/bin/" + actualFilename,   // Docker container
-		"./bin/" + actualFilename,      // Local development
-		"../bin/" + actualFilename,     // Running from cmd/
+		"/app/bin/" + actualFilename, // Docker container
+		"./bin/" + actualFilename,    // Local development
+		"../bin/" + actualFilename,   // Running from cmd/
 	}
 
 	for _, binPath := range binPaths {
@@ -4400,6 +4446,235 @@ func (s *Server) handleUpdateCA(c *gin.Context) {
 		"not_after":     cert.NotAfter,
 		"fingerprint":   pki.Fingerprint(cert),
 	})
+}
+
+// handleListCAs returns all CAs with their statuses
+func (s *Server) handleListCAs(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	cas, err := s.pkiStore.ListCAs(ctx)
+	if err != nil {
+		s.logger.Error("Failed to list CAs", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list CAs"})
+		return
+	}
+
+	result := make([]gin.H, len(cas))
+	for i, ca := range cas {
+		result[i] = gin.H{
+			"id":            ca.ID,
+			"status":        ca.Status,
+			"serial_number": ca.SerialNumber,
+			"not_before":    ca.NotBefore,
+			"not_after":     ca.NotAfter,
+			"fingerprint":   ca.Fingerprint,
+			"description":   ca.Description,
+			"created_at":    ca.CreatedAt,
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"cas": result})
+}
+
+// handlePrepareCARotation generates a new pending CA for rotation
+func (s *Server) handlePrepareCARotation(c *gin.Context) {
+	if s.ca == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "CA not initialized"})
+		return
+	}
+
+	var req struct {
+		Description string `json:"description"`
+	}
+	c.ShouldBindJSON(&req)
+
+	ctx := c.Request.Context()
+
+	// Generate a new CA certificate
+	newCA, err := pki.NewCA(s.config.PKI)
+	if err != nil {
+		s.logger.Error("Failed to generate new CA", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate new CA"})
+		return
+	}
+
+	// Generate unique ID for the new CA
+	newCAID := fmt.Sprintf("ca-%d", time.Now().Unix())
+
+	// Save as pending
+	storedCA := &db.StoredCA{
+		ID:             newCAID,
+		CertificatePEM: string(newCA.CertificatePEM()),
+		PrivateKeyPEM:  string(newCA.PrivateKeyPEM()),
+		SerialNumber:   newCA.Certificate().SerialNumber.String(),
+		NotBefore:      newCA.Certificate().NotBefore,
+		NotAfter:       newCA.Certificate().NotAfter,
+		Status:         db.CAStatusPending,
+		Description:    req.Description,
+	}
+
+	if err := s.pkiStore.SaveCAWithID(ctx, storedCA); err != nil {
+		s.logger.Error("Failed to save pending CA", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save pending CA"})
+		return
+	}
+
+	// Record rotation event
+	oldFingerprint, _ := s.pkiStore.GetCAFingerprint(ctx)
+	event := &db.CARotationEvent{
+		CAID:           newCAID,
+		EventType:      "initiated",
+		OldFingerprint: oldFingerprint,
+		NewFingerprint: pki.Fingerprint(newCA.Certificate()),
+		Notes:          "CA rotation prepared",
+	}
+	s.pkiStore.RecordRotationEvent(ctx, event)
+
+	s.logger.Info("Pending CA prepared for rotation",
+		zap.String("id", newCAID),
+		zap.String("fingerprint", pki.Fingerprint(newCA.Certificate())))
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":       "Pending CA prepared for rotation",
+		"id":            newCAID,
+		"status":        "pending",
+		"serial_number": newCA.Certificate().SerialNumber.Text(16),
+		"not_before":    newCA.Certificate().NotBefore,
+		"not_after":     newCA.Certificate().NotAfter,
+		"fingerprint":   pki.Fingerprint(newCA.Certificate()),
+		"next_steps": []string{
+			"1. Wait for all gateways/hubs/spokes to download the new CA via heartbeat",
+			"2. Call POST /api/v1/admin/settings/ca/activate/" + newCAID + " to complete rotation",
+			"3. Old CA will be retired (still trusted) for a grace period",
+		},
+	})
+}
+
+// handleActivateCA activates a pending CA and retires the current active CA
+func (s *Server) handleActivateCA(c *gin.Context) {
+	caID := c.Param("id")
+	if caID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "CA ID required"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Verify the CA exists and is pending
+	pendingCA, err := s.pkiStore.GetCAByID(ctx, caID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "CA not found"})
+		return
+	}
+	if pendingCA.Status != db.CAStatusPending {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "CA is not in pending status"})
+		return
+	}
+
+	// Activate the CA (this also retires the current active CA)
+	if err := s.pkiStore.ActivateCA(ctx, caID); err != nil {
+		s.logger.Error("Failed to activate CA", zap.Error(err), zap.String("ca_id", caID))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to activate CA"})
+		return
+	}
+
+	// Reload the CA in memory
+	if err := s.reloadActiveCA(ctx); err != nil {
+		s.logger.Error("Failed to reload CA in memory", zap.Error(err))
+		// Don't fail the request - the database is updated
+	}
+
+	s.logger.Info("CA activated", zap.String("ca_id", caID))
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":     "CA activated successfully",
+		"id":          caID,
+		"status":      "active",
+		"fingerprint": pendingCA.Fingerprint,
+		"note":        "Previous CA has been retired but remains trusted. Gateways/Hubs/Spokes will reprovision automatically.",
+	})
+}
+
+// handleRevokeCA revokes a retired CA (removes from trust)
+func (s *Server) handleRevokeCA(c *gin.Context) {
+	caID := c.Param("id")
+	if caID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "CA ID required"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Verify the CA exists and is retired
+	ca, err := s.pkiStore.GetCAByID(ctx, caID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "CA not found"})
+		return
+	}
+	if ca.Status == db.CAStatusActive {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot revoke active CA - activate a new CA first"})
+		return
+	}
+
+	if err := s.pkiStore.RevokeCA(ctx, caID); err != nil {
+		s.logger.Error("Failed to revoke CA", zap.Error(err), zap.String("ca_id", caID))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to revoke CA"})
+		return
+	}
+
+	s.logger.Info("CA revoked", zap.String("ca_id", caID))
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "CA revoked successfully",
+		"id":      caID,
+		"status":  "revoked",
+		"warning": "Components still using this CA will no longer be able to connect",
+	})
+}
+
+// handleGetCAFingerprint returns the fingerprint of the active CA
+func (s *Server) handleGetCAFingerprint(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	fingerprint, err := s.pkiStore.GetCAFingerprint(ctx)
+	if err != nil {
+		// Fallback to in-memory CA
+		if s.ca != nil && s.ca.Certificate() != nil {
+			fingerprint = pki.Fingerprint(s.ca.Certificate())
+		} else {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "CA not available"})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"fingerprint": fingerprint,
+	})
+}
+
+// reloadActiveCA reloads the active CA from database into memory
+func (s *Server) reloadActiveCA(ctx context.Context) error {
+	storedCA, err := s.pkiStore.GetCA(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Update the CA in memory
+	if err := s.ca.UpdateFromPEM(ctx, storedCA.CertificatePEM, storedCA.PrivateKeyPEM); err != nil {
+		return err
+	}
+
+	// Reinitialize config generator
+	if s.configGen != nil {
+		newConfigGen, err := openvpn.NewConfigGenerator(s.ca, nil)
+		if err != nil {
+			s.logger.Error("Failed to reinitialize config generator", zap.Error(err))
+		} else {
+			s.configGen = newConfigGen
+		}
+	}
+
+	return nil
 }
 
 // validateCryptoProfileAllowed checks if the given crypto profile is allowed by system settings

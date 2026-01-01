@@ -31,6 +31,13 @@ RUN mkdir -p /client-binaries && \
     CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o /client-binaries/gatekey-darwin-amd64 ./cmd/gatekey && \
     CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o /client-binaries/gatekey-darwin-arm64 ./cmd/gatekey
 
+# Build admin CLI binaries for multiple platforms
+RUN mkdir -p /admin-binaries && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /admin-binaries/gatekey-admin-linux-amd64 ./cmd/gatekey-admin && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o /admin-binaries/gatekey-admin-linux-arm64 ./cmd/gatekey-admin && \
+    CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o /admin-binaries/gatekey-admin-darwin-amd64 ./cmd/gatekey-admin && \
+    CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o /admin-binaries/gatekey-admin-darwin-arm64 ./cmd/gatekey-admin
+
 # Build hub binaries for multiple platforms
 RUN mkdir -p /hub-binaries && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /hub-binaries/gatekey-hub-linux-amd64 ./cmd/gatekey-hub && \
@@ -52,9 +59,10 @@ RUN apk add --no-cache ca-certificates tzdata
 # Copy server binary
 COPY --from=builder /gatekey-server /usr/local/bin/gatekey-server
 
-# Copy gateway and client binaries for download
+# Copy gateway, client, admin, hub, and mesh binaries for download
 COPY --from=builder /gateway-binaries /app/bin
 COPY --from=builder /client-binaries /app/bin
+COPY --from=builder /admin-binaries /app/bin
 COPY --from=builder /hub-binaries /app/bin
 COPY --from=builder /mesh-gateway-binaries /app/bin
 

@@ -15,6 +15,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
     { name: 'Connect', href: '/connect', icon: 'vpn' },
     { name: 'Web Access', href: '/web-access', icon: 'web' },
     { name: 'My Configs', href: '/my-configs', icon: 'configs' },
+    { name: 'API Keys', href: '/api-keys', icon: 'key' },
   ]
 
   const adminNavigation = [
@@ -27,7 +28,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
     { name: 'Monitoring', href: '/admin/monitoring', icon: 'monitoring' },
     { name: 'OIDC Providers', href: '/admin/settings/oidc', icon: 'oidc' },
     { name: 'SAML Providers', href: '/admin/settings/saml', icon: 'saml' },
-    { name: 'General', href: '/admin/settings/general', icon: 'cog' },
+    { name: 'VPN Settings', href: '/admin/settings/general', icon: 'cog' },
     { name: 'Certificate CA', href: '/admin/settings/ca', icon: 'certificate' },
   ]
 
@@ -115,6 +116,12 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
         return (
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        )
+      case 'key':
+        return (
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
           </svg>
         )
       case 'monitoring':

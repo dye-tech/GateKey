@@ -47,24 +47,24 @@ func (s *Server) handleListMeshHubs(c *gin.Context) {
 		}
 
 		hubData := gin.H{
-			"id":                hub.ID,
-			"name":              hub.Name,
-			"description":       hub.Description,
-			"publicEndpoint":    hub.PublicEndpoint,
-			"vpnPort":           hub.VPNPort,
-			"vpnProtocol":       hub.VPNProtocol,
-			"vpnSubnet":         hub.VPNSubnet,
-			"cryptoProfile":     hub.CryptoProfile,
-			"tlsAuthEnabled":    hub.TLSAuthEnabled,
-			"fullTunnelMode":    hub.FullTunnelMode,
-			"pushDns":           hub.PushDNS,
-			"dnsServers":        hub.DNSServers,
-			"status":            status,
-			"statusMessage":     hub.StatusMessage,
-			"connectedSpokes":   hub.ConnectedSpokes,
-			"connectedClients":  hub.ConnectedClients,
-			"createdAt":         hub.CreatedAt.Format(time.RFC3339),
-			"updatedAt":         hub.UpdatedAt.Format(time.RFC3339),
+			"id":               hub.ID,
+			"name":             hub.Name,
+			"description":      hub.Description,
+			"publicEndpoint":   hub.PublicEndpoint,
+			"vpnPort":          hub.VPNPort,
+			"vpnProtocol":      hub.VPNProtocol,
+			"vpnSubnet":        hub.VPNSubnet,
+			"cryptoProfile":    hub.CryptoProfile,
+			"tlsAuthEnabled":   hub.TLSAuthEnabled,
+			"fullTunnelMode":   hub.FullTunnelMode,
+			"pushDns":          hub.PushDNS,
+			"dnsServers":       hub.DNSServers,
+			"status":           status,
+			"statusMessage":    hub.StatusMessage,
+			"connectedSpokes":  hub.ConnectedSpokes,
+			"connectedClients": hub.ConnectedClients,
+			"createdAt":        hub.CreatedAt.Format(time.RFC3339),
+			"updatedAt":        hub.UpdatedAt.Format(time.RFC3339),
 		}
 		if hub.LastHeartbeat != nil {
 			hubData["lastHeartbeat"] = hub.LastHeartbeat.Format(time.RFC3339)
@@ -175,28 +175,28 @@ func (s *Server) handleGetMeshHub(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"hub": gin.H{
-			"id":                hub.ID,
-			"name":              hub.Name,
-			"description":       hub.Description,
-			"publicEndpoint":    hub.PublicEndpoint,
-			"vpnPort":           hub.VPNPort,
-			"vpnProtocol":       hub.VPNProtocol,
-			"vpnSubnet":         hub.VPNSubnet,
-			"cryptoProfile":     hub.CryptoProfile,
-			"tlsAuthEnabled":    hub.TLSAuthEnabled,
-			"fullTunnelMode":    hub.FullTunnelMode,
-			"pushDns":           hub.PushDNS,
-			"dnsServers":        hub.DNSServers,
-			"localNetworks":     hub.LocalNetworks,
-			"controlPlaneUrl":   hub.ControlPlaneURL,
-			"status":            hub.Status,
-			"statusMessage":     hub.StatusMessage,
-			"connectedSpokes":   hub.ConnectedSpokes,
-			"connectedClients":  hub.ConnectedClients,
-			"hasCACert":         hub.CACert != "",
-			"hasServerCert":     hub.ServerCert != "",
-			"createdAt":         hub.CreatedAt.Format(time.RFC3339),
-			"updatedAt":         hub.UpdatedAt.Format(time.RFC3339),
+			"id":               hub.ID,
+			"name":             hub.Name,
+			"description":      hub.Description,
+			"publicEndpoint":   hub.PublicEndpoint,
+			"vpnPort":          hub.VPNPort,
+			"vpnProtocol":      hub.VPNProtocol,
+			"vpnSubnet":        hub.VPNSubnet,
+			"cryptoProfile":    hub.CryptoProfile,
+			"tlsAuthEnabled":   hub.TLSAuthEnabled,
+			"fullTunnelMode":   hub.FullTunnelMode,
+			"pushDns":          hub.PushDNS,
+			"dnsServers":       hub.DNSServers,
+			"localNetworks":    hub.LocalNetworks,
+			"controlPlaneUrl":  hub.ControlPlaneURL,
+			"status":           hub.Status,
+			"statusMessage":    hub.StatusMessage,
+			"connectedSpokes":  hub.ConnectedSpokes,
+			"connectedClients": hub.ConnectedClients,
+			"hasCACert":        hub.CACert != "",
+			"hasServerCert":    hub.ServerCert != "",
+			"createdAt":        hub.CreatedAt.Format(time.RFC3339),
+			"updatedAt":        hub.UpdatedAt.Format(time.RFC3339),
 		},
 	})
 }
@@ -1029,10 +1029,17 @@ func (s *Server) handleMeshHubHeartbeat(c *gin.Context) {
 	expectedVersion := computeConfigVersion(hub.VPNPort, hub.VPNProtocol, hub.VPNSubnet, hub.CryptoProfile, hub.TLSAuthEnabled)
 	needsReprovision := req.ConfigVersion != "" && req.ConfigVersion != expectedVersion
 
+	// Get Root CA fingerprint for rotation detection
+	rootCAFingerprint := ""
+	if s.ca != nil && s.ca.Certificate() != nil {
+		rootCAFingerprint = pki.Fingerprint(s.ca.Certificate())
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"ok":               true,
-		"needsReprovision": needsReprovision,
-		"configVersion":    expectedVersion,
+		"ok":                true,
+		"needsReprovision":  needsReprovision,
+		"configVersion":     expectedVersion,
+		"rootCAFingerprint": rootCAFingerprint,
 	})
 }
 
@@ -1059,9 +1066,16 @@ func (s *Server) handleMeshHubProvisionRequest(c *gin.Context) {
 		return
 	}
 
-	// Auto-provision if hub has no PKI yet
-	if hub.CACert == "" || hub.CAKey == "" {
-		s.logger.Info("Auto-provisioning hub PKI", zap.String("hub", hub.Name))
+	// Check if hub needs PKI provisioning or re-provisioning
+	needsNewPKI := hub.CACert == "" || hub.CAKey == ""
+
+	// Check if existing Sub-CA was signed by a different root CA (CA rotation occurred)
+	if !needsNewPKI && hub.CACert != "" && s.ca != nil {
+		needsNewPKI = s.hubSubCANeedsRegeneration(hub.CACert)
+	}
+
+	if needsNewPKI {
+		s.logger.Info("Auto-provisioning hub PKI", zap.String("hub", hub.Name), zap.Bool("existing_pki", hub.CACert != ""))
 
 		// Check if we have a CA
 		if s.ca == nil {
@@ -1234,9 +1248,9 @@ func (s *Server) handleMeshSpokeDisconnected(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	var req struct {
-		Token     string `json:"token" binding:"required"`
-		SpokeID string `json:"spokeId"`
-		RemoteIP  string `json:"remoteIp"`
+		Token    string `json:"token" binding:"required"`
+		SpokeID  string `json:"spokeId"`
+		RemoteIP string `json:"remoteIp"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1551,6 +1565,7 @@ func (s *Server) handleMeshSpokeProvisionRequest(c *gin.Context) {
 		"tlsAuthEnabled": hub.TLSAuthEnabled,
 		"tlsAuthKey":     hub.TLSAuthKey,
 		"cryptoProfile":  hub.CryptoProfile,
+		"configVersion":  computeSpokeConfigVersion(hub),
 	})
 }
 
@@ -1564,6 +1579,7 @@ func (s *Server) handleMeshSpokeHeartbeat(c *gin.Context) {
 		RemoteIP      string `json:"remoteIp"`
 		BytesSent     int64  `json:"bytesSent"`
 		BytesReceived int64  `json:"bytesReceived"`
+		ConfigVersion string `json:"configVersion"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1591,13 +1607,68 @@ func (s *Server) handleMeshSpokeHeartbeat(c *gin.Context) {
 		s.logger.Error("Failed to update gateway status", zap.Error(err))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"ok": true})
+	// Get hub to compute current config version
+	hub, err := s.meshStore.GetHub(ctx, gw.HubID)
+	if err != nil {
+		s.logger.Error("Failed to get hub for config version", zap.Error(err))
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+		return
+	}
+
+	// Compute current config version including TLS-Auth key hash
+	currentConfigVersion := computeSpokeConfigVersion(hub)
+
+	// Check if spoke needs to reprovision
+	needsReprovision := req.ConfigVersion != "" && req.ConfigVersion != currentConfigVersion
+
+	if needsReprovision {
+		s.logger.Info("Spoke config version mismatch, needs reprovision",
+			zap.String("spoke", gw.Name),
+			zap.String("spokeVersion", req.ConfigVersion),
+			zap.String("hubVersion", currentConfigVersion))
+	}
+
+	// Get Root CA fingerprint for rotation detection
+	rootCAFingerprint := ""
+	if s.ca != nil && s.ca.Certificate() != nil {
+		rootCAFingerprint = pki.Fingerprint(s.ca.Certificate())
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"ok":                true,
+		"configVersion":     currentConfigVersion,
+		"needsReprovision":  needsReprovision,
+		"tlsAuthEnabled":    hub.TLSAuthEnabled,
+		"rootCAFingerprint": rootCAFingerprint,
+	})
 }
 
 // ==================== Helper Functions ====================
 
 func computeConfigVersion(vpnPort int, vpnProtocol, vpnSubnet, cryptoProfile string, tlsAuthEnabled bool) string {
 	data := fmt.Sprintf("%d|%s|%s|%s|%v", vpnPort, vpnProtocol, vpnSubnet, cryptoProfile, tlsAuthEnabled)
+	hash := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(hash[:8])
+}
+
+// computeSpokeConfigVersion computes a config version hash for spoke provisioning
+// This includes the TLS-Auth key hash so spokes can detect when they need to reprovision
+func computeSpokeConfigVersion(hub *db.MeshHub) string {
+	// Hash the TLS-Auth key content (not the whole key, just enough to detect changes)
+	var tlsAuthHash string
+	if hub.TLSAuthEnabled && hub.TLSAuthKey != "" {
+		h := sha256.Sum256([]byte(hub.TLSAuthKey))
+		tlsAuthHash = hex.EncodeToString(h[:4]) // First 4 bytes of hash
+	}
+
+	data := fmt.Sprintf("%d|%s|%s|%s|%v|%s",
+		hub.VPNPort,
+		hub.VPNProtocol,
+		hub.VPNSubnet,
+		hub.CryptoProfile,
+		hub.TLSAuthEnabled,
+		tlsAuthHash,
+	)
 	hash := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(hash[:8])
 }
@@ -2143,4 +2214,69 @@ func generateMeshClientOVPNConfig(hub *db.MeshHub, caChain, clientCert, clientKe
 	}
 
 	return sb.String()
+}
+
+// hubSubCANeedsRegeneration checks if a hub's Sub-CA was signed by a different
+// root CA than the current active one (indicating CA rotation occurred).
+// Returns true if the Sub-CA needs to be regenerated with the new root CA.
+func (s *Server) hubSubCANeedsRegeneration(subCAPEM string) bool {
+	if s.ca == nil || s.ca.Certificate() == nil {
+		return false
+	}
+
+	// Parse the Sub-CA certificate
+	block, _ := pem.Decode([]byte(subCAPEM))
+	if block == nil {
+		s.logger.Warn("Failed to decode hub Sub-CA PEM")
+		return true // If we can't parse, regenerate to be safe
+	}
+
+	subCA, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		s.logger.Warn("Failed to parse hub Sub-CA certificate", zap.Error(err))
+		return true // If we can't parse, regenerate to be safe
+	}
+
+	// Get the current root CA's Subject Key Identifier
+	rootCA := s.ca.Certificate()
+
+	// Compare Authority Key Identifier of Sub-CA with Subject Key Identifier of root CA
+	// If they don't match, the Sub-CA was signed by a different root CA
+	if len(subCA.AuthorityKeyId) > 0 && len(rootCA.SubjectKeyId) > 0 {
+		if !bytesEqual(subCA.AuthorityKeyId, rootCA.SubjectKeyId) {
+			s.logger.Info("Hub Sub-CA was signed by different root CA, needs regeneration",
+				zap.String("sub_ca_authority_key_id", hex.EncodeToString(subCA.AuthorityKeyId)),
+				zap.String("root_ca_subject_key_id", hex.EncodeToString(rootCA.SubjectKeyId)))
+			return true
+		}
+	}
+
+	// Also verify that the root CA can verify the Sub-CA signature
+	roots := x509.NewCertPool()
+	roots.AddCert(rootCA)
+
+	opts := x509.VerifyOptions{
+		Roots: roots,
+	}
+
+	if _, err := subCA.Verify(opts); err != nil {
+		s.logger.Info("Hub Sub-CA signature verification failed with current root CA, needs regeneration",
+			zap.Error(err))
+		return true
+	}
+
+	return false
+}
+
+// bytesEqual compares two byte slices for equality
+func bytesEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
