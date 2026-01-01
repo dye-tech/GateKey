@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import {
-  getAdminGateways, registerGateway, deleteGateway, updateGateway,
+  getAdminGateways, registerGateway, deleteGateway, updateGateway, reprovisionGateway,
   getGatewayNetworks, getNetworks, assignGatewayToNetwork, removeGatewayFromNetwork,
   getGatewayUsers, assignUserToGateway, removeUserFromGateway,
   getGatewayGroups, assignGroupToGateway, removeGroupFromGateway,
@@ -50,6 +50,24 @@ export default function AdminGateways() {
       await loadGateways()
     } catch (err) {
       setError('Failed to delete gateway')
+    }
+  }
+
+  async function handleReprovision(gateway: AdminGateway) {
+    if (!confirm(
+      `Re-provision gateway "${gateway.name}"?\n\n` +
+      `WARNING: This will regenerate all certificates. ` +
+      `Existing client VPN configs will stop working and users must download new configs.`
+    )) {
+      return
+    }
+
+    try {
+      await reprovisionGateway(gateway.id)
+      await loadGateways()
+      setError(null)
+    } catch (err) {
+      setError('Failed to trigger reprovision')
     }
   }
 
@@ -162,6 +180,7 @@ export default function AdminGateways() {
                       actions={[
                         { label: 'Edit', icon: 'edit', onClick: () => { setEditingGateway(gateway); setShowEditModal(true) }, color: 'gray' },
                         { label: 'Access', icon: 'access', onClick: () => { setAccessGateway(gateway); setShowAccessModal(true) }, color: 'purple' },
+                        { label: 'Re-provision', icon: 'install', onClick: () => handleReprovision(gateway) },
                         { label: 'Install', icon: 'install', onClick: () => handleShowInstaller(gateway), color: 'primary' },
                         { label: 'Delete', icon: 'delete', onClick: () => handleDelete(gateway), color: 'red' },
                       ] as ActionItem[]}

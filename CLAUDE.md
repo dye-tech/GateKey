@@ -63,12 +63,17 @@ gatekey/
 
 ## Binaries
 
-| Binary | Description |
-|--------|-------------|
-| `gatekey` | User VPN client - this is what end users install |
-| `gatekey-server` | Control plane server |
-| `gatekey-gateway` | Gateway agent (runs alongside OpenVPN) |
-| `gatekey-admin` | Admin CLI for managing policies |
+| Binary | Description | Platform |
+|--------|-------------|----------|
+| `gatekey` | User VPN client - this is what end users install | Linux, macOS |
+| `gatekey-server` | Control plane server | Linux (Docker/K8s) |
+| `gatekey-gateway` | Gateway agent (runs alongside OpenVPN) | Linux only |
+| `gatekey-hub` | Mesh hub with zero-trust firewall | Linux only |
+| `gatekey-mesh-gateway` | Mesh spoke (connects to hub) | Linux only |
+| `gatekey-admin` | Admin CLI for managing policies | Linux, macOS |
+
+**Note**: Gateway, hub, and mesh components require Linux for nftables firewall support.
+See [docs/compatibility.md](docs/compatibility.md) for full platform support matrix.
 
 ## Build Commands
 
@@ -154,6 +159,22 @@ gatekey disconnect --all      # Disconnect from all gateways
 - `POST /api/v1/gateway/client-rules` - Get access rules for a connected client
 - `POST /api/v1/gateway/all-rules` - Get all rules for periodic refresh
 
+### Mesh Networking (Admin)
+- `GET /api/v1/admin/mesh/hubs` - List mesh hubs
+- `POST /api/v1/admin/mesh/hubs` - Create mesh hub
+- `PUT /api/v1/admin/mesh/hubs/:id` - Update mesh hub (includes TLS Auth, Full Tunnel, DNS settings)
+- `DELETE /api/v1/admin/mesh/hubs/:id` - Delete mesh hub
+- `GET /api/v1/admin/mesh/hubs/:id/networks` - Get hub networks (zero-trust access control)
+- `POST /api/v1/admin/mesh/hubs/:id/networks` - Assign network to hub
+- `DELETE /api/v1/admin/mesh/hubs/:id/networks/:networkId` - Remove network from hub
+- `GET /api/v1/admin/mesh/hubs/:id/spokes` - List spokes for hub
+- `POST /api/v1/admin/mesh/hubs/:id/spokes` - Create spoke
+- `PUT /api/v1/admin/mesh/spokes/:id` - Update spoke (includes Full Tunnel, DNS settings)
+
+### User Mesh Access
+- `GET /api/v1/mesh/hubs` - List hubs user can access
+- `POST /api/v1/mesh/generate-config` - Generate client VPN config with zero-trust routes
+
 ## Database Tables
 
 - `local_users` - Local admin users
@@ -167,6 +188,13 @@ gatekey disconnect --all      # Disconnect from all gateways
 - `group_access_rules` - Group to rule assignments
 - `vpn_configs` - Generated VPN configurations
 - `audit_logs` - Audit trail
+- `mesh_hubs` - Mesh hub servers (TLS Auth, Full Tunnel, DNS settings, local networks)
+- `mesh_gateways` - Mesh spokes/gateways (Full Tunnel, DNS settings, local networks)
+- `mesh_hub_networks` - Networks assigned to hubs (zero-trust access control)
+- `mesh_hub_users` - User access to hubs
+- `mesh_hub_groups` - Group access to hubs
+- `mesh_gateway_users` - User access to spokes
+- `mesh_gateway_groups` - Group access to spokes
 
 ## Kubernetes Integration
 
@@ -252,3 +280,29 @@ Routes are pushed to clients dynamically during connection based on:
 3. Gateway's full tunnel mode setting
 
 For CIDR-type access rules, routes are automatically converted to OpenVPN push directives (e.g., `route 192.168.50.0 255.255.254.0`).
+
+## Mesh Networking
+
+Hub-and-spoke VPN topology for site-to-site connectivity.
+
+### Key Features
+- **Zero-Trust Access**: Routes only pushed for networks with explicit access rules
+- **Hub Networks**: Assign global Networks to hubs via Manage Access → Networks tab
+- **Full Tunnel Mode**: Route all client traffic through hub
+- **Push DNS**: Push DNS servers to mesh clients
+- **Local Networks**: Networks directly reachable from hub (not via spokes)
+
+### Zero-Trust Model
+1. Create Networks (Administration → Networks)
+2. Create Access Rules within Networks (Administration → Access Rules)
+3. Assign Access Rules to Users/Groups
+4. Assign Networks to Hub (Mesh → Hubs → Manage Access → Networks)
+5. Users only receive routes for networks they have access rules for
+
+### CLI Commands
+```bash
+gatekey connect --mesh <hub-name>   # Connect to mesh hub
+gatekey mesh list                   # List available mesh hubs
+gatekey status                      # Show connection status
+gatekey disconnect                  # Disconnect from VPN
+```

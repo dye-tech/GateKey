@@ -454,7 +454,7 @@ func generateClientConfig(prov ProvisionResponse, hubEndpoint string) string {
 	sb.WriteString("# Logging\n")
 	sb.WriteString("status /var/log/openvpn/mesh-status.log\n")
 	sb.WriteString("log-append /var/log/openvpn/mesh-gateway.log\n")
-	sb.WriteString("verb 3\n")
+	sb.WriteString("verb 1\n")
 
 	return sb.String()
 }

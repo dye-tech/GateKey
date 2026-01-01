@@ -300,7 +300,7 @@ remote-cert-tls server
 # Logging
 status /var/log/openvpn/mesh-spoke-status.log
 log-append /var/log/openvpn/mesh-spoke.log
-verb 3
+verb 1
 EOF
 
     # Create log directory

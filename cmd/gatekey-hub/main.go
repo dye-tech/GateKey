@@ -9,23 +9,30 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
+	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
+
+	"github.com/gatekey-project/gatekey/internal/firewall"
 )
 
 var (
 	configPath       string
 	logger           *zap.Logger
 	currentConfigVer string
+	firewallMgr      *firewall.Manager
 )
 
 const configVersionFile = "/etc/gatekey-hub/.config_version"
@@ -182,6 +189,23 @@ func runHub(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Initialize firewall manager for zero-trust enforcement
+	nftBackend, err := firewall.NewNFTablesBackend(firewall.NFTablesConfig{
+		TableName: "gatekey",
+		ChainName: "forward",
+	})
+	if err != nil {
+		logger.Warn("Failed to create nftables backend, firewall rules will not be enforced", zap.Error(err))
+	} else {
+		firewallMgr = firewall.NewManager(nftBackend)
+		if err := firewallMgr.Initialize(ctx); err != nil {
+			logger.Warn("Failed to initialize firewall manager", zap.Error(err))
+			firewallMgr = nil
+		} else {
+			logger.Info("Firewall manager initialized")
+		}
+	}
+
 	// Start OpenVPN if not running
 	if !isOpenVPNRunning() {
 		logger.Info("Starting OpenVPN...")
@@ -196,12 +220,23 @@ func runHub(cmd *cobra.Command, args []string) error {
 	// Start gateway monitoring loop
 	go gatewayMonitorLoop(ctx, cfg)
 
+	// Start firewall enforcement loop (zero-trust)
+	go firewallEnforcementLoop(ctx, cfg)
+
 	// Wait for shutdown signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
 	logger.Info("Shutting down mesh hub")
+
+	// Cleanup firewall rules
+	if firewallMgr != nil {
+		if err := firewallMgr.Cleanup(context.Background()); err != nil {
+			logger.Warn("Failed to cleanup firewall rules", zap.Error(err))
+		}
+	}
+
 	return nil
 }
 
@@ -460,7 +495,7 @@ func generateServerConfig(prov ProvisionResponse) string {
 	sb.WriteString("# Logging\n")
 	sb.WriteString("status /var/log/openvpn/status.log\n")
 	sb.WriteString("log-append /var/log/openvpn/openvpn.log\n")
-	sb.WriteString("verb 3\n\n")
+	sb.WriteString("verb 1\n\n")
 
 	sb.WriteString("# Persist settings across restarts\n")
 	sb.WriteString("persist-key\n")
@@ -477,6 +512,11 @@ func generateServerConfig(prov ProvisionResponse) string {
 func gatewayMonitorLoop(ctx context.Context, cfg *HubConfig) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
+
+	// CRITICAL: Create CCD files immediately on startup, before any spokes connect
+	// This prevents spokes from getting wrong IPs from the dynamic pool
+	logger.Info("Creating initial CCD files for spokes...")
+	updateGatewayRoutes(ctx, cfg)
 
 	for {
 		select {
@@ -521,6 +561,8 @@ func updateGatewayRoutes(ctx context.Context, cfg *HubConfig) {
 	ccdDir := "/etc/openvpn/server/ccd"
 	_ = os.MkdirAll(ccdDir, 0755)
 
+	needsRestart := false
+
 	// Update CCD files and kernel routes for each spoke
 	for _, spoke := range result.Spokes {
 		if spoke.TunnelIP == "" {
@@ -539,17 +581,36 @@ func updateGatewayRoutes(ctx context.Context, cfg *HubConfig) {
 			}
 		}
 
+		newContent := sb.String()
+
 		// Write CCD file (use spoke certificate CN as filename)
 		ccdFile := fmt.Sprintf("%s/mesh-gateway-%s", ccdDir, spoke.Name)
-		if err := os.WriteFile(ccdFile, []byte(sb.String()), 0644); err != nil {
-			logger.Warn("Failed to write CCD file", zap.String("spoke", spoke.Name), zap.Error(err))
-		} else {
-			logger.Debug("Updated CCD file", zap.String("spoke", spoke.Name), zap.String("file", ccdFile))
+
+		// Check if CCD file content changed
+		existingContent, err := os.ReadFile(ccdFile)
+		if err != nil || string(existingContent) != newContent {
+			if err := os.WriteFile(ccdFile, []byte(newContent), 0644); err != nil {
+				logger.Warn("Failed to write CCD file", zap.String("spoke", spoke.Name), zap.Error(err))
+			} else {
+				logger.Info("Updated CCD file", zap.String("spoke", spoke.Name), zap.String("file", ccdFile))
+				// If file changed and spoke might be connected with wrong IP, flag for restart
+				if err == nil && string(existingContent) != newContent {
+					needsRestart = true
+				}
+			}
 		}
 
 		// Add kernel routes for each spoke network via the spoke's tunnel IP
 		for _, network := range spoke.LocalNetworks {
 			addKernelRoute(network, spoke.TunnelIP)
+		}
+	}
+
+	// If CCD files changed, restart OpenVPN so clients reconnect with correct IPs
+	if needsRestart {
+		logger.Info("CCD files changed, restarting OpenVPN to apply new configurations...")
+		if err := restartOpenVPN(); err != nil {
+			logger.Warn("Failed to restart OpenVPN", zap.Error(err))
 		}
 	}
 }
@@ -684,7 +745,7 @@ func getConnectedClientCount() int {
 }
 
 func countConnections(prefix string) int {
-	statusFile := "/var/log/openvpn/status.log"
+	statusFile := "/var/log/openvpn/hub-status.log"
 	data, err := os.ReadFile(statusFile)
 	if err != nil {
 		return 0
@@ -714,4 +775,369 @@ func countConnections(prefix string) int {
 	}
 
 	return count
+}
+
+// ==================== Firewall Enforcement ====================
+
+// ConnectedClient represents a connected VPN client
+type ConnectedClient struct {
+	CN       string // Common Name (email)
+	TunnelIP string // VPN tunnel IP
+	RealIP   string // Real client IP
+}
+
+// AccessRule represents an access rule from the control plane
+type AccessRule struct {
+	Type     string `json:"type"`     // ip, cidr, hostname, hostname_wildcard
+	Value    string `json:"value"`    // Rule value
+	Port     string `json:"port"`     // Port or * for all
+	Protocol string `json:"protocol"` // tcp, udp, * for all
+}
+
+// clientFirewallState tracks firewall rules for a client
+type clientFirewallState struct {
+	rules    []AccessRule
+	rulesSet bool
+}
+
+var (
+	clientFirewallStates = make(map[string]*clientFirewallState) // CN -> state
+	clientFirewallMutex  = &sync.Mutex{}
+)
+
+// firewallEnforcementLoop periodically syncs firewall rules for connected clients
+func firewallEnforcementLoop(ctx context.Context, cfg *HubConfig) {
+	if firewallMgr == nil {
+		logger.Warn("Firewall manager not initialized, skipping enforcement loop")
+		return
+	}
+
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	// Run initial sync
+	syncFirewallRules(ctx, cfg)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			syncFirewallRules(ctx, cfg)
+		}
+	}
+}
+
+// getConnectedClients parses OpenVPN status to get connected clients
+func getConnectedClients() []ConnectedClient {
+	statusFile := "/var/log/openvpn/hub-status.log"
+	data, err := os.ReadFile(statusFile)
+	if err != nil {
+		return nil
+	}
+
+	var clients []ConnectedClient
+	lines := strings.Split(string(data), "\n")
+
+	// Parse client list (Common Name, Real Address, Virtual Address, ...)
+	inClientList := false
+	for _, line := range lines {
+		if strings.HasPrefix(line, "ROUTING TABLE") {
+			inClientList = false
+		}
+		if strings.HasPrefix(line, "Virtual Address,") || strings.HasPrefix(line, "Common Name,") {
+			inClientList = true
+			continue
+		}
+		if inClientList && line != "" {
+			parts := strings.Split(line, ",")
+			if len(parts) >= 3 {
+				cn := parts[0]
+				// Skip mesh gateways - they don't need client firewall rules
+				if strings.HasPrefix(cn, "mesh-gateway-") {
+					continue
+				}
+				realIP := parts[1]
+				if idx := strings.Index(realIP, ":"); idx > 0 {
+					realIP = realIP[:idx]
+				}
+				clients = append(clients, ConnectedClient{
+					CN:     cn,
+					RealIP: realIP,
+				})
+			}
+		}
+	}
+
+	// Get virtual IPs from routing table
+	inRoutingTable := false
+	for _, line := range lines {
+		if strings.HasPrefix(line, "ROUTING TABLE") {
+			inRoutingTable = true
+			continue
+		}
+		if strings.HasPrefix(line, "GLOBAL STATS") {
+			break
+		}
+		if inRoutingTable && line != "" && !strings.HasPrefix(line, "Virtual Address,") {
+			parts := strings.Split(line, ",")
+			if len(parts) >= 2 {
+				virtualIP := parts[0]
+				cn := parts[1]
+				// Match with client and update tunnel IP
+				for i := range clients {
+					if clients[i].CN == cn {
+						clients[i].TunnelIP = virtualIP
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return clients
+}
+
+func syncFirewallRules(ctx context.Context, cfg *HubConfig) {
+	if firewallMgr == nil {
+		return
+	}
+
+	clients := getConnectedClients()
+	if len(clients) == 0 {
+		return
+	}
+
+	// Build list of client emails
+	var emails []string
+	for _, c := range clients {
+		if c.CN != "" {
+			emails = append(emails, c.CN)
+		}
+	}
+
+	// Fetch rules from control plane
+	clientRules := fetchClientRules(ctx, cfg, emails)
+	if clientRules == nil {
+		return
+	}
+
+	clientFirewallMutex.Lock()
+	defer clientFirewallMutex.Unlock()
+
+	// Track active clients
+	activeClients := make(map[string]bool)
+	for _, c := range clients {
+		activeClients[c.CN] = true
+	}
+
+	// Remove firewall rules for disconnected clients
+	for cn := range clientFirewallStates {
+		if !activeClients[cn] {
+			removeClientFirewallRules(ctx, cn)
+			delete(clientFirewallStates, cn)
+		}
+	}
+
+	// Update firewall rules for connected clients
+	for _, client := range clients {
+		if client.TunnelIP == "" {
+			continue
+		}
+
+		rules, ok := clientRules[client.CN]
+		if !ok {
+			// No rules = no access (zero trust)
+			rules = []AccessRule{}
+		}
+
+		state, exists := clientFirewallStates[client.CN]
+		if !exists {
+			state = &clientFirewallState{}
+			clientFirewallStates[client.CN] = state
+		}
+
+		// Check if rules changed
+		rulesChanged := !state.rulesSet || !rulesEqual(state.rules, rules)
+		if rulesChanged {
+			applyClientFirewallRules(ctx, client, rules)
+			state.rules = rules
+			state.rulesSet = true
+		}
+	}
+}
+
+func fetchClientRules(ctx context.Context, cfg *HubConfig, emails []string) map[string][]AccessRule {
+	reqBody := struct {
+		Token   string   `json:"token"`
+		Clients []string `json:"clients"`
+	}{
+		Token:   cfg.APIToken,
+		Clients: emails,
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		logger.Warn("Failed to marshal request", zap.Error(err))
+		return nil
+	}
+
+	url := strings.TrimSuffix(cfg.ControlPlaneURL, "/") + "/api/v1/mesh-hub/all-client-rules"
+	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	if err != nil {
+		logger.Warn("Failed to fetch client rules", zap.Error(err))
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		logger.Warn("Control plane returned error", zap.Int("status", resp.StatusCode))
+		return nil
+	}
+
+	var result struct {
+		ClientRules map[string][]AccessRule `json:"clientRules"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		logger.Warn("Failed to decode response", zap.Error(err))
+		return nil
+	}
+
+	return result.ClientRules
+}
+
+func rulesEqual(a, b []AccessRule) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func applyClientFirewallRules(ctx context.Context, client ConnectedClient, rules []AccessRule) {
+	if firewallMgr == nil {
+		return
+	}
+
+	// Remove existing rules for this client first
+	connectionID := fmt.Sprintf("mesh-client-%s", strings.ReplaceAll(client.TunnelIP, ".", "-"))
+	_ = firewallMgr.RemoveRules(ctx, connectionID)
+
+	logger.Info("Applying firewall rules",
+		zap.String("client", client.CN),
+		zap.String("tunnelIP", client.TunnelIP),
+		zap.Int("ruleCount", len(rules)))
+
+	// Parse source IP
+	sourceIP := net.ParseIP(client.TunnelIP)
+	if sourceIP == nil {
+		logger.Warn("Invalid tunnel IP", zap.String("tunnelIP", client.TunnelIP))
+		return
+	}
+
+	// Convert access rules to firewall networks and ports
+	var networks []net.IPNet
+	var ports []firewall.PortRange
+
+	for _, rule := range rules {
+		switch rule.Type {
+		case "ip":
+			ip := net.ParseIP(rule.Value)
+			if ip != nil {
+				networks = append(networks, net.IPNet{IP: ip, Mask: net.CIDRMask(32, 32)})
+			}
+		case "cidr":
+			_, ipnet, err := net.ParseCIDR(rule.Value)
+			if err == nil && ipnet != nil {
+				networks = append(networks, *ipnet)
+			}
+		case "hostname", "hostname_wildcard":
+			// Resolve hostname to IP
+			ips, err := net.LookupIP(rule.Value)
+			if err != nil || len(ips) == 0 {
+				logger.Debug("Failed to resolve hostname",
+					zap.String("hostname", rule.Value),
+					zap.Error(err))
+				continue
+			}
+			// Add all IPv4 addresses
+			for _, ip := range ips {
+				if ip4 := ip.To4(); ip4 != nil {
+					networks = append(networks, net.IPNet{IP: ip4, Mask: net.CIDRMask(32, 32)})
+				}
+			}
+		}
+
+		// Parse port if specified
+		if rule.Port != "" && rule.Port != "*" {
+			protocol := firewall.ProtocolAny
+			switch rule.Protocol {
+			case "tcp":
+				protocol = firewall.ProtocolTCP
+			case "udp":
+				protocol = firewall.ProtocolUDP
+			}
+
+			if strings.Contains(rule.Port, "-") {
+				// Port range
+				parts := strings.Split(rule.Port, "-")
+				if len(parts) == 2 {
+					start, _ := strconv.Atoi(parts[0])
+					end, _ := strconv.Atoi(parts[1])
+					ports = append(ports, firewall.PortRange{
+						Protocol: protocol,
+						Port:     start,
+						PortEnd:  end,
+					})
+				}
+			} else {
+				port, _ := strconv.Atoi(rule.Port)
+				if port > 0 {
+					ports = append(ports, firewall.PortRange{
+						Protocol: protocol,
+						Port:     port,
+					})
+				}
+			}
+		}
+	}
+
+	// Generate a UUID from client email for firewall tracking
+	// Use namespace UUID to generate deterministic UUID from email
+	userUUID := uuid.NewSHA1(uuid.NameSpaceURL, []byte(client.CN))
+
+	// Apply rules using firewall manager
+	if err := firewallMgr.ApplyRules(ctx, connectionID, userUUID, sourceIP, networks, ports); err != nil {
+		logger.Warn("Failed to apply firewall rules",
+			zap.String("client", client.CN),
+			zap.Error(err))
+	}
+}
+
+func removeClientFirewallRules(ctx context.Context, cn string) {
+	if firewallMgr == nil {
+		return
+	}
+
+	// Find client's tunnel IP from connected clients
+	clients := getConnectedClients()
+	var tunnelIP string
+	for _, c := range clients {
+		if c.CN == cn {
+			tunnelIP = c.TunnelIP
+			break
+		}
+	}
+	if tunnelIP == "" {
+		return
+	}
+
+	connectionID := fmt.Sprintf("mesh-client-%s", strings.ReplaceAll(tunnelIP, ".", "-"))
+	if err := firewallMgr.RemoveRules(ctx, connectionID); err != nil {
+		logger.Debug("Error removing firewall rules", zap.String("cn", cn), zap.Error(err))
+	}
 }

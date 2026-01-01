@@ -59,7 +59,11 @@ Mesh networking enables secure site-to-site connectivity using a hub-and-spoke t
    - **VPN Protocol**: UDP (recommended) or TCP
    - **VPN Subnet**: Tunnel IP range (e.g., `172.30.0.0/16`)
    - **Crypto Profile**: FIPS, Modern, or Compatible
-   - **TLS-Auth**: Enable for additional security
+   - **TLS-Auth**: Enable for additional security (recommended)
+   - **Full Tunnel Mode**: Route all client traffic through hub
+   - **Push DNS**: Push DNS servers to connected clients
+   - **DNS Servers**: Custom DNS servers (defaults to 1.1.1.1, 8.8.8.8)
+   - **Local Networks**: Networks directly reachable from the hub (e.g., `192.168.1.0/24`)
 4. Click **Create Hub**
 5. **Save the API Token** - shown only once!
 
@@ -127,9 +131,9 @@ View logs on the spoke server:
 journalctl -u gatekey-mesh-gateway -f
 ```
 
-## Access Control
+## Access Control (Zero-Trust)
 
-GateKey provides fine-grained access control at both the hub and spoke level.
+GateKey implements a **zero-trust security model** for mesh networking. Access is denied by default - users only get routes to networks they are explicitly authorized to access.
 
 ### Hub Access Control
 
@@ -139,11 +143,30 @@ Hub access determines who can connect to the mesh network as a VPN client.
 1. Go to **Mesh → Hubs**
 2. Click the actions menu on a hub
 3. Select **Manage Access**
-4. Add users or groups
+4. Use tabs to manage:
+   - **Users**: Individual user assignments
+   - **Groups**: Group-based assignments
+   - **Networks**: Network access rules (zero-trust)
 
 Users without hub access:
 - Cannot see the hub on the Connect page
 - Cannot generate VPN configs for the mesh
+
+### Hub Network Access (Zero-Trust)
+
+The Networks tab controls which networks users can access through access rules. This implements zero-trust - routes are only pushed to clients if they have explicit access rules.
+
+**How it works:**
+1. Assign Networks to the hub (from the global Networks list)
+2. Each Network contains Access Rules (CIDR definitions)
+3. Assign Access Rules to Users or Groups
+4. Only users with matching access rules receive routes
+
+**Example:**
+- Hub has "Home Lab" network assigned with access rule `192.168.50.0/23`
+- User "alice" is assigned to this access rule
+- When Alice connects, she receives a route to `192.168.50.0/23`
+- User "bob" without this rule cannot reach that network
 
 ### Spoke Access Control
 
@@ -167,7 +190,7 @@ You can:
 - Assign the "Developers" group to access only development (via a spoke that only advertises dev)
 - Exclude contractors from production access
 
-### Access Control Flow
+### Access Control Flow (Zero-Trust)
 
 ```
 User requests mesh VPN connection
@@ -179,8 +202,20 @@ User requests mesh VPN connection
                 │ YES
                 ▼
 ┌───────────────────────────────┐
+│ Get networks assigned to hub  │
+│ (via Networks tab)            │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│ Filter to access rules user   │
+│ is assigned to (zero-trust)   │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
 │ Generate VPN config with      │
-│ routes for accessible spokes  │
+│ ONLY authorized routes        │
 └───────────────┬───────────────┘
                 │
                 ▼
@@ -203,7 +238,27 @@ Users with hub access can connect to the mesh network as VPN clients.
 4. Click **Download Config**
 5. Save the `.ovpn` file
 
-### Connecting
+### Using the GateKey CLI
+
+The GateKey CLI provides the easiest way to connect:
+
+```bash
+# List available mesh hubs
+gatekey mesh list
+
+# Connect to a mesh hub
+gatekey connect --mesh hub-name
+
+# Check status
+gatekey status
+
+# Disconnect
+gatekey disconnect
+```
+
+The CLI automatically downloads configs and manages connections.
+
+### Manual Connection (OpenVPN Client)
 
 Import the config into any OpenVPN client:
 
@@ -247,6 +302,9 @@ sudo openvpn --config mesh-hub-name.ovpn
 | `/api/v1/admin/mesh/hubs/:id/groups` | GET | List hub groups |
 | `/api/v1/admin/mesh/hubs/:id/groups` | POST | Add group to hub |
 | `/api/v1/admin/mesh/hubs/:id/groups/:groupName` | DELETE | Remove group |
+| `/api/v1/admin/mesh/hubs/:id/networks` | GET | List hub networks (zero-trust) |
+| `/api/v1/admin/mesh/hubs/:id/networks` | POST | Assign network to hub |
+| `/api/v1/admin/mesh/hubs/:id/networks/:networkId` | DELETE | Remove network from hub |
 
 ### Spoke Management
 
@@ -340,21 +398,66 @@ sudo openvpn --config mesh-hub-name.ovpn
 
 ### Client Can't Access Spoke Networks
 
-1. Verify user has hub access (check Manage Access modal)
+1. Verify user has hub access (check Manage Access modal → Users/Groups tabs)
 
-2. Verify user has spoke access for the target network
+2. **Zero-Trust Check**: Verify network is assigned to hub (Manage Access → Networks tab)
 
-3. Check client received correct routes:
+3. **Access Rules Check**: Verify user has access rules for the target network:
+   - Go to Administration → Access Rules
+   - Check user/group is assigned to rules covering the target CIDR
+
+4. Check client received correct routes:
    ```bash
    ip route show | grep tun
    ```
 
-4. Test connectivity step by step:
+5. Test connectivity step by step:
    ```bash
    ping <hub-tunnel-ip>    # Should work
    ping <spoke-tunnel-ip>  # Should work if routes ok
-   ping <spoke-network-ip> # Should work if spoke access granted
+   ping <spoke-network-ip> # Should work if access rules granted
    ```
+
+### No Routes Pushed to Client
+
+If connecting successfully but no routes appear:
+
+1. Check networks are assigned to hub (Manage Access → Networks tab)
+2. Check user has access rules within those networks
+3. Regenerate the VPN config after making access rule changes
+
+## VPN Settings
+
+### Full Tunnel Mode
+
+When enabled, all client traffic is routed through the VPN (0.0.0.0/0 route). This is useful for:
+- Enforcing traffic inspection
+- Hiding client's real IP
+- Accessing internet through hub's network
+
+**To enable:**
+1. When creating a hub, check "Full Tunnel Mode"
+2. Or edit an existing hub and enable the setting
+
+### DNS Settings
+
+Push DNS servers to connected clients to ensure name resolution works correctly.
+
+**Configuration:**
+1. Enable "Push DNS servers to clients"
+2. Add custom DNS servers (e.g., 1.1.1.1, 8.8.8.8)
+3. If no servers specified, defaults to 1.1.1.1 and 8.8.8.8
+
+**Use cases:**
+- Internal DNS resolution for private domains
+- DNS-based ad blocking (Pi-hole, AdGuard)
+- Split-horizon DNS scenarios
+
+### Hub Local Networks
+
+Networks directly reachable from the hub server (not via spokes). Configure these in the hub settings to make them available to clients.
+
+**Example:** If the hub is on 192.168.1.0/24 and you want clients to reach that network, add it to the hub's local networks.
 
 ## Security Considerations
 
@@ -369,3 +472,5 @@ sudo openvpn --config mesh-hub-name.ovpn
 5. **Certificate Lifetime**: Client certificates are short-lived (24 hours default) to limit exposure.
 
 6. **Audit Logging**: All access changes and connections are logged for compliance.
+
+7. **Zero-Trust Access**: Networks must be explicitly assigned to hubs, and users must have access rules to receive routes.

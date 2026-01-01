@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import {
-  getMeshHubs, createMeshHub, deleteMeshHub, provisionMeshHub, getMeshHubInstallScript,
-  getMeshSpokes, createMeshSpoke, deleteMeshSpoke, provisionMeshSpoke, getMeshSpokeInstallScript,
+  getMeshHubs, createMeshHub, deleteMeshHub, provisionMeshHub, getMeshHubInstallScript, updateMeshHub,
+  getMeshSpokes, createMeshSpoke, deleteMeshSpoke, provisionMeshSpoke, getMeshSpokeInstallScript, updateMeshSpoke,
   getMeshHubUsers, assignMeshHubUser, removeMeshHubUser,
   getMeshHubGroups, assignMeshHubGroup, removeMeshHubGroup,
+  getMeshHubNetworks, assignMeshHubNetwork, removeMeshHubNetwork, MeshHubNetwork,
   getMeshSpokeUsers, assignMeshSpokeUser, removeMeshSpokeUser,
   getMeshSpokeGroups, assignMeshSpokeGroup, removeMeshSpokeGroup,
-  getUsers, getGroups,
+  getUsers, getGroups, getNetworks, Network,
   MeshHub, MeshHubWithToken, MeshSpoke, MeshSpokeWithToken,
   CreateMeshHubRequest, CreateMeshSpokeRequest, CryptoProfile
 } from '../api/client'
@@ -34,6 +35,8 @@ export default function AdminMesh() {
   const [installScript, setInstallScript] = useState<{ type: 'hub' | 'spoke'; name: string; script: string } | null>(null)
   const [newHub, setNewHub] = useState<MeshHubWithToken | null>(null)
   const [newSpoke, setNewSpoke] = useState<MeshSpokeWithToken | null>(null)
+  const [editingHub, setEditingHub] = useState<MeshHub | null>(null)
+  const [editingSpoke, setEditingSpoke] = useState<MeshSpoke | null>(null)
 
   useEffect(() => {
     loadHubs()
@@ -261,8 +264,9 @@ export default function AdminMesh() {
                         <ActionDropdown
                           actions={[
                             { label: 'View Spokes', icon: 'gateway' as const, onClick: () => { setSelectedHub(hub); setActiveTab('spokes') } },
+                            { label: 'Edit', icon: 'edit' as const, onClick: () => setEditingHub(hub) },
                             { label: 'Manage Access', icon: 'access' as const, onClick: () => { setAccessHub(hub); setShowAccessModal(true) } },
-                            { label: 'Provision', icon: 'install' as const, onClick: () => handleProvisionHub(hub) },
+                            { label: 'Re-provision', icon: 'install' as const, onClick: () => handleProvisionHub(hub) },
                             { label: 'Install Script', icon: 'view' as const, onClick: () => handleShowHubInstallScript(hub), color: 'primary' as const },
                             { label: 'Delete', icon: 'delete' as const, onClick: () => handleDeleteHub(hub), color: 'red' as const },
                           ]}
@@ -366,8 +370,9 @@ export default function AdminMesh() {
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <ActionDropdown
                               actions={[
+                                { label: 'Edit', icon: 'edit' as const, onClick: () => setEditingSpoke(spoke) },
                                 { label: 'Manage Access', icon: 'access' as const, onClick: () => { setAccessSpoke(spoke); setShowSpokeAccessModal(true) } },
-                                { label: 'Provision', icon: 'install' as const, onClick: () => handleProvisionSpoke(spoke) },
+                                { label: 'Re-provision', icon: 'install' as const, onClick: () => handleProvisionSpoke(spoke) },
                                 { label: 'Install Script', icon: 'view' as const, onClick: () => handleShowSpokeInstallScript(spoke), color: 'primary' as const },
                                 { label: 'Delete', icon: 'delete' as const, onClick: () => handleDeleteSpoke(spoke), color: 'red' as const },
                               ]}
@@ -479,6 +484,30 @@ export default function AdminMesh() {
           }}
         />
       )}
+
+      {/* Edit Hub Modal */}
+      {editingHub && (
+        <EditHubModal
+          hub={editingHub}
+          onClose={() => setEditingHub(null)}
+          onSuccess={() => {
+            setEditingHub(null)
+            loadHubs()
+          }}
+        />
+      )}
+
+      {/* Edit Spoke Modal */}
+      {editingSpoke && selectedHub && (
+        <EditSpokeModal
+          spoke={editingSpoke}
+          onClose={() => setEditingSpoke(null)}
+          onSuccess={() => {
+            setEditingSpoke(null)
+            loadSpokes(selectedHub.id)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -494,7 +523,11 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
     vpnSubnet: '172.30.0.0/16',
     cryptoProfile: 'fips' as CryptoProfile,
     tlsAuthEnabled: true,
+    fullTunnelMode: false,
+    pushDns: false,
+    dnsServers: [],
   })
+  const [dnsInput, setDnsInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -617,6 +650,85 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                 Enable TLS-Auth (additional HMAC layer)
               </label>
             </div>
+
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="fullTunnel"
+                checked={form.fullTunnelMode}
+                onChange={(e) => setForm({ ...form, fullTunnelMode: e.target.checked })}
+                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <label htmlFor="fullTunnel" className="ml-2 text-sm text-gray-700">
+                Full Tunnel Mode (route all client traffic through VPN)
+              </label>
+            </div>
+
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="pushDns"
+                checked={form.pushDns}
+                onChange={(e) => setForm({ ...form, pushDns: e.target.checked })}
+                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <label htmlFor="pushDns" className="ml-2 text-sm text-gray-700">
+                Push DNS servers to clients
+              </label>
+            </div>
+
+            {form.pushDns && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700">DNS Servers</label>
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={dnsInput}
+                    onChange={(e) => setDnsInput(e.target.value)}
+                    className="input flex-1"
+                    placeholder="e.g., 1.1.1.1"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        if (dnsInput.trim()) {
+                          setForm({ ...form, dnsServers: [...(form.dnsServers || []), dnsInput.trim()] })
+                          setDnsInput('')
+                        }
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (dnsInput.trim()) {
+                        setForm({ ...form, dnsServers: [...(form.dnsServers || []), dnsInput.trim()] })
+                        setDnsInput('')
+                      }
+                    }}
+                    className="btn btn-secondary"
+                  >
+                    Add
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Leave empty to use defaults (1.1.1.1, 8.8.8.8)</p>
+                {form.dnsServers && form.dnsServers.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {form.dnsServers.map((dns, idx) => (
+                      <span key={idx} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm flex items-center">
+                        {dns}
+                        <button
+                          type="button"
+                          onClick={() => setForm({ ...form, dnsServers: form.dnsServers?.filter((_, i) => i !== idx) })}
+                          className="ml-1 text-gray-400 hover:text-red-600"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex justify-end space-x-3 pt-4">
               <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
@@ -927,14 +1039,17 @@ function InstallScriptModal({ type, name, script, onClose }: { type: 'hub' | 'sp
 
 // Manage Access Modal Component
 function ManageAccessModal({ hub, onClose }: { hub: MeshHub; onClose: () => void }) {
-  const [activeTab, setActiveTab] = useState<'users' | 'groups'>('users')
+  const [activeTab, setActiveTab] = useState<'users' | 'groups' | 'networks'>('users')
   const [users, setUsers] = useState<string[]>([])
   const [groups, setGroups] = useState<string[]>([])
+  const [networks, setNetworks] = useState<MeshHubNetwork[]>([])
   const [allUsers, setAllUsers] = useState<{ id: string; email: string; name: string }[]>([])
   const [allGroups, setAllGroups] = useState<string[]>([])
+  const [allNetworks, setAllNetworks] = useState<Network[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedUser, setSelectedUser] = useState('')
   const [selectedGroup, setSelectedGroup] = useState('')
+  const [selectedNetwork, setSelectedNetwork] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -944,16 +1059,20 @@ function ManageAccessModal({ hub, onClose }: { hub: MeshHub; onClose: () => void
   async function loadData() {
     try {
       setLoading(true)
-      const [hubUsers, hubGroups, userList, groupList] = await Promise.all([
+      const [hubUsers, hubGroups, hubNetworks, userList, groupList, networkList] = await Promise.all([
         getMeshHubUsers(hub.id),
         getMeshHubGroups(hub.id),
+        getMeshHubNetworks(hub.id),
         getUsers(),
         getGroups(),
+        getNetworks(),
       ])
       setUsers(hubUsers)
       setGroups(hubGroups)
+      setNetworks(hubNetworks)
       setAllUsers(userList)
       setAllGroups(groupList.map(g => g.name))
+      setAllNetworks(networkList)
     } catch (err) {
       setError('Failed to load access data')
     } finally {
@@ -1001,8 +1120,32 @@ function ManageAccessModal({ hub, onClose }: { hub: MeshHub; onClose: () => void
     }
   }
 
+  async function handleAddNetwork() {
+    if (!selectedNetwork) return
+    try {
+      await assignMeshHubNetwork(hub.id, selectedNetwork)
+      const network = allNetworks.find(n => n.id === selectedNetwork)
+      if (network) {
+        setNetworks([...networks, { id: network.id, name: network.name, description: network.description || '', cidr: network.cidr, isActive: network.isActive }])
+      }
+      setSelectedNetwork('')
+    } catch (err) {
+      setError('Failed to add network')
+    }
+  }
+
+  async function handleRemoveNetwork(networkId: string) {
+    try {
+      await removeMeshHubNetwork(hub.id, networkId)
+      setNetworks(networks.filter(n => n.id !== networkId))
+    } catch (err) {
+      setError('Failed to remove network')
+    }
+  }
+
   const availableUsers = allUsers.filter(u => !users.includes(u.id))
   const availableGroups = allGroups.filter(g => !groups.includes(g))
+  const availableNetworks = allNetworks.filter(n => !networks.find(hn => hn.id === n.id))
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
@@ -1022,6 +1165,12 @@ function ManageAccessModal({ hub, onClose }: { hub: MeshHub; onClose: () => void
               {error}
             </div>
           )}
+
+          {/* Zero-Trust Info */}
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-blue-700 text-sm">
+            <strong>Zero-Trust Model:</strong> Users only get routes to networks they have explicit access rules for.
+            Assign networks to this hub, then ensure users have access rules within those networks.
+          </div>
 
           {/* Tabs */}
           <div className="border-b border-gray-200 mb-4">
@@ -1046,12 +1195,76 @@ function ManageAccessModal({ hub, onClose }: { hub: MeshHub; onClose: () => void
               >
                 Groups ({groups.length})
               </button>
+              <button
+                onClick={() => setActiveTab('networks')}
+                className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'networks'
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Networks ({networks.length})
+              </button>
             </nav>
           </div>
 
           {loading ? (
             <div className="flex justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+            </div>
+          ) : activeTab === 'networks' ? (
+            <div className="space-y-4">
+              {/* Add Network */}
+              <div className="flex space-x-2">
+                <select
+                  value={selectedNetwork}
+                  onChange={(e) => setSelectedNetwork(e.target.value)}
+                  className="input flex-1"
+                >
+                  <option value="">Select a network...</option>
+                  {availableNetworks.map((network) => (
+                    <option key={network.id} value={network.id}>
+                      {network.name} ({network.cidr})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleAddNetwork}
+                  disabled={!selectedNetwork}
+                  className="btn btn-primary"
+                >
+                  Add
+                </button>
+              </div>
+
+              {/* Network List */}
+              <div className="border rounded-lg divide-y">
+                {networks.length === 0 ? (
+                  <div className="p-4 text-center text-gray-500">
+                    No networks assigned to this hub. Add networks to enable zero-trust access control.
+                  </div>
+                ) : (
+                  networks.map((network) => (
+                    <div key={network.id} className="p-3 flex items-center justify-between">
+                      <div>
+                        <div className="font-medium text-gray-900">{network.name}</div>
+                        <div className="text-sm text-gray-500">{network.cidr}</div>
+                        {network.description && (
+                          <div className="text-xs text-gray-400">{network.description}</div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleRemoveNetwork(network.id)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           ) : activeTab === 'users' ? (
             <div className="space-y-4">
@@ -1430,6 +1643,73 @@ function ManageSpokeAccessModal({ spoke, onClose }: { spoke: MeshSpoke; onClose:
               Close
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Edit Hub Modal Component
+function EditHubModal({ hub, onClose, onSuccess }: { hub: MeshHub; onClose: () => void; onSuccess: () => void }) {
+  const [form, setForm] = useState({ name: hub.name, description: hub.description || '', publicEndpoint: hub.publicEndpoint || '', vpnPort: hub.vpnPort || 1194, vpnProtocol: hub.vpnProtocol || 'udp', vpnSubnet: hub.vpnSubnet || '172.30.0.0/16', cryptoProfile: hub.cryptoProfile || 'modern' as CryptoProfile, tlsAuthEnabled: hub.tlsAuthEnabled ?? true, fullTunnelMode: hub.fullTunnelMode ?? false, pushDns: hub.pushDns ?? false, dnsServers: hub.dnsServers || [], localNetworks: hub.localNetworks || [] })
+  const [dnsInput, setDnsInput] = useState('')
+  const [networkInput, setNetworkInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault(); setLoading(true); setError(null)
+    try { await updateMeshHub(hub.id, form as any); onSuccess() } catch { setError('Failed to update hub') } finally { setLoading(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <div className="relative bg-white rounded-lg shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+          <h2 className="text-lg font-semibold mb-4">Edit Hub: {hub.name}</h2>
+          {error && <div className="mb-4 p-3 bg-red-50 text-red-700 rounded">{error}</div>}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div><label className="block text-sm font-medium text-gray-700">Name</label><input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input" required /></div>
+            <div><label className="block text-sm font-medium text-gray-700">Description</label><input type="text" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input" /></div>
+            <div><label className="block text-sm font-medium text-gray-700">Public Endpoint</label><input type="text" value={form.publicEndpoint} onChange={(e) => setForm({ ...form, publicEndpoint: e.target.value })} className="input" /></div>
+            <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700">Port</label><input type="number" value={form.vpnPort} onChange={(e) => setForm({ ...form, vpnPort: parseInt(e.target.value) })} className="input" /></div><div><label className="block text-sm font-medium text-gray-700">Protocol</label><select value={form.vpnProtocol} onChange={(e) => setForm({ ...form, vpnProtocol: e.target.value })} className="input"><option value="udp">UDP</option><option value="tcp">TCP</option></select></div></div>
+            <div><label className="block text-sm font-medium text-gray-700">VPN Subnet</label><input type="text" value={form.vpnSubnet} onChange={(e) => setForm({ ...form, vpnSubnet: e.target.value })} className="input" /></div>
+            <div><label className="block text-sm font-medium text-gray-700">Crypto Profile</label><select value={form.cryptoProfile} onChange={(e) => setForm({ ...form, cryptoProfile: e.target.value as CryptoProfile })} className="input"><option value="modern">Modern</option><option value="fips">FIPS</option><option value="compatible">Compatible</option></select></div>
+            <div className="space-y-2"><label className="flex items-center"><input type="checkbox" checked={form.tlsAuthEnabled} onChange={(e) => setForm({ ...form, tlsAuthEnabled: e.target.checked })} className="mr-2" /><span className="text-sm">TLS-Auth</span></label><label className="flex items-center"><input type="checkbox" checked={form.fullTunnelMode} onChange={(e) => setForm({ ...form, fullTunnelMode: e.target.checked })} className="mr-2" /><span className="text-sm">Full Tunnel</span></label><label className="flex items-center"><input type="checkbox" checked={form.pushDns} onChange={(e) => setForm({ ...form, pushDns: e.target.checked })} className="mr-2" /><span className="text-sm">Push DNS</span></label></div>
+            {form.pushDns && <div><label className="block text-sm font-medium text-gray-700">DNS Servers</label><div className="flex space-x-2"><input type="text" value={dnsInput} onChange={(e) => setDnsInput(e.target.value)} className="input flex-1" placeholder="1.1.1.1" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (dnsInput) { setForm({ ...form, dnsServers: [...form.dnsServers, dnsInput] }); setDnsInput('') } } }} /><button type="button" onClick={() => { if (dnsInput) { setForm({ ...form, dnsServers: [...form.dnsServers, dnsInput] }); setDnsInput('') } }} className="btn btn-secondary">Add</button></div>{form.dnsServers.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.dnsServers.map((d) => <span key={d} className="px-2 py-1 bg-gray-100 rounded text-sm">{d}<button type="button" onClick={() => setForm({ ...form, dnsServers: form.dnsServers.filter(x => x !== d) })} className="ml-1 text-red-600">×</button></span>)}</div>}</div>}
+            <div><label className="block text-sm font-medium text-gray-700">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="192.168.1.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((n) => <span key={n} className="px-2 py-1 bg-gray-100 rounded text-sm">{n}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(x => x !== n) })} className="ml-1 text-red-600">×</button></span>)}</div>}</div>
+            <div className="flex justify-end space-x-3 pt-4"><button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button><button type="submit" disabled={loading} className="btn btn-primary">{loading ? 'Saving...' : 'Save'}</button></div>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Edit Spoke Modal Component
+function EditSpokeModal({ spoke, onClose, onSuccess }: { spoke: MeshSpoke; onClose: () => void; onSuccess: () => void }) {
+  const [form, setForm] = useState({ name: spoke.name, description: spoke.description || '', localNetworks: spoke.localNetworks || [] })
+  const [networkInput, setNetworkInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault(); setLoading(true); setError(null)
+    try { await updateMeshSpoke(spoke.id, form); onSuccess() } catch { setError('Failed to update spoke') } finally { setLoading(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <div className="relative bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
+          <h2 className="text-lg font-semibold mb-4">Edit Spoke: {spoke.name}</h2>
+          {error && <div className="mb-4 p-3 bg-red-50 text-red-700 rounded">{error}</div>}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div><label className="block text-sm font-medium text-gray-700">Name</label><input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input" required /></div>
+            <div><label className="block text-sm font-medium text-gray-700">Description</label><input type="text" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input" /></div>
+            <div><label className="block text-sm font-medium text-gray-700">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="e.g., 10.0.0.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div><p className="text-xs text-gray-500 mt-1">Networks behind this spoke routable via hub</p>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((net) => <span key={net} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm flex items-center">{net}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(n => n !== net) })} className="ml-1 text-gray-400 hover:text-red-600">×</button></span>)}</div>}</div>
+            <div className="flex justify-end space-x-3 pt-4"><button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button><button type="submit" disabled={loading} className="btn btn-primary">{loading ? 'Saving...' : 'Save'}</button></div>
+          </form>
         </div>
       </div>
     </div>

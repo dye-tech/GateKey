@@ -334,7 +334,7 @@ func (v *VPNManager) disconnectSingle(conn *ConnectionState, gatewayName string)
 	// Clean up gateway-specific files
 	os.Remove(v.config.GatewayPidPath(gatewayName))
 	os.Remove(v.config.GatewayConfigPath(gatewayName))
-	// Keep the log file for debugging
+	os.Remove(v.config.GatewayLogPath(gatewayName))
 }
 
 // cleanupTunInterfaces removes stale tun interfaces, preserving those used by active connections.
@@ -547,9 +547,9 @@ func (v *VPNManager) startOpenVPNForGateway(configPath, gatewayName, tunInterfac
 		"--config", configPath,
 		"--daemon",
 		"--writepid", pidPath,
-		"--log-append", logPath,
+		"--log", logPath,
 		"--dev", tunInterface,
-		"--verb", "3",
+		"--verb", "1",
 	}
 
 	needsSudo := os.Geteuid() != 0
@@ -1063,8 +1063,8 @@ func (v *VPNManager) startOpenVPN(configPath string) (int, error) {
 		"--config", configPath,
 		"--daemon",
 		"--writepid", v.config.PidPath(),
-		"--log-append", logPath, // Use --log-append instead of --log to preserve our permissions
-		"--verb", "3",
+		"--log", logPath,
+		"--verb", "1",
 	}
 
 	// Check if we need sudo

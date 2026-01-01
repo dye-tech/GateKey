@@ -404,7 +404,7 @@ persist-tun
 # Logging
 status /var/log/openvpn/status.log
 log-append /var/log/openvpn/openvpn.log
-verb 3
+verb 1
 
 # GateKey authentication hooks
 script-security 3
