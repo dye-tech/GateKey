@@ -467,7 +467,8 @@ func generateClientConfig(prov ProvisionResponse, hubEndpoint string) string {
 		} else {
 			sb.WriteString("ncp-ciphers AES-256-GCM:AES-128-GCM\n")
 		}
-		sb.WriteString("auth SHA256\n")
+		sb.WriteString("auth SHA384\n")
+		sb.WriteString("tls-cipher TLS-ECDHE-ECDSA-WITH-AES-256-GCM-SHA384:TLS-ECDHE-RSA-WITH-AES-256-GCM-SHA384\n")
 	case "compatible":
 		sb.WriteString("# Maximum compatibility crypto\n")
 		sb.WriteString("cipher AES-256-GCM\n")
