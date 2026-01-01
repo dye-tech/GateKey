@@ -500,6 +500,34 @@ func (s *Server) handleAdminRevokeUserAPIKeys(c *gin.Context) {
 	})
 }
 
+// handleAdminDeleteUserAPIKeys permanently deletes all API keys for a user (admin only)
+func (s *Server) handleAdminDeleteUserAPIKeys(c *gin.Context) {
+	admin, err := s.getAuthenticatedUser(c)
+	if err != nil || admin == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
+		return
+	}
+
+	userID := c.Param("id")
+
+	count, err := s.apiKeyStore.DeleteAllForUser(c.Request.Context(), userID)
+	if err != nil {
+		s.logger.Error("Failed to delete API keys", zap.String("user_id", userID), zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete API keys"})
+		return
+	}
+
+	s.logger.Info("Admin deleted all API keys for user",
+		zap.String("admin_id", admin.UserID),
+		zap.String("user_id", userID),
+		zap.Int64("deleted_count", count))
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":      "API keys deleted permanently",
+		"deletedCount": count,
+	})
+}
+
 // handleValidateAPIKey validates an API key and returns user info (for CLI login)
 func (s *Server) handleValidateAPIKey(c *gin.Context) {
 	// Extract API key from Authorization header

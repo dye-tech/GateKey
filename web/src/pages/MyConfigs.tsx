@@ -1,11 +1,27 @@
 import { useState, useEffect } from 'react'
-import { getUserConfigs, revokeConfig, VPNConfig } from '../api/client'
+import { getUserConfigs, revokeConfig, VPNConfig, getUserMeshConfigs, revokeMeshConfig, MeshVPNConfig } from '../api/client'
+
+type ConfigType = 'gateway' | 'mesh'
+
+interface UnifiedConfig {
+  id: string
+  type: ConfigType
+  name: string // gatewayName or hubName
+  fileName: string
+  expiresAt: string
+  createdAt: string
+  isRevoked: boolean
+  revokedAt: string | null
+  downloaded: boolean
+}
 
 export default function MyConfigs() {
-  const [configs, setConfigs] = useState<VPNConfig[]>([])
+  const [gatewayConfigs, setGatewayConfigs] = useState<VPNConfig[]>([])
+  const [meshConfigs, setMeshConfigs] = useState<MeshVPNConfig[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [revoking, setRevoking] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'all' | 'gateway' | 'mesh'>('all')
 
   useEffect(() => {
     loadConfigs()
@@ -15,8 +31,12 @@ export default function MyConfigs() {
     try {
       setLoading(true)
       setError(null)
-      const data = await getUserConfigs()
-      setConfigs(data)
+      const [gwData, meshData] = await Promise.all([
+        getUserConfigs(),
+        getUserMeshConfigs()
+      ])
+      setGatewayConfigs(gwData)
+      setMeshConfigs(meshData)
     } catch (err) {
       setError('Failed to load configs')
       console.error(err)
@@ -25,14 +45,18 @@ export default function MyConfigs() {
     }
   }
 
-  async function handleRevoke(configId: string) {
+  async function handleRevoke(configId: string, type: ConfigType) {
     if (!confirm('Are you sure you want to revoke this config? This will immediately disconnect any active VPN session using this config.')) {
       return
     }
 
     try {
       setRevoking(configId)
-      await revokeConfig(configId)
+      if (type === 'gateway') {
+        await revokeConfig(configId)
+      } else {
+        await revokeMeshConfig(configId)
+      }
       await loadConfigs()
     } catch (err) {
       setError('Failed to revoke config')
@@ -50,8 +74,47 @@ export default function MyConfigs() {
     return new Date(dateStr) < new Date()
   }
 
-  const activeConfigs = configs.filter(c => !c.isRevoked && !isExpired(c.expiresAt))
-  const inactiveConfigs = configs.filter(c => c.isRevoked || isExpired(c.expiresAt))
+  // Convert to unified format for display
+  function toUnifiedConfigs(): UnifiedConfig[] {
+    const gwUnified: UnifiedConfig[] = gatewayConfigs.map(c => ({
+      id: c.id,
+      type: 'gateway' as ConfigType,
+      name: c.gatewayName,
+      fileName: c.fileName,
+      expiresAt: c.expiresAt,
+      createdAt: c.createdAt,
+      isRevoked: c.isRevoked,
+      revokedAt: c.revokedAt,
+      downloaded: c.downloaded,
+    }))
+
+    const meshUnified: UnifiedConfig[] = meshConfigs.map(c => ({
+      id: c.id,
+      type: 'mesh' as ConfigType,
+      name: c.hubName,
+      fileName: c.fileName,
+      expiresAt: c.expiresAt,
+      createdAt: c.createdAt,
+      isRevoked: c.isRevoked,
+      revokedAt: c.revokedAt,
+      downloaded: c.downloaded,
+    }))
+
+    return [...gwUnified, ...meshUnified].sort((a, b) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )
+  }
+
+  const allConfigs = toUnifiedConfigs()
+  const filteredConfigs = activeTab === 'all'
+    ? allConfigs
+    : allConfigs.filter(c => c.type === activeTab)
+
+  const activeConfigs = filteredConfigs.filter(c => !c.isRevoked && !isExpired(c.expiresAt))
+  const inactiveConfigs = filteredConfigs.filter(c => c.isRevoked || isExpired(c.expiresAt))
+
+  const gatewayCount = gatewayConfigs.filter(c => !c.isRevoked && !isExpired(c.expiresAt)).length
+  const meshCount = meshConfigs.filter(c => !c.isRevoked && !isExpired(c.expiresAt)).length
 
   return (
     <div className="space-y-6">
@@ -74,6 +137,44 @@ export default function MyConfigs() {
         </div>
       ) : (
         <>
+          {/* Filter Tabs */}
+          <div className="card">
+            <div className="border-b border-gray-200">
+              <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+                <button
+                  onClick={() => setActiveTab('all')}
+                  className={`${
+                    activeTab === 'all'
+                      ? 'border-primary-500 text-primary-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                >
+                  All Configs ({gatewayCount + meshCount})
+                </button>
+                <button
+                  onClick={() => setActiveTab('gateway')}
+                  className={`${
+                    activeTab === 'gateway'
+                      ? 'border-primary-500 text-primary-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                >
+                  Gateway ({gatewayCount})
+                </button>
+                <button
+                  onClick={() => setActiveTab('mesh')}
+                  className={`${
+                    activeTab === 'mesh'
+                      ? 'border-primary-500 text-primary-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                >
+                  Mesh Hub ({meshCount})
+                </button>
+              </nav>
+            </div>
+          </div>
+
           {/* Active Configs */}
           <div className="card">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
@@ -86,7 +187,8 @@ export default function MyConfigs() {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Gateway</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">File</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expires</th>
@@ -98,7 +200,16 @@ export default function MyConfigs() {
                     {activeConfigs.map((config) => (
                       <tr key={config.id}>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <span className="font-medium text-gray-900">{config.gatewayName}</span>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            config.type === 'gateway'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-purple-100 text-purple-800'
+                          }`}>
+                            {config.type === 'gateway' ? 'Gateway' : 'Mesh Hub'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className="font-medium text-gray-900">{config.name}</span>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                           {config.fileName}
@@ -121,7 +232,7 @@ export default function MyConfigs() {
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-right">
                           <button
-                            onClick={() => handleRevoke(config.id)}
+                            onClick={() => handleRevoke(config.id, config.type)}
                             disabled={revoking === config.id}
                             className="inline-flex items-center px-3 py-1.5 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
                           >
@@ -149,7 +260,8 @@ export default function MyConfigs() {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Gateway</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">File</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
@@ -159,7 +271,16 @@ export default function MyConfigs() {
                     {inactiveConfigs.map((config) => (
                       <tr key={config.id} className="bg-gray-50">
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <span className="font-medium text-gray-500">{config.gatewayName}</span>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            config.type === 'gateway'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-purple-100 text-purple-800'
+                          }`}>
+                            {config.type === 'gateway' ? 'Gateway' : 'Mesh Hub'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className="font-medium text-gray-500">{config.name}</span>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-400">
                           {config.fileName}
