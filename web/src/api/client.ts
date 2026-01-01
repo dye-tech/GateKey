@@ -1606,12 +1606,14 @@ export async function getAdminAPIKeys(): Promise<AdminAPIKey[]> {
     createdAt: key.created_at,
     userId: key.user_id,
     userEmail: key.user_email,
+    userName: key.user_name || '',
   }))
 }
 
 export interface AdminAPIKey extends APIKey {
   userId: string
   userEmail: string
+  userName: string
 }
 
 export async function getAdminUserAPIKeys(userId: string): Promise<APIKey[]> {

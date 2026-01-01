@@ -41,6 +41,13 @@ type APIKey struct {
 	UpdatedAt          time.Time  `json:"updated_at"`
 }
 
+// APIKeyWithUser extends APIKey with user information for admin views
+type APIKeyWithUser struct {
+	APIKey
+	UserEmail string `json:"user_email"`
+	UserName  string `json:"user_name"`
+}
+
 // APIKeyStore handles API key persistence
 type APIKeyStore struct {
 	db *DB
@@ -197,6 +204,54 @@ func (s *APIKeyStore) ListAll(ctx context.Context) ([]*APIKey, error) {
 	defer rows.Close()
 
 	return s.scanAPIKeys(rows)
+}
+
+// ListAllWithUserInfo lists all API keys with user information (for admin views)
+func (s *APIKeyStore) ListAllWithUserInfo(ctx context.Context) ([]*APIKeyWithUser, error) {
+	rows, err := s.db.Pool.Query(ctx, `
+		SELECT ak.id, ak.user_id, ak.name, ak.description, ak.key_hash, ak.key_prefix, ak.scopes,
+			ak.is_admin_provisioned, ak.provisioned_by, ak.expires_at, ak.last_used_at, ak.last_used_ip::text,
+			ak.is_revoked, ak.revoked_at, ak.revoked_by, ak.revocation_reason, ak.created_at, ak.updated_at,
+			COALESCE(u.email, lu.email, ak.user_id::text) as user_email,
+			COALESCE(u.name, lu.username, '') as user_name
+		FROM api_keys ak
+		LEFT JOIN users u ON ak.user_id = u.id
+		LEFT JOIN local_users lu ON ak.user_id = lu.id
+		ORDER BY ak.created_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var keys []*APIKeyWithUser
+	for rows.Next() {
+		key := &APIKeyWithUser{}
+		var scopesJSON []byte
+		var lastUsedIP *string
+
+		err := rows.Scan(
+			&key.ID, &key.UserID, &key.Name, &key.Description, &key.KeyHash, &key.KeyPrefix, &scopesJSON,
+			&key.IsAdminProvisioned, &key.ProvisionedBy, &key.ExpiresAt, &key.LastUsedAt, &lastUsedIP,
+			&key.IsRevoked, &key.RevokedAt, &key.RevokedBy, &key.RevocationReason, &key.CreatedAt, &key.UpdatedAt,
+			&key.UserEmail, &key.UserName,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		key.LastUsedIP = lastUsedIP
+
+		if len(scopesJSON) > 0 {
+			if err := json.Unmarshal(scopesJSON, &key.Scopes); err != nil {
+				key.Scopes = []string{}
+			}
+		}
+
+		keys = append(keys, key)
+	}
+
+	return keys, rows.Err()
 }
 
 // UpdateLastUsed updates the last used timestamp and IP

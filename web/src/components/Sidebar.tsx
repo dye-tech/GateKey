@@ -18,19 +18,40 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
     { name: 'API Keys', href: '/api-keys', icon: 'key' },
   ]
 
-  const adminNavigation = [
-    { name: 'Users', href: '/admin/users', icon: 'users' },
-    { name: 'Gateways', href: '/admin/gateways', icon: 'server' },
-    { name: 'Networks', href: '/admin/networks', icon: 'globe' },
-    { name: 'Access Rules', href: '/admin/access-rules', icon: 'shield' },
-    { name: 'Mesh', href: '/admin/mesh', icon: 'mesh' },
-    { name: 'Proxy Apps', href: '/admin/proxy-apps', icon: 'apps' },
-    { name: 'All Configs', href: '/admin/configs', icon: 'configs' },
-    { name: 'Monitoring', href: '/admin/monitoring', icon: 'monitoring' },
-    { name: 'OIDC Providers', href: '/admin/settings/oidc', icon: 'oidc' },
-    { name: 'SAML Providers', href: '/admin/settings/saml', icon: 'saml' },
-    { name: 'VPN Settings', href: '/admin/settings/general', icon: 'cog' },
-    { name: 'Certificate CA', href: '/admin/settings/ca', icon: 'certificate' },
+  // Admin navigation organized by logical groups
+  const adminNavigationGroups = [
+    {
+      label: 'Identity & Access',
+      items: [
+        { name: 'Users', href: '/admin/users', icon: 'users' },
+        { name: 'OIDC Providers', href: '/admin/settings/oidc', icon: 'oidc' },
+        { name: 'SAML Providers', href: '/admin/settings/saml', icon: 'saml' },
+      ]
+    },
+    {
+      label: 'Network',
+      items: [
+        { name: 'Gateways', href: '/admin/gateways', icon: 'server' },
+        { name: 'Mesh', href: '/admin/mesh', icon: 'mesh' },
+        { name: 'Networks', href: '/admin/networks', icon: 'globe' },
+        { name: 'Access Rules', href: '/admin/access-rules', icon: 'shield' },
+      ]
+    },
+    {
+      label: 'Applications',
+      items: [
+        { name: 'Proxy Apps', href: '/admin/proxy-apps', icon: 'apps' },
+      ]
+    },
+    {
+      label: 'System',
+      items: [
+        { name: 'Monitoring', href: '/admin/monitoring', icon: 'monitoring' },
+        { name: 'All Configs', href: '/admin/configs', icon: 'configs' },
+        { name: 'VPN Settings', href: '/admin/settings/general', icon: 'cog' },
+        { name: 'Certificate CA', href: '/admin/settings/ca', icon: 'certificate' },
+      ]
+    },
   ]
 
   const isActive = (href: string) => {
@@ -229,44 +250,48 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
             {/* Admin navigation */}
             {user?.isAdmin && (
               <>
-                <div className={`mt-6 px-3 ${isOpen ? '' : 'lg:px-2'}`}>
-                  <div
-                    className={`flex items-center text-xs font-semibold text-gray-400 uppercase tracking-wider ${
-                      isOpen ? 'px-3' : 'lg:justify-center'
-                    }`}
-                  >
-                    {isOpen ? (
-                      'Administration'
-                    ) : (
-                      <span className="hidden lg:block w-8 h-0.5 bg-gray-300 rounded"></span>
-                    )}
-                  </div>
-                </div>
-                <div className="mt-2 px-3 space-y-1">
-                  {adminNavigation.map((item) => (
-                    <Link
-                      key={item.name}
-                      to={item.href}
-                      className={`flex items-center px-3 py-2.5 rounded-lg transition-colors ${
-                        isActive(item.href)
-                          ? 'bg-primary-50 text-primary-700'
-                          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                      }`}
-                      title={!isOpen ? item.name : undefined}
-                    >
-                      <span className={`flex-shrink-0 ${isActive(item.href) ? 'text-primary-600' : 'text-gray-500'}`}>
-                        {renderIcon(item.icon)}
-                      </span>
-                      <span
-                        className={`ml-3 font-medium transition-opacity duration-300 ${
-                          isOpen ? 'opacity-100' : 'lg:opacity-0 lg:w-0 lg:overflow-hidden'
+                {adminNavigationGroups.map((group, groupIndex) => (
+                  <div key={group.label}>
+                    <div className={`${groupIndex === 0 ? 'mt-6' : 'mt-4'} px-3 ${isOpen ? '' : 'lg:px-2'}`}>
+                      <div
+                        className={`flex items-center text-xs font-semibold text-gray-400 uppercase tracking-wider ${
+                          isOpen ? 'px-3' : 'lg:justify-center'
                         }`}
                       >
-                        {item.name}
-                      </span>
-                    </Link>
-                  ))}
-                </div>
+                        {isOpen ? (
+                          group.label
+                        ) : (
+                          <span className="hidden lg:block w-8 h-0.5 bg-gray-300 rounded"></span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-2 px-3 space-y-1">
+                      {group.items.map((item) => (
+                        <Link
+                          key={item.name}
+                          to={item.href}
+                          className={`flex items-center px-3 py-2.5 rounded-lg transition-colors ${
+                            isActive(item.href)
+                              ? 'bg-primary-50 text-primary-700'
+                              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                          }`}
+                          title={!isOpen ? item.name : undefined}
+                        >
+                          <span className={`flex-shrink-0 ${isActive(item.href) ? 'text-primary-600' : 'text-gray-500'}`}>
+                            {renderIcon(item.icon)}
+                          </span>
+                          <span
+                            className={`ml-3 font-medium transition-opacity duration-300 ${
+                              isOpen ? 'opacity-100' : 'lg:opacity-0 lg:w-0 lg:overflow-hidden'
+                            }`}
+                          >
+                            {item.name}
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </>
             )}
           </nav>
