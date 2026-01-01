@@ -81,13 +81,13 @@ The hub communicates with the GateKey control plane to:
 
 // HubConfig holds hub configuration
 type HubConfig struct {
-	Name            string        `mapstructure:"name"`
-	ControlPlaneURL string        `mapstructure:"control_plane_url"`
-	APIToken        string        `mapstructure:"api_token"`
-	VPNPort         int           `mapstructure:"vpn_port"`
-	VPNProtocol     string        `mapstructure:"vpn_protocol"`
+	Name              string        `mapstructure:"name"`
+	ControlPlaneURL   string        `mapstructure:"control_plane_url"`
+	APIToken          string        `mapstructure:"api_token"`
+	VPNPort           int           `mapstructure:"vpn_port"`
+	VPNProtocol       string        `mapstructure:"vpn_protocol"`
 	HeartbeatInterval time.Duration `mapstructure:"heartbeat_interval"`
-	LogLevel        string        `mapstructure:"log_level"`
+	LogLevel          string        `mapstructure:"log_level"`
 }
 
 // ProvisionResponse from control plane
@@ -587,14 +587,14 @@ func updateGatewayRoutes(ctx context.Context, cfg *HubConfig) {
 		ccdFile := fmt.Sprintf("%s/mesh-gateway-%s", ccdDir, spoke.Name)
 
 		// Check if CCD file content changed
-		existingContent, err := os.ReadFile(ccdFile)
-		if err != nil || string(existingContent) != newContent {
+		existingContent, readErr := os.ReadFile(ccdFile)
+		if readErr != nil || string(existingContent) != newContent {
 			if err := os.WriteFile(ccdFile, []byte(newContent), 0644); err != nil {
 				logger.Warn("Failed to write CCD file", zap.String("spoke", spoke.Name), zap.Error(err))
 			} else {
 				logger.Info("Updated CCD file", zap.String("spoke", spoke.Name), zap.String("file", ccdFile))
-				// If file changed and spoke might be connected with wrong IP, flag for restart
-				if err == nil && string(existingContent) != newContent {
+				// If file existed and content was different, flag for restart
+				if readErr == nil && string(existingContent) != newContent {
 					needsRestart = true
 				}
 			}

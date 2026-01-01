@@ -57,12 +57,20 @@ Quick start:
 
 func loginCmd() *cobra.Command {
 	var noBrowser bool
+	var apiKey string
 
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Authenticate with GateKey server",
-		Long: `Opens your browser to authenticate with your identity provider.
-After successful authentication, your session is saved locally.`,
+		Long: `Authenticate with the GateKey server.
+
+By default, opens your browser to authenticate with your identity provider.
+Use --api-key to authenticate with an API key instead.
+
+Examples:
+  gatekey login                      # Browser-based SSO login
+  gatekey login --no-browser         # Print URL instead of opening browser
+  gatekey login --api-key gk_xxx...  # Login with API key`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := client.LoadConfig(cfgFile)
 			if err != nil {
@@ -78,11 +86,16 @@ After successful authentication, your session is saved locally.`,
 			}
 
 			auth := client.NewAuthManager(cfg)
+
+			if apiKey != "" {
+				return auth.LoginAPIKey(cmd.Context(), apiKey)
+			}
 			return auth.Login(cmd.Context(), noBrowser)
 		},
 	}
 
 	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "Print login URL instead of opening browser")
+	cmd.Flags().StringVar(&apiKey, "api-key", "", "Authenticate with API key")
 
 	return cmd
 }

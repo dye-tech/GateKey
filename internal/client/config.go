@@ -16,6 +16,7 @@ type Config struct {
 	OpenVPNBinary string `yaml:"openvpn_binary"`
 	ConfigDir     string `yaml:"config_dir"`
 	LogLevel      string `yaml:"log_level"`
+	APIKey        string `yaml:"api_key,omitempty"`
 
 	// Runtime paths (not saved to config)
 	configPath string `yaml:"-"`
@@ -139,6 +140,8 @@ func (c *Config) Set(key, value string) error {
 		c.ConfigDir = value
 	case "log_level":
 		c.LogLevel = value
+	case "api_key":
+		c.APIKey = value
 	default:
 		return fmt.Errorf("unknown configuration key: %s", key)
 	}
