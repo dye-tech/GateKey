@@ -367,8 +367,8 @@ func (s *Server) handleProvisionMeshHub(c *gin.Context) {
 		return
 	}
 
-	// Compute config version hash
-	configVersion := computeConfigVersion(hub.VPNPort, hub.VPNProtocol, hub.VPNSubnet, hub.CryptoProfile, hub.TLSAuthEnabled)
+	// Compute config version hash (includes TLSAuthKey and CA cert hash for rotation detection)
+	configVersion := computeConfigVersion(hub.VPNPort, hub.VPNProtocol, hub.VPNSubnet, hub.CryptoProfile, hub.TLSAuthEnabled, hub.TLSAuthKey, hub.CACert)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":       "hub provisioned successfully",
@@ -1025,8 +1025,8 @@ func (s *Server) handleMeshHubHeartbeat(c *gin.Context) {
 		s.logger.Error("Failed to update hub status", zap.Error(err))
 	}
 
-	// Check if config version matches
-	expectedVersion := computeConfigVersion(hub.VPNPort, hub.VPNProtocol, hub.VPNSubnet, hub.CryptoProfile, hub.TLSAuthEnabled)
+	// Check if config version matches (includes TLSAuthKey and CA cert hash for rotation detection)
+	expectedVersion := computeConfigVersion(hub.VPNPort, hub.VPNProtocol, hub.VPNSubnet, hub.CryptoProfile, hub.TLSAuthEnabled, hub.TLSAuthKey, hub.CACert)
 	needsReprovision := req.ConfigVersion != "" && req.ConfigVersion != expectedVersion
 
 	// Get Root CA fingerprint for rotation detection
@@ -1151,7 +1151,7 @@ func (s *Server) handleMeshHubProvisionRequest(c *gin.Context) {
 		"vpnprotocol":    hub.VPNProtocol,
 		"vpnsubnet":      hub.VPNSubnet,
 		"cryptoprofile":  hub.CryptoProfile,
-		"configversion":  computeConfigVersion(hub.VPNPort, hub.VPNProtocol, hub.VPNSubnet, hub.CryptoProfile, hub.TLSAuthEnabled),
+		"configversion":  computeConfigVersion(hub.VPNPort, hub.VPNProtocol, hub.VPNSubnet, hub.CryptoProfile, hub.TLSAuthEnabled, hub.TLSAuthKey, hub.CACert),
 	})
 }
 
@@ -1505,12 +1505,22 @@ func (s *Server) handleMeshSpokeProvisionRequest(c *gin.Context) {
 		s.logger.Info("Hub auto-provisioned successfully for spoke", zap.String("hub", hub.Name))
 	}
 
-	// Generate client certificate if not already provisioned
+	// Generate client certificate if not already provisioned or if CA has changed
 	clientCert := gw.ClientCert
 	clientKey := gw.ClientKey
 	tunnelIP := gw.TunnelIP
 
-	if clientCert == "" || clientKey == "" {
+	// Check if existing certificate needs regeneration due to CA rotation
+	needsNewCert := clientCert == "" || clientKey == ""
+	if !needsNewCert && clientCert != "" {
+		// Verify the certificate was signed by the current hub CA
+		if !s.verifyCertSignedByCA(clientCert, hub.CACert) {
+			s.logger.Info("Spoke certificate was not signed by current CA, regenerating", zap.String("spoke", gw.Name))
+			needsNewCert = true
+		}
+	}
+
+	if needsNewCert {
 		s.logger.Info("Generating client certificate for spoke", zap.String("spoke", gw.Name))
 
 		// Generate client certificate signed by hub's CA
@@ -1645,14 +1655,28 @@ func (s *Server) handleMeshSpokeHeartbeat(c *gin.Context) {
 
 // ==================== Helper Functions ====================
 
-func computeConfigVersion(vpnPort int, vpnProtocol, vpnSubnet, cryptoProfile string, tlsAuthEnabled bool) string {
-	data := fmt.Sprintf("%d|%s|%s|%s|%v", vpnPort, vpnProtocol, vpnSubnet, cryptoProfile, tlsAuthEnabled)
+func computeConfigVersion(vpnPort int, vpnProtocol, vpnSubnet, cryptoProfile string, tlsAuthEnabled bool, tlsAuthKey, caCert string) string {
+	// Hash the TLS-Auth key content to detect changes
+	var tlsAuthHash string
+	if tlsAuthEnabled && tlsAuthKey != "" {
+		h := sha256.Sum256([]byte(tlsAuthKey))
+		tlsAuthHash = hex.EncodeToString(h[:4]) // First 4 bytes of hash
+	}
+
+	// Hash the CA certificate to detect CA rotation
+	var caCertHash string
+	if caCert != "" {
+		h := sha256.Sum256([]byte(caCert))
+		caCertHash = hex.EncodeToString(h[:4]) // First 4 bytes of hash
+	}
+
+	data := fmt.Sprintf("%d|%s|%s|%s|%v|%s|%s", vpnPort, vpnProtocol, vpnSubnet, cryptoProfile, tlsAuthEnabled, tlsAuthHash, caCertHash)
 	hash := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(hash[:8])
 }
 
 // computeSpokeConfigVersion computes a config version hash for spoke provisioning
-// This includes the TLS-Auth key hash so spokes can detect when they need to reprovision
+// This includes the TLS-Auth key hash and CA cert hash so spokes can detect when they need to reprovision
 func computeSpokeConfigVersion(hub *db.MeshHub) string {
 	// Hash the TLS-Auth key content (not the whole key, just enough to detect changes)
 	var tlsAuthHash string
@@ -1661,13 +1685,21 @@ func computeSpokeConfigVersion(hub *db.MeshHub) string {
 		tlsAuthHash = hex.EncodeToString(h[:4]) // First 4 bytes of hash
 	}
 
-	data := fmt.Sprintf("%d|%s|%s|%s|%v|%s",
+	// Hash the CA certificate to detect CA rotation
+	var caCertHash string
+	if hub.CACert != "" {
+		h := sha256.Sum256([]byte(hub.CACert))
+		caCertHash = hex.EncodeToString(h[:4]) // First 4 bytes of hash
+	}
+
+	data := fmt.Sprintf("%d|%s|%s|%s|%v|%s|%s",
 		hub.VPNPort,
 		hub.VPNProtocol,
 		hub.VPNSubnet,
 		hub.CryptoProfile,
 		hub.TLSAuthEnabled,
 		tlsAuthHash,
+		caCertHash,
 	)
 	hash := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(hash[:8])
@@ -2279,4 +2311,39 @@ func bytesEqual(a, b []byte) bool {
 		}
 	}
 	return true
+}
+
+// verifyCertSignedByCA checks if a certificate was signed by the given CA
+func (s *Server) verifyCertSignedByCA(certPEM, caPEM string) bool {
+	// Parse the certificate
+	certBlock, _ := pem.Decode([]byte(certPEM))
+	if certBlock == nil {
+		return false
+	}
+	cert, err := x509.ParseCertificate(certBlock.Bytes)
+	if err != nil {
+		return false
+	}
+
+	// Parse the CA certificate
+	caBlock, _ := pem.Decode([]byte(caPEM))
+	if caBlock == nil {
+		return false
+	}
+	caCert, err := x509.ParseCertificate(caBlock.Bytes)
+	if err != nil {
+		return false
+	}
+
+	// Verify the certificate was signed by this CA
+	roots := x509.NewCertPool()
+	roots.AddCert(caCert)
+
+	opts := x509.VerifyOptions{
+		Roots:     roots,
+		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	}
+
+	_, err = cert.Verify(opts)
+	return err == nil
 }

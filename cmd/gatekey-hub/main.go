@@ -405,7 +405,7 @@ func doProvision(ctx context.Context, cfg *HubConfig) error {
 
 	// Generate OpenVPN server config
 	serverConfig := generateServerConfig(provResp)
-	if err := os.WriteFile(openvpnDir+"/server.conf", []byte(serverConfig), 0644); err != nil {
+	if err := os.WriteFile(openvpnDir+"/hub.conf", []byte(serverConfig), 0644); err != nil {
 		return fmt.Errorf("failed to write server config: %w", err)
 	}
 
@@ -477,8 +477,8 @@ func generateServerConfig(prov ProvisionResponse) string {
 		sb.WriteString("# FIPS 140-3 compliant crypto\n")
 		sb.WriteString("cipher AES-256-GCM\n")
 		sb.WriteString("data-ciphers AES-256-GCM:AES-128-GCM\n")
-		sb.WriteString("auth SHA256\n")
-		sb.WriteString("tls-cipher TLS-ECDHE-RSA-WITH-AES-256-GCM-SHA384:TLS-ECDHE-RSA-WITH-AES-128-GCM-SHA256\n")
+		sb.WriteString("auth SHA384\n")
+		sb.WriteString("tls-cipher TLS-ECDHE-ECDSA-WITH-AES-256-GCM-SHA384:TLS-ECDHE-RSA-WITH-AES-256-GCM-SHA384\n")
 	case "compatible":
 		sb.WriteString("# Maximum compatibility crypto\n")
 		sb.WriteString("cipher AES-256-GCM\n")
@@ -493,8 +493,8 @@ func generateServerConfig(prov ProvisionResponse) string {
 	sb.WriteString("\n")
 
 	sb.WriteString("# Logging\n")
-	sb.WriteString("status /var/log/openvpn/status.log\n")
-	sb.WriteString("log-append /var/log/openvpn/openvpn.log\n")
+	sb.WriteString("status /var/log/openvpn/hub-status.log\n")
+	sb.WriteString("log-append /var/log/openvpn/hub.log\n")
 	sb.WriteString("verb 1\n\n")
 
 	sb.WriteString("# Persist settings across restarts\n")
@@ -503,8 +503,8 @@ func generateServerConfig(prov ProvisionResponse) string {
 
 	sb.WriteString("# Hook scripts for gateway/client management\n")
 	sb.WriteString("script-security 2\n")
-	sb.WriteString("client-connect /usr/local/bin/gatekey-hub-hook connect\n")
-	sb.WriteString("client-disconnect /usr/local/bin/gatekey-hub-hook disconnect\n")
+	sb.WriteString("client-connect \"/usr/local/bin/gatekey-hub-hook connect\"\n")
+	sb.WriteString("client-disconnect \"/usr/local/bin/gatekey-hub-hook disconnect\"\n")
 
 	return sb.String()
 }
@@ -714,18 +714,18 @@ func isOpenVPNRunning() bool {
 }
 
 func startOpenVPN() error {
-	cmd := exec.Command("systemctl", "start", "openvpn-server@server")
+	cmd := exec.Command("systemctl", "start", "openvpn-server@hub")
 	if err := cmd.Run(); err != nil {
-		cmd = exec.Command("systemctl", "start", "openvpn@server")
+		cmd = exec.Command("systemctl", "start", "openvpn@hub")
 		return cmd.Run()
 	}
 	return nil
 }
 
 func restartOpenVPN() error {
-	cmd := exec.Command("systemctl", "restart", "openvpn-server@server")
+	cmd := exec.Command("systemctl", "restart", "openvpn-server@hub")
 	if err := cmd.Run(); err != nil {
-		cmd = exec.Command("systemctl", "restart", "openvpn@server")
+		cmd = exec.Command("systemctl", "restart", "openvpn@hub")
 		return cmd.Run()
 	}
 	return nil
