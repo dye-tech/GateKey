@@ -1571,6 +1571,47 @@ func (s *Server) handleListUserConfigs(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"configs": result})
 }
 
+// handleAdminListAllConfigs returns all gateway configs with user info (admin only)
+func (s *Server) handleAdminListAllConfigs(c *gin.Context) {
+	limit := 100
+	offset := 0
+
+	configs, total, err := s.configStore.GetAllConfigs(c.Request.Context(), limit, offset)
+	if err != nil {
+		s.logger.Error("Failed to list all configs", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list configs"})
+		return
+	}
+
+	result := make([]gin.H, len(configs))
+	for i, cfg := range configs {
+		result[i] = gin.H{
+			"id":           cfg.ID,
+			"userId":       cfg.UserID,
+			"userEmail":    cfg.UserEmail,
+			"userName":     cfg.UserName,
+			"gatewayId":    cfg.GatewayID,
+			"gatewayName":  cfg.GatewayName,
+			"fileName":     cfg.FileName,
+			"serialNumber": cfg.SerialNumber,
+			"fingerprint":  cfg.Fingerprint,
+			"expiresAt":    cfg.ExpiresAt.Format(time.RFC3339),
+			"createdAt":    cfg.CreatedAt.Format(time.RFC3339),
+			"isRevoked":    cfg.IsRevoked,
+			"revokedAt":    nil,
+			"downloaded":   cfg.DownloadedAt != nil,
+		}
+		if cfg.RevokedAt != nil {
+			result[i]["revokedAt"] = cfg.RevokedAt.Format(time.RFC3339)
+		}
+		if cfg.RevokedReason != "" {
+			result[i]["revokedReason"] = cfg.RevokedReason
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"configs": result, "total": total})
+}
+
 // handleAdminRevokeConfig allows admins to revoke any config
 func (s *Server) handleAdminRevokeConfig(c *gin.Context) {
 	configID := c.Param("id")
@@ -1629,6 +1670,96 @@ func (s *Server) handleAdminRevokeUserConfigs(c *gin.Context) {
 		"message":      "User configs revoked successfully",
 		"revokedCount": count,
 	})
+}
+
+// handleAdminListUserConfigs returns all gateway configs for a specific user
+func (s *Server) handleAdminListUserConfigs(c *gin.Context) {
+	userID := c.Param("id")
+
+	configs, err := s.configStore.GetUserConfigs(c.Request.Context(), userID)
+	if err != nil {
+		s.logger.Error("Failed to get user configs", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user configs"})
+		return
+	}
+
+	type configResponse struct {
+		ID          string  `json:"id"`
+		GatewayID   string  `json:"gatewayId"`
+		GatewayName string  `json:"gatewayName"`
+		FileName    string  `json:"fileName"`
+		ExpiresAt   string  `json:"expiresAt"`
+		CreatedAt   string  `json:"createdAt"`
+		IsRevoked   bool    `json:"isRevoked"`
+		RevokedAt   *string `json:"revokedAt"`
+		Downloaded  bool    `json:"downloaded"`
+	}
+
+	var response []configResponse
+	for _, cfg := range configs {
+		resp := configResponse{
+			ID:          cfg.ID,
+			GatewayID:   cfg.GatewayID,
+			GatewayName: cfg.GatewayName,
+			FileName:    cfg.FileName,
+			ExpiresAt:   cfg.ExpiresAt.Format("2006-01-02T15:04:05Z07:00"),
+			CreatedAt:   cfg.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			IsRevoked:   cfg.IsRevoked,
+			Downloaded:  cfg.DownloadedAt != nil,
+		}
+		if cfg.RevokedAt != nil {
+			revokedAt := cfg.RevokedAt.Format("2006-01-02T15:04:05Z07:00")
+			resp.RevokedAt = &revokedAt
+		}
+		response = append(response, resp)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"configs": response})
+}
+
+// handleAdminListUserMeshConfigs returns all mesh configs for a specific user
+func (s *Server) handleAdminListUserMeshConfigs(c *gin.Context) {
+	userID := c.Param("id")
+
+	configs, err := s.meshConfigStore.GetUserConfigs(c.Request.Context(), userID)
+	if err != nil {
+		s.logger.Error("Failed to get user mesh configs", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user mesh configs"})
+		return
+	}
+
+	type configResponse struct {
+		ID         string  `json:"id"`
+		HubID      string  `json:"hubId"`
+		HubName    string  `json:"hubName"`
+		FileName   string  `json:"fileName"`
+		ExpiresAt  string  `json:"expiresAt"`
+		CreatedAt  string  `json:"createdAt"`
+		IsRevoked  bool    `json:"isRevoked"`
+		RevokedAt  *string `json:"revokedAt"`
+		Downloaded bool    `json:"downloaded"`
+	}
+
+	var response []configResponse
+	for _, cfg := range configs {
+		resp := configResponse{
+			ID:         cfg.ID,
+			HubID:      cfg.HubID,
+			HubName:    cfg.HubName,
+			FileName:   cfg.FileName,
+			ExpiresAt:  cfg.ExpiresAt.Format("2006-01-02T15:04:05Z07:00"),
+			CreatedAt:  cfg.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			IsRevoked:  cfg.IsRevoked,
+			Downloaded: cfg.DownloadedAt != nil,
+		}
+		if cfg.RevokedAt != nil {
+			revokedAt := cfg.RevokedAt.Format("2006-01-02T15:04:05Z07:00")
+			resp.RevokedAt = &revokedAt
+		}
+		response = append(response, resp)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"configs": response})
 }
 
 // Certificate handlers

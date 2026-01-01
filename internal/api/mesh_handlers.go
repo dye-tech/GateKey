@@ -2018,6 +2018,14 @@ func (s *Server) handleGenerateMeshClientConfig(c *gin.Context) {
 		return
 	}
 
+	// Extract serial number and fingerprint from the certificate
+	serialNumber, fingerprint, err := extractCertInfo(clientCert)
+	if err != nil {
+		s.logger.Error("Failed to extract certificate info", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to process certificate"})
+		return
+	}
+
 	// Get routes the user can access via access rules (zero-trust)
 	// Only routes defined in access rules assigned to the user are allowed
 	routes, err := s.meshStore.GetUserMeshAccessRules(ctx, hub.ID, user.UserID, user.Groups)
@@ -2038,12 +2046,74 @@ func (s *Server) handleGenerateMeshClientConfig(c *gin.Context) {
 	}
 
 	// Generate OpenVPN config
-	config := generateMeshClientOVPNConfig(hub, fullCAChain, clientCert, clientKey, routes)
+	configData := generateMeshClientOVPNConfig(hub, fullCAChain, clientCert, clientKey, routes)
+
+	// Generate unique config ID
+	configID := generateUUID()
+	fileName := fmt.Sprintf("mesh-%s.ovpn", hub.Name)
+	expiresAt := time.Now().Add(certValidity)
+
+	// Save config to database for tracking
+	meshConfig := &db.MeshGeneratedConfig{
+		ID:           configID,
+		UserID:       user.UserID,
+		HubID:        hub.ID,
+		HubName:      hub.Name,
+		FileName:     fileName,
+		ConfigData:   []byte(configData),
+		SerialNumber: serialNumber,
+		Fingerprint:  fingerprint,
+		ExpiresAt:    expiresAt,
+	}
+
+	if err := s.meshConfigStore.SaveConfig(ctx, meshConfig); err != nil {
+		s.logger.Error("Failed to save mesh config", zap.Error(err))
+		// Continue anyway - user can still use the config, just won't be tracked
+	} else {
+		s.logger.Info("Mesh config generated and saved",
+			zap.String("config_id", configID),
+			zap.String("user", user.Email),
+			zap.String("hub", hub.Name))
+	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"hubname": hub.Name,
-		"config":  config,
+		"id":        configID,
+		"hubname":   hub.Name,
+		"config":    configData,
+		"expiresAt": expiresAt.Format(time.RFC3339),
 	})
+}
+
+// extractCertInfo extracts serial number and fingerprint from a certificate PEM
+func extractCertInfo(certPEM string) (serialNumber, fingerprint string, err error) {
+	block, _ := pem.Decode([]byte(certPEM))
+	if block == nil {
+		return "", "", fmt.Errorf("failed to decode certificate PEM")
+	}
+
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to parse certificate: %w", err)
+	}
+
+	// Serial number as hex string
+	serialNumber = cert.SerialNumber.Text(16)
+
+	// Fingerprint is SHA-256 of the DER-encoded certificate
+	hash := sha256.Sum256(block.Bytes)
+	fingerprint = hex.EncodeToString(hash[:])
+
+	return serialNumber, fingerprint, nil
+}
+
+// generateUUID generates a random UUID v4
+func generateUUID() string {
+	uuid := make([]byte, 16)
+	_, _ = cryptoRand.Read(uuid)
+	uuid[6] = (uuid[6] & 0x0f) | 0x40 // Version 4
+	uuid[8] = (uuid[8] & 0x3f) | 0x80 // Variant is 10
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:16])
 }
 
 // issueClientCertFromPEM issues a client certificate using the provided CA cert and key PEM strings
@@ -2346,4 +2416,241 @@ func (s *Server) verifyCertSignedByCA(certPEM, caPEM string) bool {
 
 	_, err = cert.Verify(opts)
 	return err == nil
+}
+
+// ==================== User Mesh Config Management ====================
+
+// handleListUserMeshConfigs returns all mesh configs for the current user
+func (s *Server) handleListUserMeshConfigs(c *gin.Context) {
+	user, err := s.getAuthenticatedUser(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	configs, err := s.meshConfigStore.GetUserConfigs(c.Request.Context(), user.UserID)
+	if err != nil {
+		s.logger.Error("Failed to get user mesh configs", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get configs"})
+		return
+	}
+
+	result := make([]gin.H, len(configs))
+	for i, cfg := range configs {
+		result[i] = gin.H{
+			"id":         cfg.ID,
+			"hubId":      cfg.HubID,
+			"hubName":    cfg.HubName,
+			"fileName":   cfg.FileName,
+			"expiresAt":  cfg.ExpiresAt.Format(time.RFC3339),
+			"createdAt":  cfg.CreatedAt.Format(time.RFC3339),
+			"isRevoked":  cfg.IsRevoked,
+			"revokedAt":  nil,
+			"downloaded": cfg.DownloadedAt != nil,
+		}
+		if cfg.RevokedAt != nil {
+			result[i]["revokedAt"] = cfg.RevokedAt.Format(time.RFC3339)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"configs": result})
+}
+
+// handleRevokeMeshConfig allows users to revoke their own mesh config
+func (s *Server) handleRevokeMeshConfig(c *gin.Context) {
+	configID := c.Param("id")
+
+	user, err := s.getAuthenticatedUser(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	// Get the config to verify ownership
+	config, err := s.meshConfigStore.GetConfig(c.Request.Context(), configID)
+	if err != nil {
+		if err == db.ErrMeshConfigNotFound || err == db.ErrMeshConfigExpired {
+			c.JSON(http.StatusNotFound, gin.H{"error": "config not found"})
+			return
+		}
+		s.logger.Error("Failed to get mesh config", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get config"})
+		return
+	}
+
+	// Verify ownership
+	if config.UserID != user.UserID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you can only revoke your own configs"})
+		return
+	}
+
+	// Revoke the config
+	if err := s.meshConfigStore.RevokeConfig(c.Request.Context(), configID, "revoked by user"); err != nil {
+		if err == db.ErrMeshConfigNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "config not found or already revoked"})
+			return
+		}
+		s.logger.Error("Failed to revoke mesh config", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to revoke config"})
+		return
+	}
+
+	s.logger.Info("Mesh config revoked by user",
+		zap.String("config_id", configID),
+		zap.String("user_id", user.UserID))
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Config revoked successfully",
+	})
+}
+
+// handleDownloadMeshConfig downloads a mesh config by ID
+func (s *Server) handleDownloadMeshConfig(c *gin.Context) {
+	configID := c.Param("id")
+
+	user, err := s.getAuthenticatedUser(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	config, err := s.meshConfigStore.GetConfig(c.Request.Context(), configID)
+	if err != nil {
+		if err == db.ErrMeshConfigNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "config not found"})
+			return
+		}
+		if err == db.ErrMeshConfigExpired {
+			c.JSON(http.StatusGone, gin.H{"error": "config has expired"})
+			return
+		}
+		if err == db.ErrMeshConfigRevoked {
+			c.JSON(http.StatusGone, gin.H{"error": "config has been revoked"})
+			return
+		}
+		s.logger.Error("Failed to get mesh config", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get config"})
+		return
+	}
+
+	// Verify ownership
+	if config.UserID != user.UserID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you can only download your own configs"})
+		return
+	}
+
+	// Check if revoked
+	if config.IsRevoked {
+		c.JSON(http.StatusGone, gin.H{"error": "config has been revoked"})
+		return
+	}
+
+	// Mark as downloaded
+	_ = s.meshConfigStore.MarkDownloaded(c.Request.Context(), configID)
+
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", config.FileName))
+	c.Header("Content-Type", "application/x-openvpn-profile")
+	c.Data(http.StatusOK, "application/x-openvpn-profile", config.ConfigData)
+}
+
+// ==================== Admin Mesh Config Management ====================
+
+// handleAdminListMeshConfigs returns all mesh configs (admin only)
+func (s *Server) handleAdminListMeshConfigs(c *gin.Context) {
+	limit := 100
+	offset := 0
+
+	configs, total, err := s.meshConfigStore.GetAllConfigs(c.Request.Context(), limit, offset)
+	if err != nil {
+		s.logger.Error("Failed to list mesh configs", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list configs"})
+		return
+	}
+
+	result := make([]gin.H, len(configs))
+	for i, cfg := range configs {
+		result[i] = gin.H{
+			"id":           cfg.ID,
+			"userId":       cfg.UserID,
+			"userEmail":    cfg.UserEmail,
+			"userName":     cfg.UserName,
+			"hubId":        cfg.HubID,
+			"hubName":      cfg.HubName,
+			"fileName":     cfg.FileName,
+			"serialNumber": cfg.SerialNumber,
+			"fingerprint":  cfg.Fingerprint,
+			"expiresAt":    cfg.ExpiresAt.Format(time.RFC3339),
+			"createdAt":    cfg.CreatedAt.Format(time.RFC3339),
+			"isRevoked":    cfg.IsRevoked,
+			"revokedAt":    nil,
+			"downloaded":   cfg.DownloadedAt != nil,
+		}
+		if cfg.RevokedAt != nil {
+			result[i]["revokedAt"] = cfg.RevokedAt.Format(time.RFC3339)
+		}
+		if cfg.RevokedReason != "" {
+			result[i]["revokedReason"] = cfg.RevokedReason
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"configs": result, "total": total})
+}
+
+// handleAdminRevokeMeshConfig allows admins to revoke any mesh config
+func (s *Server) handleAdminRevokeMeshConfig(c *gin.Context) {
+	configID := c.Param("id")
+
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		req.Reason = "revoked by admin"
+	}
+
+	if err := s.meshConfigStore.RevokeConfig(c.Request.Context(), configID, req.Reason); err != nil {
+		if err == db.ErrMeshConfigNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "config not found or already revoked"})
+			return
+		}
+		s.logger.Error("Failed to revoke mesh config", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to revoke config"})
+		return
+	}
+
+	s.logger.Info("Mesh config revoked by admin", zap.String("config_id", configID))
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Config revoked successfully",
+	})
+}
+
+// handleAdminRevokeMeshUserConfigs allows admins to revoke all mesh configs for a user
+func (s *Server) handleAdminRevokeMeshUserConfigs(c *gin.Context) {
+	userID := c.Param("id")
+
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		req.Reason = "all mesh configs revoked by admin"
+	}
+
+	count, err := s.meshConfigStore.RevokeUserConfigs(c.Request.Context(), userID, req.Reason)
+	if err != nil {
+		s.logger.Error("Failed to revoke user mesh configs", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to revoke configs"})
+		return
+	}
+
+	s.logger.Info("User mesh configs revoked by admin",
+		zap.String("user_id", userID),
+		zap.Int64("count", count))
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":      true,
+		"message":      "User mesh configs revoked successfully",
+		"revokedCount": count,
+	})
 }

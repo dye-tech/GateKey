@@ -99,6 +99,15 @@ const sections: Section[] = [
     ),
   },
   {
+    id: 'admin-configs',
+    title: 'Config Management',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    ),
+  },
+  {
     id: 'api-keys',
     title: 'API Keys',
     icon: (
@@ -1139,6 +1148,121 @@ curl -sSL ${baseUrl}/scripts/install-gateway.sh | \\
                   <h3 className="text-sm font-medium text-yellow-800">Warning</h3>
                   <p className="mt-1 text-sm text-yellow-700">
                     Purging logs is irreversible. Once deleted, login history cannot be recovered.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Admin Config Management Section */}
+        <section id="admin-configs" className="scroll-mt-24">
+          <div className="card">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Admin Config Management</h1>
+            <p className="text-gray-600 mb-6">
+              Administrators can view and manage all VPN configurations across all users from a centralized dashboard.
+            </p>
+
+            {/* Overview */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Overview</h3>
+            <p className="text-gray-600 mb-4">
+              The Admin All Configs page provides administrators with a complete view of every VPN configuration
+              generated across the organization. This includes both standard gateway configs and mesh VPN configs,
+              with full visibility into who generated each config and when.
+            </p>
+
+            {/* Features */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Features</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Gateway Configs</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• View all gateway VPN configurations</li>
+                  <li>• See user email and name for each config</li>
+                  <li>• Filter by user, status (active/revoked/expired)</li>
+                  <li>• Revoke any active configuration</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Mesh Configs</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• View all mesh hub VPN configurations</li>
+                  <li>• See user ownership for each config</li>
+                  <li>• Track expiration and download status</li>
+                  <li>• Revoke mesh configs as needed</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Information Displayed */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Information Displayed</h3>
+            <div className="overflow-x-auto mb-6">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Field</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200 text-sm">
+                  <tr>
+                    <td className="px-4 py-3 font-medium">User</td>
+                    <td className="px-4 py-3">Email and display name of the user who generated the config</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Gateway/Hub</td>
+                    <td className="px-4 py-3">The VPN gateway or mesh hub the config connects to</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">File Name</td>
+                    <td className="px-4 py-3">The generated .ovpn configuration file name</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Created</td>
+                    <td className="px-4 py-3">When the configuration was generated</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Expires</td>
+                    <td className="px-4 py-3">When the configuration will expire</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Status</td>
+                    <td className="px-4 py-3">Active, Revoked, or Expired</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Accessing the Page */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Accessing Config Management</h3>
+            <ol className="list-decimal list-inside space-y-2 text-gray-600 mb-6">
+              <li>Navigate to <strong>Administration</strong> in the sidebar</li>
+              <li>Click <strong>All Configs</strong></li>
+              <li>Use the tabs to switch between Gateway and Mesh configs</li>
+              <li>Use filters to find specific configs by user or status</li>
+            </ol>
+
+            {/* Revoking Configs */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Revoking Configurations</h3>
+            <p className="text-gray-600 mb-4">
+              Administrators can revoke any active VPN configuration. When a config is revoked:
+            </p>
+            <ul className="list-disc list-inside space-y-2 text-gray-600 mb-6">
+              <li>The user will no longer be able to connect using that configuration</li>
+              <li>The certificate associated with the config is marked as invalid</li>
+              <li>A reason for revocation can be recorded for audit purposes</li>
+              <li>The config remains visible with a "Revoked" status</li>
+            </ul>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex">
+                <svg className="h-5 w-5 text-blue-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-blue-800">Tip</h3>
+                  <p className="mt-1 text-sm text-blue-700">
+                    You can also view and revoke configs for a specific user from the Users page by clicking on a user and going to the "VPN Configs" tab.
                   </p>
                 </div>
               </div>

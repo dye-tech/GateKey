@@ -36,6 +36,7 @@ type Server struct {
 	proxyAppStore   *db.ProxyApplicationStore
 	loginLogStore   *db.LoginLogStore
 	meshStore       *db.MeshStore
+	meshConfigStore *db.MeshConfigStore
 	apiKeyStore     *db.APIKeyStore
 	ca              *pki.CA
 	configGen       *openvpn.ConfigGenerator
@@ -95,6 +96,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	proxyAppStore := db.NewProxyApplicationStore(database)
 	loginLogStore := db.NewLoginLogStore(database)
 	meshStore := db.NewMeshStore(database)
+	meshConfigStore := db.NewMeshConfigStore(database)
 	apiKeyStore := db.NewAPIKeyStore(database)
 
 	// Initialize PKI with database store for CA persistence
@@ -136,6 +138,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 		proxyAppStore:   proxyAppStore,
 		loginLogStore:   loginLogStore,
 		meshStore:       meshStore,
+		meshConfigStore: meshConfigStore,
 		apiKeyStore:     apiKeyStore,
 		ca:              ca,
 		configGen:       configGen,
@@ -376,6 +379,8 @@ func (s *Server) setupRoutes() {
 			admin.POST("/users/:id/gateways", s.handleAssignUserGateway)
 			admin.DELETE("/users/:id/gateways/:gatewayId", s.handleRemoveUserGateway)
 			admin.POST("/users/:id/revoke-configs", s.handleAdminRevokeUserConfigs)
+			admin.GET("/users/:id/configs", s.handleAdminListUserConfigs)
+			admin.GET("/users/:id/mesh-configs", s.handleAdminListUserMeshConfigs)
 
 			// Config management (admin)
 			admin.POST("/configs/:id/revoke", s.handleAdminRevokeConfig)
@@ -442,6 +447,14 @@ func (s *Server) setupRoutes() {
 			admin.POST("/mesh/spokes/:id/groups", s.handleAssignMeshSpokeGroup)
 			admin.DELETE("/mesh/spokes/:id/groups/:groupName", s.handleRemoveMeshSpokeGroup)
 
+			// Admin config management (gateway configs)
+			admin.GET("/configs", s.handleAdminListAllConfigs)
+
+			// Admin mesh config management
+			admin.GET("/mesh-configs", s.handleAdminListMeshConfigs)
+			admin.POST("/mesh-configs/:id/revoke", s.handleAdminRevokeMeshConfig)
+			admin.POST("/users/:id/revoke-mesh-configs", s.handleAdminRevokeMeshUserConfigs)
+
 			// API key management (admin)
 			admin.GET("/api-keys", s.handleAdminListAPIKeys)
 			admin.POST("/api-keys", s.handleAdminCreateAPIKey)
@@ -450,6 +463,7 @@ func (s *Server) setupRoutes() {
 			admin.GET("/users/:id/api-keys", s.handleAdminListUserAPIKeys)
 			admin.POST("/users/:id/api-keys", s.handleAdminCreateUserAPIKey)
 			admin.DELETE("/users/:id/api-keys", s.handleAdminRevokeUserAPIKeys)
+			admin.DELETE("/users/:id/api-keys/all", s.handleAdminDeleteUserAPIKeys)
 		}
 
 		// User API key management
@@ -470,6 +484,11 @@ func (s *Server) setupRoutes() {
 		// User mesh hub access
 		v1.GET("/mesh/hubs", s.handleListUserMeshHubs)
 		v1.POST("/mesh/generate-config", s.handleGenerateMeshClientConfig)
+
+		// User mesh config management
+		v1.GET("/mesh-configs", s.handleListUserMeshConfigs)
+		v1.GET("/mesh-configs/:id/download", s.handleDownloadMeshConfig)
+		v1.POST("/mesh-configs/:id/revoke", s.handleRevokeMeshConfig)
 	}
 
 	// Metrics endpoint
@@ -595,17 +614,44 @@ func (s *Server) cleanupExpiredConfigs(ctx context.Context) {
 	// The config already has an expiry based on validity, so we add 1 hour buffer
 	olderThan := time.Duration(1) * time.Hour
 
+	// Clean up gateway configs
 	count, err := s.configStore.DeleteExpiredConfigs(ctx, olderThan)
 	if err != nil {
-		s.logger.Error("Failed to cleanup expired configs", zap.Error(err))
-		return
-	}
-
-	if count > 0 {
-		s.logger.Info("Cleaned up expired configs",
+		s.logger.Error("Failed to cleanup expired gateway configs", zap.Error(err))
+	} else if count > 0 {
+		s.logger.Info("Cleaned up expired gateway configs",
 			zap.Int64("deleted", count),
 			zap.Int("validity_hours", validityHours),
 			zap.Duration("buffer", olderThan))
+	}
+
+	// Clean up mesh configs
+	meshCount, err := s.meshConfigStore.DeleteExpiredConfigs(ctx, olderThan)
+	if err != nil {
+		s.logger.Error("Failed to cleanup expired mesh configs", zap.Error(err))
+	} else if meshCount > 0 {
+		s.logger.Info("Cleaned up expired mesh configs",
+			zap.Int64("deleted", meshCount),
+			zap.Int("validity_hours", validityHours),
+			zap.Duration("buffer", olderThan))
+	}
+
+	// Clean up revoked API keys (delete after 24 hours)
+	revokedKeysCount, err := s.apiKeyStore.DeleteRevokedKeys(ctx)
+	if err != nil {
+		s.logger.Error("Failed to cleanup revoked API keys", zap.Error(err))
+	} else if revokedKeysCount > 0 {
+		s.logger.Info("Cleaned up revoked API keys",
+			zap.Int64("deleted", revokedKeysCount))
+	}
+
+	// Clean up expired API keys (delete after 30 days)
+	expiredKeysCount, err := s.apiKeyStore.DeleteExpiredKeys(ctx)
+	if err != nil {
+		s.logger.Error("Failed to cleanup expired API keys", zap.Error(err))
+	} else if expiredKeysCount > 0 {
+		s.logger.Info("Cleaned up expired API keys",
+			zap.Int64("deleted", expiredKeysCount))
 	}
 }
 

@@ -249,13 +249,33 @@ func (s *APIKeyStore) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// DeleteExpiredKeys deletes all expired and revoked keys older than 30 days
+// DeleteExpiredKeys deletes all expired keys older than 30 days
 func (s *APIKeyStore) DeleteExpiredKeys(ctx context.Context) (int64, error) {
 	result, err := s.db.Pool.Exec(ctx, `
 		DELETE FROM api_keys
-		WHERE (expires_at < NOW() - INTERVAL '30 days')
-		   OR (is_revoked = TRUE AND revoked_at < NOW() - INTERVAL '30 days')
+		WHERE expires_at < NOW() - INTERVAL '30 days'
 	`)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+// DeleteRevokedKeys deletes revoked keys older than 24 hours
+func (s *APIKeyStore) DeleteRevokedKeys(ctx context.Context) (int64, error) {
+	result, err := s.db.Pool.Exec(ctx, `
+		DELETE FROM api_keys
+		WHERE is_revoked = TRUE AND revoked_at < NOW() - INTERVAL '24 hours'
+	`)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+// DeleteAllForUser permanently deletes all API keys for a user
+func (s *APIKeyStore) DeleteAllForUser(ctx context.Context, userID string) (int64, error) {
+	result, err := s.db.Pool.Exec(ctx, `DELETE FROM api_keys WHERE user_id = $1`, userID)
 	if err != nil {
 		return 0, err
 	}

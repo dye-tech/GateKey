@@ -243,3 +243,49 @@ func (s *ConfigStore) DeleteExpiredConfigs(ctx context.Context, olderThan time.D
 	}
 	return result.RowsAffected(), nil
 }
+
+// ConfigWithUser extends GeneratedConfig with user information
+type ConfigWithUser struct {
+	GeneratedConfig
+	UserEmail string
+	UserName  string
+}
+
+// GetAllConfigs retrieves all configs with user info (for admin)
+func (s *ConfigStore) GetAllConfigs(ctx context.Context, limit, offset int) ([]*ConfigWithUser, int, error) {
+	// Get total count
+	var total int
+	err := s.db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM generated_configs`).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := s.db.Pool.Query(ctx, `
+		SELECT gc.id, gc.user_id, gc.gateway_id, gc.gateway_name, gc.file_name, gc.serial_number, gc.fingerprint,
+		       gc.is_revoked, gc.revoked_at, COALESCE(gc.revoked_reason, ''), gc.expires_at, gc.created_at, gc.downloaded_at,
+		       COALESCE(u.email, lu.email, gc.user_id) as user_email,
+		       COALESCE(u.name, lu.username, '') as user_name
+		FROM generated_configs gc
+		LEFT JOIN users u ON gc.user_id = u.id::text
+		LEFT JOIN local_users lu ON gc.user_id = lu.id::text
+		ORDER BY gc.created_at DESC
+		LIMIT $1 OFFSET $2
+	`, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var configs []*ConfigWithUser
+	for rows.Next() {
+		var config ConfigWithUser
+		if err := rows.Scan(&config.ID, &config.UserID, &config.GatewayID, &config.GatewayName, &config.FileName,
+			&config.SerialNumber, &config.Fingerprint, &config.IsRevoked,
+			&config.RevokedAt, &config.RevokedReason, &config.ExpiresAt, &config.CreatedAt, &config.DownloadedAt,
+			&config.UserEmail, &config.UserName); err != nil {
+			return nil, 0, err
+		}
+		configs = append(configs, &config)
+	}
+	return configs, total, rows.Err()
+}

@@ -25,6 +25,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
     { name: 'Access Rules', href: '/admin/access-rules', icon: 'shield' },
     { name: 'Mesh', href: '/admin/mesh', icon: 'mesh' },
     { name: 'Proxy Apps', href: '/admin/proxy-apps', icon: 'apps' },
+    { name: 'All Configs', href: '/admin/configs', icon: 'configs' },
     { name: 'Monitoring', href: '/admin/monitoring', icon: 'monitoring' },
     { name: 'OIDC Providers', href: '/admin/settings/oidc', icon: 'oidc' },
     { name: 'SAML Providers', href: '/admin/settings/saml', icon: 'saml' },
