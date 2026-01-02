@@ -30,21 +30,20 @@ GateKey is a zero-trust VPN solution that wraps OpenVPN. Users authenticate via 
 ### macOS
 
 ```bash
+brew tap dye-tech/gatekey
 brew install gatekey
 ```
 
 ### Linux
 
 ```bash
-# Download the latest release
-curl -LO https://github.com/dye-tech/GateKey/releases/latest/download/gatekey-linux-amd64
-chmod +x gatekey-linux-amd64
-sudo mv gatekey-linux-amd64 /usr/local/bin/gatekey
+brew tap dye-tech/gatekey
+brew install gatekey
 ```
 
-### Windows
+### Releases
 
-Download the latest `.exe` from the [releases page](https://github.com/dye-tech/GateKey/releases).
+(https://github.com/dye-tech/GateKey/releases).
 
 ### From Source
 
