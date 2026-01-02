@@ -45,9 +45,10 @@ func cidrToRoute(cidr string) string {
 		return ""
 	}
 	// Convert net.IPMask to dotted decimal format
+	// Use "push" directive for client-connect scripts
 	mask := ipNet.Mask
 	if len(mask) == 4 {
-		return fmt.Sprintf("route %s %d.%d.%d.%d", ipNet.IP.String(), mask[0], mask[1], mask[2], mask[3])
+		return fmt.Sprintf("push \"route %s %d.%d.%d.%d\"", ipNet.IP.String(), mask[0], mask[1], mask[2], mask[3])
 	}
 	return ""
 }
@@ -2090,7 +2091,8 @@ func (s *Server) handleGatewayConnect(c *gin.Context) {
 	}
 
 	// Get the user's access rules for firewall enforcement
-	accessRules, err := s.accessRuleStore.GetUserAccessRules(ctx, user.ID, user.Groups)
+	// Only get rules for networks assigned to this specific gateway
+	accessRules, err := s.accessRuleStore.GetUserAccessRulesForGateway(ctx, user.ID, user.Groups, gateway.ID)
 	if err != nil {
 		s.logger.Error("Gateway connect: failed to get access rules", zap.Error(err))
 		// Continue but with empty rules (default deny)
@@ -2104,7 +2106,7 @@ func (s *Server) handleGatewayConnect(c *gin.Context) {
 
 	// If full tunnel mode is enabled, push default route for all traffic
 	if gateway.FullTunnelMode {
-		clientConfig = append(clientConfig, "redirect-gateway def1 bypass-dhcp")
+		clientConfig = append(clientConfig, "push \"redirect-gateway def1 bypass-dhcp\"")
 	}
 
 	// Push DNS servers if enabled
@@ -2112,12 +2114,12 @@ func (s *Server) handleGatewayConnect(c *gin.Context) {
 		if len(gateway.DNSServers) > 0 {
 			// Use custom DNS servers configured for this gateway
 			for _, dns := range gateway.DNSServers {
-				clientConfig = append(clientConfig, fmt.Sprintf("dhcp-option DNS %s", dns))
+				clientConfig = append(clientConfig, fmt.Sprintf("push \"dhcp-option DNS %s\"", dns))
 			}
 		} else {
 			// Fallback to public DNS if push_dns is enabled but no servers configured
-			clientConfig = append(clientConfig, "dhcp-option DNS 1.1.1.1")
-			clientConfig = append(clientConfig, "dhcp-option DNS 8.8.8.8")
+			clientConfig = append(clientConfig, "push \"dhcp-option DNS 1.1.1.1\"")
+			clientConfig = append(clientConfig, "push \"dhcp-option DNS 8.8.8.8\"")
 		}
 	}
 
@@ -2138,10 +2140,17 @@ func (s *Server) handleGatewayConnect(c *gin.Context) {
 		}
 		firewallRules = append(firewallRules, fwRule)
 
-		// For split tunnel mode, push routes for each CIDR rule
-		if !gateway.FullTunnelMode && rule.RuleType == "cidr" {
-			// Convert CIDR to OpenVPN route format (network netmask)
-			route := cidrToRoute(rule.Value)
+		// For split tunnel mode, push routes for CIDR and IP rules
+		if !gateway.FullTunnelMode {
+			var route string
+			switch rule.RuleType {
+			case "cidr":
+				// Convert CIDR to OpenVPN route format (network netmask)
+				route = cidrToRoute(rule.Value)
+			case "ip":
+				// Single IP is a /32 CIDR
+				route = cidrToRoute(rule.Value + "/32")
+			}
 			if route != "" {
 				clientConfig = append(clientConfig, route)
 			}

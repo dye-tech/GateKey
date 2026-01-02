@@ -431,7 +431,8 @@ AUTHEOF
 
     cat > "$OPENVPN_CONFIG_DIR/gatekey-connect.sh" << 'CONNECTEOF'
 #!/bin/bash
-/usr/local/bin/gatekey-gateway hook --type client-connect --config /etc/gatekey/gateway.yaml
+# $1 is the client config file path passed by OpenVPN - routes are written here
+/usr/local/bin/gatekey-gateway hook --type client-connect --config /etc/gatekey/gateway.yaml "$1"
 CONNECTEOF
 
     cat > "$OPENVPN_CONFIG_DIR/gatekey-disconnect.sh" << 'DISCONNECTEOF'
@@ -514,6 +515,11 @@ configure_firewall() {
         nft add chain inet gatekey input "{ type filter hook input priority 0; }" 2>/dev/null || true
         nft add rule inet gatekey input udp dport ${VPN_PORT} accept 2>/dev/null || true
 
+        # Forward rules for VPN traffic
+        nft add chain inet gatekey forward "{ type filter hook forward priority 0; }" 2>/dev/null || true
+        nft add rule inet gatekey forward iifname "tun0" accept 2>/dev/null || true
+        nft add rule inet gatekey forward oifname "tun0" ct state related,established accept 2>/dev/null || true
+
         # NAT masquerade for VPN traffic
         nft add table ip nat 2>/dev/null || true
         nft add chain ip nat postrouting "{ type nat hook postrouting priority 100; }" 2>/dev/null || true
@@ -524,11 +530,17 @@ configure_firewall() {
         echo "Using ufw"
         ufw allow ${VPN_PORT}/${VPN_PROTOCOL}
         # ufw requires manual NAT config in /etc/ufw/before.rules
-        # Add iptables masquerade as fallback
+        # Add iptables rules as fallback
+        iptables -I FORWARD 1 -i tun0 -j ACCEPT 2>/dev/null || true
+        iptables -I FORWARD 2 -o tun0 -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
         iptables -t nat -A POSTROUTING -s ${VPN_NETWORK} -o ${DEFAULT_IFACE} -j MASQUERADE 2>/dev/null || true
     elif command -v iptables &> /dev/null; then
         echo "Using iptables"
         iptables -A INPUT -p ${VPN_PROTOCOL} --dport ${VPN_PORT} -j ACCEPT
+        # Forward rules for VPN traffic
+        iptables -I FORWARD 1 -i tun0 -j ACCEPT
+        iptables -I FORWARD 2 -o tun0 -m state --state RELATED,ESTABLISHED -j ACCEPT
+        # NAT masquerade
         iptables -t nat -A POSTROUTING -s ${VPN_NETWORK} -o ${DEFAULT_IFACE} -j MASQUERADE
 
         # Save iptables rules if possible
