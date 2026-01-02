@@ -538,6 +538,7 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
     fullTunnelMode: false,
     pushDns: false,
     dnsServers: [],
+    sessionEnabled: true,
   })
   const [dnsInput, setDnsInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -742,6 +743,22 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
               </div>
             )}
 
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="hubSessionEnabled"
+                checked={form.sessionEnabled ?? true}
+                onChange={(e) => setForm({ ...form, sessionEnabled: e.target.checked })}
+                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <label htmlFor="hubSessionEnabled" className="ml-2 text-sm text-gray-700">
+                Enable Remote Sessions
+              </label>
+            </div>
+            <p className="text-xs text-gray-500 -mt-2">
+              Allow administrators to run commands on this hub via the Remote Sessions page.
+            </p>
+
             <div className="flex justify-end space-x-3 pt-4">
               <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
               <button type="submit" disabled={loading} className="btn btn-primary">
@@ -761,6 +778,7 @@ function AddSpokeModal({ hubId, onClose, onSuccess }: { hubId: string; onClose: 
     name: '',
     description: '',
     localNetworks: [],
+    sessionEnabled: true,
   })
   const [networkInput, setNetworkInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -849,6 +867,22 @@ function AddSpokeModal({ hubId, onClose, onSuccess }: { hubId: string; onClose: 
                 </div>
               )}
             </div>
+
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="spokeSessionEnabled"
+                checked={form.sessionEnabled ?? true}
+                onChange={(e) => setForm({ ...form, sessionEnabled: e.target.checked })}
+                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <label htmlFor="spokeSessionEnabled" className="ml-2 text-sm text-gray-700">
+                Enable Remote Sessions
+              </label>
+            </div>
+            <p className="text-xs text-gray-500 -mt-2">
+              Allow administrators to run commands on this spoke via the Remote Sessions page.
+            </p>
 
             <div className="flex justify-end space-x-3 pt-4">
               <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
@@ -1663,7 +1697,7 @@ function ManageSpokeAccessModal({ spoke, onClose }: { spoke: MeshSpoke; onClose:
 
 // Edit Hub Modal Component
 function EditHubModal({ hub, onClose, onSuccess }: { hub: MeshHub; onClose: () => void; onSuccess: () => void }) {
-  const [form, setForm] = useState({ name: hub.name, description: hub.description || '', publicEndpoint: hub.publicEndpoint || '', vpnPort: hub.vpnPort || 1194, vpnProtocol: hub.vpnProtocol || 'udp', vpnSubnet: hub.vpnSubnet || '172.30.0.0/16', cryptoProfile: hub.cryptoProfile || 'modern' as CryptoProfile, tlsAuthEnabled: hub.tlsAuthEnabled ?? true, fullTunnelMode: hub.fullTunnelMode ?? false, pushDns: hub.pushDns ?? false, dnsServers: hub.dnsServers || [], localNetworks: hub.localNetworks || [] })
+  const [form, setForm] = useState({ name: hub.name, description: hub.description || '', publicEndpoint: hub.publicEndpoint || '', vpnPort: hub.vpnPort || 1194, vpnProtocol: hub.vpnProtocol || 'udp', vpnSubnet: hub.vpnSubnet || '172.30.0.0/16', cryptoProfile: hub.cryptoProfile || 'modern' as CryptoProfile, tlsAuthEnabled: hub.tlsAuthEnabled ?? true, fullTunnelMode: hub.fullTunnelMode ?? false, pushDns: hub.pushDns ?? false, dnsServers: hub.dnsServers || [], localNetworks: hub.localNetworks || [], sessionEnabled: hub.sessionEnabled ?? true })
   const [dnsInput, setDnsInput] = useState('')
   const [networkInput, setNetworkInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -1690,6 +1724,8 @@ function EditHubModal({ hub, onClose, onSuccess }: { hub: MeshHub; onClose: () =
             <div className="space-y-2"><label className="flex items-center"><input type="checkbox" checked={form.tlsAuthEnabled} onChange={(e) => setForm({ ...form, tlsAuthEnabled: e.target.checked })} className="mr-2" /><span className="text-sm">TLS-Auth</span></label><label className="flex items-center"><input type="checkbox" checked={form.fullTunnelMode} onChange={(e) => setForm({ ...form, fullTunnelMode: e.target.checked })} className="mr-2" /><span className="text-sm">Full Tunnel</span></label><label className="flex items-center"><input type="checkbox" checked={form.pushDns} onChange={(e) => setForm({ ...form, pushDns: e.target.checked })} className="mr-2" /><span className="text-sm">Push DNS</span></label></div>
             {form.pushDns && <div><label className="block text-sm font-medium text-gray-700">DNS Servers</label><div className="flex space-x-2"><input type="text" value={dnsInput} onChange={(e) => setDnsInput(e.target.value)} className="input flex-1" placeholder="1.1.1.1" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (dnsInput) { setForm({ ...form, dnsServers: [...form.dnsServers, dnsInput] }); setDnsInput('') } } }} /><button type="button" onClick={() => { if (dnsInput) { setForm({ ...form, dnsServers: [...form.dnsServers, dnsInput] }); setDnsInput('') } }} className="btn btn-secondary">Add</button></div>{form.dnsServers.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.dnsServers.map((d) => <span key={d} className="px-2 py-1 bg-gray-100 rounded text-sm">{d}<button type="button" onClick={() => setForm({ ...form, dnsServers: form.dnsServers.filter(x => x !== d) })} className="ml-1 text-red-600">×</button></span>)}</div>}</div>}
             <div><label className="block text-sm font-medium text-gray-700">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="192.168.1.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((n) => <span key={n} className="px-2 py-1 bg-gray-100 rounded text-sm">{n}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(x => x !== n) })} className="ml-1 text-red-600">×</button></span>)}</div>}</div>
+            <div className="flex items-center"><input type="checkbox" id="editHubSessionEnabled" checked={form.sessionEnabled ?? true} onChange={(e) => setForm({ ...form, sessionEnabled: e.target.checked })} className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" /><label htmlFor="editHubSessionEnabled" className="ml-2 text-sm text-gray-700">Enable Remote Sessions</label></div>
+            <p className="text-xs text-gray-500 -mt-2">Allow administrators to run commands on this hub via the Remote Sessions page.</p>
             <div className="flex justify-end space-x-3 pt-4"><button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button><button type="submit" disabled={loading} className="btn btn-primary">{loading ? 'Saving...' : 'Save'}</button></div>
           </form>
         </div>
@@ -1700,7 +1736,7 @@ function EditHubModal({ hub, onClose, onSuccess }: { hub: MeshHub; onClose: () =
 
 // Edit Spoke Modal Component
 function EditSpokeModal({ spoke, onClose, onSuccess }: { spoke: MeshSpoke; onClose: () => void; onSuccess: () => void }) {
-  const [form, setForm] = useState({ name: spoke.name, description: spoke.description || '', localNetworks: spoke.localNetworks || [] })
+  const [form, setForm] = useState({ name: spoke.name, description: spoke.description || '', localNetworks: spoke.localNetworks || [], sessionEnabled: spoke.sessionEnabled ?? true })
   const [networkInput, setNetworkInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -1720,6 +1756,8 @@ function EditSpokeModal({ spoke, onClose, onSuccess }: { spoke: MeshSpoke; onClo
             <div><label className="block text-sm font-medium text-gray-700">Name</label><input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input" required /></div>
             <div><label className="block text-sm font-medium text-gray-700">Description</label><input type="text" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input" /></div>
             <div><label className="block text-sm font-medium text-gray-700">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="e.g., 10.0.0.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div><p className="text-xs text-gray-500 mt-1">Networks behind this spoke routable via hub</p>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((net) => <span key={net} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm flex items-center">{net}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(n => n !== net) })} className="ml-1 text-gray-400 hover:text-red-600">×</button></span>)}</div>}</div>
+            <div className="flex items-center"><input type="checkbox" id="editSpokeSessionEnabled" checked={form.sessionEnabled ?? true} onChange={(e) => setForm({ ...form, sessionEnabled: e.target.checked })} className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" /><label htmlFor="editSpokeSessionEnabled" className="ml-2 text-sm text-gray-700">Enable Remote Sessions</label></div>
+            <p className="text-xs text-gray-500 -mt-2">Allow administrators to run commands on this spoke via the Remote Sessions page.</p>
             <div className="flex justify-end space-x-3 pt-4"><button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button><button type="submit" disabled={loading} className="btn btn-primary">{loading ? 'Saving...' : 'Save'}</button></div>
           </form>
         </div>

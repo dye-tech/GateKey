@@ -245,6 +245,7 @@ export default function AdminGateways() {
               fullTunnelMode: false, // Default for new gateways
               pushDns: false, // Default for new gateways
               dnsServers: [], // Default for new gateways
+              sessionEnabled: true, // Default for new gateways
               isActive: false,
               lastHeartbeat: null,
               createdAt: new Date().toISOString(),
@@ -309,6 +310,7 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
   const [fullTunnelMode, setFullTunnelMode] = useState(false)
   const [pushDns, setPushDns] = useState(false)
   const [dnsServers, setDnsServers] = useState('1.1.1.1, 8.8.8.8')
+  const [sessionEnabled, setSessionEnabled] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -337,6 +339,7 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
         full_tunnel_mode: fullTunnelMode,
         push_dns: pushDns,
         dns_servers: pushDns ? dnsServers.split(',').map(s => s.trim()).filter(s => s) : [],
+        session_enabled: sessionEnabled,
       })
       onSuccess(gateway)
     } catch (err: unknown) {
@@ -533,6 +536,22 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
               </p>
             </div>
           )}
+
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="sessionEnabled"
+              checked={sessionEnabled}
+              onChange={(e) => setSessionEnabled(e.target.checked)}
+              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+            />
+            <label htmlFor="sessionEnabled" className="ml-2 block text-sm text-gray-700">
+              Enable Remote Sessions
+            </label>
+          </div>
+          <p className="text-xs text-gray-500 -mt-2">
+            Allow administrators to run commands on this gateway via the Remote Sessions page.
+          </p>
 
           <div className="flex justify-end space-x-3 pt-4">
             <button
@@ -797,6 +816,7 @@ function EditGatewayModal({ gateway, onClose, onSuccess }: EditGatewayModalProps
   const [fullTunnelMode, setFullTunnelMode] = useState(gateway.fullTunnelMode ?? false)
   const [pushDns, setPushDns] = useState(gateway.pushDns ?? false)
   const [dnsServers, setDnsServers] = useState((gateway.dnsServers ?? []).join(', ') || '1.1.1.1, 8.8.8.8')
+  const [sessionEnabled, setSessionEnabled] = useState(gateway.sessionEnabled ?? true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -825,6 +845,7 @@ function EditGatewayModal({ gateway, onClose, onSuccess }: EditGatewayModalProps
         full_tunnel_mode: fullTunnelMode,
         push_dns: pushDns,
         dns_servers: pushDns ? dnsServers.split(',').map(s => s.trim()).filter(s => s) : [],
+        session_enabled: sessionEnabled,
       })
       onSuccess()
     } catch (err: unknown) {
@@ -1019,6 +1040,22 @@ function EditGatewayModal({ gateway, onClose, onSuccess }: EditGatewayModalProps
               </p>
             </div>
           )}
+
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="editSessionEnabled"
+              checked={sessionEnabled}
+              onChange={(e) => setSessionEnabled(e.target.checked)}
+              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+            />
+            <label htmlFor="editSessionEnabled" className="ml-2 block text-sm text-gray-700">
+              Enable Remote Sessions
+            </label>
+          </div>
+          <p className="text-xs text-gray-500 -mt-2">
+            Allow administrators to run commands on this gateway via the Remote Sessions page.
+          </p>
 
           <div className="flex justify-end space-x-3 pt-4">
             <button
