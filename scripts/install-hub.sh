@@ -410,11 +410,20 @@ configure_firewall() {
         nft add table inet gatekey 2>/dev/null || true
         nft add chain inet gatekey input "{ type filter hook input priority 0; }" 2>/dev/null || true
         nft add rule inet gatekey input ${VPN_PROTOCOL} dport ${VPN_PORT} accept 2>/dev/null || true
+        # Forward rules for VPN traffic
+        nft add chain inet gatekey forward "{ type filter hook forward priority 0; }" 2>/dev/null || true
+        nft add rule inet gatekey forward iifname "tun0" accept 2>/dev/null || true
+        nft add rule inet gatekey forward oifname "tun0" ct state related,established accept 2>/dev/null || true
+        # NAT masquerade
         nft add table ip nat 2>/dev/null || true
         nft add chain ip nat postrouting "{ type nat hook postrouting priority 100; }" 2>/dev/null || true
         nft add rule ip nat postrouting ip saddr ${VPN_SUBNET} oifname "${DEFAULT_IFACE}" masquerade 2>/dev/null || true
     elif command -v iptables &> /dev/null; then
         iptables -A INPUT -p ${VPN_PROTOCOL} --dport ${VPN_PORT} -j ACCEPT
+        # Forward rules for VPN traffic
+        iptables -I FORWARD 1 -i tun0 -j ACCEPT
+        iptables -I FORWARD 2 -o tun0 -m state --state RELATED,ESTABLISHED -j ACCEPT
+        # NAT masquerade
         iptables -t nat -A POSTROUTING -s ${VPN_SUBNET} -o ${DEFAULT_IFACE} -j MASQUERADE
     fi
 
