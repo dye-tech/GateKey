@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gatekey-project/gatekey/internal/session"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -26,9 +27,13 @@ var (
 	configPath       string
 	logger           *zap.Logger
 	currentConfigVer string
+	provisionedName  string // Name from control plane provisioning
 )
 
-const configVersionFile = "/etc/gatekey-mesh/.config_version"
+const (
+	configVersionFile = "/etc/gatekey-mesh/.config_version"
+	gatewayNameFile   = "/etc/gatekey-mesh/.gateway_name"
+)
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -81,11 +86,13 @@ type GatewayConfig struct {
 	LocalNetworks     []string      `mapstructure:"local_networks"`
 	HeartbeatInterval time.Duration `mapstructure:"heartbeat_interval"`
 	LogLevel          string        `mapstructure:"log_level"`
+	SessionEnabled    bool          `mapstructure:"session_enabled"`
 }
 
 // ProvisionResponse from control plane
 type ProvisionResponse struct {
 	GatewayID      string   `json:"gatewayId"`
+	GatewayName    string   `json:"gatewayName"` // Name for session authentication
 	HubEndpoint    string   `json:"hubEndpoint"`
 	HubVPNPort     int      `json:"hubVpnPort"`
 	HubVPNProtocol string   `json:"hubVpnProtocol"`
@@ -106,6 +113,7 @@ func loadConfig() (*GatewayConfig, error) {
 
 	v.SetDefault("heartbeat_interval", "30s")
 	v.SetDefault("log_level", "info")
+	v.SetDefault("session_enabled", true)
 
 	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("failed to read config: %w", err)
@@ -142,6 +150,18 @@ func saveConfigVersion(version string) error {
 	return os.WriteFile(configVersionFile, []byte(version), 0600)
 }
 
+func loadGatewayName() string {
+	data, err := os.ReadFile(gatewayNameFile)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+func saveGatewayName(name string) error {
+	return os.WriteFile(gatewayNameFile, []byte(name), 0600)
+}
+
 func runGateway(cmd *cobra.Command, args []string) error {
 	cfg, err := loadConfig()
 	if err != nil {
@@ -160,8 +180,9 @@ func runGateway(cmd *cobra.Command, args []string) error {
 		zap.Strings("local_networks", cfg.LocalNetworks),
 	)
 
-	// Load persisted config version
+	// Load persisted config version and gateway name
 	currentConfigVer = loadConfigVersion()
+	provisionedName = loadGatewayName()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -173,6 +194,17 @@ func runGateway(cmd *cobra.Command, args []string) error {
 			logger.Error("Initial provision failed", zap.Error(err))
 			return fmt.Errorf("initial provision failed: %w", err)
 		}
+		// Reload provisioned name after provisioning
+		provisionedName = loadGatewayName()
+	}
+
+	// Determine effective name: prefer config, fallback to provisioned name
+	effectiveName := cfg.Name
+	if effectiveName == "" {
+		effectiveName = provisionedName
+	}
+	if effectiveName != "" {
+		logger.Info("Using gateway name", zap.String("name", effectiveName))
 	}
 
 	// Start OpenVPN client if not running
@@ -181,6 +213,23 @@ func runGateway(cmd *cobra.Command, args []string) error {
 		if err := startOpenVPN(); err != nil {
 			logger.Warn("Failed to start OpenVPN", zap.Error(err))
 		}
+	}
+
+	// Start remote session client (connects outbound to control plane)
+	var sessionClient *session.AgentClient
+	if cfg.SessionEnabled && effectiveName != "" {
+		sessionClient = session.NewAgentClient(&session.AgentClientConfig{
+			ControlPlaneURL: cfg.ControlPlaneURL,
+			Token:           cfg.GatewayToken,
+			NodeType:        "spoke",
+			NodeID:          effectiveName,
+			NodeName:        effectiveName,
+			Logger:          logger,
+		})
+		sessionClient.Start(ctx)
+		logger.Info("Remote session client started")
+	} else if effectiveName == "" {
+		logger.Warn("Remote sessions disabled: gateway name not available (set 'name' in config or run provision)")
 	}
 
 	// Start heartbeat loop
@@ -195,6 +244,12 @@ func runGateway(cmd *cobra.Command, args []string) error {
 	<-quit
 
 	logger.Info("Shutting down mesh gateway")
+
+	// Stop session client
+	if sessionClient != nil {
+		sessionClient.Stop()
+	}
+
 	return nil
 }
 
@@ -412,7 +467,17 @@ func doProvision(ctx context.Context, cfg *GatewayConfig) error {
 		logger.Warn("Failed to save config version", zap.Error(err))
 	}
 
+	// Save gateway name for session authentication
+	if provResp.GatewayName != "" {
+		provisionedName = provResp.GatewayName
+		if err := saveGatewayName(provResp.GatewayName); err != nil {
+			logger.Warn("Failed to save gateway name", zap.Error(err))
+		}
+		logger.Info("Gateway name saved from provisioning", zap.String("name", provResp.GatewayName))
+	}
+
 	logger.Info("Gateway provisioned successfully",
+		zap.String("name", provResp.GatewayName),
 		zap.String("hub_endpoint", hubEndpoint),
 		zap.String("tunnel_ip", provResp.TunnelIP),
 		zap.String("config_version", currentConfigVer),

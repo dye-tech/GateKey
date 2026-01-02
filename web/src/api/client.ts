@@ -112,6 +112,7 @@ export interface AdminGateway {
   fullTunnelMode: boolean
   pushDns: boolean
   dnsServers: string[]
+  sessionEnabled: boolean
   isActive: boolean
   lastHeartbeat: string | null
   createdAt: string
@@ -130,6 +131,7 @@ export interface RegisterGatewayRequest {
   full_tunnel_mode?: boolean
   push_dns?: boolean
   dns_servers?: string[]
+  session_enabled?: boolean
 }
 
 export interface RegisterGatewayResponse {
@@ -173,6 +175,7 @@ export interface UpdateGatewayRequest {
   full_tunnel_mode?: boolean
   push_dns?: boolean
   dns_servers?: string[]
+  session_enabled?: boolean
 }
 
 export async function updateGateway(id: string, req: UpdateGatewayRequest): Promise<void> {
@@ -987,6 +990,7 @@ export interface MeshHub {
   pushDns: boolean
   dnsServers: string[]
   localNetworks: string[]
+  sessionEnabled: boolean
   status: MeshHubStatus
   statusMessage: string
   connectedSpokes: number
@@ -1014,6 +1018,7 @@ export interface CreateMeshHubRequest {
   pushDns?: boolean
   dnsServers?: string[]
   localNetworks?: string[]
+  sessionEnabled?: boolean
 }
 
 export interface MeshSpoke {
@@ -1025,6 +1030,7 @@ export interface MeshSpoke {
   fullTunnelMode: boolean
   pushDns: boolean
   dnsServers: string[]
+  sessionEnabled: boolean
   tunnelIp: string
   status: MeshSpokeStatus
   statusMessage: string
@@ -1045,6 +1051,7 @@ export interface CreateMeshSpokeRequest {
   name: string
   description?: string
   localNetworks: string[]
+  sessionEnabled?: boolean
 }
 
 // Mesh Hub Management
@@ -1064,6 +1071,7 @@ export async function getMeshHubs(): Promise<MeshHub[]> {
     pushDns: hub.pushDns || false,
     dnsServers: (hub.dnsServers as string[]) || [],
     localNetworks: (hub.localNetworks as string[]) || [],
+    sessionEnabled: hub.sessionEnabled ?? true,
     status: hub.status,
     statusMessage: hub.statusMessage || '',
     connectedSpokes: hub.connectedSpokes || 0,
@@ -1091,6 +1099,7 @@ export async function getMeshHub(id: string): Promise<MeshHub> {
     pushDns: hub.pushDns || false,
     dnsServers: hub.dnsServers || [],
     localNetworks: hub.localNetworks || [],
+    sessionEnabled: hub.sessionEnabled ?? true,
     status: hub.status,
     statusMessage: hub.statusMessage || '',
     connectedSpokes: hub.connectedSpokes || 0,
@@ -1118,6 +1127,7 @@ export async function createMeshHub(req: CreateMeshHubRequest): Promise<MeshHubW
     pushDns: hub.pushDns || false,
     dnsServers: hub.dnsServers || [],
     localNetworks: hub.localNetworks || [],
+    sessionEnabled: hub.sessionEnabled ?? true,
     apiToken: hub.apiToken,
     controlPlaneUrl: hub.controlPlaneUrl,
     status: hub.status,
@@ -1209,6 +1219,7 @@ export async function getMeshSpokes(hubId: string): Promise<MeshSpoke[]> {
     fullTunnelMode: spoke.fullTunnelMode || false,
     pushDns: spoke.pushDns || false,
     dnsServers: (spoke.dnsServers as string[]) || [],
+    sessionEnabled: spoke.sessionEnabled ?? true,
     tunnelIp: spoke.tunnelIp || '',
     status: spoke.status,
     statusMessage: spoke.statusMessage || '',
@@ -1234,6 +1245,7 @@ export async function getMeshSpoke(id: string): Promise<MeshSpoke> {
     fullTunnelMode: spoke.fullTunnelMode || false,
     pushDns: spoke.pushDns || false,
     dnsServers: spoke.dnsServers || [],
+    sessionEnabled: spoke.sessionEnabled ?? true,
     tunnelIp: spoke.tunnelIp || '',
     status: spoke.status,
     statusMessage: spoke.statusMessage || '',
@@ -1259,6 +1271,7 @@ export async function createMeshSpoke(hubId: string, req: CreateMeshSpokeRequest
     fullTunnelMode: spoke.fullTunnelMode || false,
     pushDns: spoke.pushDns || false,
     dnsServers: spoke.dnsServers || [],
+    sessionEnabled: spoke.sessionEnabled ?? true,
     tunnelIp: '',
     token: spoke.token,
     status: spoke.status,
@@ -1663,4 +1676,167 @@ export async function revokeAdminAPIKey(keyId: string): Promise<void> {
 export async function revokeAdminUserAPIKeys(userId: string): Promise<{ revokedCount: number }> {
   const response = await api.delete(`/api/v1/admin/users/${userId}/api-keys`)
   return { revokedCount: response.data.revoked_count || 0 }
+}
+
+// Topology API
+export interface TopologyGateway {
+  id: string
+  name: string
+  hostname: string
+  publicIp: string
+  vpnPort: number
+  vpnProtocol: string
+  isActive: boolean
+  lastHeartbeat: string | null
+  clientCount: number
+}
+
+export interface TopologyMeshHub {
+  id: string
+  name: string
+  publicEndpoint: string
+  publicIp: string
+  vpnPort: number
+  vpnSubnet: string
+  serverTunnelIp: string
+  localNetworks: string[]
+  status: string
+  lastHeartbeat: string | null
+  connectedSpokes: number
+  connectedUsers: number
+}
+
+export interface TopologyMeshSpoke {
+  id: string
+  hubId: string
+  name: string
+  localNetworks: string[]
+  tunnelIp: string
+  status: string
+  lastSeen: string | null
+  remoteIp: string
+}
+
+export interface TopologyConnection {
+  id: string
+  source: string
+  target: string
+  type: string
+  status: string
+}
+
+export interface TopologyResponse {
+  gateways: TopologyGateway[]
+  meshHubs: TopologyMeshHub[]
+  meshSpokes: TopologyMeshSpoke[]
+  connections: TopologyConnection[]
+}
+
+export async function getTopology(): Promise<TopologyResponse> {
+  const response = await api.get('/api/v1/admin/topology')
+  return response.data
+}
+
+// Active Sessions API
+export interface ActiveSession {
+  id: string
+  userId: string
+  userEmail: string
+  userName: string
+  gatewayId: string
+  gatewayName: string
+  nodeType: string
+  clientIp: string
+  vpnAddress: string
+  connectedAt: string
+  bytesSent: number
+  bytesRecv: number
+}
+
+export async function getActiveSessions(): Promise<{ sessions: ActiveSession[]; total: number }> {
+  const response = await api.get('/api/v1/admin/sessions/active')
+  return response.data
+}
+
+// Network Tools API
+export interface NetworkToolInfo {
+  name: string
+  description: string
+  options: string[]
+  required?: string[]
+}
+
+export interface NetworkToolLocation {
+  id: string
+  name: string
+  type: string
+}
+
+export interface NetworkToolsInfoResponse {
+  tools: NetworkToolInfo[]
+  locations: NetworkToolLocation[]
+}
+
+export async function getNetworkToolsInfo(): Promise<NetworkToolsInfoResponse> {
+  const response = await api.get('/api/v1/admin/network-tools')
+  return {
+    tools: response.data.tools || [],
+    locations: (response.data.locations || []).map((loc: Record<string, string>) => ({
+      id: loc.id,
+      name: loc.name,
+      type: loc.type,
+    })),
+  }
+}
+
+export interface NetworkToolRequest {
+  tool: string
+  target: string
+  port?: number
+  ports?: string
+  location?: string
+  options?: Record<string, string>
+}
+
+export interface NetworkToolResult {
+  tool: string
+  target: string
+  status: string
+  output: string
+  error?: string
+  duration: string
+  location: string
+  startedAt: string
+}
+
+export async function executeNetworkTool(req: NetworkToolRequest): Promise<NetworkToolResult> {
+  const response = await api.post('/api/v1/admin/network-tools/execute', req)
+  return response.data
+}
+
+// ==================== Remote Sessions ====================
+
+export interface RemoteSessionAgent {
+  id: string
+  nodeType: string // hub, gateway, spoke
+  nodeId: string
+  nodeName: string
+  connectedAt: string
+}
+
+export async function getRemoteSessionAgents(): Promise<RemoteSessionAgent[]> {
+  const response = await api.get('/api/v1/admin/remote-session/agents')
+  return (response.data.agents || []).map((agent: Record<string, unknown>) => ({
+    id: agent.agentId as string,
+    nodeType: agent.nodeType as string,
+    nodeId: agent.nodeId as string,
+    nodeName: agent.nodeName as string,
+    connectedAt: agent.connected as string,
+  }))
+}
+
+// Get WebSocket URL for remote session
+export function getRemoteSessionWebSocketUrl(): string {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${protocol}//${window.location.host}/ws/admin/session`
 }

@@ -283,6 +283,48 @@ func (s *MeshStore) GetHubByToken(ctx context.Context, token string) (*MeshHub, 
 	return &hub, nil
 }
 
+// GetHubByName retrieves a mesh hub by name
+func (s *MeshStore) GetHubByName(name string) (*MeshHub, error) {
+	ctx := context.Background()
+	var hub MeshHub
+	var vpnSubnet *string
+	err := s.db.Pool.QueryRow(ctx, `
+		SELECT id, name, description,
+			public_endpoint, vpn_port, vpn_protocol, vpn_subnet::text,
+			COALESCE(local_networks, '{}'),
+			crypto_profile, tls_auth_enabled, COALESCE(tls_auth_key, ''),
+			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
+			COALESCE(ca_cert, ''), COALESCE(ca_key, ''), COALESCE(server_cert, ''), COALESCE(server_key, ''), COALESCE(dh_params, ''),
+			api_token, control_plane_url,
+			status, COALESCE(status_message, ''), last_heartbeat, connected_gateways, connected_clients,
+			COALESCE(config_version, ''),
+			created_at, updated_at
+		FROM mesh_hubs WHERE name = $1
+	`, name).Scan(
+		&hub.ID, &hub.Name, &hub.Description,
+		&hub.PublicEndpoint, &hub.VPNPort, &hub.VPNProtocol, &vpnSubnet,
+		&hub.LocalNetworks,
+		&hub.CryptoProfile, &hub.TLSAuthEnabled, &hub.TLSAuthKey,
+		&hub.FullTunnelMode, &hub.PushDNS, &hub.DNSServers,
+		&hub.CACert, &hub.CAKey, &hub.ServerCert, &hub.ServerKey, &hub.DHParams,
+		&hub.APIToken, &hub.ControlPlaneURL,
+		&hub.Status, &hub.StatusMessage, &hub.LastHeartbeat, &hub.ConnectedSpokes, &hub.ConnectedClients,
+		&hub.ConfigVersion,
+		&hub.CreatedAt, &hub.UpdatedAt,
+	)
+
+	if err == pgx.ErrNoRows {
+		return nil, ErrMeshHubNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if vpnSubnet != nil {
+		hub.VPNSubnet = *vpnSubnet
+	}
+	return &hub, nil
+}
+
 // ListHubs retrieves all mesh hubs
 func (s *MeshStore) ListHubs(ctx context.Context) ([]*MeshHub, error) {
 	rows, err := s.db.Pool.Query(ctx, `
@@ -471,6 +513,43 @@ func (s *MeshStore) GetMeshSpokeByToken(ctx context.Context, token string) (*Mes
 			created_at, updated_at
 		FROM mesh_gateways WHERE token = $1
 	`, token).Scan(
+		&gw.ID, &gw.HubID, &gw.Name, &gw.Description, &gw.LocalNetworks,
+		&gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers,
+		&tunnelIP, &gw.ClientCert, &gw.ClientKey, &gw.Token,
+		&gw.Status, &gw.StatusMessage, &gw.LastSeen, &gw.BytesSent, &gw.BytesReceived,
+		&remoteIP,
+		&gw.CreatedAt, &gw.UpdatedAt,
+	)
+
+	if err == pgx.ErrNoRows {
+		return nil, ErrMeshSpokeNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if tunnelIP != nil {
+		gw.TunnelIP = *tunnelIP
+	}
+	if remoteIP != nil {
+		gw.RemoteIP = *remoteIP
+	}
+	return &gw, nil
+}
+
+// GetMeshSpokeByName retrieves a mesh spoke by name
+func (s *MeshStore) GetMeshSpokeByName(name string) (*MeshSpoke, error) {
+	ctx := context.Background()
+	var gw MeshSpoke
+	var tunnelIP, remoteIP *string
+	err := s.db.Pool.QueryRow(ctx, `
+		SELECT id, hub_id, name, description, local_networks,
+			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
+			host(tunnel_ip), COALESCE(client_cert, ''), COALESCE(client_key, ''), token,
+			status, COALESCE(status_message, ''), last_seen, bytes_sent, bytes_received,
+			host(remote_ip),
+			created_at, updated_at
+		FROM mesh_gateways WHERE name = $1
+	`, name).Scan(
 		&gw.ID, &gw.HubID, &gw.Name, &gw.Description, &gw.LocalNetworks,
 		&gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers,
 		&tunnelIP, &gw.ClientCert, &gw.ClientKey, &gw.Token,

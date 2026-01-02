@@ -166,7 +166,20 @@ Update a gateway:
 gatekey-admin gateway update <gateway-id> \
   --hostname "new-hostname.example.com" \
   --port 443
+
+# Enable or disable remote sessions
+gatekey-admin gateway update <gateway-id> --session=true
+gatekey-admin gateway update <gateway-id> --session=false
 ```
+
+**Options:**
+| Flag | Description |
+|------|-------------|
+| `--name` | Gateway name |
+| `--endpoint` | Gateway endpoint/hostname |
+| `--port` | VPN port |
+| `--description` | Description |
+| `--session` | Enable/disable remote sessions (default: true) |
 
 ### gateway delete
 
@@ -444,21 +457,32 @@ Create a mesh hub:
 
 ```bash
 gatekey-admin mesh hub create \
-  --name "primary-hub" \
-  --endpoint "hub.example.com" \
-  --port 1194 \
-  --protocol udp \
-  --vpn-subnet "172.30.0.0/16"
+  --gateway <gateway-id> \
+  --network "172.30.0.0/24" \
+  --session
 ```
+
+**Options:**
+| Flag | Description |
+|------|-------------|
+| `--gateway` | Gateway ID (required) |
+| `--network` | Hub network CIDR (required) |
+| `--session` | Enable remote sessions (default: true) |
 
 ### mesh hub update
 
 Update a mesh hub:
 
 ```bash
-gatekey-admin mesh hub update <hub-id> \
-  --endpoint "new-hub.example.com"
+# Enable or disable remote sessions
+gatekey-admin mesh hub update <hub-id> --session=true
+gatekey-admin mesh hub update <hub-id> --session=false
 ```
+
+**Options:**
+| Flag | Description |
+|------|-------------|
+| `--session` | Enable/disable remote sessions |
 
 ### mesh hub delete
 
@@ -491,19 +515,34 @@ Create a mesh spoke:
 
 ```bash
 gatekey-admin mesh spoke create \
+  --gateway <gateway-id> \
   --hub <hub-id> \
-  --name "home-lab" \
-  --networks "10.0.0.0/8,192.168.1.0/24"
+  --network "10.0.0.0/24" \
+  --session
 ```
+
+**Options:**
+| Flag | Description |
+|------|-------------|
+| `--gateway` | Gateway ID (required) |
+| `--hub` | Hub ID (required) |
+| `--network` | Spoke network CIDR (required) |
+| `--session` | Enable remote sessions (default: true) |
 
 ### mesh spoke update
 
 Update a mesh spoke:
 
 ```bash
-gatekey-admin mesh spoke update <spoke-id> \
-  --networks "10.0.0.0/8"
+# Enable or disable remote sessions
+gatekey-admin mesh spoke update <spoke-id> --session=true
+gatekey-admin mesh spoke update <spoke-id> --session=false
 ```
+
+**Options:**
+| Flag | Description |
+|------|-------------|
+| `--session` | Enable/disable remote sessions |
 
 ### mesh spoke delete
 
@@ -613,6 +652,129 @@ gatekey-admin connection disconnect <connection-id>
 gatekey-admin connection disconnect --user user@example.com
 ```
 
+## Network Troubleshooting
+
+The troubleshoot command provides network diagnostic tools that can run from the control plane or remote agents.
+
+### troubleshoot ping
+
+Test connectivity to a host:
+
+```bash
+gatekey-admin troubleshoot ping 8.8.8.8
+gatekey-admin troubleshoot ping google.com --count 5
+```
+
+### troubleshoot nslookup
+
+Perform DNS lookup:
+
+```bash
+gatekey-admin troubleshoot nslookup google.com
+gatekey-admin troubleshoot nslookup api.internal.com
+```
+
+### troubleshoot traceroute
+
+Trace the route to a host:
+
+```bash
+gatekey-admin troubleshoot traceroute 10.0.0.1
+```
+
+### troubleshoot nc
+
+Test TCP connectivity to a port:
+
+```bash
+gatekey-admin troubleshoot nc api.internal.com 443
+gatekey-admin troubleshoot nc database.internal.com 5432
+```
+
+### troubleshoot nmap
+
+Scan ports on a host:
+
+```bash
+gatekey-admin troubleshoot nmap 10.0.0.1 --ports 22,80,443
+gatekey-admin troubleshoot nmap server.internal.com --ports 1-1000
+```
+
+**Options:**
+| Flag | Description |
+|------|-------------|
+| `--location` | Where to run: control-plane, gateway:<id>, hub:<id>, spoke:<id> |
+| `--timeout` | Command timeout in seconds |
+
+## Remote Sessions
+
+The session command allows you to connect to and execute commands on remote gateways, hubs, and spokes.
+
+### session list
+
+List connected agents available for remote sessions:
+
+```bash
+gatekey-admin session list
+gatekey-admin session list -o json
+```
+
+### session exec
+
+Execute a single command on an agent:
+
+```bash
+gatekey-admin session exec <agent-id> "ip addr"
+gatekey-admin session exec hub-1 "systemctl status openvpn"
+gatekey-admin session exec spoke-datacenter "ping -c 3 10.0.0.1"
+```
+
+### session connect
+
+Start an interactive shell session with an agent:
+
+```bash
+gatekey-admin session connect <agent-id>
+```
+
+This opens an interactive shell where you can run multiple commands. Type `exit` or `quit` to disconnect.
+
+**Example interactive session:**
+```
+$ gatekey-admin session connect hub-1
+Connected to hub-1. Type 'exit' to disconnect.
+
+$ ip addr
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 ...
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> ...
+
+$ systemctl status openvpn
+● openvpn.service - OpenVPN service
+   Active: active (running) ...
+
+$ exit
+Disconnecting...
+```
+
+**Requirements:**
+- Remote agents must have `session_enabled: true` in their configuration
+- Agents connect outbound to the control plane (no inbound firewall rules needed)
+
+## Topology
+
+View network topology information:
+
+### topology show
+
+Display the current network topology:
+
+```bash
+gatekey-admin topology show
+gatekey-admin topology show -o json
+```
+
+Shows gateways, mesh hubs, mesh spokes, and their connections.
+
 ## Version Information
 
 ```bash
@@ -713,5 +875,7 @@ gatekey-admin mesh spoke list -o json > backup/mesh-spokes.json
 - [API Keys Guide](api-keys.md) - API key management
 - [Client Guide](client.md) - End-user VPN client
 - [Mesh Networking](mesh-networking.md) - Hub-and-spoke topology
+- [Remote Sessions](remote-sessions.md) - Remote shell access to agents
+- [Network Troubleshooting](network-troubleshooting.md) - Diagnostic tools guide
 - [API Reference](api.md) - REST API documentation
 - [Security](security.md) - Security best practices

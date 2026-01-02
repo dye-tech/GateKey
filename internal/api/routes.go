@@ -758,9 +758,26 @@ func (s *Server) createSSOSession(ctx context.Context, userID, token string, exp
 
 	// Check if user should be admin based on provider's admin_group setting
 	isAdmin := false
+	s.logger.Info("Checking admin status for SSO user",
+		zap.String("email", email),
+		zap.String("providerType", providerType),
+		zap.String("providerName", providerName),
+		zap.Strings("groups", groups))
+
 	if providerType == "oidc" && providerName != "" {
 		oidcProvider, err := s.providerStore.GetOIDCProvider(ctx, providerName)
-		if err == nil && oidcProvider.AdminGroup != "" {
+		if err != nil {
+			s.logger.Warn("Failed to get OIDC provider for admin check",
+				zap.String("provider", providerName),
+				zap.Error(err))
+		} else if oidcProvider.AdminGroup == "" {
+			s.logger.Info("No admin group configured for OIDC provider",
+				zap.String("provider", providerName))
+		} else {
+			s.logger.Info("Checking OIDC admin group membership",
+				zap.String("email", email),
+				zap.String("adminGroup", oidcProvider.AdminGroup),
+				zap.Strings("userGroups", groups))
 			// Check if user is in the admin group
 			for _, group := range groups {
 				if group == oidcProvider.AdminGroup {
@@ -771,10 +788,27 @@ func (s *Server) createSSOSession(ctx context.Context, userID, token string, exp
 					break
 				}
 			}
+			if !isAdmin {
+				s.logger.Info("User NOT in OIDC admin group",
+					zap.String("email", email),
+					zap.String("adminGroup", oidcProvider.AdminGroup),
+					zap.Strings("userGroups", groups))
+			}
 		}
 	} else if providerType == "saml" && providerName != "" {
 		samlProvider, err := s.providerStore.GetSAMLProvider(ctx, providerName)
-		if err == nil && samlProvider.AdminGroup != "" {
+		if err != nil {
+			s.logger.Warn("Failed to get SAML provider for admin check",
+				zap.String("provider", providerName),
+				zap.Error(err))
+		} else if samlProvider.AdminGroup == "" {
+			s.logger.Info("No admin group configured for SAML provider",
+				zap.String("provider", providerName))
+		} else {
+			s.logger.Info("Checking SAML admin group membership",
+				zap.String("email", email),
+				zap.String("adminGroup", samlProvider.AdminGroup),
+				zap.Strings("userGroups", groups))
 			// Check if user is in the admin group
 			for _, group := range groups {
 				if group == samlProvider.AdminGroup {
@@ -784,6 +818,12 @@ func (s *Server) createSSOSession(ctx context.Context, userID, token string, exp
 						zap.String("group", samlProvider.AdminGroup))
 					break
 				}
+			}
+			if !isAdmin {
+				s.logger.Info("User NOT in SAML admin group",
+					zap.String("email", email),
+					zap.String("adminGroup", samlProvider.AdminGroup),
+					zap.Strings("userGroups", groups))
 			}
 		}
 	}
@@ -1033,10 +1073,14 @@ func (s *Server) handleCLIComplete(c *gin.Context) {
 	s.logger.Info("CLI complete: redirecting with existing session",
 		zap.String("state", state),
 		zap.String("email", session.Email),
+		zap.Bool("is_admin", session.IsAdmin),
 		zap.String("callback_url", callbackURL))
 
-	// Redirect to CLI callback with token
+	// Redirect to CLI callback with token (include is_admin flag)
 	redirectURL := callbackURL + "?token=" + session.Token + "&email=" + url.QueryEscape(session.Email) + "&name=" + url.QueryEscape(session.Name) + "&expires_in=86400"
+	if session.IsAdmin {
+		redirectURL += "&is_admin=true"
+	}
 	c.Redirect(http.StatusFound, redirectURL)
 }
 

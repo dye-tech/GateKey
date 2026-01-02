@@ -126,6 +126,15 @@ const sections: Section[] = [
     ),
   },
   {
+    id: 'diagnostics',
+    title: 'Diagnostics',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+    ),
+  },
+  {
     id: 'mesh',
     title: 'Mesh Networking',
     icon: (
@@ -1480,6 +1489,74 @@ gatekey-admin gateway list -o yaml`}</pre>
               <pre className="text-gray-700">{`server_url: ${baseUrl}
 api_key: gk_your_api_key_here
 output: table`}</pre>
+            </div>
+          </div>
+        </section>
+
+        {/* Diagnostics Section */}
+        <section id="diagnostics" className="scroll-mt-24">
+          <div className="card">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Diagnostics</h1>
+            <p className="text-gray-600 mb-6">
+              Network troubleshooting tools and remote session management for debugging connectivity issues across your VPN infrastructure.
+            </p>
+
+            {/* Network Tools */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Network Tools</h3>
+            <p className="text-gray-600 mb-4">
+              Run network diagnostics from the control plane or any connected hub, gateway, or spoke. Access via <strong>Administration → Diagnostics → Network Tools</strong>.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Available Tools</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• <strong>ping</strong> - Test connectivity to a host</li>
+                  <li>• <strong>nslookup</strong> - DNS resolution lookup</li>
+                  <li>• <strong>traceroute</strong> - Trace network path</li>
+                  <li>• <strong>nc (netcat)</strong> - TCP port connectivity test</li>
+                  <li>• <strong>nmap</strong> - Port scanning</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Execution Locations</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• <strong>Control Plane</strong> - Run from the central server</li>
+                  <li>• <strong>Gateways</strong> - Run from VPN gateways</li>
+                  <li>• <strong>Mesh Hubs</strong> - Run from hub servers</li>
+                  <li>• <strong>Mesh Spokes</strong> - Run from spoke clients</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Remote Sessions */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Remote Sessions</h3>
+            <p className="text-gray-600 mb-4">
+              Connect to and execute shell commands on remote hubs, gateways, and spokes. Access via <strong>Administration → Diagnostics → Remote Sessions</strong>.
+            </p>
+            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <h4 className="font-medium text-gray-900 mb-2">How It Works</h4>
+              <ul className="text-sm text-gray-600 space-y-2">
+                <li>• Agents connect <strong>outbound</strong> to the control plane (no inbound firewall rules needed)</li>
+                <li>• Enable remote sessions by setting <code className="bg-gray-200 px-1 rounded">session_enabled: true</code> in agent config</li>
+                <li>• Connected agents appear in the Remote Sessions list</li>
+                <li>• Click "Connect" to open an interactive terminal</li>
+              </ul>
+            </div>
+
+            {/* CLI Commands */}
+            <h3 className="text-lg font-medium text-gray-900 mb-3">CLI Commands</h3>
+            <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm overflow-x-auto">
+              <pre className="text-gray-700">{`# Network Troubleshooting
+gatekey-admin troubleshoot ping 8.8.8.8
+gatekey-admin troubleshoot nslookup google.com
+gatekey-admin troubleshoot traceroute 10.0.0.1
+gatekey-admin troubleshoot nc api.internal.com 443
+gatekey-admin troubleshoot nmap 10.0.0.1 --ports 22,80,443
+
+# Remote Sessions
+gatekey-admin session list              # List connected agents
+gatekey-admin session exec hub-1 "ip addr"  # Execute single command
+gatekey-admin session connect hub-1     # Interactive shell`}</pre>
             </div>
           </div>
         </section>

@@ -1564,6 +1564,7 @@ func (s *Server) handleMeshSpokeProvisionRequest(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"gatewayId":      gw.ID,
+		"gatewayName":    gw.Name, // Include name for session authentication
 		"hubEndpoint":    hub.PublicEndpoint,
 		"hubVpnPort":     hub.VPNPort,
 		"hubVpnProtocol": hub.VPNProtocol,

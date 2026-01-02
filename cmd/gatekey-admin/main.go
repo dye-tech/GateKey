@@ -2,14 +2,19 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
@@ -72,6 +77,9 @@ Configuration:
 		newCACmd(),
 		newAuditCmd(),
 		newConnectionCmd(),
+		newTroubleshootCmd(),
+		newTopologyCmd(),
+		newSessionCmd(),
 		newVersionCmd(),
 	)
 
@@ -255,6 +263,7 @@ func newGatewayCmd() *cobra.Command {
 			port, _ := cmd.Flags().GetInt("port")
 			protocol, _ := cmd.Flags().GetString("protocol")
 			description, _ := cmd.Flags().GetString("description")
+			sessionEnabled, _ := cmd.Flags().GetBool("session")
 
 			if name == "" || endpoint == "" {
 				return fmt.Errorf("--name and --endpoint are required")
@@ -262,11 +271,12 @@ func newGatewayCmd() *cobra.Command {
 
 			ctx := context.Background()
 			gw, err := client.CreateGateway(ctx, map[string]interface{}{
-				"name":        name,
-				"endpoint":    endpoint,
-				"port":        port,
-				"protocol":    protocol,
-				"description": description,
+				"name":            name,
+				"endpoint":        endpoint,
+				"port":            port,
+				"protocol":        protocol,
+				"description":     description,
+				"session_enabled": sessionEnabled,
 			})
 			if err != nil {
 				return err
@@ -280,6 +290,7 @@ func newGatewayCmd() *cobra.Command {
 	createCmd.Flags().Int("port", 1194, "VPN port")
 	createCmd.Flags().String("protocol", "udp", "Protocol (udp/tcp)")
 	createCmd.Flags().String("description", "", "Description")
+	createCmd.Flags().Bool("session", true, "Enable remote sessions (default: true)")
 
 	// Update
 	updateCmd := &cobra.Command{
@@ -300,6 +311,10 @@ func newGatewayCmd() *cobra.Command {
 			if description, _ := cmd.Flags().GetString("description"); description != "" {
 				req["description"] = description
 			}
+			if cmd.Flags().Changed("session") {
+				session, _ := cmd.Flags().GetBool("session")
+				req["session_enabled"] = session
+			}
 
 			ctx := context.Background()
 			gw, err := client.UpdateGateway(ctx, args[0], req)
@@ -314,6 +329,7 @@ func newGatewayCmd() *cobra.Command {
 	updateCmd.Flags().String("endpoint", "", "Gateway endpoint")
 	updateCmd.Flags().Int("port", 0, "VPN port")
 	updateCmd.Flags().String("description", "", "Description")
+	updateCmd.Flags().Bool("session", true, "Enable remote sessions")
 
 	// Delete
 	deleteCmd := &cobra.Command{
@@ -1069,6 +1085,7 @@ func newMeshCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			gatewayID, _ := cmd.Flags().GetString("gateway")
 			network, _ := cmd.Flags().GetString("network")
+			sessionEnabled, _ := cmd.Flags().GetBool("session")
 
 			if gatewayID == "" || network == "" {
 				return fmt.Errorf("--gateway and --network are required")
@@ -1076,8 +1093,9 @@ func newMeshCmd() *cobra.Command {
 
 			ctx := context.Background()
 			hub, err := client.CreateMeshHub(ctx, map[string]interface{}{
-				"gateway_id":  gatewayID,
-				"hub_network": network,
+				"gateway_id":      gatewayID,
+				"hub_network":     network,
+				"session_enabled": sessionEnabled,
 			})
 			if err != nil {
 				return err
@@ -1088,6 +1106,32 @@ func newMeshCmd() *cobra.Command {
 	}
 	hubCreateCmd.Flags().String("gateway", "", "Gateway ID (required)")
 	hubCreateCmd.Flags().String("network", "", "Hub network CIDR (required)")
+	hubCreateCmd.Flags().Bool("session", true, "Enable remote sessions (default: true)")
+
+	hubUpdateCmd := &cobra.Command{
+		Use:   "update ID",
+		Short: "Update a mesh hub",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			req := make(map[string]interface{})
+			if cmd.Flags().Changed("session") {
+				session, _ := cmd.Flags().GetBool("session")
+				req["session_enabled"] = session
+			}
+			if len(req) == 0 {
+				return fmt.Errorf("no updates specified")
+			}
+
+			ctx := context.Background()
+			hub, err := client.UpdateMeshHub(ctx, args[0], req)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Mesh hub updated: %s\n", hub.ID)
+			return nil
+		},
+	}
+	hubUpdateCmd.Flags().Bool("session", true, "Enable remote sessions")
 
 	hubDeleteCmd := &cobra.Command{
 		Use:   "delete ID",
@@ -1120,7 +1164,7 @@ func newMeshCmd() *cobra.Command {
 		},
 	}
 
-	hubCmd.AddCommand(hubListCmd, hubCreateCmd, hubDeleteCmd, hubProvisionCmd)
+	hubCmd.AddCommand(hubListCmd, hubCreateCmd, hubUpdateCmd, hubDeleteCmd, hubProvisionCmd)
 
 	// Spoke subcommands
 	spokeCmd := &cobra.Command{
@@ -1159,6 +1203,7 @@ func newMeshCmd() *cobra.Command {
 			gatewayID, _ := cmd.Flags().GetString("gateway")
 			hubID, _ := cmd.Flags().GetString("hub")
 			network, _ := cmd.Flags().GetString("network")
+			sessionEnabled, _ := cmd.Flags().GetBool("session")
 
 			if gatewayID == "" || hubID == "" || network == "" {
 				return fmt.Errorf("--gateway, --hub, and --network are required")
@@ -1166,9 +1211,10 @@ func newMeshCmd() *cobra.Command {
 
 			ctx := context.Background()
 			spoke, err := client.CreateMeshSpoke(ctx, map[string]interface{}{
-				"gateway_id":    gatewayID,
-				"hub_id":        hubID,
-				"spoke_network": network,
+				"gateway_id":      gatewayID,
+				"hub_id":          hubID,
+				"spoke_network":   network,
+				"session_enabled": sessionEnabled,
 			})
 			if err != nil {
 				return err
@@ -1180,6 +1226,32 @@ func newMeshCmd() *cobra.Command {
 	spokeCreateCmd.Flags().String("gateway", "", "Gateway ID (required)")
 	spokeCreateCmd.Flags().String("hub", "", "Hub ID (required)")
 	spokeCreateCmd.Flags().String("network", "", "Spoke network CIDR (required)")
+	spokeCreateCmd.Flags().Bool("session", true, "Enable remote sessions (default: true)")
+
+	spokeUpdateCmd := &cobra.Command{
+		Use:   "update ID",
+		Short: "Update a mesh spoke",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			req := make(map[string]interface{})
+			if cmd.Flags().Changed("session") {
+				session, _ := cmd.Flags().GetBool("session")
+				req["session_enabled"] = session
+			}
+			if len(req) == 0 {
+				return fmt.Errorf("no updates specified")
+			}
+
+			ctx := context.Background()
+			spoke, err := client.UpdateMeshSpoke(ctx, args[0], req)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Mesh spoke updated: %s\n", spoke.ID)
+			return nil
+		},
+	}
+	spokeUpdateCmd.Flags().Bool("session", true, "Enable remote sessions")
 
 	spokeDeleteCmd := &cobra.Command{
 		Use:   "delete ID",
@@ -1212,7 +1284,7 @@ func newMeshCmd() *cobra.Command {
 		},
 	}
 
-	spokeCmd.AddCommand(spokeListCmd, spokeCreateCmd, spokeDeleteCmd, spokeProvisionCmd)
+	spokeCmd.AddCommand(spokeListCmd, spokeCreateCmd, spokeUpdateCmd, spokeDeleteCmd, spokeProvisionCmd)
 
 	cmd.AddCommand(hubCmd, spokeCmd)
 	return cmd
@@ -1395,6 +1467,603 @@ func newConnectionCmd() *cobra.Command {
 
 	cmd.AddCommand(listCmd, disconnectCmd)
 	return cmd
+}
+
+// === Troubleshoot Command ===
+
+func newTroubleshootCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "troubleshoot",
+		Aliases: []string{"ts", "diag"},
+		Short:   "Network troubleshooting tools",
+		Long: `Run network diagnostic tools from the control plane or remote nodes.
+
+Available tools: ping, nslookup, traceroute, nc (netcat), nmap
+
+Examples:
+  gatekey-admin troubleshoot ping 8.8.8.8
+  gatekey-admin troubleshoot nslookup google.com
+  gatekey-admin troubleshoot traceroute 10.0.0.1
+  gatekey-admin troubleshoot nc 192.168.1.1 --port 443
+  gatekey-admin troubleshoot nmap 10.0.0.0/24 --ports 22,80,443`,
+	}
+
+	// Ping
+	pingCmd := &cobra.Command{
+		Use:   "ping TARGET",
+		Short: "Test ICMP connectivity to a host",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			location, _ := cmd.Flags().GetString("location")
+			count, _ := cmd.Flags().GetInt("count")
+
+			options := map[string]string{}
+			if count > 0 {
+				options["count"] = fmt.Sprintf("%d", count)
+			}
+
+			return executeNetworkTool("ping", args[0], 0, "", location, options)
+		},
+	}
+	pingCmd.Flags().String("location", "control-plane", "Execution location (control-plane, gateway:<id>, hub:<id>, spoke:<id>)")
+	pingCmd.Flags().Int("count", 4, "Number of ping packets")
+
+	// Nslookup
+	nslookupCmd := &cobra.Command{
+		Use:   "nslookup TARGET",
+		Short: "Perform DNS lookup for a hostname",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			location, _ := cmd.Flags().GetString("location")
+			return executeNetworkTool("nslookup", args[0], 0, "", location, nil)
+		},
+	}
+	nslookupCmd.Flags().String("location", "control-plane", "Execution location")
+
+	// Traceroute
+	tracerouteCmd := &cobra.Command{
+		Use:     "traceroute TARGET",
+		Aliases: []string{"tracert"},
+		Short:   "Trace the route to a host",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			location, _ := cmd.Flags().GetString("location")
+			return executeNetworkTool("traceroute", args[0], 0, "", location, nil)
+		},
+	}
+	tracerouteCmd.Flags().String("location", "control-plane", "Execution location")
+
+	// Netcat
+	ncCmd := &cobra.Command{
+		Use:     "nc TARGET",
+		Aliases: []string{"netcat"},
+		Short:   "Test TCP connectivity to a port",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			location, _ := cmd.Flags().GetString("location")
+			port, _ := cmd.Flags().GetInt("port")
+
+			if port <= 0 {
+				return fmt.Errorf("--port is required for netcat")
+			}
+
+			return executeNetworkTool("nc", args[0], port, "", location, nil)
+		},
+	}
+	ncCmd.Flags().String("location", "control-plane", "Execution location")
+	ncCmd.Flags().Int("port", 0, "Target port (required)")
+	ncCmd.MarkFlagRequired("port")
+
+	// Nmap
+	nmapCmd := &cobra.Command{
+		Use:   "nmap TARGET",
+		Short: "Scan ports on a host",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			location, _ := cmd.Flags().GetString("location")
+			ports, _ := cmd.Flags().GetString("ports")
+
+			return executeNetworkTool("nmap", args[0], 0, ports, location, nil)
+		},
+	}
+	nmapCmd.Flags().String("location", "control-plane", "Execution location")
+	nmapCmd.Flags().String("ports", "", "Ports to scan (e.g., 22,80,443 or 1-1000)")
+
+	// List tools
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List available tools and execution locations",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			info, err := client.GetNetworkToolsInfo(ctx)
+			if err != nil {
+				return err
+			}
+
+			fmt.Println("Available Tools:")
+			for _, tool := range info.Tools {
+				fmt.Printf("  %-12s - %s\n", tool.Name, tool.Description)
+			}
+
+			fmt.Println("\nExecution Locations:")
+			for _, loc := range info.Locations {
+				fmt.Printf("  %-30s (%s)\n", loc["id"], loc["name"])
+			}
+
+			return nil
+		},
+	}
+
+	cmd.AddCommand(pingCmd, nslookupCmd, tracerouteCmd, ncCmd, nmapCmd, listCmd)
+	return cmd
+}
+
+func executeNetworkTool(tool, target string, port int, ports, location string, options map[string]string) error {
+	ctx := context.Background()
+
+	fmt.Printf("Executing %s to %s", tool, target)
+	if port > 0 {
+		fmt.Printf(":%d", port)
+	}
+	if location != "" && location != "control-plane" {
+		fmt.Printf(" from %s", location)
+	}
+	fmt.Println("...")
+	fmt.Println()
+
+	result, err := client.ExecuteNetworkTool(ctx, &adminclient.NetworkToolRequest{
+		Tool:     tool,
+		Target:   target,
+		Port:     port,
+		Ports:    ports,
+		Location: location,
+		Options:  options,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Print output
+	if result.Output != "" {
+		fmt.Println(result.Output)
+	}
+
+	// Print status summary
+	fmt.Println()
+	fmt.Printf("Status:   %s\n", result.Status)
+	fmt.Printf("Duration: %s\n", result.Duration)
+
+	if result.Error != "" {
+		fmt.Printf("Error:    %s\n", result.Error)
+	}
+
+	return nil
+}
+
+// === Topology Command ===
+
+func newTopologyCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "topology",
+		Short: "View network topology",
+	}
+
+	showCmd := &cobra.Command{
+		Use:   "show",
+		Short: "Show network topology overview",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			topo, err := client.GetTopology(ctx)
+			if err != nil {
+				return err
+			}
+
+			fmt.Println("=== Network Topology ===")
+			fmt.Println()
+
+			// Gateways
+			fmt.Printf("Gateways (%d):\n", len(topo.Gateways))
+			for _, gw := range topo.Gateways {
+				status := "inactive"
+				if gw.IsActive {
+					status = "active"
+				}
+				fmt.Printf("  - %s (%s) - %s:%d [%s]\n", gw.Name, gw.ID, gw.PublicIP, gw.VPNPort, status)
+			}
+
+			fmt.Println()
+
+			// Mesh Hubs
+			fmt.Printf("Mesh Hubs (%d):\n", len(topo.MeshHubs))
+			for _, hub := range topo.MeshHubs {
+				fmt.Printf("  - %s (%s) - %s [%s] - %d spokes, %d users\n",
+					hub.Name, hub.ID, hub.VPNSubnet, hub.Status, hub.ConnectedSpokes, hub.ConnectedUsers)
+			}
+
+			fmt.Println()
+
+			// Mesh Spokes
+			fmt.Printf("Mesh Spokes (%d):\n", len(topo.MeshSpokes))
+			for _, spoke := range topo.MeshSpokes {
+				fmt.Printf("  - %s (%s) -> hub:%s - %s [%s]\n",
+					spoke.Name, spoke.ID, spoke.HubID, spoke.TunnelIP, spoke.Status)
+				if len(spoke.LocalNetworks) > 0 {
+					fmt.Printf("      Networks: %s\n", strings.Join(spoke.LocalNetworks, ", "))
+				}
+			}
+
+			fmt.Println()
+
+			// Connections
+			fmt.Printf("Connections (%d):\n", len(topo.Connections))
+			for _, conn := range topo.Connections {
+				fmt.Printf("  - %s -> %s [%s] (%s)\n", conn.Source, conn.Target, conn.Status, conn.Type)
+			}
+
+			return nil
+		},
+	}
+
+	cmd.AddCommand(showCmd)
+	return cmd
+}
+
+// === Session Command ===
+
+func newSessionCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "session",
+		Aliases: []string{"remote", "shell"},
+		Short:   "Remote session management for gateways, hubs, and spokes",
+		Long: `Connect to and execute commands on remote gateways, mesh hubs, and spokes.
+
+This feature requires agents to be connected to the control plane via the
+remote session agent. Once connected, you can list available agents and
+either run single commands or start an interactive shell session.
+
+Examples:
+  gatekey-admin session list
+  gatekey-admin session exec hub-1 "ip addr"
+  gatekey-admin session connect hub-1`,
+	}
+
+	// List connected agents
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List connected agents available for remote sessions",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			agents, err := client.ListRemoteSessionAgents(ctx)
+			if err != nil {
+				return err
+			}
+
+			if len(agents) == 0 {
+				fmt.Println("No agents currently connected")
+				return nil
+			}
+
+			return outputResult(agents, []string{"Agent ID", "Type", "Node Name", "Connected"}, func(item interface{}) []string {
+				a := item.(adminclient.RemoteSessionAgent)
+				return []string{a.AgentID, a.NodeType, a.NodeName, a.ConnectedAt.Format("2006-01-02 15:04:05")}
+			})
+		},
+	}
+
+	// Execute single command
+	execCmd := &cobra.Command{
+		Use:   "exec AGENT_ID COMMAND",
+		Short: "Execute a single command on an agent",
+		Args:  cobra.MinimumNArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			agentID := args[0]
+			command := strings.Join(args[1:], " ")
+
+			return executeRemoteCommand(agentID, command)
+		},
+	}
+
+	// Interactive session
+	connectCmd := &cobra.Command{
+		Use:   "connect AGENT_ID",
+		Short: "Start an interactive shell session with an agent",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			agentID := args[0]
+			return startInteractiveSession(agentID)
+		},
+	}
+
+	cmd.AddCommand(listCmd, execCmd, connectCmd)
+	return cmd
+}
+
+// WebSocket message types for remote sessions
+type wsMessage struct {
+	Type      string          `json:"type"`
+	Payload   json.RawMessage `json:"payload,omitempty"`
+	ID        string          `json:"id,omitempty"`
+	Timestamp time.Time       `json:"timestamp"`
+}
+
+type connectAgentPayload struct {
+	AgentID string `json:"agentId"`
+}
+
+type commandPayload struct {
+	Command string `json:"command"`
+}
+
+type outputPayload struct {
+	Output   string `json:"output"`
+	IsStderr bool   `json:"is_stderr"`
+	ExitCode *int   `json:"exit_code,omitempty"`
+	Done     bool   `json:"done"`
+}
+
+func executeRemoteCommand(agentID, command string) error {
+	wsURL, err := client.GetWebSocketURL()
+	if err != nil {
+		return fmt.Errorf("failed to get WebSocket URL: %w", err)
+	}
+
+	// Get auth header
+	authHeader, err := client.Auth().GetAuthHeader()
+	if err != nil {
+		return fmt.Errorf("failed to get auth: %w", err)
+	}
+
+	// Connect with auth
+	dialer := websocket.Dialer{
+		HandshakeTimeout: 10 * time.Second,
+	}
+	headers := http.Header{}
+	headers.Set("Authorization", authHeader)
+
+	conn, _, err := dialer.Dial(wsURL, headers)
+	if err != nil {
+		return fmt.Errorf("failed to connect to control plane: %w", err)
+	}
+	defer conn.Close()
+
+	// Read initial agent_list message (sent immediately on connect)
+	var initialMsg wsMessage
+	if err := conn.ReadJSON(&initialMsg); err != nil {
+		return fmt.Errorf("failed to read initial message: %w", err)
+	}
+	// Ignore agent_list, we already know which agent we want
+
+	// Connect to agent
+	connectPayload, _ := json.Marshal(connectAgentPayload{AgentID: agentID})
+	msg := wsMessage{
+		Type:      "connect_agent",
+		Payload:   connectPayload,
+		Timestamp: time.Now(),
+	}
+	if err := conn.WriteJSON(msg); err != nil {
+		return fmt.Errorf("failed to connect to agent: %w", err)
+	}
+
+	// Wait for agent_connected response
+	var resp wsMessage
+	if err := conn.ReadJSON(&resp); err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+	if resp.Type == "error" {
+		var errPayload struct {
+			Message string `json:"message"`
+		}
+		json.Unmarshal(resp.Payload, &errPayload)
+		return fmt.Errorf("failed to connect to agent: %s", errPayload.Message)
+	}
+	if resp.Type != "agent_connected" {
+		return fmt.Errorf("unexpected response: %s", resp.Type)
+	}
+
+	// Send command
+	cmdPayload, _ := json.Marshal(commandPayload{Command: command})
+	cmdMsg := wsMessage{
+		Type:      "command",
+		Payload:   cmdPayload,
+		Timestamp: time.Now(),
+	}
+	if err := conn.WriteJSON(cmdMsg); err != nil {
+		return fmt.Errorf("failed to send command: %w", err)
+	}
+
+	// Read output until done
+	for {
+		var outMsg wsMessage
+		if err := conn.ReadJSON(&outMsg); err != nil {
+			return fmt.Errorf("connection closed: %w", err)
+		}
+
+		if outMsg.Type == "output" {
+			var out outputPayload
+			if err := json.Unmarshal(outMsg.Payload, &out); err != nil {
+				continue
+			}
+
+			if out.Output != "" {
+				if out.IsStderr {
+					fmt.Fprint(os.Stderr, out.Output)
+				} else {
+					fmt.Print(out.Output)
+				}
+			}
+
+			if out.Done {
+				if out.ExitCode != nil && *out.ExitCode != 0 {
+					return fmt.Errorf("command exited with code %d", *out.ExitCode)
+				}
+				return nil
+			}
+		} else if outMsg.Type == "error" {
+			var errPayload struct {
+				Message string `json:"message"`
+			}
+			json.Unmarshal(outMsg.Payload, &errPayload)
+			return fmt.Errorf("error: %s", errPayload.Message)
+		}
+	}
+}
+
+func startInteractiveSession(agentID string) error {
+	wsURL, err := client.GetWebSocketURL()
+	if err != nil {
+		return fmt.Errorf("failed to get WebSocket URL: %w", err)
+	}
+
+	// Get auth header
+	authHeader, err := client.Auth().GetAuthHeader()
+	if err != nil {
+		return fmt.Errorf("failed to get auth: %w", err)
+	}
+
+	// Connect with auth
+	dialer := websocket.Dialer{
+		HandshakeTimeout: 10 * time.Second,
+	}
+	headers := http.Header{}
+	headers.Set("Authorization", authHeader)
+
+	conn, _, err := dialer.Dial(wsURL, headers)
+	if err != nil {
+		return fmt.Errorf("failed to connect to control plane: %w", err)
+	}
+	defer conn.Close()
+
+	// Read initial agent_list message (sent immediately on connect)
+	var initialMsg wsMessage
+	if err := conn.ReadJSON(&initialMsg); err != nil {
+		return fmt.Errorf("failed to read initial message: %w", err)
+	}
+	// Ignore agent_list, we already know which agent we want
+
+	// Connect to agent
+	connectPayload, _ := json.Marshal(connectAgentPayload{AgentID: agentID})
+	msg := wsMessage{
+		Type:      "connect_agent",
+		Payload:   connectPayload,
+		Timestamp: time.Now(),
+	}
+	if err := conn.WriteJSON(msg); err != nil {
+		return fmt.Errorf("failed to connect to agent: %w", err)
+	}
+
+	// Wait for agent_connected response
+	var resp wsMessage
+	if err := conn.ReadJSON(&resp); err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+	if resp.Type == "error" {
+		var errPayload struct {
+			Message string `json:"message"`
+		}
+		json.Unmarshal(resp.Payload, &errPayload)
+		return fmt.Errorf("failed to connect to agent: %s", errPayload.Message)
+	}
+	if resp.Type != "agent_connected" {
+		return fmt.Errorf("unexpected response: %s", resp.Type)
+	}
+
+	fmt.Printf("Connected to %s. Type 'exit' to disconnect.\n\n", agentID)
+
+	// Handle interrupt signals
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// Start output reader goroutine
+	outputDone := make(chan struct{})
+	go func() {
+		defer close(outputDone)
+		for {
+			var outMsg wsMessage
+			if err := conn.ReadJSON(&outMsg); err != nil {
+				return
+			}
+
+			if outMsg.Type == "output" {
+				var out outputPayload
+				if err := json.Unmarshal(outMsg.Payload, &out); err != nil {
+					continue
+				}
+
+				if out.Output != "" {
+					if out.IsStderr {
+						fmt.Fprint(os.Stderr, out.Output)
+					} else {
+						fmt.Print(out.Output)
+					}
+				}
+
+				if out.Done && out.ExitCode != nil {
+					fmt.Printf("\n[Exit code: %d]\n", *out.ExitCode)
+				}
+			} else if outMsg.Type == "error" {
+				var errPayload struct {
+					Message string `json:"message"`
+				}
+				json.Unmarshal(outMsg.Payload, &errPayload)
+				fmt.Fprintf(os.Stderr, "Error: %s\n", errPayload.Message)
+			}
+		}
+	}()
+
+	// Read commands from stdin
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		select {
+		case <-sigChan:
+			fmt.Println("\nDisconnecting...")
+			disconnectMsg := wsMessage{
+				Type:      "disconnect",
+				Timestamp: time.Now(),
+			}
+			conn.WriteJSON(disconnectMsg)
+			return nil
+		case <-outputDone:
+			return fmt.Errorf("connection closed")
+		default:
+		}
+
+		fmt.Print("$ ")
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			break
+		}
+
+		command := strings.TrimSpace(line)
+		if command == "" {
+			continue
+		}
+
+		if command == "exit" || command == "quit" {
+			fmt.Println("Disconnecting...")
+			disconnectMsg := wsMessage{
+				Type:      "disconnect",
+				Timestamp: time.Now(),
+			}
+			conn.WriteJSON(disconnectMsg)
+			return nil
+		}
+
+		// Send command
+		cmdPayload, _ := json.Marshal(commandPayload{Command: command})
+		cmdMsg := wsMessage{
+			Type:      "command",
+			Payload:   cmdPayload,
+			Timestamp: time.Now(),
+		}
+		if err := conn.WriteJSON(cmdMsg); err != nil {
+			return fmt.Errorf("failed to send command: %w", err)
+		}
+
+		// Wait for command to complete before prompting again
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	return nil
 }
 
 // === Version Command ===

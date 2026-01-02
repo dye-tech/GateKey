@@ -25,7 +25,9 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
+	"github.com/gatekey-project/gatekey/internal/agent"
 	"github.com/gatekey-project/gatekey/internal/firewall"
+	"github.com/gatekey-project/gatekey/internal/session"
 )
 
 var (
@@ -88,6 +90,9 @@ type HubConfig struct {
 	VPNProtocol       string        `mapstructure:"vpn_protocol"`
 	HeartbeatInterval time.Duration `mapstructure:"heartbeat_interval"`
 	LogLevel          string        `mapstructure:"log_level"`
+	AgentListenAddr   string        `mapstructure:"agent_listen_addr"` // Agent API listen address (e.g., ":9443")
+	AgentEnabled      bool          `mapstructure:"agent_enabled"`     // Enable remote execution agent
+	SessionEnabled    bool          `mapstructure:"session_enabled"`   // Enable remote session support
 }
 
 // ProvisionResponse from control plane
@@ -120,6 +125,9 @@ func loadConfig() (*HubConfig, error) {
 	v.SetDefault("vpn_protocol", "udp")
 	v.SetDefault("heartbeat_interval", "30s")
 	v.SetDefault("log_level", "info")
+	v.SetDefault("agent_listen_addr", ":9443")
+	v.SetDefault("agent_enabled", true)
+	v.SetDefault("session_enabled", true)
 
 	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("failed to read config: %w", err)
@@ -214,6 +222,40 @@ func runHub(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Start agent API server for remote tool execution
+	var agentServer *agent.Server
+	if cfg.AgentEnabled {
+		agentServer = agent.NewServer(&agent.Config{
+			ListenAddr: cfg.AgentListenAddr,
+			APIToken:   cfg.APIToken,
+			NodeType:   "hub",
+			NodeName:   cfg.Name,
+			Logger:     logger,
+		})
+		go func() {
+			logger.Info("Starting agent API server",
+				zap.String("addr", cfg.AgentListenAddr))
+			if err := agentServer.Start(); err != nil && err != http.ErrServerClosed {
+				logger.Error("Agent API server failed", zap.Error(err))
+			}
+		}()
+	}
+
+	// Start remote session client (connects outbound to control plane)
+	var sessionClient *session.AgentClient
+	if cfg.SessionEnabled {
+		sessionClient = session.NewAgentClient(&session.AgentClientConfig{
+			ControlPlaneURL: cfg.ControlPlaneURL,
+			Token:           cfg.APIToken,
+			NodeType:        "hub",
+			NodeID:          cfg.Name, // Use name as unique ID
+			NodeName:        cfg.Name,
+			Logger:          logger,
+		})
+		sessionClient.Start(ctx)
+		logger.Info("Remote session client started")
+	}
+
 	// Start heartbeat loop
 	go heartbeatLoop(ctx, cfg)
 
@@ -229,6 +271,20 @@ func runHub(cmd *cobra.Command, args []string) error {
 	<-quit
 
 	logger.Info("Shutting down mesh hub")
+
+	// Shutdown agent API server
+	if agentServer != nil {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		if err := agentServer.Shutdown(shutdownCtx); err != nil {
+			logger.Warn("Failed to shutdown agent server", zap.Error(err))
+		}
+	}
+
+	// Stop session client
+	if sessionClient != nil {
+		sessionClient.Stop()
+	}
 
 	// Cleanup firewall rules
 	if firewallMgr != nil {

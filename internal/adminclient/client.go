@@ -651,3 +651,143 @@ func (c *Client) GetSystemInfo(ctx context.Context) (*SystemInfo, error) {
 	err := c.doJSON(ctx, http.MethodGet, "/api/v1/admin/system/info", nil, &info)
 	return &info, err
 }
+
+// === Topology Operations ===
+
+type TopologyGateway struct {
+	ID            string     `json:"id"`
+	Name          string     `json:"name"`
+	Hostname      string     `json:"hostname"`
+	PublicIP      string     `json:"publicIp"`
+	VPNPort       int        `json:"vpnPort"`
+	VPNProtocol   string     `json:"vpnProtocol"`
+	IsActive      bool       `json:"isActive"`
+	LastHeartbeat *time.Time `json:"lastHeartbeat"`
+	ClientCount   int        `json:"clientCount"`
+}
+
+type TopologyMeshHub struct {
+	ID              string     `json:"id"`
+	Name            string     `json:"name"`
+	PublicEndpoint  string     `json:"publicEndpoint"`
+	VPNSubnet       string     `json:"vpnSubnet"`
+	Status          string     `json:"status"`
+	LastHeartbeat   *time.Time `json:"lastHeartbeat"`
+	ConnectedSpokes int        `json:"connectedSpokes"`
+	ConnectedUsers  int        `json:"connectedUsers"`
+}
+
+type TopologyMeshSpoke struct {
+	ID            string     `json:"id"`
+	HubID         string     `json:"hubId"`
+	Name          string     `json:"name"`
+	LocalNetworks []string   `json:"localNetworks"`
+	TunnelIP      string     `json:"tunnelIp"`
+	Status        string     `json:"status"`
+	LastSeen      *time.Time `json:"lastSeen"`
+	RemoteIP      string     `json:"remoteIp"`
+}
+
+type TopologyConnection struct {
+	ID     string `json:"id"`
+	Source string `json:"source"`
+	Target string `json:"target"`
+	Type   string `json:"type"`
+	Status string `json:"status"`
+}
+
+type TopologyResponse struct {
+	Gateways    []TopologyGateway    `json:"gateways"`
+	MeshHubs    []TopologyMeshHub    `json:"meshHubs"`
+	MeshSpokes  []TopologyMeshSpoke  `json:"meshSpokes"`
+	Connections []TopologyConnection `json:"connections"`
+}
+
+func (c *Client) GetTopology(ctx context.Context) (*TopologyResponse, error) {
+	var result TopologyResponse
+	err := c.doJSON(ctx, http.MethodGet, "/api/v1/admin/topology", nil, &result)
+	return &result, err
+}
+
+// === Network Tools Operations ===
+
+type NetworkToolRequest struct {
+	Tool     string            `json:"tool"`
+	Target   string            `json:"target"`
+	Port     int               `json:"port,omitempty"`
+	Ports    string            `json:"ports,omitempty"`
+	Location string            `json:"location,omitempty"`
+	Options  map[string]string `json:"options,omitempty"`
+}
+
+type NetworkToolResult struct {
+	Tool      string `json:"tool"`
+	Target    string `json:"target"`
+	Status    string `json:"status"`
+	Output    string `json:"output"`
+	Error     string `json:"error,omitempty"`
+	Duration  string `json:"duration"`
+	Location  string `json:"location"`
+	StartedAt string `json:"startedAt"`
+}
+
+type NetworkToolInfo struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Options     []string `json:"options"`
+	Required    []string `json:"required,omitempty"`
+}
+
+type NetworkToolsInfoResponse struct {
+	Tools     []NetworkToolInfo        `json:"tools"`
+	Locations []map[string]string `json:"locations"`
+}
+
+func (c *Client) GetNetworkToolsInfo(ctx context.Context) (*NetworkToolsInfoResponse, error) {
+	var result NetworkToolsInfoResponse
+	err := c.doJSON(ctx, http.MethodGet, "/api/v1/admin/network-tools", nil, &result)
+	return &result, err
+}
+
+func (c *Client) ExecuteNetworkTool(ctx context.Context, req *NetworkToolRequest) (*NetworkToolResult, error) {
+	var result NetworkToolResult
+	err := c.doJSON(ctx, http.MethodPost, "/api/v1/admin/network-tools/execute", req, &result)
+	return &result, err
+}
+
+// === Remote Session Operations ===
+
+type RemoteSessionAgent struct {
+	AgentID     string    `json:"agentId"`
+	NodeType    string    `json:"nodeType"`
+	NodeID      string    `json:"nodeId"`
+	NodeName    string    `json:"nodeName"`
+	ConnectedAt time.Time `json:"connected"`
+}
+
+func (c *Client) ListRemoteSessionAgents(ctx context.Context) ([]RemoteSessionAgent, error) {
+	var result struct {
+		Agents []RemoteSessionAgent `json:"agents"`
+	}
+	err := c.doJSON(ctx, http.MethodGet, "/api/v1/admin/remote-session/agents", nil, &result)
+	return result.Agents, err
+}
+
+// GetWebSocketURL returns the WebSocket URL for remote sessions
+func (c *Client) GetWebSocketURL() (string, error) {
+	u, err := url.Parse(c.baseURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid base URL: %w", err)
+	}
+
+	// Convert http(s) to ws(s)
+	switch u.Scheme {
+	case "https":
+		u.Scheme = "wss"
+	case "http":
+		u.Scheme = "ws"
+	}
+	u.Path = "/ws/admin/session"
+
+	return u.String(), nil
+}
