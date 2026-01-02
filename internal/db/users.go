@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -192,6 +193,7 @@ func (s *UserStore) UpdatePassword(ctx context.Context, username, newPassword st
 }
 
 // InitDefaultAdmin creates a default admin user if no users exist
+// If GATEKEY_ADMIN_PASSWORD is set, use that password; otherwise generate a random one
 func (s *UserStore) InitDefaultAdmin(ctx context.Context) (string, bool, error) {
 	hasUsers, err := s.HasUsers(ctx)
 	if err != nil {
@@ -201,10 +203,14 @@ func (s *UserStore) InitDefaultAdmin(ctx context.Context) (string, bool, error) 
 		return "", false, nil
 	}
 
-	// Generate a random password
-	passwordBytes := make([]byte, 16)
-	rand.Read(passwordBytes)
-	password := base64.RawURLEncoding.EncodeToString(passwordBytes)
+	// Check for admin password in environment variable
+	password := os.Getenv("GATEKEY_ADMIN_PASSWORD")
+	if password == "" {
+		// Generate a random password if not provided
+		passwordBytes := make([]byte, 16)
+		rand.Read(passwordBytes)
+		password = base64.RawURLEncoding.EncodeToString(passwordBytes)
+	}
 
 	err = s.CreateUser(ctx, "admin", password, "admin@localhost", true)
 	if err != nil {

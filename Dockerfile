@@ -51,6 +51,18 @@ RUN mkdir -p /mesh-gateway-binaries && \
 # Runtime stage
 FROM alpine:3.23
 
+# OCI labels for supply chain security
+LABEL org.opencontainers.image.title="GateKey Server"
+LABEL org.opencontainers.image.description="GateKey Zero-Trust VPN Control Plane"
+LABEL org.opencontainers.image.vendor="Dye Tech"
+LABEL org.opencontainers.image.source="https://github.com/dye-tech/GateKey"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
+# Create non-root user early with explicit UID/GID
+# Using UID 65532 (standard nonroot UID used by distroless)
+RUN addgroup -g 65532 -S gatekey && \
+    adduser -u 65532 -S -G gatekey -h /app -s /sbin/nologin gatekey
+
 WORKDIR /app
 
 # Install runtime dependencies
@@ -75,11 +87,11 @@ COPY migrations /app/migrations
 # Copy install scripts
 COPY scripts /app/scripts
 
-# Create non-root user
-RUN adduser -D -g '' gatekey && \
-    chown -R gatekey:gatekey /app
+# Set ownership for app directory
+RUN chown -R 65532:65532 /app
 
-USER gatekey
+# Switch to non-root user (using numeric UID for security scanners)
+USER 65532:65532
 
 # Expose ports
 EXPOSE 8080
