@@ -7,8 +7,9 @@ LABEL org.opencontainers.image.vendor="Dye Tech"
 LABEL org.opencontainers.image.source="https://github.com/dye-tech/GateKey"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
-# Remove default config and add our server config
-RUN rm /etc/nginx/conf.d/default.conf
+# Upgrade all packages to get security fixes, then remove default config
+RUN apk upgrade --no-cache && \
+    rm /etc/nginx/conf.d/default.conf
 
 COPY deploy/nginx.conf /etc/nginx/conf.d/gatex.conf
 

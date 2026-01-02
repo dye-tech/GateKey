@@ -65,8 +65,9 @@ RUN addgroup -g 65532 -S gatekey && \
 
 WORKDIR /app
 
-# Install runtime dependencies
-RUN apk add --no-cache ca-certificates tzdata
+# Install runtime dependencies and upgrade all packages to get security fixes
+RUN apk upgrade --no-cache && \
+    apk add --no-cache ca-certificates tzdata
 
 # Copy server binary
 COPY --from=builder /gatekey-server /usr/local/bin/gatekey-server
