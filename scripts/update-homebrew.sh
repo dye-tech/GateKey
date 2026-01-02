@@ -1,84 +1,90 @@
 #!/bin/bash
-# Update Homebrew formulas with version and checksums from release
-# Usage: ./scripts/update-homebrew.sh <version>
-# Example: ./scripts/update-homebrew.sh 1.0.0
+# Update Homebrew formulas with new version and checksums
+# Usage: ./update-homebrew.sh <version> <homebrew-tap-path>
 
 set -e
 
-VERSION="${1}"
-if [ -z "${VERSION}" ]; then
-    echo "Usage: $0 <version>"
-    echo "Example: $0 1.0.0"
+VERSION="${1:-}"
+HOMEBREW_TAP="${2:-/home/jesse/Desktop/homebrew-gatekey}"
+
+if [[ -z "$VERSION" ]]; then
+    echo "Usage: $0 <version> [homebrew-tap-path]"
+    echo "Example: $0 1.2.0"
     exit 1
 fi
 
-# Get script directory
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-PROJECT_ROOT="$( cd "${SCRIPT_DIR}/.." && pwd )"
-FORMULA_DIR="${PROJECT_ROOT}/Formula"
-DIST_DIR="${PROJECT_ROOT}/dist"
+# Remove 'v' prefix if present
+VERSION="${VERSION#v}"
 
-# Check if checksums file exists
-if [ ! -f "${DIST_DIR}/checksums.txt" ]; then
-    echo "Error: ${DIST_DIR}/checksums.txt not found"
-    echo "Run 'make release VERSION=${VERSION}' first"
+DIST_DIR="$(dirname "$0")/../dist"
+
+if [[ ! -d "$DIST_DIR" ]]; then
+    echo "Error: dist directory not found. Run release.sh first."
     exit 1
 fi
 
-echo "Updating Homebrew formulas for version ${VERSION}..."
+echo "Updating Homebrew formulas to version ${VERSION}..."
 
-# Function to get SHA256 for a specific archive
-get_sha256() {
-    local archive_name="$1"
-    grep "${archive_name}" "${DIST_DIR}/checksums.txt" | awk '{print $1}'
-}
+# Formulas and their corresponding binary names
+FORMULAS="gatekey gatekey-admin gatekey-server gatekey-gateway gatekey-hub gatekey-mesh-gateway"
 
-# Update each formula
-for binary in gatekey gatekey-server gatekey-gateway gatekey-admin; do
-    formula_file="${FORMULA_DIR}/${binary}.rb"
+for formula in $FORMULAS; do
+    binary="$formula"
+    formula_file="${HOMEBREW_TAP}/Formula/${formula}.rb"
 
-    if [ ! -f "${formula_file}" ]; then
-        echo "Warning: ${formula_file} not found, skipping"
+    if [[ ! -f "$formula_file" ]]; then
+        echo "Warning: Formula file not found: $formula_file"
         continue
     fi
 
-    echo "Updating ${binary}.rb..."
+    echo "Updating ${formula}..."
 
-    # Get checksums for each platform
-    sha_darwin_amd64=$(get_sha256 "${binary}-${VERSION}-darwin-amd64.tar.gz")
-    sha_darwin_arm64=$(get_sha256 "${binary}-${VERSION}-darwin-arm64.tar.gz")
-    sha_linux_amd64=$(get_sha256 "${binary}-${VERSION}-linux-amd64.tar.gz")
-    sha_linux_arm64=$(get_sha256 "${binary}-${VERSION}-linux-arm64.tar.gz")
+    # Get checksums from dist directory
+    darwin_arm64_sha=$(sha256sum "${DIST_DIR}/${binary}-${VERSION}-darwin-arm64.tar.gz" 2>/dev/null | cut -d' ' -f1 || echo "MISSING")
+    darwin_amd64_sha=$(sha256sum "${DIST_DIR}/${binary}-${VERSION}-darwin-amd64.tar.gz" 2>/dev/null | cut -d' ' -f1 || echo "MISSING")
+    linux_arm64_sha=$(sha256sum "${DIST_DIR}/${binary}-${VERSION}-linux-arm64.tar.gz" 2>/dev/null | cut -d' ' -f1 || echo "MISSING")
+    linux_amd64_sha=$(sha256sum "${DIST_DIR}/${binary}-${VERSION}-linux-amd64.tar.gz" 2>/dev/null | cut -d' ' -f1 || echo "MISSING")
 
-    # Replace placeholders
-    sed -i.bak \
-        -e "s/VERSION_PLACEHOLDER/${VERSION}/g" \
-        -e "s/SHA256_DARWIN_AMD64_PLACEHOLDER/${sha_darwin_amd64}/g" \
-        -e "s/SHA256_DARWIN_ARM64_PLACEHOLDER/${sha_darwin_arm64}/g" \
-        -e "s/SHA256_LINUX_AMD64_PLACEHOLDER/${sha_linux_amd64}/g" \
-        -e "s/SHA256_LINUX_ARM64_PLACEHOLDER/${sha_linux_arm64}/g" \
-        "${formula_file}"
+    if [[ "$darwin_arm64_sha" == "MISSING" ]]; then
+        echo "  Warning: Could not find archives for ${binary}"
+        continue
+    fi
 
-    rm -f "${formula_file}.bak"
+    # Update version
+    sed -i "s/version \"[^\"]*\"/version \"${VERSION}\"/" "$formula_file"
 
-    echo "  - darwin/amd64: ${sha_darwin_amd64:0:16}..."
-    echo "  - darwin/arm64: ${sha_darwin_arm64:0:16}..."
-    echo "  - linux/amd64: ${sha_linux_amd64:0:16}..."
-    echo "  - linux/arm64: ${sha_linux_arm64:0:16}..."
+    # Update checksums using awk
+    awk -v darwin_arm64="$darwin_arm64_sha" \
+        -v darwin_amd64="$darwin_amd64_sha" \
+        -v linux_arm64="$linux_arm64_sha" \
+        -v linux_amd64="$linux_amd64_sha" '
+    BEGIN { sha_count = 0; in_macos = 0; in_linux = 0 }
+    /on_macos do/ { in_macos = 1; in_linux = 0 }
+    /on_linux do/ { in_linux = 1; in_macos = 0 }
+    /sha256 "/ {
+        if (in_macos && sha_count == 0) {
+            sub(/sha256 "[^"]*"/, "sha256 \"" darwin_arm64 "\"")
+            sha_count++
+        } else if (in_macos && sha_count == 1) {
+            sub(/sha256 "[^"]*"/, "sha256 \"" darwin_amd64 "\"")
+            sha_count++
+        } else if (in_linux && sha_count == 2) {
+            sub(/sha256 "[^"]*"/, "sha256 \"" linux_arm64 "\"")
+            sha_count++
+        } else if (in_linux && sha_count == 3) {
+            sub(/sha256 "[^"]*"/, "sha256 \"" linux_amd64 "\"")
+            sha_count++
+        }
+    }
+    { print }
+    ' "$formula_file" > "${formula_file}.tmp" && mv "${formula_file}.tmp" "$formula_file"
+
+    echo "  Updated: darwin-arm64=${darwin_arm64_sha:0:8}... darwin-amd64=${darwin_amd64_sha:0:8}..."
 done
 
 echo ""
-echo "Formulas updated successfully!"
-echo ""
-echo "Next steps:"
-echo "  1. Review changes in ${FORMULA_DIR}/"
-echo "  2. Copy formulas to your Homebrew tap repository"
-echo "  3. Commit and push the tap repository"
-echo ""
-echo "Example tap repository structure:"
-echo "  homebrew-tap/"
-echo "    Formula/"
-echo "      gatekey.rb"
-echo "      gatekey-server.rb"
-echo "      gatekey-gateway.rb"
-echo "      gatekey-admin.rb"
+echo "Done! Now commit and push the homebrew tap:"
+echo "  cd ${HOMEBREW_TAP}"
+echo "  git add -A"
+echo "  git commit -m 'Update to v${VERSION}'"
+echo "  git push"
