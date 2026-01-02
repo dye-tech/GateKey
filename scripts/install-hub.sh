@@ -96,7 +96,7 @@ install_dependencies() {
     case $OS in
         ubuntu|debian)
             apt-get update
-            apt-get install -y openvpn easy-rsa curl jq nftables iptables
+            apt-get install -y openvpn curl jq nftables iptables
             ;;
         centos|rhel|fedora|rocky|almalinux)
             if command -v dnf &> /dev/null; then
@@ -106,34 +106,36 @@ install_dependencies() {
                 else
                     dnf install -y epel-release
                 fi
-                dnf install -y openvpn easy-rsa curl jq nftables iptables
+                dnf install -y openvpn curl jq nftables iptables
             else
                 yum install -y epel-release
-                yum install -y openvpn easy-rsa curl jq nftables iptables
+                yum install -y openvpn curl jq nftables iptables
             fi
             ;;
         amzn)
             # Amazon Linux 2 and Amazon Linux 2023
             if command -v dnf &> /dev/null; then
                 # Amazon Linux 2023 uses dnf
-                dnf install -y openvpn easy-rsa curl jq nftables iptables
+                # Handle curl-minimal conflict by using --allowerasing
+                dnf install -y openvpn jq nftables iptables
+                dnf install -y --allowerasing curl
             else
                 # Amazon Linux 2 uses yum and needs EPEL for OpenVPN
                 amazon-linux-extras install -y epel 2>/dev/null || yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-                yum install -y openvpn easy-rsa curl jq nftables iptables
+                yum install -y openvpn curl jq nftables iptables
             fi
             ;;
         opensuse*|sles|suse)
             # openSUSE and SUSE Linux Enterprise
-            zypper install -y openvpn easy-rsa curl jq nftables iptables
+            zypper install -y openvpn curl jq nftables iptables
             ;;
         arch|manjaro)
             # Arch Linux and Manjaro
-            pacman -Sy --noconfirm openvpn easy-rsa curl jq nftables iptables
+            pacman -Sy --noconfirm openvpn curl jq nftables iptables
             ;;
         alpine)
             # Alpine Linux
-            apk add --no-cache openvpn easy-rsa curl jq bash nftables iptables
+            apk add --no-cache openvpn curl jq bash nftables iptables
             ;;
         *)
             echo -e "${RED}Unsupported OS: $OS${NC}"

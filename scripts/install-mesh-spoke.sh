@@ -116,7 +116,9 @@ install_dependencies() {
             # Amazon Linux 2 and Amazon Linux 2023
             if command -v dnf &> /dev/null; then
                 # Amazon Linux 2023 uses dnf
-                dnf install -y openvpn curl jq
+                # Handle curl-minimal conflict by using --allowerasing
+                dnf install -y openvpn jq
+                dnf install -y --allowerasing curl
             else
                 # Amazon Linux 2 uses yum and needs EPEL for OpenVPN
                 amazon-linux-extras install -y epel 2>/dev/null || yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
