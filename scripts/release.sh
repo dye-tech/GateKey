@@ -40,6 +40,8 @@ BINARIES=(
     "gatekey-server:./cmd/gatekey-server"
     "gatekey-gateway:./cmd/gatekey-gateway"
     "gatekey-admin:./cmd/gatekey-admin"
+    "gatekey-hub:./cmd/gatekey-hub"
+    "gatekey-mesh-gateway:./cmd/gatekey-mesh-gateway"
 )
 
 # Build flags
