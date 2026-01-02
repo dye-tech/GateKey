@@ -1820,7 +1820,10 @@ func executeRemoteCommand(agentID, command string) error {
 	headers := http.Header{}
 	headers.Set("Authorization", authHeader)
 
-	conn, _, err := dialer.Dial(wsURL, headers)
+	conn, httpResp, err := dialer.Dial(wsURL, headers)
+	if httpResp != nil && httpResp.Body != nil {
+		httpResp.Body.Close()
+	}
 	if err != nil {
 		return fmt.Errorf("failed to connect to control plane: %w", err)
 	}
@@ -1927,7 +1930,10 @@ func startInteractiveSession(agentID string) error {
 	headers := http.Header{}
 	headers.Set("Authorization", authHeader)
 
-	conn, _, err := dialer.Dial(wsURL, headers)
+	conn, httpResp, err := dialer.Dial(wsURL, headers)
+	if httpResp != nil && httpResp.Body != nil {
+		httpResp.Body.Close()
+	}
 	if err != nil {
 		return fmt.Errorf("failed to connect to control plane: %w", err)
 	}

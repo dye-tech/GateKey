@@ -178,7 +178,7 @@ func (a *AuthManager) Login(ctx context.Context, noBrowser bool) error {
 		}
 		// Clear any API key when using session login
 		a.config.APIKey = ""
-		a.config.Save()
+		_ = a.config.Save() // Ignore error, best effort
 
 		fmt.Println("\nAuthentication successful!")
 		if token.UserEmail != "" {

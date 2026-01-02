@@ -19,16 +19,16 @@ import (
 
 // Message types for WebSocket communication
 const (
-	MsgTypeAuth          = "auth"
-	MsgTypeAuthResponse  = "auth_response"
-	MsgTypeCommand       = "command"
-	MsgTypeOutput        = "output"
-	MsgTypePing          = "ping"
-	MsgTypePong          = "pong"
-	MsgTypeAgentList     = "agent_list"
-	MsgTypeConnectAgent  = "connect_agent"
-	MsgTypeDisconnect    = "disconnect"
-	MsgTypeError         = "error"
+	MsgTypeAuth         = "auth"
+	MsgTypeAuthResponse = "auth_response"
+	MsgTypeCommand      = "command"
+	MsgTypeOutput       = "output"
+	MsgTypePing         = "ping"
+	MsgTypePong         = "pong"
+	MsgTypeAgentList    = "agent_list"
+	MsgTypeConnectAgent = "connect_agent"
+	MsgTypeDisconnect   = "disconnect"
+	MsgTypeError        = "error"
 )
 
 // Message is the base WebSocket message structure
@@ -79,31 +79,31 @@ type AgentInfo struct {
 
 // ConnectedAgent represents an agent connected to the session manager
 type ConnectedAgent struct {
-	Info       AgentInfo
-	Conn       *websocket.Conn
-	Send       chan []byte
-	Done       chan struct{}
-	LastPing   time.Time
-	mutex      sync.Mutex
+	Info     AgentInfo
+	Conn     *websocket.Conn
+	Send     chan []byte
+	Done     chan struct{}
+	LastPing time.Time
+	mutex    sync.Mutex
 }
 
 // AdminSession represents an admin connected for remote sessions
 type AdminSession struct {
-	ID            string
-	Conn          *websocket.Conn
-	Send          chan []byte
-	Done          chan struct{}
-	ConnectedTo   string // AgentID currently connected to
-	UserEmail     string
-	mutex         sync.Mutex
+	ID          string
+	Conn        *websocket.Conn
+	Send        chan []byte
+	Done        chan struct{}
+	ConnectedTo string // AgentID currently connected to
+	UserEmail   string
+	mutex       sync.Mutex
 }
 
 // Manager handles remote session connections
 type Manager struct {
-	agents          map[string]*ConnectedAgent      // AgentID -> agent
-	admins          map[string]*AdminSession        // SessionID -> admin
-	agentsByNode    map[string]string               // NodeID -> AgentID (for lookup)
-	pendingCommands map[string]chan OutputPayload   // MsgID -> output channel (for sync commands)
+	agents          map[string]*ConnectedAgent    // AgentID -> agent
+	admins          map[string]*AdminSession      // SessionID -> admin
+	agentsByNode    map[string]string             // NodeID -> AgentID (for lookup)
+	pendingCommands map[string]chan OutputPayload // MsgID -> output channel (for sync commands)
 	mutex           sync.RWMutex
 	logger          *zap.Logger
 	upgrader        websocket.Upgrader
@@ -138,7 +138,7 @@ func (m *Manager) HandleAgentConnection(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Wait for auth message
-	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	_, msgBytes, err := conn.ReadMessage()
 	if err != nil {
 		m.logger.Warn("Failed to read auth message", zap.Error(err))
@@ -212,7 +212,7 @@ func (m *Manager) HandleAgentConnection(w http.ResponseWriter, r *http.Request) 
 	m.sendAuthResponse(conn, true, "Connected", agentID)
 
 	// Reset deadline
-	conn.SetReadDeadline(time.Time{})
+	_ = conn.SetReadDeadline(time.Time{})
 
 	// Start agent handlers
 	go m.agentWriter(agent)

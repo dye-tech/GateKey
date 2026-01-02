@@ -258,7 +258,7 @@ func (s *PKIStore) ActivateCA(ctx context.Context, newCAID string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Get current active CA fingerprint for audit
 	var oldFingerprint string

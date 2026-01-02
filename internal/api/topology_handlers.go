@@ -306,4 +306,3 @@ func calculateServerTunnelIP(subnet string) string {
 	ip[len(ip)-1]++
 	return ip.String()
 }
-
