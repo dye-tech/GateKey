@@ -535,6 +535,30 @@ CREATE TABLE public.mesh_gateways (
 ALTER TABLE public.mesh_gateways OWNER TO gatekey;
 
 --
+-- Name: mesh_generated_configs; Type: TABLE; Schema: public; Owner: gatekey
+--
+
+CREATE TABLE public.mesh_generated_configs (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    user_id character varying(255) NOT NULL,
+    hub_id uuid NOT NULL,
+    hub_name character varying(255) NOT NULL,
+    file_name character varying(255) NOT NULL,
+    config_data bytea NOT NULL,
+    serial_number character varying(255) NOT NULL,
+    fingerprint character varying(255) NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    downloaded_at timestamp with time zone,
+    is_revoked boolean DEFAULT false NOT NULL,
+    revoked_at timestamp with time zone,
+    revoked_reason character varying(255)
+);
+
+
+ALTER TABLE public.mesh_generated_configs OWNER TO gatekey;
+
+--
 -- Name: mesh_hub_groups; Type: TABLE; Schema: public; Owner: gatekey
 --
 
@@ -1124,6 +1148,14 @@ ALTER TABLE ONLY public.mesh_gateways
 
 ALTER TABLE ONLY public.mesh_gateways
     ADD CONSTRAINT mesh_gateways_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: mesh_generated_configs mesh_generated_configs_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+--
+
+ALTER TABLE ONLY public.mesh_generated_configs
+    ADD CONSTRAINT mesh_generated_configs_pkey PRIMARY KEY (id);
 
 
 --
@@ -1724,6 +1756,41 @@ CREATE INDEX idx_mesh_gateways_token ON public.mesh_gateways USING btree (token)
 
 
 --
+-- Name: idx_mesh_generated_configs_active; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_mesh_generated_configs_active ON public.mesh_generated_configs USING btree (user_id, is_revoked) WHERE (is_revoked = false);
+
+
+--
+-- Name: idx_mesh_generated_configs_expires_at; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_mesh_generated_configs_expires_at ON public.mesh_generated_configs USING btree (expires_at);
+
+
+--
+-- Name: idx_mesh_generated_configs_hub_id; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_mesh_generated_configs_hub_id ON public.mesh_generated_configs USING btree (hub_id);
+
+
+--
+-- Name: idx_mesh_generated_configs_serial_number; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_mesh_generated_configs_serial_number ON public.mesh_generated_configs USING btree (serial_number);
+
+
+--
+-- Name: idx_mesh_generated_configs_user_id; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_mesh_generated_configs_user_id ON public.mesh_generated_configs USING btree (user_id);
+
+
+--
 -- Name: idx_mesh_hub_networks_hub; Type: INDEX; Schema: public; Owner: gatekey
 --
 
@@ -2245,6 +2312,14 @@ ALTER TABLE ONLY public.mesh_gateway_users
 
 ALTER TABLE ONLY public.mesh_gateways
     ADD CONSTRAINT mesh_gateways_hub_id_fkey FOREIGN KEY (hub_id) REFERENCES public.mesh_hubs(id) ON DELETE CASCADE;
+
+
+--
+-- Name: mesh_generated_configs mesh_generated_configs_hub_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+--
+
+ALTER TABLE ONLY public.mesh_generated_configs
+    ADD CONSTRAINT mesh_generated_configs_hub_id_fkey FOREIGN KEY (hub_id) REFERENCES public.mesh_hubs(id) ON DELETE CASCADE;
 
 
 --

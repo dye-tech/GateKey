@@ -15,6 +15,7 @@ import (
 	"github.com/gatekey-project/gatekey/internal/k8s"
 	"github.com/gatekey-project/gatekey/internal/openvpn"
 	"github.com/gatekey-project/gatekey/internal/pki"
+	"github.com/gatekey-project/gatekey/internal/session"
 )
 
 // Server represents the HTTP API server.
@@ -42,6 +43,7 @@ type Server struct {
 	configGen       *openvpn.ConfigGenerator
 	adminPassword   string             // Initial admin password (shown once at startup)
 	bgCancel        context.CancelFunc // Cancel function for background tasks
+	sessionMgr      *session.Manager   // Remote session manager
 }
 
 // NewServer creates a new API server instance.
@@ -173,6 +175,10 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 		logger.Info("Please change this password after first login!")
 		logger.Info("==============================================")
 	}
+
+	// Initialize session manager for remote sessions
+	srv.sessionMgr = session.NewManager(logger)
+	srv.sessionMgr.ValidateAgentToken = srv.validateAgentToken
 
 	// Setup routes
 	srv.setupRoutes()
@@ -464,6 +470,15 @@ func (s *Server) setupRoutes() {
 			admin.POST("/users/:id/api-keys", s.handleAdminCreateUserAPIKey)
 			admin.DELETE("/users/:id/api-keys", s.handleAdminRevokeUserAPIKeys)
 			admin.DELETE("/users/:id/api-keys/all", s.handleAdminDeleteUserAPIKeys)
+
+			// Topology and network tools
+			admin.GET("/topology", s.handleGetTopology)
+			admin.GET("/sessions/active", s.handleGetActiveSessions)
+			admin.GET("/network-tools", s.handleListNetworkTools)
+			admin.POST("/network-tools/execute", s.handleExecuteNetworkTool)
+
+			// Remote session agents
+			admin.GET("/remote-session/agents", s.handleGetConnectedAgents)
 		}
 
 		// User API key management
@@ -490,6 +505,10 @@ func (s *Server) setupRoutes() {
 		v1.GET("/mesh-configs/:id/download", s.handleDownloadMeshConfig)
 		v1.POST("/mesh-configs/:id/revoke", s.handleRevokeMeshConfig)
 	}
+
+	// WebSocket endpoints for remote sessions (outside API group - no JSON middleware)
+	s.router.GET("/ws/agent", s.handleAgentWebSocket)
+	s.router.GET("/ws/admin/session", s.handleAdminSessionWebSocket)
 
 	// Metrics endpoint
 	if s.config.Metrics.Enabled {

@@ -14,6 +14,9 @@ import AdminProxyApps from './pages/AdminProxyApps'
 import AdminMonitoring from './pages/AdminMonitoring'
 import AdminMesh from './pages/AdminMesh'
 import AdminConfigs from './pages/AdminConfigs'
+import AdminTopology from './pages/AdminTopology'
+import AdminNetworkTools from './pages/AdminNetworkTools'
+import AdminRemoteSessions from './pages/AdminRemoteSessions'
 import Help from './pages/Help'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
@@ -153,6 +156,27 @@ function AppRoutes() {
         <AdminRoute>
           <Layout>
             <AdminMesh />
+          </Layout>
+        </AdminRoute>
+      } />
+      <Route path="/admin/topology" element={
+        <AdminRoute>
+          <Layout>
+            <AdminTopology />
+          </Layout>
+        </AdminRoute>
+      } />
+      <Route path="/admin/network-tools" element={
+        <AdminRoute>
+          <Layout>
+            <AdminNetworkTools />
+          </Layout>
+        </AdminRoute>
+      } />
+      <Route path="/admin/remote-sessions" element={
+        <AdminRoute>
+          <Layout>
+            <AdminRemoteSessions />
           </Layout>
         </AdminRoute>
       } />
