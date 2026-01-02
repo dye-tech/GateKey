@@ -208,7 +208,7 @@ func (m *Middleware) RequireAuthOrAPIKey() gin.HandlerFunc {
 			// Update last used (async to not slow down request)
 			go func() {
 				bgCtx := context.Background()
-				m.apiKeyStore.UpdateLastUsed(bgCtx, apiKey.ID, c.ClientIP())
+				_ = m.apiKeyStore.UpdateLastUsed(bgCtx, apiKey.ID, c.ClientIP())
 			}()
 
 			// Convert SSOUser to models.User for consistency
@@ -308,7 +308,7 @@ func (m *Middleware) RequireAdminOrAPIKey() gin.HandlerFunc {
 			// Update last used (async)
 			go func() {
 				bgCtx := context.Background()
-				m.apiKeyStore.UpdateLastUsed(bgCtx, apiKey.ID, c.ClientIP())
+				_ = m.apiKeyStore.UpdateLastUsed(bgCtx, apiKey.ID, c.ClientIP())
 			}()
 
 			// Convert SSOUser to models.User for consistency

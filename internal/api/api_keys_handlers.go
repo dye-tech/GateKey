@@ -400,7 +400,7 @@ func (s *Server) handleAdminRevokeAPIKey(c *gin.Context) {
 	var req struct {
 		Reason string `json:"reason"`
 	}
-	c.ShouldBindJSON(&req)
+	_ = c.ShouldBindJSON(&req) // Optional, reason can be empty
 
 	reason := req.Reason
 	if reason == "" {
@@ -516,7 +516,7 @@ func (s *Server) handleAdminRevokeUserAPIKeys(c *gin.Context) {
 	var req struct {
 		Reason string `json:"reason"`
 	}
-	c.ShouldBindJSON(&req)
+	_ = c.ShouldBindJSON(&req) // Optional, reason can be empty
 
 	reason := req.Reason
 	if reason == "" {
@@ -598,8 +598,8 @@ func (s *Server) handleValidateAPIKey(c *gin.Context) {
 		return
 	}
 
-	// Update last used
-	go s.apiKeyStore.UpdateLastUsed(c.Request.Context(), apiKey.ID, c.ClientIP())
+	// Update last used (async)
+	go func() { _ = s.apiKeyStore.UpdateLastUsed(c.Request.Context(), apiKey.ID, c.ClientIP()) }()
 
 	// Determine admin status - check both IsAdmin flag and group membership
 	isAdmin := user.IsAdmin

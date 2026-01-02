@@ -114,21 +114,21 @@ func (c *Client) handleError(resp *http.Response) error {
 // === Gateway Operations ===
 
 type Gateway struct {
-	ID                  string     `json:"id"`
-	Name                string     `json:"name"`
-	Description         string     `json:"description"`
-	Endpoint            string     `json:"endpoint"`
-	PublicIP            string     `json:"public_ip"`
-	InternalIP          string     `json:"internal_ip,omitempty"`
-	Port                int        `json:"port"`
-	Protocol            string     `json:"protocol"`
-	Status              string     `json:"status"`
-	LastHeartbeat       *time.Time `json:"last_heartbeat,omitempty"`
-	ClientCount         int        `json:"client_count"`
-	IsMeshHub           bool       `json:"is_mesh_hub"`
-	IsProvisioned       bool       `json:"is_provisioned"`
-	CreatedAt           time.Time  `json:"created_at"`
-	UpdatedAt           time.Time  `json:"updated_at"`
+	ID            string     `json:"id"`
+	Name          string     `json:"name"`
+	Description   string     `json:"description"`
+	Endpoint      string     `json:"endpoint"`
+	PublicIP      string     `json:"public_ip"`
+	InternalIP    string     `json:"internal_ip,omitempty"`
+	Port          int        `json:"port"`
+	Protocol      string     `json:"protocol"`
+	Status        string     `json:"status"`
+	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
+	ClientCount   int        `json:"client_count"`
+	IsMeshHub     bool       `json:"is_mesh_hub"`
+	IsProvisioned bool       `json:"is_provisioned"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
 func (c *Client) ListGateways(ctx context.Context) ([]Gateway, error) {
@@ -162,10 +162,10 @@ func (c *Client) DeleteGateway(ctx context.Context, id string) error {
 }
 
 type ProvisionResponse struct {
-	Gateway   Gateway `json:"gateway"`
-	Config    string  `json:"config"`
-	Token     string  `json:"token,omitempty"`
-	Message   string  `json:"message"`
+	Gateway Gateway `json:"gateway"`
+	Config  string  `json:"config"`
+	Token   string  `json:"token,omitempty"`
+	Message string  `json:"message"`
 }
 
 func (c *Client) ProvisionGateway(ctx context.Context, id string) (*ProvisionResponse, error) {
@@ -227,17 +227,17 @@ func (c *Client) DeleteNetwork(ctx context.Context, id string) error {
 // === Access Rule Operations ===
 
 type AccessRule struct {
-	ID            string    `json:"id"`
-	Name          string    `json:"name"`
-	Description   string    `json:"description"`
-	NetworkID     string    `json:"network_id"`
-	NetworkName   string    `json:"network_name,omitempty"`
-	Groups        []string  `json:"groups"`
-	AllowedCIDRs  []string  `json:"allowed_cidrs"`
-	IsActive      bool      `json:"is_active"`
-	Priority      int       `json:"priority"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	Description  string    `json:"description"`
+	NetworkID    string    `json:"network_id"`
+	NetworkName  string    `json:"network_name,omitempty"`
+	Groups       []string  `json:"groups"`
+	AllowedCIDRs []string  `json:"allowed_cidrs"`
+	IsActive     bool      `json:"is_active"`
+	Priority     int       `json:"priority"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 func (c *Client) ListAccessRules(ctx context.Context) ([]AccessRule, error) {
@@ -312,13 +312,13 @@ func (c *Client) RevokeUserConfigs(ctx context.Context, id string) error {
 // === Local User Operations ===
 
 type LocalUser struct {
-	ID           string    `json:"id"`
-	Username     string    `json:"username"`
-	Email        string    `json:"email"`
-	IsAdmin      bool      `json:"is_admin"`
-	IsActive     bool      `json:"is_active"`
-	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID          string     `json:"id"`
+	Username    string     `json:"username"`
+	Email       string     `json:"email"`
+	IsAdmin     bool       `json:"is_admin"`
+	IsActive    bool       `json:"is_active"`
+	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 func (c *Client) ListLocalUsers(ctx context.Context) ([]LocalUser, error) {
@@ -445,13 +445,13 @@ func (c *Client) RevokeUserAPIKeys(ctx context.Context, userID string, reason st
 // === Mesh Hub Operations ===
 
 type MeshHub struct {
-	ID                string    `json:"id"`
-	GatewayID         string    `json:"gateway_id"`
-	GatewayName       string    `json:"gateway_name,omitempty"`
-	HubNetwork        string    `json:"hub_network"`
-	IsProvisioned     bool      `json:"is_provisioned"`
-	ConnectedSpokes   int       `json:"connected_spokes"`
-	CreatedAt         time.Time `json:"created_at"`
+	ID              string    `json:"id"`
+	GatewayID       string    `json:"gateway_id"`
+	GatewayName     string    `json:"gateway_name,omitempty"`
+	HubNetwork      string    `json:"hub_network"`
+	IsProvisioned   bool      `json:"is_provisioned"`
+	ConnectedSpokes int       `json:"connected_spokes"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 func (c *Client) ListMeshHubs(ctx context.Context) ([]MeshHub, error) {
@@ -543,14 +543,14 @@ func (c *Client) ProvisionMeshSpoke(ctx context.Context, id string) (*ProvisionR
 // === CA Operations ===
 
 type CA struct {
-	ID            string     `json:"id"`
-	Name          string     `json:"name"`
-	IsActive      bool       `json:"is_active"`
-	IsCurrent     bool       `json:"is_current"`
-	SerialNumber  string     `json:"serial_number"`
-	NotBefore     time.Time  `json:"not_before"`
-	NotAfter      time.Time  `json:"not_after"`
-	CreatedAt     time.Time  `json:"created_at"`
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	IsActive     bool      `json:"is_active"`
+	IsCurrent    bool      `json:"is_current"`
+	SerialNumber string    `json:"serial_number"`
+	NotBefore    time.Time `json:"not_before"`
+	NotAfter     time.Time `json:"not_after"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 func (c *Client) GetCA(ctx context.Context) (*CA, error) {
@@ -739,7 +739,7 @@ type NetworkToolInfo struct {
 }
 
 type NetworkToolsInfoResponse struct {
-	Tools     []NetworkToolInfo        `json:"tools"`
+	Tools     []NetworkToolInfo   `json:"tools"`
 	Locations []map[string]string `json:"locations"`
 }
 

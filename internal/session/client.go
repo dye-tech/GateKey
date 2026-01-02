@@ -159,7 +159,10 @@ func (c *AgentClient) connect(ctx context.Context) error {
 		HandshakeTimeout: 30 * time.Second,
 	}
 
-	conn, _, err := dialer.DialContext(ctx, u.String(), nil)
+	conn, httpResp, err := dialer.DialContext(ctx, u.String(), nil)
+	if httpResp != nil && httpResp.Body != nil {
+		httpResp.Body.Close()
+	}
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
@@ -189,7 +192,7 @@ func (c *AgentClient) connect(ctx context.Context) error {
 	}
 
 	// Wait for auth response
-	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	_, respBytes, err := conn.ReadMessage()
 	if err != nil {
 		conn.Close()
@@ -218,7 +221,7 @@ func (c *AgentClient) connect(ctx context.Context) error {
 		return fmt.Errorf("auth failed: %s", authResp.Message)
 	}
 
-	conn.SetReadDeadline(time.Time{})
+	_ = conn.SetReadDeadline(time.Time{})
 
 	c.mutex.Lock()
 	c.connected = true

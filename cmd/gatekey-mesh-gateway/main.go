@@ -17,10 +17,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gatekey-project/gatekey/internal/session"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
+
+	"github.com/gatekey-project/gatekey/internal/session"
 )
 
 var (

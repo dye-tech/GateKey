@@ -1391,7 +1391,7 @@ func (s *Server) getAuthenticatedUser(c *gin.Context) (*authenticatedUser, error
 		}
 
 		// Update last used (async)
-		go s.apiKeyStore.UpdateLastUsed(context.Background(), apiKey.ID, c.ClientIP())
+		go func() { _ = s.apiKeyStore.UpdateLastUsed(context.Background(), apiKey.ID, c.ClientIP()) }()
 
 		return &authenticatedUser{
 			UserID:   ssoUser.ID,
@@ -2144,12 +2144,14 @@ func (s *Server) handleGatewayConnect(c *gin.Context) {
 		if !gateway.FullTunnelMode {
 			var route string
 			switch rule.RuleType {
-			case "cidr":
+			case db.AccessRuleTypeCIDR:
 				// Convert CIDR to OpenVPN route format (network netmask)
 				route = cidrToRoute(rule.Value)
-			case "ip":
+			case db.AccessRuleTypeIP:
 				// Single IP is a /32 CIDR
 				route = cidrToRoute(rule.Value + "/32")
+			case db.AccessRuleTypeHostname, db.AccessRuleTypeHostnameWildcard:
+				// Hostname rules don't generate routes
 			}
 			if route != "" {
 				clientConfig = append(clientConfig, route)
@@ -2694,7 +2696,7 @@ func (s *Server) getCurrentUserInfo(c *gin.Context) (string, []string, error) {
 			return "", nil, errors.New("invalid API key")
 		}
 		// Update last used in background
-		go s.apiKeyStore.UpdateLastUsed(c.Request.Context(), apiKey.ID, c.ClientIP())
+		go func() { _ = s.apiKeyStore.UpdateLastUsed(c.Request.Context(), apiKey.ID, c.ClientIP()) }()
 		return ssoUser.ID, ssoUser.Groups, nil
 	}
 
@@ -4675,7 +4677,7 @@ func (s *Server) handlePrepareCARotation(c *gin.Context) {
 	var req struct {
 		Description string `json:"description"`
 	}
-	c.ShouldBindJSON(&req)
+	_ = c.ShouldBindJSON(&req) // Optional, description can be empty
 
 	ctx := c.Request.Context()
 
@@ -4717,7 +4719,7 @@ func (s *Server) handlePrepareCARotation(c *gin.Context) {
 		NewFingerprint: pki.Fingerprint(newCA.Certificate()),
 		Notes:          "CA rotation prepared",
 	}
-	s.pkiStore.RecordRotationEvent(ctx, event)
+	_ = s.pkiStore.RecordRotationEvent(ctx, event) // Best effort
 
 	s.logger.Info("Pending CA prepared for rotation",
 		zap.String("id", newCAID),
