@@ -232,7 +232,18 @@ func (v *VPNManager) DisconnectGateway(gatewayName string) error {
 	multiState := v.loadMultiState()
 
 	if len(multiState.Connections) == 0 {
-		return fmt.Errorf("not connected to any gateway")
+		// Check for orphaned OpenVPN processes even if state is empty
+		orphaned := v.findOrphanedOpenVPNProcesses()
+		if len(orphaned) == 0 {
+			return fmt.Errorf("not connected to any gateway")
+		}
+		// Kill orphaned processes
+		for _, pid := range orphaned {
+			v.killProcess(pid)
+		}
+		v.cleanupTunInterfaces()
+		fmt.Printf("Cleaned up %d orphaned OpenVPN process(es)\n", len(orphaned))
+		return nil
 	}
 
 	// If no gateway specified, disconnect from all
@@ -367,6 +378,81 @@ func (v *VPNManager) cleanupTunInterfaces() {
 				}
 			}
 		}
+	}
+}
+
+// findOrphanedOpenVPNProcesses finds OpenVPN processes using configs in the gatekey directory
+// that are not tracked in our state file.
+func (v *VPNManager) findOrphanedOpenVPNProcesses() []int {
+	var orphaned []int
+	dataDir := v.config.DataDir()
+
+	// Read all processes from /proc
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return orphaned
+	}
+
+	for _, entry := range entries {
+		// Only check numeric directories (PIDs)
+		pid, err := strconv.Atoi(entry.Name())
+		if err != nil {
+			continue
+		}
+
+		// Read the command line
+		cmdlinePath := fmt.Sprintf("/proc/%d/cmdline", pid)
+		cmdline, err := os.ReadFile(cmdlinePath)
+		if err != nil {
+			continue
+		}
+
+		cmdlineStr := string(cmdline)
+
+		// Check if this is an OpenVPN process using our data directory
+		if strings.Contains(cmdlineStr, "openvpn") && strings.Contains(cmdlineStr, dataDir) {
+			orphaned = append(orphaned, pid)
+		}
+	}
+
+	return orphaned
+}
+
+// killProcess terminates a process by PID, first with SIGTERM then SIGKILL if needed.
+// Uses sudo if necessary for root-owned processes.
+func (v *VPNManager) killProcess(pid int) {
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return
+	}
+
+	// Try SIGTERM first for graceful shutdown
+	err = proc.Signal(syscall.SIGTERM)
+	if err != nil {
+		if strings.Contains(err.Error(), "process already finished") {
+			return
+		}
+		// Permission denied - try with sudo
+		if strings.Contains(err.Error(), "operation not permitted") {
+			fmt.Printf("Stopping OpenVPN process (PID: %d)...\n", pid)
+			exec.Command("sudo", "kill", "-TERM", strconv.Itoa(pid)).Run()
+			time.Sleep(1 * time.Second)
+			if v.isProcessRunning(pid) {
+				exec.Command("sudo", "kill", "-KILL", strconv.Itoa(pid)).Run()
+			}
+			return
+		}
+		// Other error - try SIGKILL
+		proc.Kill()
+		return
+	}
+
+	// Wait a moment for graceful shutdown
+	time.Sleep(1 * time.Second)
+
+	// Check if still running and force kill if needed
+	if v.isProcessRunning(pid) {
+		proc.Kill()
 	}
 }
 
