@@ -12,13 +12,15 @@
   <a href="https://goreportcard.com/report/github.com/dye-tech/GateKey"><img src="https://goreportcard.com/badge/github.com/dye-tech/GateKey" alt="Go Report Card"></a>
   <a href="https://github.com/dye-tech/GateKey/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
   <a href="https://golang.org/doc/go1.25"><img src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go" alt="Go Version"></a>
+  <a href="https://hub.docker.com/r/dyetech/gatekey-server"><img src="https://img.shields.io/docker/v/dyetech/gatekey-server?label=Docker&logo=docker" alt="Docker"></a>
 </p>
 
 <p align="center">
   <a href="#installation">Installation</a> •
   <a href="#quick-start">Quick Start</a> •
   <a href="#how-it-works">How It Works</a> •
-  <a href="#server-setup">Server Setup</a>
+  <a href="#server-setup">Server Setup</a> •
+  <a href="https://github.com/dye-tech/gatekey-helm-chart">Helm Chart</a>
 </p>
 
 ---
@@ -183,7 +185,47 @@ The following is for administrators setting up GateKey infrastructure.
 - PostgreSQL 14+
 - OpenVPN 2.5+ (on gateway servers)
 
-### Deploy Control Plane
+### Option 1: Kubernetes (Recommended)
+
+Deploy GateKey to Kubernetes using our Helm chart:
+
+```bash
+# Add the Helm repository
+helm repo add gatekey https://dye-tech.github.io/gatekey-helm-chart
+helm repo update
+
+# Install with default settings
+helm install gatekey gatekey/gatekey -n gatekey --create-namespace
+
+# Or install with custom admin password
+helm install gatekey gatekey/gatekey -n gatekey --create-namespace \
+  --set secrets.adminPassword="your-secure-password"
+```
+
+Retrieve the auto-generated admin password:
+
+```bash
+kubectl get secret gatekey-admin-password -n gatekey -o jsonpath='{.data.admin-password}' | base64 -d
+```
+
+For full configuration options, see the [Helm chart repository](https://github.com/dye-tech/gatekey-helm-chart).
+
+### Option 2: Docker
+
+```bash
+# Run with Docker
+docker run -d \
+  -p 8080:8080 \
+  -e DATABASE_URL="postgres://gatekey:password@host.docker.internal/gatekey?sslmode=disable" \
+  -e GATEKEY_ADMIN_PASSWORD="your-secure-password" \
+  dyetech/gatekey-server:latest
+```
+
+Docker images available:
+- [`dyetech/gatekey-server`](https://hub.docker.com/r/dyetech/gatekey-server) - Control plane
+- [`dyetech/gatekey-web`](https://hub.docker.com/r/dyetech/gatekey-web) - Web UI
+
+### Option 3: Manual Deployment
 
 ```bash
 # Clone
@@ -252,6 +294,24 @@ Use the admin UI or API to:
 | `gatekey-server` | Control plane server |
 | `gatekey-gateway` | Gateway agent (runs alongside OpenVPN) |
 | `gatekey-admin` | Admin CLI for managing policies |
+
+### Docker Images
+
+| Image | Description |
+|-------|-------------|
+| [`dyetech/gatekey-server`](https://hub.docker.com/r/dyetech/gatekey-server) | Control plane (includes API + embedded CA) |
+| [`dyetech/gatekey-web`](https://hub.docker.com/r/dyetech/gatekey-web) | Web UI (nginx + React frontend) |
+
+### Helm Chart
+
+For Kubernetes deployments, use our official Helm chart:
+
+```bash
+helm repo add gatekey https://dye-tech.github.io/gatekey-helm-chart
+helm install gatekey gatekey/gatekey -n gatekey --create-namespace
+```
+
+See [gatekey-helm-chart](https://github.com/dye-tech/gatekey-helm-chart) for configuration options.
 
 ## API Reference
 
