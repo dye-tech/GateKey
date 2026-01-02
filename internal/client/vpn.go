@@ -812,7 +812,14 @@ func (v *VPNManager) checkTunnelStatusForGateway(gatewayName string) string {
 
 // getRoutesFromGatewayConfig extracts routes from a gateway-specific config.
 func (v *VPNManager) getRoutesFromGatewayConfig(gatewayName string) []string {
-	configPath := v.config.GatewayConfigPath(gatewayName)
+	// Handle mesh connections - mesh:hubname uses config file mesh-hubname.ovpn
+	configName := gatewayName
+	if strings.HasPrefix(gatewayName, "mesh:") {
+		hubName := strings.TrimPrefix(gatewayName, "mesh:")
+		configName = "mesh-" + hubName
+	}
+
+	configPath := v.config.GatewayConfigPath(configName)
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil
