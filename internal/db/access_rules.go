@@ -298,3 +298,38 @@ func (s *AccessRuleStore) GetAllGroupAccessRuleAssignments(ctx context.Context) 
 	}
 	return result, rows.Err()
 }
+
+// GetUserAccessRulesForGateway gets access rules for a user that are associated with networks
+// assigned to the specified gateway. This ensures only relevant routes are pushed to clients.
+func (s *AccessRuleStore) GetUserAccessRulesForGateway(ctx context.Context, userID string, groups []string, gatewayID string) ([]*AccessRule, error) {
+	// Get rules assigned to the user (directly or via groups) that belong to networks
+	// assigned to this gateway via gateway_networks
+	query := `
+		SELECT DISTINCT ar.id, ar.name, ar.description, ar.rule_type, ar.value,
+		       ar.port_range, ar.protocol, ar.network_id, ar.is_active, ar.created_at, ar.updated_at
+		FROM access_rules ar
+		JOIN gateway_networks gn ON ar.network_id = gn.network_id
+		LEFT JOIN user_access_rules uar ON ar.id = uar.access_rule_id AND uar.user_id = $1
+		LEFT JOIN group_access_rules gar ON ar.id = gar.access_rule_id
+		WHERE ar.is_active = true
+		AND gn.gateway_id = $3
+		AND (uar.user_id IS NOT NULL OR gar.group_name = ANY($2))
+		ORDER BY ar.name
+	`
+	rows, err := s.db.Pool.Query(ctx, query, userID, groups, gatewayID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var rules []*AccessRule
+	for rows.Next() {
+		var r AccessRule
+		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.RuleType, &r.Value,
+			&r.PortRange, &r.Protocol, &r.NetworkID, &r.IsActive, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		rules = append(rules, &r)
+	}
+	return rules, rows.Err()
+}
