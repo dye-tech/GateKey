@@ -57,7 +57,7 @@ jobs:
       - name: Download release artifacts
         run: |
           mkdir -p dist
-          for binary in gatekey gatekey-server gatekey-gateway gatekey-admin; do
+          for binary in gatekey gatekey-server gatekey-gateway gatekey-admin gatekey-hub gatekey-mesh-gateway; do
             for platform in darwin-amd64 darwin-arm64 linux-amd64 linux-arm64; do
               curl -sL "https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.VERSION }}/${binary}-${{ steps.version.outputs.VERSION }}-${platform}.tar.gz" \
                 -o "dist/${binary}-${{ steps.version.outputs.VERSION }}-${platform}.tar.gz"
@@ -65,19 +65,23 @@ jobs:
           done
           cd dist && sha256sum *.tar.gz > checksums.txt
 
+      - name: Checkout Homebrew Tap
+        uses: actions/checkout@v6
+        with:
+          repository: dye-tech/homebrew-gatekey
+          path: homebrew-gatekey
+          ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+
       - name: Update Homebrew formulas
         run: |
           chmod +x scripts/update-homebrew.sh
-          ./scripts/update-homebrew.sh ${{ steps.version.outputs.VERSION }}
+          ./scripts/update-homebrew.sh ${{ steps.version.outputs.VERSION }} ./homebrew-gatekey
 
       - name: Push to Homebrew Tap
-        uses: cpina/github-action-push-to-another-repository@main
-        env:
-          SSH_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
-        with:
-          source-directory: 'Formula'
-          destination-github-username: 'dye-tech'
-          destination-repository-name: 'homebrew-tap'
-          target-branch: main
-          target-directory: 'Formula'
-          commit-message: 'Update formulas for GateKey v${{ steps.version.outputs.VERSION }}'
+        run: |
+          cd homebrew-gatekey
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --staged --quiet || git commit -m "Update formulas for GateKey v${{ steps.version.outputs.VERSION }}"
+          git push
