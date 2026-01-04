@@ -6,7 +6,8 @@ This document outlines platform support and feature availability for all GateKey
 
 | Binary | Purpose | Server-side | Client-side |
 |--------|---------|-------------|-------------|
-| `gatekey` | VPN client for end users | No | Yes |
+| `gatekey` | VPN client for end users (CLI) | No | Yes |
+| `gatekey-android` | VPN client for Android devices | No | Yes |
 | `gatekey-server` | Control plane (API, UI, PKI) | Yes | No |
 | `gatekey-gateway` | Gateway agent with firewall | Yes | No |
 | `gatekey-hub` | Mesh hub with firewall | Yes | No |
@@ -27,6 +28,32 @@ The user-facing VPN client. Wraps OpenVPN for easy VPN connections.
 | Windows | amd64 | Planned | Coming soon |
 
 **Dependencies**: OpenVPN client must be installed.
+
+### gatekey-android (Android Client)
+
+Native Android VPN client with embedded OpenVPN3. No external dependencies required.
+
+| Platform | Architecture | Supported | Notes |
+|----------|-------------|-----------|-------|
+| Android 8.0+ (API 26) | arm64-v8a | Yes | Primary target |
+| Android 8.0+ (API 26) | armeabi-v7a | Yes | Full support |
+| Android 8.0+ (API 26) | x86_64 | Yes | Emulator/Chromebook |
+| Android 8.0+ (API 26) | x86 | Yes | Emulator support |
+
+**Features**:
+- Browser-based SSO login (OIDC)
+- API key authentication
+- Gateway and mesh hub connections
+- Material Design 3 UI with Jetpack Compose
+- Embedded OpenVPN3 (no external VPN app needed)
+
+**Build Requirements**:
+- JDK 17 (JDK 25+ not supported)
+- Android SDK with API 35
+- Android NDK 29.0.14206865
+- CMake and SWIG 4.0+
+
+See the [Android Client README](https://github.com/gatekey/gatekey-android-client) for build instructions.
 
 ### gatekey-server (Control Plane)
 
@@ -103,13 +130,14 @@ Connects remote sites to a mesh hub. Runs as OpenVPN client.
 
 ### VPN Features
 
-| Feature | Linux | macOS | Windows |
-|---------|-------|-------|---------|
-| OpenVPN connections | Yes | Yes | Planned |
-| Multi-gateway support | Yes | Yes | Planned |
-| Mesh hub connections | Yes | Yes | Planned |
-| Auto-reconnect | Yes | Yes | Planned |
-| Browser-based login | Yes | Yes | Planned |
+| Feature | Linux | macOS | Android | Windows |
+|---------|-------|-------|---------|---------|
+| OpenVPN connections | Yes | Yes | Yes | Planned |
+| Multi-gateway support | Yes | Yes | Yes | Planned |
+| Mesh hub connections | Yes | Yes | Yes | Planned |
+| Auto-reconnect | Yes | Yes | Yes | Planned |
+| Browser-based login | Yes | Yes | Yes | Planned |
+| API key login | Yes | Yes | Yes | Planned |
 
 ## Recommended Deployment Configurations
 
@@ -136,6 +164,15 @@ Can run control plane + gateway on same machine
 OS: Linux, macOS (Windows coming soon)
 Dependencies: OpenVPN client
 No special permissions needed (except for VPN connection)
+```
+
+### Android Devices
+
+```
+OS: Android 8.0+ (API 26)
+App: GateKey Android Client (APK or Play Store)
+No external dependencies (OpenVPN3 embedded)
+VPN permission required on first connection
 ```
 
 ## Linux Distribution Support
