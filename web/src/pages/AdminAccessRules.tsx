@@ -100,8 +100,8 @@ export default function AdminAccessRules() {
       <div className="card">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Access Rules</h1>
-            <p className="text-gray-500 mt-1">
+            <h1 className="text-2xl font-bold text-theme-primary">Access Rules</h1>
+            <p className="text-theme-tertiary mt-1">
               Define IP addresses, CIDR ranges, and hostnames that users/groups can access.
             </p>
           </div>
@@ -119,7 +119,7 @@ export default function AdminAccessRules() {
 
       {/* Error message */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-theme rounded-lg text-red-700 dark:text-red-400">
           {error}
         </div>
       )}
@@ -131,74 +131,74 @@ export default function AdminAccessRules() {
         </div>
       ) : rules.length > 0 ? (
         <div className="card p-0">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-theme">
+            <thead className="bg-theme-tertiary">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                   Rule
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                   Type
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                   Network
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                   Value
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                   Port/Protocol
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-theme-card divide-y divide-theme">
               {rules.map((rule) => (
                 <tr key={rule.id}>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{rule.name}</div>
+                        <div className="text-sm font-medium text-theme-primary">{rule.name}</div>
                         {rule.description && (
-                          <div className="text-sm text-gray-500">{rule.description}</div>
+                          <div className="text-sm text-theme-tertiary">{rule.description}</div>
                         )}
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full bg-blue-100 text-blue-800">
+                    <span className="px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full bg-blue-600 text-white">
                       {RULE_TYPE_LABELS[rule.ruleType]}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {rule.networkId ? (
-                      <span className="text-sm text-gray-900">
+                      <span className="text-sm text-theme-primary">
                         {networks.find(n => n.id === rule.networkId)?.name || 'Unknown'}
                       </span>
                     ) : (
-                      <span className="px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full bg-yellow-100 text-yellow-800">
+                      <span className="px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full bg-yellow-500 text-white">
                         Unassigned
                       </span>
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <code className="px-2 py-1 bg-gray-100 rounded text-sm font-mono">
+                    <code className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded text-sm font-mono">
                       {rule.value}
                     </code>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-tertiary">
                     {rule.portRange || '*'} / {rule.protocol?.toUpperCase() || '*'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                       rule.isActive
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-800'
+                        ? 'bg-green-600 text-white'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
                     }`}>
                       {rule.isActive ? 'Active' : 'Inactive'}
                     </span>
@@ -219,11 +219,11 @@ export default function AdminAccessRules() {
         </div>
       ) : (
         <div className="card text-center py-12">
-          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="mx-auto h-12 w-12 text-theme-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
           </svg>
-          <h3 className="mt-4 text-lg font-medium text-gray-900">No access rules defined</h3>
-          <p className="mt-2 text-gray-500">
+          <h3 className="mt-4 text-lg font-medium text-theme-primary">No access rules defined</h3>
+          <p className="mt-2 text-theme-tertiary">
             Get started by adding an IP, CIDR, or hostname whitelist rule.
           </p>
           <button
@@ -331,20 +331,20 @@ function RuleModal({ rule, onClose, onSuccess }: RuleModalProps) {
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">
+      <div className="bg-theme-card rounded-lg shadow-xl max-w-lg w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
+        <h2 className="text-xl font-semibold text-theme-primary mb-4">
           {rule ? 'Edit Access Rule' : 'Add New Access Rule'}
         </h2>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-theme rounded text-red-700 dark:text-red-400 text-sm">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-theme-secondary mb-1">
               Rule Name *
             </label>
             <input
@@ -352,13 +352,13 @@ function RuleModal({ rule, onClose, onSuccess }: RuleModalProps) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="internal-api-access"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-theme-secondary mb-1">
               Rule Type *
             </label>
             <select
@@ -367,7 +367,7 @@ function RuleModal({ rule, onClose, onSuccess }: RuleModalProps) {
                 setRuleType(e.target.value as AccessRuleType)
                 setValue('')
               }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             >
               <option value="ip">IP Address</option>
               <option value="cidr">CIDR Range</option>
@@ -377,7 +377,7 @@ function RuleModal({ rule, onClose, onSuccess }: RuleModalProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-theme-secondary mb-1">
               Value *
             </label>
             <input
@@ -385,17 +385,17 @@ function RuleModal({ rule, onClose, onSuccess }: RuleModalProps) {
               value={value}
               onChange={(e) => setValue(e.target.value)}
               placeholder={RULE_TYPE_EXAMPLES[ruleType]}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono"
+              className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono"
               required
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-theme-tertiary mt-1">
               Example: {RULE_TYPE_EXAMPLES[ruleType]}
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-theme-secondary mb-1">
                 Port Range
               </label>
               <input
@@ -403,19 +403,19 @@ function RuleModal({ rule, onClose, onSuccess }: RuleModalProps) {
                 value={portRange}
                 onChange={(e) => setPortRange(e.target.value)}
                 placeholder="443 or 8000-9000"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
-              <p className="text-xs text-gray-500 mt-1">Leave empty for all ports</p>
+              <p className="text-xs text-theme-tertiary mt-1">Leave empty for all ports</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-theme-secondary mb-1">
                 Protocol
               </label>
               <select
                 value={protocol}
                 onChange={(e) => setProtocol(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="">All Protocols</option>
                 <option value="tcp">TCP</option>
@@ -426,13 +426,13 @@ function RuleModal({ rule, onClose, onSuccess }: RuleModalProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-theme-secondary mb-1">
               Network <span className="text-red-500">*</span>
             </label>
             <select
               value={networkId}
               onChange={(e) => setNetworkId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             >
               <option value="">-- Select Network --</option>
               {networks.map((n) => (
@@ -441,13 +441,13 @@ function RuleModal({ rule, onClose, onSuccess }: RuleModalProps) {
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-theme-tertiary">
               Required for VPN access. Rules without a network won't apply to gateway or mesh connections.
             </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-theme-secondary mb-1">
               Description
             </label>
             <textarea
@@ -455,7 +455,7 @@ function RuleModal({ rule, onClose, onSuccess }: RuleModalProps) {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Allow access to internal API server"
               rows={2}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             />
           </div>
 
@@ -465,9 +465,9 @@ function RuleModal({ rule, onClose, onSuccess }: RuleModalProps) {
               id="isActive"
               checked={isActive}
               onChange={(e) => setIsActive(e.target.checked)}
-              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-theme rounded"
             />
-            <label htmlFor="isActive" className="ml-2 text-sm text-gray-700">
+            <label htmlFor="isActive" className="ml-2 text-sm text-theme-secondary">
               Active
             </label>
           </div>
@@ -586,16 +586,16 @@ function AssignmentModal({ rule, onClose, onUpdate }: AssignmentModalProps) {
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">
+      <div className="bg-theme-card rounded-lg shadow-xl max-w-2xl w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
+        <h2 className="text-xl font-semibold text-theme-primary mb-2">
           Assign Access Rule
         </h2>
-        <p className="text-sm text-gray-500 mb-4">
-          Rule: <span className="font-medium">{rule.name}</span> ({RULE_TYPE_LABELS[rule.ruleType]}: <code className="bg-gray-100 px-1 rounded">{rule.value}</code>)
+        <p className="text-sm text-theme-tertiary mb-4">
+          Rule: <span className="font-medium">{rule.name}</span> ({RULE_TYPE_LABELS[rule.ruleType]}: <code className="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-1 rounded">{rule.value}</code>)
         </p>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-theme rounded text-red-700 dark:text-red-400 text-sm">
             {error}
           </div>
         )}
@@ -608,10 +608,10 @@ function AssignmentModal({ rule, onClose, onUpdate }: AssignmentModalProps) {
           <div className="space-y-6">
             {/* Users section */}
             <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Assigned Users</h3>
+              <h3 className="text-sm font-medium text-theme-secondary mb-2">Assigned Users</h3>
 
               {/* Add user controls */}
-              <div className="mb-3 p-3 bg-gray-50 rounded-lg space-y-2">
+              <div className="mb-3 p-3 bg-theme-tertiary rounded-lg space-y-2">
                 {availableUsers.length > 0 && (
                   <div className="flex space-x-2">
                     <select
@@ -620,7 +620,7 @@ function AssignmentModal({ rule, onClose, onUpdate }: AssignmentModalProps) {
                         setSelectedUserId(e.target.value)
                         setCustomUserId('')
                       }}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                      className="flex-1 px-3 py-2 border border-theme rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
                     >
                       <option value="">Select a user...</option>
                       {availableUsers.map((u) => (
@@ -647,7 +647,7 @@ function AssignmentModal({ rule, onClose, onUpdate }: AssignmentModalProps) {
                       setSelectedUserId('')
                     }}
                     placeholder="Or enter user ID/email manually..."
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                    className="flex-1 px-3 py-2 border border-theme rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
                   />
                   <button
                     onClick={handleAddUser}
@@ -661,7 +661,7 @@ function AssignmentModal({ rule, onClose, onUpdate }: AssignmentModalProps) {
 
               {/* Assigned users list */}
               {rule.users && rule.users.length > 0 ? (
-                <div className="border border-gray-200 rounded-lg divide-y divide-gray-200">
+                <div className="border border-theme rounded-lg divide-y divide-theme">
                   {rule.users.map((userId) => {
                     const userInfo = getUserDisplay(userId)
                     return (
@@ -673,13 +673,13 @@ function AssignmentModal({ rule, onClose, onUpdate }: AssignmentModalProps) {
                             </span>
                           </div>
                           <div className="ml-3">
-                            <p className="text-sm font-medium text-gray-900">{userInfo.name}</p>
+                            <p className="text-sm font-medium text-theme-primary">{userInfo.name}</p>
                             {userInfo.email && userInfo.email !== userInfo.name && (
-                              <p className="text-xs text-gray-500">{userInfo.email}</p>
+                              <p className="text-xs text-theme-tertiary">{userInfo.email}</p>
                             )}
                           </div>
                           {userInfo.provider && (
-                            <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded">
+                            <span className="ml-2 px-2 py-0.5 text-xs bg-blue-600 text-white rounded">
                               {userInfo.provider}
                             </span>
                           )}
@@ -698,16 +698,16 @@ function AssignmentModal({ rule, onClose, onUpdate }: AssignmentModalProps) {
                   })}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500 italic">No users assigned</p>
+                <p className="text-sm text-theme-tertiary italic">No users assigned</p>
               )}
             </div>
 
             {/* Groups section */}
             <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Assigned Groups</h3>
+              <h3 className="text-sm font-medium text-theme-secondary mb-2">Assigned Groups</h3>
 
               {/* Add group controls */}
-              <div className="mb-3 p-3 bg-gray-50 rounded-lg space-y-2">
+              <div className="mb-3 p-3 bg-theme-tertiary rounded-lg space-y-2">
                 {availableGroups.length > 0 && (
                   <div className="flex space-x-2">
                     <select
@@ -716,7 +716,7 @@ function AssignmentModal({ rule, onClose, onUpdate }: AssignmentModalProps) {
                         setSelectedGroupName(e.target.value)
                         setCustomGroupName('')
                       }}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                      className="flex-1 px-3 py-2 border border-theme rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
                     >
                       <option value="">Select a group...</option>
                       {availableGroups.map((g) => (
@@ -743,7 +743,7 @@ function AssignmentModal({ rule, onClose, onUpdate }: AssignmentModalProps) {
                       setSelectedGroupName('')
                     }}
                     placeholder="Or enter group name manually..."
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                    className="flex-1 px-3 py-2 border border-theme rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
                   />
                   <button
                     onClick={handleAddGroup}
@@ -757,7 +757,7 @@ function AssignmentModal({ rule, onClose, onUpdate }: AssignmentModalProps) {
 
               {/* Assigned groups list */}
               {rule.groups && rule.groups.length > 0 ? (
-                <div className="border border-gray-200 rounded-lg divide-y divide-gray-200">
+                <div className="border border-theme rounded-lg divide-y divide-theme">
                   {rule.groups.map((groupName) => {
                     const group = groups.find((g) => g.name === groupName)
                     return (
@@ -769,9 +769,9 @@ function AssignmentModal({ rule, onClose, onUpdate }: AssignmentModalProps) {
                             </svg>
                           </div>
                           <div className="ml-3">
-                            <p className="text-sm font-medium text-gray-900">{groupName}</p>
+                            <p className="text-sm font-medium text-theme-primary">{groupName}</p>
                             {group && (
-                              <p className="text-xs text-gray-500">{group.memberCount} members</p>
+                              <p className="text-xs text-theme-tertiary">{group.memberCount} members</p>
                             )}
                           </div>
                         </div>
@@ -789,7 +789,7 @@ function AssignmentModal({ rule, onClose, onUpdate }: AssignmentModalProps) {
                   })}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500 italic">No groups assigned</p>
+                <p className="text-sm text-theme-tertiary italic">No groups assigned</p>
               )}
             </div>
           </div>

@@ -99,15 +99,15 @@ export default function AdminRemoteSessions() {
     <div className="space-y-6">
       {/* Header */}
       <div className="card">
-        <h1 className="text-2xl font-bold text-gray-900">Remote Sessions</h1>
-        <p className="text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-theme-primary">Remote Sessions</h1>
+        <p className="text-theme-tertiary mt-1">
           Connect to and run commands on remote hubs, gateways, and spokes.
         </p>
       </div>
 
       {/* Error Message */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
           {error}
         </div>
       )}
@@ -130,7 +130,7 @@ export default function AdminRemoteSessions() {
                     className={`flex items-center gap-2 px-4 py-2 cursor-pointer border-r border-gray-700 min-w-0 ${
                       activeTabId === tab.agent.id
                         ? 'bg-gray-900 text-white'
-                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
+                        : 'bg-gray-800 text-theme-muted hover:bg-gray-700 hover:text-gray-200'
                     }`}
                     onClick={() => setActiveTabId(tab.agent.id)}
                   >
@@ -142,7 +142,7 @@ export default function AdminRemoteSessions() {
                     <span className="truncate text-sm font-medium">
                       {tab.agent.nodeType}: {tab.agent.nodeName}
                     </span>
-                    <span className="text-xs text-gray-500 whitespace-nowrap">
+                    <span className="text-xs text-theme-tertiary whitespace-nowrap">
                       ({getTimeRemaining(tab.openedAt)})
                     </span>
                     <button
@@ -179,7 +179,7 @@ export default function AdminRemoteSessions() {
           {/* Connected Agents List */}
           <div className="card">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Connected Agents</h3>
+              <h3 className="text-lg font-medium text-theme-primary">Connected Agents</h3>
               <button
                 onClick={loadData}
                 className="text-sm text-primary-600 hover:text-primary-800"
@@ -188,46 +188,46 @@ export default function AdminRemoteSessions() {
               </button>
             </div>
 
-            <p className="text-sm text-gray-600 mb-4">
+            <p className="text-sm text-theme-tertiary mb-4">
               Remote sessions allow you to run shell commands on connected hubs, gateways, and spokes.
               Agents connect outbound to the control plane, so no inbound firewall rules are needed.
             </p>
 
             {remoteAgents.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <CommandLineIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              <div className="text-center py-8 text-theme-tertiary">
+                <CommandLineIcon className="w-12 h-12 mx-auto mb-4 text-theme-muted" />
                 <p className="font-medium">No agents connected</p>
                 <p className="text-sm mt-1">
-                  Enable remote sessions on your hubs, gateways, or spokes by setting <code className="bg-gray-100 px-1 rounded">session_enabled: true</code> in their config.
+                  Enable remote sessions on your hubs, gateways, or spokes by setting <code className="bg-gray-300 dark:bg-gray-600 px-1 rounded text-gray-900 dark:text-gray-100">session_enabled: true</code> in their config.
                 </p>
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-theme">
+                  <thead className="bg-theme-tertiary">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Connected</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Type</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Connected</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-theme-card divide-y divide-theme">
                     {remoteAgents.map((agent) => (
-                      <tr key={agent.id} className="hover:bg-gray-50">
+                      <tr key={agent.id} className="hover:bg-theme-tertiary">
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                            agent.nodeType === 'hub' ? 'bg-blue-100 text-blue-800' :
-                            agent.nodeType === 'gateway' ? 'bg-green-100 text-green-800' :
-                            'bg-purple-100 text-purple-800'
+                            agent.nodeType === 'hub' ? 'bg-blue-600 text-white' :
+                            agent.nodeType === 'gateway' ? 'bg-green-600 text-white' :
+                            'bg-purple-600 text-white'
                           }`}>
                             {agent.nodeType}
                           </span>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-theme-primary">
                           {agent.nodeName}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-theme-tertiary">
                           {formatDate(agent.connectedAt)}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
@@ -252,28 +252,28 @@ export default function AdminRemoteSessions() {
           </div>
 
           {/* CLI Instructions */}
-          <div className="card bg-blue-50 border border-blue-200">
-            <h3 className="text-lg font-medium text-blue-900 mb-2">CLI Access</h3>
-            <div className="text-sm text-blue-800 space-y-2">
+          <div className="instruction-box">
+            <h3 className="instruction-box-title">CLI Access</h3>
+            <div className="instruction-box-text space-y-2">
               <p>You can also use remote sessions from the command line:</p>
-              <div className="bg-blue-100 p-3 rounded font-mono text-xs space-y-1">
-                <div># List connected agents</div>
-                <div className="text-blue-700">gatekey-admin session list</div>
-                <div className="mt-2"># Execute a single command</div>
-                <div className="text-blue-700">gatekey-admin session exec &lt;agent-id&gt; "ip addr"</div>
-                <div className="mt-2"># Start interactive session</div>
-                <div className="text-blue-700">gatekey-admin session connect &lt;agent-id&gt;</div>
+              <div className="bg-gray-900 p-3 rounded font-mono text-xs space-y-1 text-gray-300">
+                <div className="text-gray-500"># List connected agents</div>
+                <div className="text-gray-100">gatekey-admin session list</div>
+                <div className="mt-2 text-gray-500"># Execute a single command</div>
+                <div className="text-gray-100">gatekey-admin session exec &lt;agent-id&gt; "ip addr"</div>
+                <div className="mt-2 text-gray-500"># Start interactive session</div>
+                <div className="text-gray-100">gatekey-admin session connect &lt;agent-id&gt;</div>
               </div>
             </div>
           </div>
 
           {/* Setup Instructions */}
-          <div className="card bg-gray-50">
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Setup Instructions</h3>
-            <div className="text-sm text-gray-600 space-y-2">
+          <div className="instruction-box">
+            <h3 className="instruction-box-title">Setup Instructions</h3>
+            <div className="instruction-box-text space-y-2">
               <p>To enable remote sessions on an agent:</p>
               <ol className="list-decimal list-inside space-y-1 ml-2">
-                <li>Add <code className="bg-white px-1 rounded">session_enabled: true</code> to the agent's config file</li>
+                <li>Add <code className="bg-gray-300 dark:bg-gray-600 px-1 rounded text-gray-900 dark:text-gray-100">session_enabled: true</code> to the agent's config file</li>
                 <li>Ensure the agent can reach the control plane URL</li>
                 <li>Restart the agent service</li>
               </ol>

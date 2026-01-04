@@ -63,8 +63,8 @@ export default function AdminProxyApps() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Web Access Applications</h1>
-          <p className="text-gray-500 mt-1">Manage clientless web applications accessible via reverse proxy</p>
+          <h1 className="text-2xl font-bold text-theme-primary">Web Access Applications</h1>
+          <p className="text-theme-tertiary mt-1">Manage clientless web applications accessible via reverse proxy</p>
         </div>
         <button onClick={() => setShowAddModal(true)} className="btn btn-primary inline-flex items-center">
           <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -75,7 +75,7 @@ export default function AdminProxyApps() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-theme text-red-700 dark:text-red-400 px-4 py-3 rounded">
           {error}
         </div>
       )}
@@ -86,11 +86,11 @@ export default function AdminProxyApps() {
         </div>
       ) : apps.length === 0 ? (
         <div className="card text-center py-12">
-          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="mx-auto h-12 w-12 text-theme-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
           </svg>
-          <h3 className="mt-4 text-lg font-medium text-gray-900">No applications</h3>
-          <p className="mt-2 text-gray-500">Add a web application to enable clientless browser access</p>
+          <h3 className="mt-4 text-lg font-medium text-theme-primary">No applications</h3>
+          <p className="mt-2 text-theme-tertiary">Add a web application to enable clientless browser access</p>
           <button onClick={() => setShowAddModal(true)} className="mt-4 btn btn-primary inline-flex items-center">
             <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -100,27 +100,27 @@ export default function AdminProxyApps() {
         </div>
       ) : (
         <div className="card p-0">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-theme">
+            <thead className="bg-theme-tertiary">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                   Name
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                   Slug / URL
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                   Internal URL
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-theme-card divide-y divide-theme">
               {apps.map((app) => (
                 <tr key={app.id}>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -135,17 +135,17 @@ export default function AdminProxyApps() {
                         </div>
                       )}
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{app.name}</div>
-                        <div className="text-sm text-gray-500">{app.description || 'No description'}</div>
+                        <div className="text-sm font-medium text-theme-primary">{app.name}</div>
+                        <div className="text-sm text-theme-tertiary">{app.description || 'No description'}</div>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-2">
-                      <code className="text-sm bg-gray-100 px-2 py-1 rounded">/proxy/{app.slug}/</code>
+                      <code className="text-sm bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-200 px-2 py-1 rounded">/proxy/{app.slug}/</code>
                       <button
                         onClick={() => copyProxyUrl(app.slug)}
-                        className="text-gray-400 hover:text-gray-600"
+                        className="text-theme-muted hover:text-theme-secondary"
                         title="Copy URL"
                       >
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -155,11 +155,11 @@ export default function AdminProxyApps() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-900 font-mono">{app.internalUrl}</span>
+                    <span className="text-sm text-theme-primary font-mono">{app.internalUrl}</span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 py-1 inline-flex text-xs font-semibold rounded-full ${
-                      app.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                      app.isActive ? 'bg-green-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
                     }`}>
                       {app.isActive ? 'Active' : 'Disabled'}
                     </span>
@@ -273,21 +273,21 @@ function AddEditModal({ app, onClose, onSuccess }: AddEditModalProps) {
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-card rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <h2 className="text-xl font-semibold mb-4">
             {app ? 'Edit Application' : 'Add Application'}
           </h2>
 
           {error && (
-            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+            <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-theme text-red-700 dark:text-red-400 px-4 py-3 rounded">
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Name *</label>
+              <label className="block text-sm font-medium text-theme-secondary">Name *</label>
               <input
                 type="text"
                 value={name}
@@ -301,25 +301,25 @@ function AddEditModal({ app, onClose, onSuccess }: AddEditModalProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Slug *</label>
+              <label className="block text-sm font-medium text-theme-secondary">Slug *</label>
               <div className="mt-1 flex rounded-md shadow-sm">
-                <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
+                <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-theme bg-theme-tertiary text-theme-tertiary text-sm">
                   /proxy/
                 </span>
                 <input
                   type="text"
                   value={slug}
                   onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                  className="flex-1 min-w-0 block w-full px-3 py-2 rounded-none rounded-r-md border border-gray-300 focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
+                  className="flex-1 min-w-0 block w-full px-3 py-2 rounded-none rounded-r-md border border-theme focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
                   required
                   pattern="[a-z0-9][a-z0-9-]*[a-z0-9]|[a-z0-9]"
                 />
               </div>
-              <p className="mt-1 text-xs text-gray-500">Lowercase letters, numbers, and dashes only</p>
+              <p className="mt-1 text-xs text-theme-tertiary">Lowercase letters, numbers, and dashes only</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Description</label>
+              <label className="block text-sm font-medium text-theme-secondary">Description</label>
               <input
                 type="text"
                 value={description}
@@ -330,7 +330,7 @@ function AddEditModal({ app, onClose, onSuccess }: AddEditModalProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Internal URL *</label>
+              <label className="block text-sm font-medium text-theme-secondary">Internal URL *</label>
               <input
                 type="url"
                 value={internalUrl}
@@ -339,11 +339,11 @@ function AddEditModal({ app, onClose, onSuccess }: AddEditModalProps) {
                 placeholder="http://internal-app.local:8080"
                 required
               />
-              <p className="mt-1 text-xs text-gray-500">The internal URL of the application to proxy to</p>
+              <p className="mt-1 text-xs text-theme-tertiary">The internal URL of the application to proxy to</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Icon URL</label>
+              <label className="block text-sm font-medium text-theme-secondary">Icon URL</label>
               <input
                 type="url"
                 value={iconUrl}
@@ -359,9 +359,9 @@ function AddEditModal({ app, onClose, onSuccess }: AddEditModalProps) {
                 id="isActive"
                 checked={isActive}
                 onChange={(e) => setIsActive(e.target.checked)}
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-theme rounded"
               />
-              <label htmlFor="isActive" className="ml-2 text-sm text-gray-700">
+              <label htmlFor="isActive" className="ml-2 text-sm text-theme-secondary">
                 Application is active
               </label>
             </div>
@@ -382,9 +382,9 @@ function AddEditModal({ app, onClose, onSuccess }: AddEditModalProps) {
                     id="preserveHostHeader"
                     checked={preserveHostHeader}
                     onChange={(e) => setPreserveHostHeader(e.target.checked)}
-                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-theme rounded"
                   />
-                  <label htmlFor="preserveHostHeader" className="ml-2 text-sm text-gray-700">
+                  <label htmlFor="preserveHostHeader" className="ml-2 text-sm text-theme-secondary">
                     Preserve original Host header
                   </label>
                 </div>
@@ -395,9 +395,9 @@ function AddEditModal({ app, onClose, onSuccess }: AddEditModalProps) {
                     id="stripPrefix"
                     checked={stripPrefix}
                     onChange={(e) => setStripPrefix(e.target.checked)}
-                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-theme rounded"
                   />
-                  <label htmlFor="stripPrefix" className="ml-2 text-sm text-gray-700">
+                  <label htmlFor="stripPrefix" className="ml-2 text-sm text-theme-secondary">
                     Strip /proxy/slug prefix from requests
                   </label>
                 </div>
@@ -408,15 +408,15 @@ function AddEditModal({ app, onClose, onSuccess }: AddEditModalProps) {
                     id="websocketEnabled"
                     checked={websocketEnabled}
                     onChange={(e) => setWebsocketEnabled(e.target.checked)}
-                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-theme rounded"
                   />
-                  <label htmlFor="websocketEnabled" className="ml-2 text-sm text-gray-700">
+                  <label htmlFor="websocketEnabled" className="ml-2 text-sm text-theme-secondary">
                     Enable WebSocket support
                   </label>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Timeout (seconds)</label>
+                  <label className="block text-sm font-medium text-theme-secondary">Timeout (seconds)</label>
                   <input
                     type="number"
                     value={timeoutSeconds}
@@ -450,7 +450,6 @@ interface AssignAccessModalProps {
 }
 
 function AssignAccessModal({ app, onClose }: AssignAccessModalProps) {
-  const [activeTab, setActiveTab] = useState<'users' | 'groups'>('users')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -461,6 +460,12 @@ function AssignAccessModal({ app, onClose }: AssignAccessModalProps) {
   // Available items
   const [allUsers, setAllUsers] = useState<SSOUser[]>([])
   const [allGroups, setAllGroups] = useState<Group[]>([])
+
+  // Selection and manual input fields
+  const [selectedUserId, setSelectedUserId] = useState('')
+  const [customUserId, setCustomUserId] = useState('')
+  const [selectedGroupName, setSelectedGroupName] = useState('')
+  const [customGroupName, setCustomGroupName] = useState('')
 
   useEffect(() => {
     loadData()
@@ -487,10 +492,17 @@ function AssignAccessModal({ app, onClose }: AssignAccessModalProps) {
     }
   }
 
-  async function handleAssignUser(userId: string) {
+  async function handleAddUser() {
+    const userId = selectedUserId || customUserId.trim()
+    if (!userId) return
     try {
-      await assignProxyAppToUser(app.id, userId)
-      setAssignedUserIds([...assignedUserIds, userId])
+      // Find user by email or id to get the actual user id
+      const user = allUsers.find(u => u.email === userId || u.id === userId)
+      const idToUse = user ? user.id : userId
+      await assignProxyAppToUser(app.id, idToUse)
+      setAssignedUserIds([...assignedUserIds, idToUse])
+      setSelectedUserId('')
+      setCustomUserId('')
     } catch {
       setError('Failed to assign user')
     }
@@ -505,10 +517,14 @@ function AssignAccessModal({ app, onClose }: AssignAccessModalProps) {
     }
   }
 
-  async function handleAssignGroup(groupName: string) {
+  async function handleAddGroup() {
+    const groupName = selectedGroupName || customGroupName.trim()
+    if (!groupName) return
     try {
       await assignProxyAppToGroup(app.id, groupName)
       setAssignedGroups([...assignedGroups, groupName])
+      setSelectedGroupName('')
+      setCustomGroupName('')
     } catch {
       setError('Failed to assign group')
     }
@@ -523,162 +539,252 @@ function AssignAccessModal({ app, onClose }: AssignAccessModalProps) {
     }
   }
 
-  const unassignedUsers = allUsers.filter(u => !assignedUserIds.includes(u.id))
-  const unassignedGroups = allGroups.filter(g => !assignedGroups.includes(g.name))
+  // Filter out already assigned users
+  const availableUsers = allUsers.filter(
+    u => !assignedUserIds.includes(u.id) && !assignedUserIds.includes(u.email)
+  )
+
+  // Filter out already assigned groups
+  const availableGroups = allGroups.filter(
+    g => !assignedGroups.includes(g.name)
+  )
+
+  // Find user details by ID for display
+  function getUserDisplay(userId: string) {
+    const user = allUsers.find(u => u.id === userId || u.email === userId)
+    if (user) {
+      return { name: user.name || user.email, email: user.email, provider: user.provider }
+    }
+    return { name: userId, email: '', provider: '' }
+  }
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold">Access Control: {app.name}</h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+      <div className="bg-theme-card rounded-lg shadow-xl max-w-2xl w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
+        <h2 className="text-xl font-semibold text-theme-primary mb-2">
+          Access Control: {app.name}
+        </h2>
+        <p className="text-sm text-theme-tertiary mb-4">
+          Users can access this application if they are directly assigned or belong to an assigned group.
+        </p>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-theme rounded text-red-700 dark:text-red-400 text-sm">
+            {error}
           </div>
+        )}
 
-          <p className="text-sm text-gray-500 mb-4">
-            Users can access this application if they are directly assigned or belong to an assigned group.
-          </p>
-
-          {error && (
-            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-              {error}
-            </div>
-          )}
-
-          {/* Tabs */}
-          <div className="border-b border-gray-200 mb-4">
-            <nav className="-mb-px flex space-x-8">
-              {[
-                { id: 'users', label: 'Users', count: assignedUserIds.length },
-                { id: 'groups', label: 'Groups', count: assignedGroups.length },
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as 'users' | 'groups')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === tab.id
-                      ? 'border-primary-500 text-primary-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  {tab.label}
-                  <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
-                    activeTab === tab.id ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {tab.count}
-                  </span>
-                </button>
-              ))}
-            </nav>
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
           </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Users section */}
+            <div>
+              <h3 className="text-sm font-medium text-theme-secondary mb-2">Assigned Users</h3>
 
-          {loading ? (
-            <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-            </div>
-          ) : (
-            <>
-              {activeTab === 'users' && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Add User</label>
+              {/* Add user controls */}
+              <div className="mb-3 p-3 bg-theme-tertiary rounded-lg space-y-2">
+                {availableUsers.length > 0 && (
+                  <div className="flex space-x-2">
                     <select
-                      className="input"
-                      value=""
-                      onChange={(e) => e.target.value && handleAssignUser(e.target.value)}
+                      value={selectedUserId}
+                      onChange={(e) => {
+                        setSelectedUserId(e.target.value)
+                        setCustomUserId('')
+                      }}
+                      className="flex-1 px-3 py-2 border border-theme rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                     >
-                      <option value="">Select a user to add...</option>
-                      {unassignedUsers.map(u => (
-                        <option key={u.id} value={u.id}>{u.email} ({u.name})</option>
+                      <option value="">Select a user...</option>
+                      {availableUsers.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name || u.email} ({u.email})
+                        </option>
                       ))}
                     </select>
-                  </div>
-
-                  {assignedUserIds.length > 0 ? (
-                    <div className="border rounded-lg divide-y">
-                      {assignedUserIds.map(userId => {
-                        const user = allUsers.find(u => u.id === userId)
-                        return (
-                          <div key={userId} className="flex items-center justify-between px-4 py-3">
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">{user?.email || userId}</div>
-                              <div className="text-sm text-gray-500">{user?.name}</div>
-                            </div>
-                            <button
-                              onClick={() => handleRemoveUser(userId)}
-                              className="inline-flex items-center px-3 py-1.5 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                            >
-                              <svg className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                              Remove
-                            </button>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500 text-center py-4">No users directly assigned</p>
-                  )}
-                </div>
-              )}
-
-              {activeTab === 'groups' && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Add Group</label>
-                    <select
-                      className="input"
-                      value=""
-                      onChange={(e) => e.target.value && handleAssignGroup(e.target.value)}
+                    <button
+                      onClick={handleAddUser}
+                      disabled={!selectedUserId}
+                      className="btn btn-primary text-sm"
                     >
-                      <option value="">Select a group to add...</option>
-                      {unassignedGroups.map(g => (
-                        <option key={g.name} value={g.name}>{g.name} ({g.memberCount} members)</option>
+                      Add
+                    </button>
+                  </div>
+                )}
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={customUserId}
+                    onChange={(e) => {
+                      setCustomUserId(e.target.value)
+                      setSelectedUserId('')
+                    }}
+                    placeholder="Or enter user ID/email manually..."
+                    className="flex-1 px-3 py-2 border border-theme rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && customUserId.trim()) {
+                        e.preventDefault()
+                        handleAddUser()
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={handleAddUser}
+                    disabled={!customUserId.trim()}
+                    className="btn btn-secondary text-sm"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Assigned users list */}
+              {assignedUserIds.length > 0 ? (
+                <div className="border border-theme rounded-lg divide-y divide-theme">
+                  {assignedUserIds.map((userId) => {
+                    const userInfo = getUserDisplay(userId)
+                    return (
+                      <div key={userId} className="flex items-center justify-between p-3">
+                        <div className="flex items-center">
+                          <div className="h-8 w-8 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
+                            <span className="text-primary-700 dark:text-primary-300 font-medium text-xs">
+                              {userInfo.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="ml-3">
+                            <p className="text-sm font-medium text-theme-primary">{userInfo.name}</p>
+                            {userInfo.email && userInfo.email !== userInfo.name && (
+                              <p className="text-xs text-theme-tertiary">{userInfo.email}</p>
+                            )}
+                          </div>
+                          {userInfo.provider && (
+                            <span className="ml-2 px-2 py-0.5 text-xs bg-blue-600 text-white rounded">
+                              {userInfo.provider}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleRemoveUser(userId)}
+                          className="p-1.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 hover:text-red-800 dark:hover:text-red-300 transition-colors"
+                          title="Remove user"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-theme-tertiary italic">No users assigned</p>
+              )}
+            </div>
+
+            {/* Groups section */}
+            <div>
+              <h3 className="text-sm font-medium text-theme-secondary mb-2">Assigned Groups</h3>
+
+              {/* Add group controls */}
+              <div className="mb-3 p-3 bg-theme-tertiary rounded-lg space-y-2">
+                {availableGroups.length > 0 && (
+                  <div className="flex space-x-2">
+                    <select
+                      value={selectedGroupName}
+                      onChange={(e) => {
+                        setSelectedGroupName(e.target.value)
+                        setCustomGroupName('')
+                      }}
+                      className="flex-1 px-3 py-2 border border-theme rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                    >
+                      <option value="">Select a group...</option>
+                      {availableGroups.map((g) => (
+                        <option key={g.name} value={g.name}>
+                          {g.name} ({g.memberCount} members)
+                        </option>
                       ))}
                     </select>
+                    <button
+                      onClick={handleAddGroup}
+                      disabled={!selectedGroupName}
+                      className="btn btn-primary text-sm"
+                    >
+                      Add
+                    </button>
                   </div>
-
-                  {assignedGroups.length > 0 ? (
-                    <div className="border rounded-lg divide-y">
-                      {assignedGroups.map(groupName => {
-                        const group = allGroups.find(g => g.name === groupName)
-                        return (
-                          <div key={groupName} className="flex items-center justify-between px-4 py-3">
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">{groupName}</div>
-                              <div className="text-sm text-gray-500">{group?.memberCount || 0} members</div>
-                            </div>
-                            <button
-                              onClick={() => handleRemoveGroup(groupName)}
-                              className="inline-flex items-center px-3 py-1.5 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                            >
-                              <svg className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                              Remove
-                            </button>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500 text-center py-4">No groups assigned</p>
-                  )}
+                )}
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={customGroupName}
+                    onChange={(e) => {
+                      setCustomGroupName(e.target.value)
+                      setSelectedGroupName('')
+                    }}
+                    placeholder="Or enter group name manually..."
+                    className="flex-1 px-3 py-2 border border-theme rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && customGroupName.trim()) {
+                        e.preventDefault()
+                        handleAddGroup()
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={handleAddGroup}
+                    disabled={!customGroupName.trim()}
+                    className="btn btn-secondary text-sm"
+                  >
+                    Add
+                  </button>
                 </div>
-              )}
-            </>
-          )}
+              </div>
 
-          <div className="flex justify-end mt-6">
-            <button onClick={onClose} className="btn btn-secondary">
-              Close
-            </button>
+              {/* Assigned groups list */}
+              {assignedGroups.length > 0 ? (
+                <div className="border border-theme rounded-lg divide-y divide-theme">
+                  {assignedGroups.map((groupName) => {
+                    const group = allGroups.find(g => g.name === groupName)
+                    return (
+                      <div key={groupName} className="flex items-center justify-between p-3">
+                        <div className="flex items-center">
+                          <div className="h-8 w-8 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center">
+                            <svg className="h-4 w-4 text-purple-600 dark:text-purple-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                          </div>
+                          <div className="ml-3">
+                            <p className="text-sm font-medium text-theme-primary">{groupName}</p>
+                            {group && (
+                              <p className="text-xs text-theme-tertiary">{group.memberCount} members</p>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveGroup(groupName)}
+                          className="p-1.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 hover:text-red-800 dark:hover:text-red-300 transition-colors"
+                          title="Remove group"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-theme-tertiary italic">No groups assigned</p>
+              )}
+            </div>
           </div>
+        )}
+
+        <div className="mt-6 flex justify-end">
+          <button onClick={onClose} className="btn btn-secondary">
+            Close
+          </button>
         </div>
       </div>
     </div>
