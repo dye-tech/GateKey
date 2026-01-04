@@ -163,6 +163,20 @@ export async function reprovisionGateway(id: string): Promise<{ message: string;
   return response.data
 }
 
+export interface RotateTokenResponse {
+  message: string
+  token: string
+  installScript: string
+  gatewayName?: string
+  hubName?: string
+  spokeName?: string
+}
+
+export async function rotateGatewayToken(id: string): Promise<RotateTokenResponse> {
+  const response = await api.post(`/api/v1/admin/gateways/${id}/rotate-token`)
+  return response.data
+}
+
 export interface UpdateGatewayRequest {
   name: string
   hostname?: string
@@ -528,6 +542,99 @@ export async function getGroupMembers(groupName: string): Promise<GroupMember[]>
 export async function getGroupAccessRules(groupName: string): Promise<AccessRule[]> {
   const response = await api.get(`/api/v1/admin/groups/${encodeURIComponent(groupName)}/access-rules`)
   return response.data.access_rules || []
+}
+
+// Local Group Management API
+export interface LocalGroup {
+  id: string
+  name: string
+  description: string
+  memberCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface LocalGroupMember {
+  userId: string
+  memberType: 'sso' | 'local'
+  email: string
+  name: string
+  createdAt: string
+}
+
+export interface CreateLocalGroupRequest {
+  name: string
+  description?: string
+}
+
+export interface UpdateLocalGroupRequest {
+  name?: string
+  description?: string
+}
+
+export async function getLocalGroups(): Promise<LocalGroup[]> {
+  const response = await api.get('/api/v1/admin/local-groups')
+  return (response.data.groups || []).map((g: Record<string, unknown>) => ({
+    id: g.id,
+    name: g.name,
+    description: g.description || '',
+    memberCount: g.member_count || 0,
+    createdAt: g.created_at,
+    updatedAt: g.updated_at,
+  }))
+}
+
+export async function getLocalGroup(id: string): Promise<LocalGroup> {
+  const response = await api.get(`/api/v1/admin/local-groups/${id}`)
+  const g = response.data
+  return {
+    id: g.id,
+    name: g.name,
+    description: g.description || '',
+    memberCount: g.member_count || 0,
+    createdAt: g.created_at,
+    updatedAt: g.updated_at,
+  }
+}
+
+export async function createLocalGroup(req: CreateLocalGroupRequest): Promise<LocalGroup> {
+  const response = await api.post('/api/v1/admin/local-groups', req)
+  const g = response.data
+  return {
+    id: g.id,
+    name: g.name,
+    description: g.description || '',
+    memberCount: g.member_count || 0,
+    createdAt: g.created_at,
+    updatedAt: g.updated_at,
+  }
+}
+
+export async function updateLocalGroup(id: string, req: UpdateLocalGroupRequest): Promise<void> {
+  await api.put(`/api/v1/admin/local-groups/${id}`, req)
+}
+
+export async function deleteLocalGroup(id: string): Promise<void> {
+  await api.delete(`/api/v1/admin/local-groups/${id}`)
+}
+
+export async function getLocalGroupMembers(groupId: string): Promise<LocalGroupMember[]> {
+  const response = await api.get(`/api/v1/admin/local-groups/${groupId}/members`)
+  return (response.data.members || []).map((m: Record<string, unknown>) => ({
+    userId: m.user_id,
+    memberType: m.member_type as 'sso' | 'local',
+    email: m.email || '',
+    name: m.name || '',
+    createdAt: m.created_at,
+  }))
+}
+
+export async function addLocalGroupMember(groupId: string, userId: string, memberType: 'sso' | 'local'): Promise<void> {
+  await api.post(`/api/v1/admin/local-groups/${groupId}/members`, { user_id: userId, member_type: memberType })
+}
+
+export async function removeLocalGroupMember(groupId: string, userId: string, memberType: 'sso' | 'local'): Promise<void> {
+  await api.delete(`/api/v1/admin/local-groups/${groupId}/members/${userId}/${memberType}`)
 }
 
 // CA Management API
@@ -1148,6 +1255,11 @@ export async function deleteMeshHub(id: string): Promise<void> {
   await api.delete(`/api/v1/admin/mesh/hubs/${id}`)
 }
 
+export async function rotateMeshHubToken(id: string): Promise<RotateTokenResponse> {
+  const response = await api.post(`/api/v1/admin/mesh/hubs/${id}/rotate-token`)
+  return response.data
+}
+
 export async function provisionMeshHub(id: string): Promise<{ configVersion: string }> {
   const response = await api.post(`/api/v1/admin/mesh/hubs/${id}/provision`)
   return { configVersion: response.data.configVersion }
@@ -1292,6 +1404,11 @@ export async function updateMeshSpoke(id: string, req: Partial<CreateMeshSpokeRe
 
 export async function deleteMeshSpoke(id: string): Promise<void> {
   await api.delete(`/api/v1/admin/mesh/spokes/${id}`)
+}
+
+export async function rotateMeshSpokeToken(id: string): Promise<RotateTokenResponse> {
+  const response = await api.post(`/api/v1/admin/mesh/spokes/${id}/rotate-token`)
+  return response.data
 }
 
 export async function provisionMeshSpoke(id: string): Promise<{ tunnelIp: string }> {

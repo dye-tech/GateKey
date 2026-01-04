@@ -375,6 +375,96 @@ func (c *Client) GetGroupRules(ctx context.Context, name string) ([]AccessRule, 
 	return result.Rules, err
 }
 
+// === Local Group Operations ===
+
+type LocalGroup struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	MemberCount int    `json:"member_count"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
+type LocalGroupMember struct {
+	UserID     string `json:"user_id"`
+	MemberType string `json:"member_type"` // "sso" or "local"
+	Email      string `json:"email"`
+	Name       string `json:"name"`
+	CreatedAt  string `json:"created_at"`
+}
+
+func (c *Client) ListLocalGroups(ctx context.Context) ([]LocalGroup, error) {
+	var result struct {
+		Groups []LocalGroup `json:"groups"`
+	}
+	err := c.doJSON(ctx, http.MethodGet, "/api/v1/admin/local-groups", nil, &result)
+	return result.Groups, err
+}
+
+func (c *Client) GetLocalGroup(ctx context.Context, id string) (*LocalGroup, error) {
+	var result struct {
+		Group LocalGroup `json:"group"`
+	}
+	err := c.doJSON(ctx, http.MethodGet, "/api/v1/admin/local-groups/"+url.PathEscape(id), nil, &result)
+	if err != nil {
+		return nil, err
+	}
+	return &result.Group, nil
+}
+
+func (c *Client) CreateLocalGroup(ctx context.Context, name, description string) (*LocalGroup, error) {
+	body := map[string]string{
+		"name":        name,
+		"description": description,
+	}
+	var result struct {
+		Group LocalGroup `json:"group"`
+	}
+	err := c.doJSON(ctx, http.MethodPost, "/api/v1/admin/local-groups", body, &result)
+	if err != nil {
+		return nil, err
+	}
+	return &result.Group, nil
+}
+
+func (c *Client) UpdateLocalGroup(ctx context.Context, id, name, description string) error {
+	body := map[string]string{}
+	if name != "" {
+		body["name"] = name
+	}
+	if description != "" {
+		body["description"] = description
+	}
+	return c.doJSON(ctx, http.MethodPut, "/api/v1/admin/local-groups/"+url.PathEscape(id), body, nil)
+}
+
+func (c *Client) DeleteLocalGroup(ctx context.Context, id string) error {
+	return c.doJSON(ctx, http.MethodDelete, "/api/v1/admin/local-groups/"+url.PathEscape(id), nil, nil)
+}
+
+func (c *Client) ListLocalGroupMembers(ctx context.Context, groupID string) ([]LocalGroupMember, error) {
+	var result struct {
+		Members []LocalGroupMember `json:"members"`
+	}
+	err := c.doJSON(ctx, http.MethodGet, "/api/v1/admin/local-groups/"+url.PathEscape(groupID)+"/members", nil, &result)
+	return result.Members, err
+}
+
+func (c *Client) AddLocalGroupMember(ctx context.Context, groupID, userID, memberType string) error {
+	body := map[string]string{
+		"user_id":     userID,
+		"member_type": memberType,
+	}
+	return c.doJSON(ctx, http.MethodPost, "/api/v1/admin/local-groups/"+url.PathEscape(groupID)+"/members", body, nil)
+}
+
+func (c *Client) RemoveLocalGroupMember(ctx context.Context, groupID, userID, memberType string) error {
+	path := fmt.Sprintf("/api/v1/admin/local-groups/%s/members/%s/%s",
+		url.PathEscape(groupID), url.PathEscape(userID), url.PathEscape(memberType))
+	return c.doJSON(ctx, http.MethodDelete, path, nil, nil)
+}
+
 // === API Key Operations ===
 
 type APIKey struct {

@@ -72,6 +72,7 @@ Configuration:
 		newUserCmd(),
 		newLocalUserCmd(),
 		newGroupCmd(),
+		newLocalGroupCmd(),
 		newAPIKeyCmd(),
 		newMeshCmd(),
 		newCACmd(),
@@ -903,6 +904,152 @@ func newGroupCmd() *cobra.Command {
 	}
 
 	cmd.AddCommand(listCmd, membersCmd, rulesCmd)
+	return cmd
+}
+
+// === Local Group Command ===
+
+func newLocalGroupCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "local-group",
+		Aliases: []string{"lg"},
+		Short:   "Manage local groups",
+	}
+
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all local groups",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			groups, err := client.ListLocalGroups(ctx)
+			if err != nil {
+				return err
+			}
+			return outputResult(groups, []string{"ID", "Name", "Description", "Members"}, func(item interface{}) []string {
+				g := item.(adminclient.LocalGroup)
+				return []string{g.ID, g.Name, g.Description, fmt.Sprintf("%d", g.MemberCount)}
+			})
+		},
+	}
+
+	createCmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a local group",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name, _ := cmd.Flags().GetString("name")
+			description, _ := cmd.Flags().GetString("description")
+
+			if name == "" {
+				return fmt.Errorf("--name is required")
+			}
+
+			ctx := context.Background()
+			group, err := client.CreateLocalGroup(ctx, name, description)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Local group created: %s (%s)\n", group.Name, group.ID)
+			return nil
+		},
+	}
+	createCmd.Flags().String("name", "", "Group name (required)")
+	createCmd.Flags().String("description", "", "Group description")
+
+	updateCmd := &cobra.Command{
+		Use:   "update ID",
+		Short: "Update a local group",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name, _ := cmd.Flags().GetString("name")
+			description, _ := cmd.Flags().GetString("description")
+
+			ctx := context.Background()
+			err := client.UpdateLocalGroup(ctx, args[0], name, description)
+			if err != nil {
+				return err
+			}
+			fmt.Println("Local group updated")
+			return nil
+		},
+	}
+	updateCmd.Flags().String("name", "", "New group name")
+	updateCmd.Flags().String("description", "", "New group description")
+
+	deleteCmd := &cobra.Command{
+		Use:   "delete ID",
+		Short: "Delete a local group",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			err := client.DeleteLocalGroup(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			fmt.Println("Local group deleted")
+			return nil
+		},
+	}
+
+	membersCmd := &cobra.Command{
+		Use:   "members ID",
+		Short: "List members of a local group",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			members, err := client.ListLocalGroupMembers(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			return outputResult(members, []string{"User ID", "Type", "Email", "Name"}, func(item interface{}) []string {
+				m := item.(adminclient.LocalGroupMember)
+				return []string{m.UserID, m.MemberType, m.Email, m.Name}
+			})
+		},
+	}
+
+	addMemberCmd := &cobra.Command{
+		Use:   "add-member GROUP_ID USER_ID",
+		Short: "Add a member to a local group",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			memberType, _ := cmd.Flags().GetString("type")
+			if memberType != "sso" && memberType != "local" {
+				return fmt.Errorf("--type must be 'sso' or 'local'")
+			}
+
+			ctx := context.Background()
+			err := client.AddLocalGroupMember(ctx, args[0], args[1], memberType)
+			if err != nil {
+				return err
+			}
+			fmt.Println("Member added to local group")
+			return nil
+		},
+	}
+	addMemberCmd.Flags().String("type", "sso", "Member type (sso or local)")
+
+	removeMemberCmd := &cobra.Command{
+		Use:   "remove-member GROUP_ID USER_ID",
+		Short: "Remove a member from a local group",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			memberType, _ := cmd.Flags().GetString("type")
+			if memberType != "sso" && memberType != "local" {
+				return fmt.Errorf("--type must be 'sso' or 'local'")
+			}
+
+			ctx := context.Background()
+			err := client.RemoveLocalGroupMember(ctx, args[0], args[1], memberType)
+			if err != nil {
+				return err
+			}
+			fmt.Println("Member removed from local group")
+			return nil
+		},
+	}
+	removeMemberCmd.Flags().String("type", "sso", "Member type (sso or local)")
+
+	cmd.AddCommand(listCmd, createCmd, updateCmd, deleteCmd, membersCmd, addMemberCmd, removeMemberCmd)
 	return cmd
 }
 

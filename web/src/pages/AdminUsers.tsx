@@ -21,6 +21,13 @@ import {
   getAdminUserAPIKeys,
   revokeAdminAPIKey,
   adminDeleteUserAPIKeys,
+  getLocalGroups,
+  createLocalGroup,
+  updateLocalGroup,
+  deleteLocalGroup,
+  getLocalGroupMembers,
+  addLocalGroupMember,
+  removeLocalGroupMember,
   SSOUser,
   LocalUser,
   Group,
@@ -31,21 +38,28 @@ import {
   VPNConfig,
   MeshVPNConfig,
   APIKey,
+  LocalGroup,
+  LocalGroupMember,
 } from '../api/client'
 import ActionDropdown, { ActionItem } from '../components/ActionDropdown'
 
 type TabType = 'sso' | 'local' | 'groups'
+type GroupsSubTab = 'all' | 'local'
 
 export default function AdminUsers() {
   const [activeTab, setActiveTab] = useState<TabType>('sso')
+  const [groupsSubTab, setGroupsSubTab] = useState<GroupsSubTab>('all')
   const [ssoUsers, setSSOUsers] = useState<SSOUser[]>([])
   const [localUsers, setLocalUsers] = useState<LocalUser[]>([])
   const [groups, setGroups] = useState<Group[]>([])
+  const [localGroups, setLocalGroups] = useState<LocalGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedUser, setSelectedUser] = useState<SSOUser | null>(null)
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
+  const [selectedLocalGroup, setSelectedLocalGroup] = useState<LocalGroup | null>(null)
   const [showCreateUserModal, setShowCreateUserModal] = useState(false)
+  const [showCreateLocalGroupModal, setShowCreateLocalGroupModal] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -54,14 +68,16 @@ export default function AdminUsers() {
   async function loadData() {
     try {
       setLoading(true)
-      const [sso, local, grps] = await Promise.all([
+      const [sso, local, grps, lgrps] = await Promise.all([
         getUsers(),
         getLocalUsers(),
         getGroups(),
+        getLocalGroups(),
       ])
       setSSOUsers(sso)
       setLocalUsers(local)
       setGroups(grps)
+      setLocalGroups(lgrps)
       setError(null)
     } catch (err) {
       setError('Failed to load user data')
@@ -119,7 +135,7 @@ export default function AdminUsers() {
           >
             Groups
             <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-theme-secondary text-theme-tertiary">
-              {groups.length}
+              {groups.length + localGroups.length}
             </span>
           </button>
         </nav>
@@ -168,7 +184,12 @@ export default function AdminUsers() {
           {activeTab === 'groups' && (
             <GroupsTab
               groups={groups}
+              localGroups={localGroups}
+              subTab={groupsSubTab}
+              onSubTabChange={setGroupsSubTab}
               onViewGroup={setSelectedGroup}
+              onViewLocalGroup={setSelectedLocalGroup}
+              onCreateLocalGroup={() => setShowCreateLocalGroupModal(true)}
             />
           )}
         </>
@@ -196,6 +217,28 @@ export default function AdminUsers() {
           onClose={() => setShowCreateUserModal(false)}
           onSuccess={() => {
             setShowCreateUserModal(false)
+            loadData()
+          }}
+        />
+      )}
+
+      {/* Local Group Details Modal */}
+      {selectedLocalGroup && (
+        <LocalGroupDetailsModal
+          group={selectedLocalGroup}
+          ssoUsers={ssoUsers}
+          localUsers={localUsers}
+          onClose={() => setSelectedLocalGroup(null)}
+          onUpdate={loadData}
+        />
+      )}
+
+      {/* Create Local Group Modal */}
+      {showCreateLocalGroupModal && (
+        <CreateLocalGroupModal
+          onClose={() => setShowCreateLocalGroupModal(false)}
+          onSuccess={() => {
+            setShowCreateLocalGroupModal(false)
             loadData()
           }}
         />
@@ -430,50 +473,139 @@ function LocalUsersTab({ users, onCreateUser, onDeleteUser }: LocalUsersTabProps
 
 interface GroupsTabProps {
   groups: Group[]
+  localGroups: LocalGroup[]
+  subTab: GroupsSubTab
+  onSubTabChange: (tab: GroupsSubTab) => void
   onViewGroup: (name: string) => void
+  onViewLocalGroup: (group: LocalGroup) => void
+  onCreateLocalGroup: () => void
 }
 
-function GroupsTab({ groups, onViewGroup }: GroupsTabProps) {
-  if (groups.length === 0) {
-    return (
-      <div className="card text-center py-12">
-        <svg className="mx-auto h-12 w-12 text-theme-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-        </svg>
-        <h3 className="mt-4 text-lg font-medium text-theme-primary">No groups found</h3>
-        <p className="mt-2 text-theme-tertiary">
-          Groups are synced from your identity provider when users log in, or created when assigning access rules.
-        </p>
-      </div>
-    )
-  }
-
+function GroupsTab({ groups, localGroups, subTab, onSubTabChange, onViewGroup, onViewLocalGroup, onCreateLocalGroup }: GroupsTabProps) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {groups.map((group) => (
-        <div
-          key={group.name}
-          className="card hover:shadow-md transition-shadow cursor-pointer"
-          onClick={() => onViewGroup(group.name)}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
-                <svg className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <div className="text-sm font-medium text-theme-primary">{group.name}</div>
-                <div className="text-xs text-theme-tertiary">{group.memberCount} members</div>
-              </div>
-            </div>
-            <svg className="h-5 w-5 text-theme-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </div>
+    <div className="space-y-4">
+      {/* Sub-tabs */}
+      <div className="flex items-center justify-between">
+        <div className="flex space-x-4">
+          <button
+            onClick={() => onSubTabChange('all')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              subTab === 'all'
+                ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
+                : 'text-theme-tertiary hover:bg-theme-secondary'
+            }`}
+          >
+            All Groups ({groups.length})
+          </button>
+          <button
+            onClick={() => onSubTabChange('local')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              subTab === 'local'
+                ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
+                : 'text-theme-tertiary hover:bg-theme-secondary'
+            }`}
+          >
+            Local Groups ({localGroups.length})
+          </button>
         </div>
-      ))}
+        {subTab === 'local' && (
+          <button onClick={onCreateLocalGroup} className="btn btn-primary">
+            <svg className="w-5 h-5 mr-2 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Create Local Group
+          </button>
+        )}
+      </div>
+
+      {/* All Groups Grid */}
+      {subTab === 'all' && (
+        groups.length === 0 ? (
+          <div className="card text-center py-12">
+            <svg className="mx-auto h-12 w-12 text-theme-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <h3 className="mt-4 text-lg font-medium text-theme-primary">No groups found</h3>
+            <p className="mt-2 text-theme-tertiary">
+              Groups are synced from your identity provider when users log in, or created when assigning access rules.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {groups.map((group) => (
+              <div
+                key={group.name}
+                className="card hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => onViewGroup(group.name)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
+                      <svg className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <div className="text-sm font-medium text-theme-primary">{group.name}</div>
+                      <div className="text-xs text-theme-tertiary">{group.memberCount} members</div>
+                    </div>
+                  </div>
+                  <svg className="h-5 w-5 text-theme-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+
+      {/* Local Groups Grid */}
+      {subTab === 'local' && (
+        localGroups.length === 0 ? (
+          <div className="card text-center py-12">
+            <svg className="mx-auto h-12 w-12 text-theme-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <h3 className="mt-4 text-lg font-medium text-theme-primary">No local groups</h3>
+            <p className="mt-2 text-theme-tertiary">
+              Create local groups to organize users and assign access rules.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {localGroups.map((group) => (
+              <div
+                key={group.id}
+                className="card hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => onViewLocalGroup(group)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
+                      <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <div className="text-sm font-medium text-theme-primary flex items-center gap-2">
+                        {group.name}
+                        <span className="px-1.5 py-0.5 text-xs rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                          Local
+                        </span>
+                      </div>
+                      <div className="text-xs text-theme-tertiary">{group.memberCount} members</div>
+                    </div>
+                  </div>
+                  <svg className="h-5 w-5 text-theme-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      )}
     </div>
   )
 }
@@ -1301,6 +1433,424 @@ function CreateUserModal({ onClose, onSuccess }: CreateUserModalProps) {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+// ==================== Local Group Modals ====================
+
+interface CreateLocalGroupModalProps {
+  onClose: () => void
+  onSuccess: () => void
+}
+
+function CreateLocalGroupModal({ onClose, onSuccess }: CreateLocalGroupModalProps) {
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+
+    try {
+      await createLocalGroup({ name, description: description || undefined })
+      onSuccess()
+    } catch (err) {
+      setError('Failed to create local group. Name may already exist.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+      <div className="bg-theme-card rounded-lg shadow-xl max-w-md w-full mx-4">
+        <form onSubmit={handleSubmit}>
+          <div className="p-6 border-b border-theme">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-theme-primary">Create Local Group</h2>
+              <button
+                type="button"
+                onClick={onClose}
+                className="text-theme-muted hover:text-theme-tertiary"
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-4">
+            {error && (
+              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 text-sm">
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">
+                Group Name
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="input"
+                placeholder="e.g., engineering"
+                required
+              />
+              <p className="text-xs text-theme-tertiary mt-1">
+                This will be prefixed with "local:" when used in access rules
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">
+                Description (optional)
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="input"
+                placeholder="Describe the purpose of this group..."
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <div className="p-4 border-t border-theme flex justify-end gap-3">
+            <button type="button" onClick={onClose} className="btn btn-secondary">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading || !name.trim()}
+              className="btn btn-primary"
+            >
+              {loading ? 'Creating...' : 'Create Group'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+interface LocalGroupDetailsModalProps {
+  group: LocalGroup
+  ssoUsers: SSOUser[]
+  localUsers: LocalUser[]
+  onClose: () => void
+  onUpdate: () => void
+}
+
+type LocalGroupModalTab = 'info' | 'members'
+
+function LocalGroupDetailsModal({ group, ssoUsers, localUsers, onClose, onUpdate }: LocalGroupDetailsModalProps) {
+  const [activeTab, setActiveTab] = useState<LocalGroupModalTab>('info')
+  const [members, setMembers] = useState<LocalGroupMember[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editName, setEditName] = useState(group.name)
+  const [editDescription, setEditDescription] = useState(group.description)
+  const [saving, setSaving] = useState(false)
+  const [selectedUser, setSelectedUser] = useState('')
+  const [selectedMemberType, setSelectedMemberType] = useState<'sso' | 'local'>('sso')
+  const [deleting, setDeleting] = useState(false)
+
+  useEffect(() => {
+    loadMembers()
+  }, [group.id])
+
+  async function loadMembers() {
+    try {
+      setLoading(true)
+      const m = await getLocalGroupMembers(group.id)
+      setMembers(m)
+    } catch {
+      setError('Failed to load group members')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleSaveEdit() {
+    setSaving(true)
+    setError(null)
+    try {
+      await updateLocalGroup(group.id, { name: editName, description: editDescription || undefined })
+      setIsEditing(false)
+      onUpdate()
+    } catch {
+      setError('Failed to update group')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirm(`Are you sure you want to delete the group "${group.name}"? This cannot be undone.`)) return
+    setDeleting(true)
+    try {
+      await deleteLocalGroup(group.id)
+      onUpdate()
+      onClose()
+    } catch {
+      setError('Failed to delete group')
+      setDeleting(false)
+    }
+  }
+
+  async function handleAddMember() {
+    if (!selectedUser) return
+    try {
+      await addLocalGroupMember(group.id, selectedUser, selectedMemberType)
+      setSelectedUser('')
+      await loadMembers()
+      onUpdate()
+    } catch {
+      setError('Failed to add member')
+    }
+  }
+
+  async function handleRemoveMember(userId: string, memberType: 'sso' | 'local') {
+    try {
+      await removeLocalGroupMember(group.id, userId, memberType)
+      await loadMembers()
+      onUpdate()
+    } catch {
+      setError('Failed to remove member')
+    }
+  }
+
+  // Get available users for adding (exclude existing members)
+  const existingMemberIds = new Set(members.map(m => `${m.userId}-${m.memberType}`))
+  const availableSSOUsers = ssoUsers.filter(u => !existingMemberIds.has(`${u.id}-sso`))
+  const availableLocalUsers = localUsers.filter(u => !existingMemberIds.has(`${u.id}-local`))
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+      <div className="bg-theme-card rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden">
+        <div className="p-6 border-b border-theme">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <h2 className="text-xl font-semibold text-theme-primary flex items-center gap-2">
+                  {group.name}
+                  <span className="px-1.5 py-0.5 text-xs rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                    Local
+                  </span>
+                </h2>
+                <p className="text-sm text-theme-tertiary">{members.length} members</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-theme-muted hover:text-theme-tertiary"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="border-b border-theme px-6">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('info')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'info'
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-theme-tertiary hover:text-theme-secondary'
+              }`}
+            >
+              Info
+            </button>
+            <button
+              onClick={() => setActiveTab('members')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'members'
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-theme-tertiary hover:text-theme-secondary'
+              }`}
+            >
+              Members ({members.length})
+            </button>
+          </nav>
+        </div>
+
+        {error && (
+          <div className="mx-6 mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-400 text-sm">
+            {error}
+            <button onClick={() => setError(null)} className="ml-2 text-red-500 hover:text-red-700">&times;</button>
+          </div>
+        )}
+
+        <div className="p-6 overflow-y-auto max-h-[50vh]">
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+            </div>
+          ) : activeTab === 'info' ? (
+            <div className="space-y-4">
+              {isEditing ? (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-theme-secondary mb-1">Group Name</label>
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="input"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-theme-secondary mb-1">Description</label>
+                    <textarea
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                      className="input"
+                      rows={3}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={handleSaveEdit} disabled={saving} className="btn btn-primary">
+                      {saving ? 'Saving...' : 'Save'}
+                    </button>
+                    <button onClick={() => { setIsEditing(false); setEditName(group.name); setEditDescription(group.description) }} className="btn btn-secondary">
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="text-xs text-theme-tertiary uppercase">Group Name</label>
+                    <p className="text-sm font-medium text-theme-primary">{group.name}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-theme-tertiary uppercase">Full Name (for access rules)</label>
+                    <p className="text-sm font-mono bg-theme-secondary px-2 py-1 rounded inline-block">local:{group.name}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-theme-tertiary uppercase">Description</label>
+                    <p className="text-sm text-theme-primary">{group.description || <span className="italic text-theme-muted">No description</span>}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-theme-tertiary uppercase">Created</label>
+                    <p className="text-sm text-theme-primary">{new Date(group.createdAt).toLocaleString()}</p>
+                  </div>
+                  <div className="pt-4 flex gap-2">
+                    <button onClick={() => setIsEditing(true)} className="btn btn-secondary">
+                      Edit Group
+                    </button>
+                    <button onClick={handleDelete} disabled={deleting} className="btn bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200">
+                      {deleting ? 'Deleting...' : 'Delete Group'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            /* Members Tab */
+            <div className="space-y-4">
+              {/* Add Member Form */}
+              <div className="flex gap-2">
+                <select
+                  value={selectedMemberType}
+                  onChange={(e) => { setSelectedMemberType(e.target.value as 'sso' | 'local'); setSelectedUser('') }}
+                  className="px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="sso">SSO User</option>
+                  <option value="local">Local User</option>
+                </select>
+                <select
+                  value={selectedUser}
+                  onChange={(e) => setSelectedUser(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">Select a user to add...</option>
+                  {selectedMemberType === 'sso'
+                    ? availableSSOUsers.map(u => (
+                        <option key={u.id} value={u.id}>{u.name || u.email} ({u.email})</option>
+                      ))
+                    : availableLocalUsers.map(u => (
+                        <option key={u.id} value={u.id}>{u.username} ({u.email})</option>
+                      ))
+                  }
+                </select>
+                <button
+                  onClick={handleAddMember}
+                  disabled={!selectedUser}
+                  className="btn btn-primary"
+                >
+                  Add
+                </button>
+              </div>
+
+              {/* Members List */}
+              {members.length === 0 ? (
+                <p className="text-theme-tertiary text-sm py-4 text-center">No members in this group</p>
+              ) : (
+                <div className="space-y-2">
+                  {members.map((member) => (
+                    <div key={`${member.userId}-${member.memberType}`} className="flex items-center justify-between p-3 bg-theme-tertiary rounded-lg">
+                      <div className="flex items-center">
+                        <div className={`h-8 w-8 rounded-full flex items-center justify-center ${
+                          member.memberType === 'sso' ? 'bg-primary-100' : 'bg-orange-100'
+                        }`}>
+                          <span className={`font-medium text-xs ${
+                            member.memberType === 'sso' ? 'text-primary-700' : 'text-orange-700'
+                          }`}>
+                            {member.name ? member.name.charAt(0).toUpperCase() : member.email.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-theme-primary">{member.name || member.email}</p>
+                          {member.name && <p className="text-xs text-theme-tertiary">{member.email}</p>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-0.5 text-xs rounded ${
+                          member.memberType === 'sso'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                        }`}>
+                          {member.memberType === 'sso' ? 'SSO' : 'Local'}
+                        </span>
+                        <button
+                          onClick={() => handleRemoveMember(member.userId, member.memberType)}
+                          className="text-red-600 hover:text-red-800 text-sm"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 border-t border-theme flex justify-end">
+          <button onClick={onClose} className="btn btn-secondary">
+            Close
+          </button>
+        </div>
       </div>
     </div>
   )
