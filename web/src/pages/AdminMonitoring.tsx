@@ -1,15 +1,21 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   getLoginLogs,
   getLoginLogStats,
   purgeLoginLogs,
   getLoginLogRetention,
   setLoginLogRetention,
+  getActiveSessions,
+  getAdminGateways,
+  getMeshHubs,
   LoginLog,
   LoginLogStats,
+  ActiveSession,
+  AdminGateway,
+  MeshHub,
 } from '../api/client'
 
-type TabType = 'logs' | 'stats' | 'settings'
+type TabType = 'realtime' | 'logs' | 'stats' | 'settings'
 
 // Convert country code to flag emoji
 function countryCodeToFlag(countryCode: string): string {
@@ -21,14 +27,45 @@ function countryCodeToFlag(countryCode: string): string {
   return String.fromCodePoint(...codePoints)
 }
 
+// Format bytes to human readable
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+// Format duration from connectedAt timestamp
+function formatDuration(connectedAt: string): string {
+  const start = new Date(connectedAt).getTime()
+  const now = Date.now()
+  const diff = Math.floor((now - start) / 1000) // seconds
+
+  if (diff < 60) return `${diff}s`
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ${diff % 60}s`
+  const hours = Math.floor(diff / 3600)
+  const mins = Math.floor((diff % 3600) / 60)
+  return `${hours}h ${mins}m`
+}
+
 export default function AdminMonitoring() {
-  const [activeTab, setActiveTab] = useState<TabType>('logs')
+  const [activeTab, setActiveTab] = useState<TabType>('realtime')
   const [logs, setLogs] = useState<LoginLog[]>([])
   const [stats, setStats] = useState<LoginLogStats | null>(null)
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+
+  // Real-time monitoring state
+  const [sessions, setSessions] = useState<ActiveSession[]>([])
+  const [gateways, setGateways] = useState<AdminGateway[]>([])
+  const [meshHubs, setMeshHubs] = useState<MeshHub[]>([])
+  const [refreshInterval, setRefreshInterval] = useState<number>(10)
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+  const [autoRefresh, setAutoRefresh] = useState(true)
+  const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Filters
   const [filterEmail, setFilterEmail] = useState('')
@@ -42,6 +79,38 @@ export default function AdminMonitoring() {
   const [retentionDays, setRetentionDays] = useState(30)
   const [purgeDays, setPurgeDays] = useState(30)
 
+  // Load real-time data
+  const loadRealtimeData = useCallback(async () => {
+    try {
+      const [sessionsData, gatewaysData, hubsData] = await Promise.all([
+        getActiveSessions(),
+        getAdminGateways(),
+        getMeshHubs(),
+      ])
+      setSessions(sessionsData.sessions || [])
+      setGateways(gatewaysData || [])
+      setMeshHubs(hubsData || [])
+      setLastRefresh(new Date())
+    } catch (err) {
+      console.error('Failed to load real-time data:', err)
+    }
+  }, [])
+
+  // Auto-refresh for real-time tab
+  useEffect(() => {
+    if (activeTab === 'realtime' && autoRefresh && refreshInterval > 0) {
+      refreshTimerRef.current = setInterval(() => {
+        loadRealtimeData()
+      }, refreshInterval * 1000)
+
+      return () => {
+        if (refreshTimerRef.current) {
+          clearInterval(refreshTimerRef.current)
+        }
+      }
+    }
+  }, [activeTab, autoRefresh, refreshInterval, loadRealtimeData])
+
   useEffect(() => {
     loadData()
   }, [activeTab, page, filterEmail, filterIP, filterProvider, filterSuccess])
@@ -51,7 +120,9 @@ export default function AdminMonitoring() {
       setLoading(true)
       setError(null)
 
-      if (activeTab === 'logs') {
+      if (activeTab === 'realtime') {
+        await loadRealtimeData()
+      } else if (activeTab === 'logs') {
         const filter: Record<string, unknown> = {
           limit: pageSize,
           offset: page * pageSize,
@@ -115,19 +186,36 @@ export default function AdminMonitoring() {
     setPage(0)
   }
 
+  // Calculate totals for real-time stats
+  const totalBandwidthIn = sessions.reduce((sum, s) => sum + s.bytesRecv, 0)
+  const totalBandwidthOut = sessions.reduce((sum, s) => sum + s.bytesSent, 0)
+  const onlineGateways = gateways.filter(g => g.isActive).length
+  const onlineMeshHubs = meshHubs.filter(h => h.status === 'online').length
+  const uniqueUsers = new Set(sessions.map(s => s.userId)).size
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="card">
-        <h1 className="text-2xl font-bold text-theme-primary">Login Monitoring</h1>
+        <h1 className="text-2xl font-bold text-theme-primary">Monitoring</h1>
         <p className="text-theme-tertiary mt-1">
-          Monitor user login activity, view statistics, and manage log retention.
+          Real-time VPN sessions, login activity, statistics, and log management.
         </p>
       </div>
 
       {/* Tabs */}
       <div className="border-b border-theme">
         <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('realtime')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'realtime'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-theme-tertiary hover:text-theme-secondary hover:border-theme'
+            }`}
+          >
+            Real-time
+          </button>
           <button
             onClick={() => setActiveTab('logs')}
             className={`py-2 px-1 border-b-2 font-medium text-sm ${
@@ -180,6 +268,305 @@ export default function AdminMonitoring() {
         </div>
       ) : (
         <>
+          {/* Real-time Tab */}
+          {activeTab === 'realtime' && (
+            <div className="space-y-6">
+              {/* Refresh Controls */}
+              <div className="card">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={autoRefresh}
+                        onChange={(e) => setAutoRefresh(e.target.checked)}
+                        className="rounded border-theme text-primary-600 focus:ring-primary-500"
+                      />
+                      <span className="text-sm text-theme-secondary">Auto-refresh</span>
+                    </label>
+                    <select
+                      value={refreshInterval}
+                      onChange={(e) => setRefreshInterval(Number(e.target.value))}
+                      disabled={!autoRefresh}
+                      className="px-3 py-1.5 border border-theme rounded-lg text-sm bg-theme-primary text-theme-primary focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+                    >
+                      <option value={5}>5 seconds</option>
+                      <option value={10}>10 seconds</option>
+                      <option value={30}>30 seconds</option>
+                      <option value={60}>60 seconds</option>
+                    </select>
+                    <button
+                      onClick={loadRealtimeData}
+                      className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                    >
+                      Refresh Now
+                    </button>
+                  </div>
+                  <div className="text-sm text-theme-tertiary">
+                    Last updated: {lastRefresh.toLocaleTimeString()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div className="card">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-theme-tertiary uppercase tracking-wider">Active Sessions</div>
+                      <div className="text-2xl font-bold text-theme-primary">{sessions.length}</div>
+                    </div>
+                    <div className="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
+                      <svg className="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-theme-tertiary uppercase tracking-wider">Unique Users</div>
+                      <div className="text-2xl font-bold text-theme-primary">{uniqueUsers}</div>
+                    </div>
+                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                      <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-theme-tertiary uppercase tracking-wider">Gateways Online</div>
+                      <div className="text-2xl font-bold text-theme-primary">{onlineGateways}/{gateways.length}</div>
+                    </div>
+                    <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                      <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-theme-tertiary uppercase tracking-wider">Mesh Hubs Online</div>
+                      <div className="text-2xl font-bold text-theme-primary">{onlineMeshHubs}/{meshHubs.length}</div>
+                    </div>
+                    <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                      <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-theme-tertiary uppercase tracking-wider">Bandwidth In</div>
+                      <div className="text-2xl font-bold text-green-600">{formatBytes(totalBandwidthIn)}</div>
+                    </div>
+                    <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                      <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-theme-tertiary uppercase tracking-wider">Bandwidth Out</div>
+                      <div className="text-2xl font-bold text-blue-600">{formatBytes(totalBandwidthOut)}</div>
+                    </div>
+                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                      <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Active Sessions Table */}
+              <div className="card overflow-hidden">
+                <h3 className="text-lg font-medium text-theme-primary mb-4">Active VPN Sessions</h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-theme">
+                    <thead className="bg-theme-secondary">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">User</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Gateway/Hub</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Client IP</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">VPN IP</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Duration</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Traffic</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-theme-card divide-y divide-theme">
+                      {sessions.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-4 py-8 text-center text-theme-tertiary">
+                            No active VPN sessions
+                          </td>
+                        </tr>
+                      ) : (
+                        sessions.map((session) => (
+                          <tr key={session.id} className="hover:bg-theme-secondary">
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <div className="text-sm font-medium text-theme-primary">{session.userEmail}</div>
+                              {session.userName && (
+                                <div className="text-xs text-theme-tertiary">{session.userName}</div>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                  session.nodeType === 'gateway'
+                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                                    : 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
+                                }`}>
+                                  {session.nodeType}
+                                </span>
+                                <span className="text-sm text-theme-primary">{session.gatewayName}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm font-mono text-theme-primary">
+                              {session.clientIp}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm font-mono text-theme-primary">
+                              {session.vpnAddress}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-theme-tertiary">
+                              {formatDuration(session.connectedAt)}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm">
+                              <div className="flex items-center gap-3">
+                                <span className="text-green-600" title="Downloaded">
+                                  <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                                  </svg>
+                                  {formatBytes(session.bytesRecv)}
+                                </span>
+                                <span className="text-blue-600" title="Uploaded">
+                                  <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                                  </svg>
+                                  {formatBytes(session.bytesSent)}
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Gateway & Mesh Hub Status */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Gateway Status */}
+                <div className="card">
+                  <h3 className="text-lg font-medium text-theme-primary mb-4">Gateway Status</h3>
+                  {gateways.length === 0 ? (
+                    <div className="text-center text-theme-tertiary py-4">No gateways configured</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {gateways.map((gateway) => (
+                        <div key={gateway.id} className="flex items-center justify-between p-3 bg-theme-secondary rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-3 h-3 rounded-full ${gateway.isActive ? 'bg-green-500' : 'bg-red-500'}`} />
+                            <div>
+                              <div className="font-medium text-theme-primary">{gateway.name}</div>
+                              <div className="text-xs text-theme-tertiary">{gateway.hostname || gateway.publicIp}</div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm text-theme-secondary">
+                              {sessions.filter(s => s.gatewayId === gateway.id).length} sessions
+                            </div>
+                            <div className="text-xs text-theme-tertiary">
+                              {gateway.vpnProtocol.toUpperCase()}:{gateway.vpnPort}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Mesh Hub Status */}
+                <div className="card">
+                  <h3 className="text-lg font-medium text-theme-primary mb-4">Mesh Hub Status</h3>
+                  {meshHubs.length === 0 ? (
+                    <div className="text-center text-theme-tertiary py-4">No mesh hubs configured</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {meshHubs.map((hub) => (
+                        <div key={hub.id} className="flex items-center justify-between p-3 bg-theme-secondary rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-3 h-3 rounded-full ${
+                              hub.status === 'online' ? 'bg-green-500' :
+                              hub.status === 'pending' ? 'bg-yellow-500' : 'bg-red-500'
+                            }`} />
+                            <div>
+                              <div className="font-medium text-theme-primary">{hub.name}</div>
+                              <div className="text-xs text-theme-tertiary">{hub.publicEndpoint}</div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm text-theme-secondary">
+                              {hub.connectedSpokes} spokes / {hub.connectedClients} clients
+                            </div>
+                            <div className="text-xs text-theme-tertiary">
+                              {hub.vpnProtocol?.toUpperCase() || 'UDP'}:{hub.vpnPort}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Sessions by Gateway Chart */}
+              {sessions.length > 0 && (
+                <div className="card">
+                  <h3 className="text-lg font-medium text-theme-primary mb-4">Sessions by Gateway</h3>
+                  <div className="space-y-3">
+                    {Array.from(new Set(sessions.map(s => s.gatewayId))).map(gatewayId => {
+                      const gatewayName = sessions.find(s => s.gatewayId === gatewayId)?.gatewayName || 'Unknown'
+                      const count = sessions.filter(s => s.gatewayId === gatewayId).length
+                      const percentage = (count / sessions.length) * 100
+                      return (
+                        <div key={gatewayId} className="flex items-center">
+                          <div className="w-32 text-sm font-medium text-theme-secondary truncate">{gatewayName}</div>
+                          <div className="flex-1 mx-3">
+                            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-primary-500 rounded-full transition-all duration-300"
+                                style={{ width: `${percentage}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className="w-16 text-sm text-theme-tertiary text-right">{count} ({percentage.toFixed(0)}%)</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Login Logs Tab */}
           {activeTab === 'logs' && (
             <div className="space-y-4">

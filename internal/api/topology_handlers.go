@@ -244,9 +244,12 @@ func (s *Server) handleGetActiveSessions(c *gin.Context) {
 	})
 }
 
-// getActiveMeshConnections queries the mesh_connections table for active sessions
+// getActiveMeshConnections queries mesh_connections and gateway_connections for active sessions
 func (s *Server) getActiveMeshConnections(ctx context.Context) ([]ActiveSession, error) {
-	rows, err := s.db.Pool.Query(ctx, `
+	var sessions []ActiveSession
+
+	// Query mesh hub connections
+	meshRows, err := s.db.Pool.Query(ctx, `
 		SELECT
 			mc.id, mc.hub_id, u.id, u.email, COALESCE(u.name, ''),
 			h.name, host(mc.client_ip), host(mc.tunnel_ip),
@@ -260,29 +263,77 @@ func (s *Server) getActiveMeshConnections(ctx context.Context) ([]ActiveSession,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer meshRows.Close()
 
-	var sessions []ActiveSession
-	for rows.Next() {
-		var s ActiveSession
+	for meshRows.Next() {
+		var sess ActiveSession
 		var clientIP, tunnelIP *string
-		if err := rows.Scan(
-			&s.ID, &s.GatewayID, &s.UserID, &s.UserEmail, &s.UserName,
-			&s.GatewayName, &clientIP, &tunnelIP,
-			&s.BytesSent, &s.BytesRecv, &s.ConnectedAt,
+		if err := meshRows.Scan(
+			&sess.ID, &sess.GatewayID, &sess.UserID, &sess.UserEmail, &sess.UserName,
+			&sess.GatewayName, &clientIP, &tunnelIP,
+			&sess.BytesSent, &sess.BytesRecv, &sess.ConnectedAt,
 		); err != nil {
 			return nil, err
 		}
-		s.NodeType = "hub"
+		sess.NodeType = "hub"
 		if clientIP != nil {
-			s.ClientIP = *clientIP
+			sess.ClientIP = *clientIP
 		}
 		if tunnelIP != nil {
-			s.VPNAddress = *tunnelIP
+			sess.VPNAddress = *tunnelIP
 		}
-		sessions = append(sessions, s)
+		sessions = append(sessions, sess)
 	}
-	return sessions, rows.Err()
+	if err := meshRows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Query gateway connections (supports both SSO and local users)
+	gatewayRows, err := s.db.Pool.Query(ctx, `
+		SELECT
+			gc.id::text, gc.gateway_id::text, gc.user_id,
+			COALESCE(u.email, lu.email, ''),
+			COALESCE(u.name, lu.username, ''),
+			g.name, host(gc.client_ip), host(gc.tunnel_ip),
+			gc.bytes_sent, gc.bytes_received, gc.connected_at,
+			gc.user_type
+		FROM gateway_connections gc
+		JOIN gateways g ON gc.gateway_id = g.id
+		LEFT JOIN users u ON gc.user_type = 'sso' AND gc.user_id = u.id::text
+		LEFT JOIN local_users lu ON gc.user_type = 'local' AND gc.user_id = lu.id::text
+		WHERE gc.disconnected_at IS NULL
+		ORDER BY gc.connected_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer gatewayRows.Close()
+
+	for gatewayRows.Next() {
+		var sess ActiveSession
+		var clientIP, tunnelIP *string
+		var userType string
+		if err := gatewayRows.Scan(
+			&sess.ID, &sess.GatewayID, &sess.UserID, &sess.UserEmail, &sess.UserName,
+			&sess.GatewayName, &clientIP, &tunnelIP,
+			&sess.BytesSent, &sess.BytesRecv, &sess.ConnectedAt, &userType,
+		); err != nil {
+			return nil, err
+		}
+		sess.NodeType = "gateway"
+		if clientIP != nil {
+			sess.ClientIP = *clientIP
+		}
+		if tunnelIP != nil {
+			sess.VPNAddress = *tunnelIP
+		}
+		// Add (Local) suffix for local users in the name
+		if userType == "local" && sess.UserName != "" && !strings.HasSuffix(sess.UserName, "(Local)") {
+			sess.UserName = sess.UserName + " (Local)"
+		}
+		sessions = append(sessions, sess)
+	}
+	return sessions, gatewayRows.Err()
 }
 
 // calculateServerTunnelIP calculates the server's tunnel IP from a VPN subnet

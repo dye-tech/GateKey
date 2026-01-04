@@ -433,6 +433,22 @@ body {
     background-color: var(--bg-hover);
   }
 
+  /* Select dropdown styling for light theme */
+  select {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+  }
+
+  select option {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+  }
+
+  select option:hover,
+  select option:checked {
+    background-color: var(--bg-hover);
+  }
+
   /* Selection highlight */
   .selected-highlight {
     background-color: var(--selected-bg);
