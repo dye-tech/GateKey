@@ -2040,6 +2040,33 @@ func (s *Server) handleGatewayVerify(c *gin.Context) {
 		return
 	}
 
+	// Check geo-fencing if enabled
+	if s.settingsStore.GetBool(ctx, db.SettingGeoFencingEnabled, false) && req.ClientIP != "" {
+		allowed, err := s.geoFenceStore.IsIPAllowed(ctx, req.ClientIP, user.ID, user.Groups)
+		if err != nil {
+			s.logger.Error("Gateway verify: geo-fence check failed", zap.Error(err))
+			// On error, we continue to allow (fail-open) but log the error
+		} else if !allowed {
+			enforceMode, _ := s.settingsStore.Get(ctx, db.SettingGeoFencingEnforce)
+			if enforceMode != nil && enforceMode.Value == "enforce" {
+				s.logger.Warn("Gateway verify: geo-fence blocked connection",
+					zap.String("user", user.Email),
+					zap.String("client_ip", req.ClientIP),
+					zap.String("gateway", gateway.Name))
+				c.JSON(http.StatusOK, gin.H{
+					"allowed": false,
+					"reason":  "connection blocked by geo-fencing policy",
+				})
+				return
+			}
+			// Audit mode - log but allow
+			s.logger.Warn("Gateway verify: geo-fence would block (audit mode)",
+				zap.String("user", user.Email),
+				zap.String("client_ip", req.ClientIP),
+				zap.String("gateway", gateway.Name))
+		}
+	}
+
 	s.logger.Info("Gateway verify: connection allowed",
 		zap.String("gateway", gateway.Name),
 		zap.String("user", user.Email),
@@ -2118,6 +2145,30 @@ func (s *Server) handleGatewayConnect(c *gin.Context) {
 			zap.String("gateway", gateway.Name))
 		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
 		return
+	}
+
+	// Check geo-fencing if enabled (defense in depth)
+	if s.settingsStore.GetBool(ctx, db.SettingGeoFencingEnabled, false) && req.ClientIP != "" {
+		allowed, geoErr := s.geoFenceStore.IsIPAllowed(ctx, req.ClientIP, userID, userGroups)
+		if geoErr != nil {
+			s.logger.Error("Gateway connect: geo-fence check failed", zap.Error(geoErr))
+			// On error, we continue to allow (fail-open) but log the error
+		} else if !allowed {
+			enforceMode, _ := s.settingsStore.Get(ctx, db.SettingGeoFencingEnforce)
+			if enforceMode != nil && enforceMode.Value == "enforce" {
+				s.logger.Warn("Gateway connect: geo-fence blocked connection",
+					zap.String("user", userEmail),
+					zap.String("client_ip", req.ClientIP),
+					zap.String("gateway", gateway.Name))
+				c.JSON(http.StatusForbidden, gin.H{"error": "connection blocked by geo-fencing policy"})
+				return
+			}
+			// Audit mode - log but allow
+			s.logger.Warn("Gateway connect: geo-fence would block (audit mode)",
+				zap.String("user", userEmail),
+				zap.String("client_ip", req.ClientIP),
+				zap.String("gateway", gateway.Name))
+		}
 	}
 
 	// Get the user's access rules for firewall enforcement
@@ -5516,4 +5567,395 @@ func (s *Server) handleRemoveLocalGroupMember(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "member removed from local group"})
+}
+
+// ============================================================================
+// Geo-Fencing Handlers
+// ============================================================================
+
+// handleGetGeoFenceSettings returns geo-fencing settings
+func (s *Server) handleGetGeoFenceSettings(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	enabled := s.settingsStore.GetBool(ctx, db.SettingGeoFencingEnabled, false)
+	enforceMode, err := s.settingsStore.Get(ctx, db.SettingGeoFencingEnforce)
+	if err != nil {
+		enforceMode = &db.Setting{Value: "audit"}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"enabled":     enabled,
+		"enforceMode": enforceMode.Value,
+	})
+}
+
+// handleUpdateGeoFenceSettings updates geo-fencing settings
+func (s *Server) handleUpdateGeoFenceSettings(c *gin.Context) {
+	var req struct {
+		Enabled     bool   `json:"enabled"`
+		EnforceMode string `json:"enforceMode"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	// Validate enforce mode
+	if req.EnforceMode != "enforce" && req.EnforceMode != "audit" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "enforceMode must be 'enforce' or 'audit'"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	if err := s.settingsStore.Set(ctx, db.SettingGeoFencingEnabled, fmt.Sprintf("%t", req.Enabled)); err != nil {
+		s.logger.Error("Failed to update geo-fencing enabled setting", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update settings"})
+		return
+	}
+
+	if err := s.settingsStore.Set(ctx, db.SettingGeoFencingEnforce, req.EnforceMode); err != nil {
+		s.logger.Error("Failed to update geo-fencing enforce mode", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update settings"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"enabled":     req.Enabled,
+		"enforceMode": req.EnforceMode,
+	})
+}
+
+// handleListGeoFenceRules returns all geo-fence rules
+func (s *Server) handleListGeoFenceRules(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	rules, err := s.geoFenceStore.ListRules(ctx)
+	if err != nil {
+		s.logger.Error("Failed to list geo-fence rules", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list rules"})
+		return
+	}
+
+	// Get assignment counts for each rule
+	type RuleWithCounts struct {
+		*db.GeoFenceRule
+		IsGlobal   bool `json:"isGlobal"`
+		UserCount  int  `json:"userCount"`
+		GroupCount int  `json:"groupCount"`
+	}
+
+	result := make([]RuleWithCounts, len(rules))
+	for i, rule := range rules {
+		isGlobal, userCount, groupCount, err := s.geoFenceStore.GetRuleAssignmentCounts(ctx, rule.ID)
+		if err != nil {
+			s.logger.Error("Failed to get rule assignment counts", zap.Error(err))
+		}
+		result[i] = RuleWithCounts{
+			GeoFenceRule: rule,
+			IsGlobal:     isGlobal,
+			UserCount:    userCount,
+			GroupCount:   groupCount,
+		}
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// handleCreateGeoFenceRule creates a new geo-fence rule
+func (s *Server) handleCreateGeoFenceRule(c *gin.Context) {
+	var req struct {
+		Name        string `json:"name" binding:"required"`
+		Description string `json:"description"`
+		IPRange     string `json:"ipRange" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name and ipRange are required"})
+		return
+	}
+
+	// Validate CIDR format
+	if _, _, err := net.ParseCIDR(req.IPRange); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid CIDR format for ipRange"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	rule, err := s.geoFenceStore.CreateRule(ctx, req.Name, req.Description, req.IPRange)
+	if err != nil {
+		s.logger.Error("Failed to create geo-fence rule", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create rule"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, rule)
+}
+
+// handleGetGeoFenceRule returns a single geo-fence rule
+func (s *Server) handleGetGeoFenceRule(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
+
+	rule, err := s.geoFenceStore.GetRule(ctx, id)
+	if err != nil {
+		if err == db.ErrGeoFenceRuleNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "rule not found"})
+			return
+		}
+		s.logger.Error("Failed to get geo-fence rule", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get rule"})
+		return
+	}
+
+	c.JSON(http.StatusOK, rule)
+}
+
+// handleUpdateGeoFenceRule updates a geo-fence rule
+func (s *Server) handleUpdateGeoFenceRule(c *gin.Context) {
+	id := c.Param("id")
+
+	var req struct {
+		Name        string `json:"name" binding:"required"`
+		Description string `json:"description"`
+		IPRange     string `json:"ipRange" binding:"required"`
+		IsActive    bool   `json:"isActive"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name and ipRange are required"})
+		return
+	}
+
+	// Validate CIDR format
+	if _, _, err := net.ParseCIDR(req.IPRange); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid CIDR format for ipRange"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	rule, err := s.geoFenceStore.UpdateRule(ctx, id, req.Name, req.Description, req.IPRange, req.IsActive)
+	if err != nil {
+		if err == db.ErrGeoFenceRuleNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "rule not found"})
+			return
+		}
+		s.logger.Error("Failed to update geo-fence rule", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update rule"})
+		return
+	}
+
+	c.JSON(http.StatusOK, rule)
+}
+
+// handleDeleteGeoFenceRule deletes a geo-fence rule
+func (s *Server) handleDeleteGeoFenceRule(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
+
+	if err := s.geoFenceStore.DeleteRule(ctx, id); err != nil {
+		if err == db.ErrGeoFenceRuleNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "rule not found"})
+			return
+		}
+		s.logger.Error("Failed to delete geo-fence rule", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete rule"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "rule deleted"})
+}
+
+// handleListGlobalGeoRules returns all global geo-fence rules
+func (s *Server) handleListGlobalGeoRules(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	rules, err := s.geoFenceStore.ListGlobalRules(ctx)
+	if err != nil {
+		s.logger.Error("Failed to list global geo-fence rules", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list global rules"})
+		return
+	}
+
+	c.JSON(http.StatusOK, rules)
+}
+
+// handleAddGlobalGeoRule adds a rule to global geo-fencing
+func (s *Server) handleAddGlobalGeoRule(c *gin.Context) {
+	var req struct {
+		RuleID string `json:"ruleId" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ruleId is required"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Verify rule exists
+	if _, err := s.geoFenceStore.GetRule(ctx, req.RuleID); err != nil {
+		if err == db.ErrGeoFenceRuleNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "rule not found"})
+			return
+		}
+		s.logger.Error("Failed to verify rule", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify rule"})
+		return
+	}
+
+	if err := s.geoFenceStore.AddGlobalRule(ctx, req.RuleID); err != nil {
+		s.logger.Error("Failed to add global geo-fence rule", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add global rule"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "rule added to global"})
+}
+
+// handleRemoveGlobalGeoRule removes a rule from global geo-fencing
+func (s *Server) handleRemoveGlobalGeoRule(c *gin.Context) {
+	ruleID := c.Param("ruleId")
+	ctx := c.Request.Context()
+
+	if err := s.geoFenceStore.RemoveGlobalRule(ctx, ruleID); err != nil {
+		s.logger.Error("Failed to remove global geo-fence rule", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove global rule"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "rule removed from global"})
+}
+
+// handleListUserGeoRules returns geo-fence rules for a user
+func (s *Server) handleListUserGeoRules(c *gin.Context) {
+	userID := c.Param("userId")
+	ctx := c.Request.Context()
+
+	rules, err := s.geoFenceStore.ListUserRules(ctx, userID)
+	if err != nil {
+		s.logger.Error("Failed to list user geo-fence rules", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list user rules"})
+		return
+	}
+
+	c.JSON(http.StatusOK, rules)
+}
+
+// handleAddUserGeoRule adds a geo-fence rule to a user
+func (s *Server) handleAddUserGeoRule(c *gin.Context) {
+	userID := c.Param("userId")
+
+	var req struct {
+		RuleID string `json:"ruleId" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ruleId is required"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Verify rule exists
+	if _, err := s.geoFenceStore.GetRule(ctx, req.RuleID); err != nil {
+		if err == db.ErrGeoFenceRuleNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "rule not found"})
+			return
+		}
+		s.logger.Error("Failed to verify rule", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify rule"})
+		return
+	}
+
+	if err := s.geoFenceStore.AddUserRule(ctx, userID, req.RuleID); err != nil {
+		s.logger.Error("Failed to add user geo-fence rule", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add user rule"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "rule added to user"})
+}
+
+// handleRemoveUserGeoRule removes a geo-fence rule from a user
+func (s *Server) handleRemoveUserGeoRule(c *gin.Context) {
+	userID := c.Param("userId")
+	ruleID := c.Param("ruleId")
+	ctx := c.Request.Context()
+
+	if err := s.geoFenceStore.RemoveUserRule(ctx, userID, ruleID); err != nil {
+		s.logger.Error("Failed to remove user geo-fence rule", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove user rule"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "rule removed from user"})
+}
+
+// handleListGroupGeoRules returns geo-fence rules for a group
+func (s *Server) handleListGroupGeoRules(c *gin.Context) {
+	groupName := c.Param("groupName")
+	ctx := c.Request.Context()
+
+	rules, err := s.geoFenceStore.ListGroupRules(ctx, groupName)
+	if err != nil {
+		s.logger.Error("Failed to list group geo-fence rules", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list group rules"})
+		return
+	}
+
+	c.JSON(http.StatusOK, rules)
+}
+
+// handleAddGroupGeoRule adds a geo-fence rule to a group
+func (s *Server) handleAddGroupGeoRule(c *gin.Context) {
+	groupName := c.Param("groupName")
+
+	var req struct {
+		RuleID string `json:"ruleId" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ruleId is required"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Verify rule exists
+	if _, err := s.geoFenceStore.GetRule(ctx, req.RuleID); err != nil {
+		if err == db.ErrGeoFenceRuleNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "rule not found"})
+			return
+		}
+		s.logger.Error("Failed to verify rule", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify rule"})
+		return
+	}
+
+	if err := s.geoFenceStore.AddGroupRule(ctx, groupName, req.RuleID); err != nil {
+		s.logger.Error("Failed to add group geo-fence rule", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add group rule"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "rule added to group"})
+}
+
+// handleRemoveGroupGeoRule removes a geo-fence rule from a group
+func (s *Server) handleRemoveGroupGeoRule(c *gin.Context) {
+	groupName := c.Param("groupName")
+	ruleID := c.Param("ruleId")
+	ctx := c.Request.Context()
+
+	if err := s.geoFenceStore.RemoveGroupRule(ctx, groupName, ruleID); err != nil {
+		s.logger.Error("Failed to remove group geo-fence rule", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove group rule"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "rule removed from group"})
 }

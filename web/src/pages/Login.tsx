@@ -21,17 +21,16 @@ export default function Login() {
   const cliState = searchParams.get('state')
   const isCLILogin = searchParams.get('cli') === 'true'
   const urlError = searchParams.get('error')
-  const [cliCompleteAttempted, setCLICompleteAttempted] = useState(false)
+  const [showCLIContinue, setShowCLIContinue] = useState(false)
+  const [cliRedirecting, setCLIRedirecting] = useState(false)
 
   useEffect(() => {
     if (user) {
       // If this is a CLI login and user is already logged in,
-      // complete the CLI callback with existing session
-      // Don't retry if we already attempted or if there's an error from a previous attempt
-      if (isCLILogin && cliState && !cliCompleteAttempted && !urlError) {
-        setCLICompleteAttempted(true)
-        // Redirect to backend to complete CLI flow with existing session
-        window.location.href = `/api/v1/auth/cli/complete?state=${encodeURIComponent(cliState)}`
+      // show the continue button instead of auto-redirecting
+      // This fixes race conditions with mobile apps (Android) that can't handle instant redirects
+      if (isCLILogin && cliState && !urlError) {
+        setShowCLIContinue(true)
         return
       }
       // If there was an error completing CLI, let user try SSO login again
@@ -39,7 +38,15 @@ export default function Login() {
         navigate('/')
       }
     }
-  }, [user, navigate, isCLILogin, cliState, cliCompleteAttempted, urlError])
+  }, [user, navigate, isCLILogin, cliState, urlError])
+
+  function handleCLIContinue() {
+    setCLIRedirecting(true)
+    // Give a small delay to ensure the UI updates before redirect
+    setTimeout(() => {
+      window.location.href = `/api/v1/auth/cli/complete?state=${encodeURIComponent(cliState || '')}`
+    }, 100)
+  }
 
   useEffect(() => {
     loadProviders()
@@ -157,6 +164,46 @@ export default function Login() {
           {loading ? (
             <div className="flex justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+            </div>
+          ) : showCLIContinue ? (
+            /* CLI Continue prompt - shows when user is already logged in and this is a CLI/mobile login */
+            <div className="text-center space-y-6">
+              <div className="flex justify-center">
+                <svg className="h-16 w-16 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-theme-primary">Authentication Successful</h2>
+                <p className="text-theme-secondary mt-2">
+                  You're signed in as <strong>{user?.email}</strong>
+                </p>
+              </div>
+              <button
+                onClick={handleCLIContinue}
+                disabled={cliRedirecting}
+                className="w-full btn btn-primary py-3 text-lg disabled:opacity-50"
+              >
+                {cliRedirecting ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin -ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Redirecting...
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center">
+                    <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    Continue to App
+                  </span>
+                )}
+              </button>
+              <p className="text-xs text-theme-muted">
+                This will open your VPN client application.
+              </p>
             </div>
           ) : showLocalForm ? (
             /* Local login form */

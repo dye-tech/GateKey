@@ -1957,3 +1957,99 @@ export function getRemoteSessionWebSocketUrl(): string {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${protocol}//${window.location.host}/ws/admin/session`
 }
+
+// ==================== Geo-Fencing ====================
+
+export interface GeoFenceSettings {
+  enabled: boolean
+  enforceMode: 'enforce' | 'audit'
+}
+
+export interface GeoFenceRule {
+  id: string
+  name: string
+  description: string
+  ipRange: string
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+  isGlobal?: boolean
+  userCount?: number
+  groupCount?: number
+}
+
+export async function getGeoFenceSettings(): Promise<GeoFenceSettings> {
+  const response = await api.get('/api/v1/admin/geo-fence/settings')
+  return response.data
+}
+
+export async function updateGeoFenceSettings(settings: GeoFenceSettings): Promise<GeoFenceSettings> {
+  const response = await api.put('/api/v1/admin/geo-fence/settings', settings)
+  return response.data
+}
+
+export async function getGeoFenceRules(): Promise<GeoFenceRule[]> {
+  const response = await api.get('/api/v1/admin/geo-fence/rules')
+  return response.data || []
+}
+
+export async function createGeoFenceRule(data: { name: string; description: string; ipRange: string }): Promise<GeoFenceRule> {
+  const response = await api.post('/api/v1/admin/geo-fence/rules', data)
+  return response.data
+}
+
+export async function getGeoFenceRule(id: string): Promise<GeoFenceRule> {
+  const response = await api.get(`/api/v1/admin/geo-fence/rules/${id}`)
+  return response.data
+}
+
+export async function updateGeoFenceRule(id: string, data: { name: string; description: string; ipRange: string; isActive: boolean }): Promise<GeoFenceRule> {
+  const response = await api.put(`/api/v1/admin/geo-fence/rules/${id}`, data)
+  return response.data
+}
+
+export async function deleteGeoFenceRule(id: string): Promise<void> {
+  await api.delete(`/api/v1/admin/geo-fence/rules/${id}`)
+}
+
+// Global geo-fence rules
+export async function getGlobalGeoRules(): Promise<GeoFenceRule[]> {
+  const response = await api.get('/api/v1/admin/geo-fence/global')
+  return response.data || []
+}
+
+export async function addGlobalGeoRule(ruleId: string): Promise<void> {
+  await api.post('/api/v1/admin/geo-fence/global', { ruleId })
+}
+
+export async function removeGlobalGeoRule(ruleId: string): Promise<void> {
+  await api.delete(`/api/v1/admin/geo-fence/global/${ruleId}`)
+}
+
+// User geo-fence rules
+export async function getUserGeoRules(userId: string): Promise<GeoFenceRule[]> {
+  const response = await api.get(`/api/v1/admin/geo-fence/users/${userId}/rules`)
+  return response.data || []
+}
+
+export async function addUserGeoRule(userId: string, ruleId: string): Promise<void> {
+  await api.post(`/api/v1/admin/geo-fence/users/${userId}/rules`, { ruleId })
+}
+
+export async function removeUserGeoRule(userId: string, ruleId: string): Promise<void> {
+  await api.delete(`/api/v1/admin/geo-fence/users/${userId}/rules/${ruleId}`)
+}
+
+// Group geo-fence rules
+export async function getGroupGeoRules(groupName: string): Promise<GeoFenceRule[]> {
+  const response = await api.get(`/api/v1/admin/geo-fence/groups/${encodeURIComponent(groupName)}/rules`)
+  return response.data || []
+}
+
+export async function addGroupGeoRule(groupName: string, ruleId: string): Promise<void> {
+  await api.post(`/api/v1/admin/geo-fence/groups/${encodeURIComponent(groupName)}/rules`, { ruleId })
+}
+
+export async function removeGroupGeoRule(groupName: string, ruleId: string): Promise<void> {
+  await api.delete(`/api/v1/admin/geo-fence/groups/${encodeURIComponent(groupName)}/rules/${ruleId}`)
+}
