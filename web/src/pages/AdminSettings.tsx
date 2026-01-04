@@ -154,26 +154,26 @@ export default function AdminSettings() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">{tabTitles[activeTab]}</h1>
-        <p className="text-gray-500 mt-1">Configure VPN settings, authentication providers, and security options</p>
+        <h1 className="text-2xl font-bold text-theme-primary">{tabTitles[activeTab]}</h1>
+        <p className="text-theme-tertiary mt-1">Configure VPN settings, authentication providers, and security options</p>
       </div>
 
       {/* Alerts */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex justify-between items-center">
+        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 flex justify-between items-center">
           <span>{error}</span>
-          <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700">&times;</button>
+          <button onClick={() => setError(null)} className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300">&times;</button>
         </div>
       )}
       {success && (
-        <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 flex justify-between items-center">
+        <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-400 flex justify-between items-center">
           <span>{success}</span>
-          <button onClick={() => setSuccess(null)} className="text-green-500 hover:text-green-700">&times;</button>
+          <button onClick={() => setSuccess(null)} className="text-green-500 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300">&times;</button>
         </div>
       )}
 
       {/* Tab Content */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-theme-card rounded-lg shadow p-6">
         {activeTab === 'oidc' && (
           <OIDCTab
             providers={oidcProviders}
@@ -258,24 +258,24 @@ function OIDCTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
         <form onSubmit={(e) => { e.preventDefault(); onSave(form); }} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Provider Name (unique ID)</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">Provider Name (unique ID)</label>
               <input
                 type="text"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
                 placeholder="keycloak"
                 required
                 disabled={!!editing}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">Display Name</label>
               <input
                 type="text"
                 value={form.display_name}
                 onChange={(e) => setForm({ ...form, display_name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
                 placeholder="Sign in with Keycloak"
                 required
               />
@@ -283,37 +283,37 @@ function OIDCTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Issuer URL</label>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">Issuer URL</label>
             <input
               type="url"
               value={form.issuer}
               onChange={(e) => setForm({ ...form, issuer: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
               placeholder="https://keycloak.example.com/realms/myrealm"
               required
             />
-            <p className="text-xs text-gray-500 mt-1">The OIDC issuer URL (usually ends with /realms/name for Keycloak)</p>
+            <p className="text-xs text-theme-tertiary mt-1">The OIDC issuer URL (usually ends with /realms/name for Keycloak)</p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Client ID</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">Client ID</label>
               <input
                 type="text"
                 value={form.client_id}
                 onChange={(e) => setForm({ ...form, client_id: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
                 placeholder="gatekey"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Client Secret</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">Client Secret</label>
               <input
                 type="password"
                 value={form.client_secret}
                 onChange={(e) => setForm({ ...form, client_secret: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
                 placeholder={editing ? '(unchanged if empty)' : 'Enter client secret'}
                 required={!editing}
               />
@@ -321,40 +321,40 @@ function OIDCTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Redirect URL</label>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">Redirect URL</label>
             <input
               type="url"
               value={form.redirect_url}
               onChange={(e) => setForm({ ...form, redirect_url: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
               placeholder={window.location.origin + '/api/v1/auth/oidc/callback'}
               required
             />
-            <p className="text-xs text-gray-500 mt-1">Configure this URL in your OIDC provider as an allowed redirect URI</p>
+            <p className="text-xs text-theme-tertiary mt-1">Configure this URL in your OIDC provider as an allowed redirect URI</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Scopes</label>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">Scopes</label>
             <input
               type="text"
               value={form.scopes.join(' ')}
               onChange={(e) => setForm({ ...form, scopes: e.target.value.split(' ').filter(s => s) })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
               placeholder="openid profile email"
             />
-            <p className="text-xs text-gray-500 mt-1">Space-separated list of OIDC scopes</p>
+            <p className="text-xs text-theme-tertiary mt-1">Space-separated list of OIDC scopes</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Admin Group (optional)</label>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">Admin Group (optional)</label>
             <input
               type="text"
               value={form.admin_group || ''}
               onChange={(e) => setForm({ ...form, admin_group: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
               placeholder="gatekey-admins"
             />
-            <p className="text-xs text-gray-500 mt-1">Users in this group will be granted admin access. Leave empty to disable.</p>
+            <p className="text-xs text-theme-tertiary mt-1">Users in this group will be granted admin access. Leave empty to disable.</p>
           </div>
 
           <div className="flex items-center">
@@ -363,9 +363,9 @@ function OIDCTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
               id="oidc-enabled"
               checked={form.enabled}
               onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
-              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-theme rounded"
             />
-            <label htmlFor="oidc-enabled" className="ml-2 text-sm text-gray-700">Enable this provider</label>
+            <label htmlFor="oidc-enabled" className="ml-2 text-sm text-theme-secondary">Enable this provider</label>
           </div>
 
           <div className="flex justify-end space-x-3 pt-4 border-t">
@@ -384,7 +384,7 @@ function OIDCTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
       <div className="flex justify-between items-center">
         <div>
           <h3 className="text-lg font-medium">OIDC Providers</h3>
-          <p className="text-sm text-gray-500">Configure OpenID Connect providers for single sign-on</p>
+          <p className="text-sm text-theme-tertiary">Configure OpenID Connect providers for single sign-on</p>
         </div>
         <button onClick={onAdd} className="btn btn-primary">
           + Add OIDC Provider
@@ -392,11 +392,11 @@ function OIDCTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
       </div>
 
       {providers.length === 0 ? (
-        <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="text-center py-8 bg-theme-tertiary rounded-lg border-2 border-dashed border-theme">
+          <svg className="mx-auto h-12 w-12 text-theme-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
           </svg>
-          <p className="mt-2 text-gray-500">No OIDC providers configured</p>
+          <p className="mt-2 text-theme-tertiary">No OIDC providers configured</p>
           <button onClick={onAdd} className="mt-2 text-primary-600 hover:text-primary-700">
             Add your first OIDC provider
           </button>
@@ -408,12 +408,12 @@ function OIDCTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
               <div>
                 <div className="flex items-center space-x-2">
                   <h4 className="font-medium">{provider.display_name}</h4>
-                  <span className={`px-2 py-0.5 text-xs rounded-full ${provider.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+                  <span className={`px-2 py-0.5 text-xs rounded-full ${provider.enabled ? 'bg-green-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-theme-secondary'}`}>
                     {provider.enabled ? 'Enabled' : 'Disabled'}
                   </span>
                 </div>
-                <p className="text-sm text-gray-500 mt-1">{provider.issuer}</p>
-                <p className="text-xs text-gray-400">Client ID: {provider.client_id}</p>
+                <p className="text-sm text-theme-tertiary mt-1">{provider.issuer}</p>
+                <p className="text-xs text-theme-muted">Client ID: {provider.client_id}</p>
                 {provider.admin_group && (
                   <p className="text-xs text-orange-600 mt-1">Admin group: {provider.admin_group}</p>
                 )}
@@ -425,7 +425,7 @@ function OIDCTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
                   </svg>
                   Edit
                 </button>
-                <button onClick={() => onDelete(provider.name)} className="btn text-sm text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 inline-flex items-center">
+                <button onClick={() => onDelete(provider.name)} className="btn text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30 inline-flex items-center">
                   <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
@@ -487,24 +487,24 @@ function SAMLTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
         <form onSubmit={(e) => { e.preventDefault(); onSave(form); }} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Provider Name (unique ID)</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">Provider Name (unique ID)</label>
               <input
                 type="text"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
                 placeholder="okta"
                 required
                 disabled={!!editing}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">Display Name</label>
               <input
                 type="text"
                 value={form.display_name}
                 onChange={(e) => setForm({ ...form, display_name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
                 placeholder="Sign in with Okta"
                 required
               />
@@ -512,54 +512,54 @@ function SAMLTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">IdP Metadata URL</label>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">IdP Metadata URL</label>
             <input
               type="url"
               value={form.idp_metadata_url}
               onChange={(e) => setForm({ ...form, idp_metadata_url: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
               placeholder="https://okta.example.com/app/xxx/sso/saml/metadata"
               required
             />
-            <p className="text-xs text-gray-500 mt-1">URL to the IdP's SAML metadata XML</p>
+            <p className="text-xs text-theme-tertiary mt-1">URL to the IdP's SAML metadata XML</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Entity ID (SP)</label>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">Entity ID (SP)</label>
             <input
               type="text"
               value={form.entity_id}
               onChange={(e) => setForm({ ...form, entity_id: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
               placeholder={window.location.origin}
               required
             />
-            <p className="text-xs text-gray-500 mt-1">The Service Provider entity ID (usually your application's URL)</p>
+            <p className="text-xs text-theme-tertiary mt-1">The Service Provider entity ID (usually your application's URL)</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ACS URL</label>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">ACS URL</label>
             <input
               type="url"
               value={form.acs_url}
               onChange={(e) => setForm({ ...form, acs_url: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
               placeholder={window.location.origin + '/api/v1/auth/saml/acs'}
               required
             />
-            <p className="text-xs text-gray-500 mt-1">Assertion Consumer Service URL - configure this in your IdP</p>
+            <p className="text-xs text-theme-tertiary mt-1">Assertion Consumer Service URL - configure this in your IdP</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Admin Group (optional)</label>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">Admin Group (optional)</label>
             <input
               type="text"
               value={form.admin_group || ''}
               onChange={(e) => setForm({ ...form, admin_group: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
               placeholder="gatekey-admins"
             />
-            <p className="text-xs text-gray-500 mt-1">Users in this group will be granted admin access. Leave empty to disable.</p>
+            <p className="text-xs text-theme-tertiary mt-1">Users in this group will be granted admin access. Leave empty to disable.</p>
           </div>
 
           <div className="flex items-center">
@@ -568,9 +568,9 @@ function SAMLTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
               id="saml-enabled"
               checked={form.enabled}
               onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
-              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-theme rounded"
             />
-            <label htmlFor="saml-enabled" className="ml-2 text-sm text-gray-700">Enable this provider</label>
+            <label htmlFor="saml-enabled" className="ml-2 text-sm text-theme-secondary">Enable this provider</label>
           </div>
 
           <div className="flex justify-end space-x-3 pt-4 border-t">
@@ -589,7 +589,7 @@ function SAMLTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
       <div className="flex justify-between items-center">
         <div>
           <h3 className="text-lg font-medium">SAML Providers</h3>
-          <p className="text-sm text-gray-500">Configure SAML 2.0 identity providers for single sign-on</p>
+          <p className="text-sm text-theme-tertiary">Configure SAML 2.0 identity providers for single sign-on</p>
         </div>
         <button onClick={onAdd} className="btn btn-primary">
           + Add SAML Provider
@@ -597,11 +597,11 @@ function SAMLTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
       </div>
 
       {providers.length === 0 ? (
-        <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="text-center py-8 bg-theme-tertiary rounded-lg border-2 border-dashed border-theme">
+          <svg className="mx-auto h-12 w-12 text-theme-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
           </svg>
-          <p className="mt-2 text-gray-500">No SAML providers configured</p>
+          <p className="mt-2 text-theme-tertiary">No SAML providers configured</p>
           <button onClick={onAdd} className="mt-2 text-primary-600 hover:text-primary-700">
             Add your first SAML provider
           </button>
@@ -613,12 +613,12 @@ function SAMLTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
               <div>
                 <div className="flex items-center space-x-2">
                   <h4 className="font-medium">{provider.display_name}</h4>
-                  <span className={`px-2 py-0.5 text-xs rounded-full ${provider.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+                  <span className={`px-2 py-0.5 text-xs rounded-full ${provider.enabled ? 'bg-green-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-theme-secondary'}`}>
                     {provider.enabled ? 'Enabled' : 'Disabled'}
                   </span>
                 </div>
-                <p className="text-sm text-gray-500 mt-1">{provider.idp_metadata_url}</p>
-                <p className="text-xs text-gray-400">Entity ID: {provider.entity_id}</p>
+                <p className="text-sm text-theme-tertiary mt-1">{provider.idp_metadata_url}</p>
+                <p className="text-xs text-theme-muted">Entity ID: {provider.entity_id}</p>
                 {provider.admin_group && (
                   <p className="text-xs text-orange-600 mt-1">Admin group: {provider.admin_group}</p>
                 )}
@@ -630,7 +630,7 @@ function SAMLTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
                   </svg>
                   Edit
                 </button>
-                <button onClick={() => onDelete(provider.name)} className="btn text-sm text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 inline-flex items-center">
+                <button onClick={() => onDelete(provider.name)} className="btn text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30 inline-flex items-center">
                   <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
@@ -806,15 +806,15 @@ function CATab() {
   function getStatusBadge(status: string) {
     switch (status) {
       case 'active':
-        return <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">Active</span>
+        return <span className="px-2 py-0.5 text-xs rounded-full bg-green-600 text-white">Active</span>
       case 'pending':
-        return <span className="px-2 py-0.5 text-xs rounded-full bg-yellow-100 text-yellow-700">Pending</span>
+        return <span className="px-2 py-0.5 text-xs rounded-full bg-yellow-500 text-white">Pending</span>
       case 'retired':
-        return <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">Retired</span>
+        return <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-theme-secondary">Retired</span>
       case 'revoked':
-        return <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700">Revoked</span>
+        return <span className="px-2 py-0.5 text-xs rounded-full bg-red-600 text-white">Revoked</span>
       default:
-        return <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">{status}</span>
+        return <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-theme-secondary">{status}</span>
     }
   }
 
@@ -830,19 +830,19 @@ function CATab() {
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-medium">Certificate Authority</h3>
-        <p className="text-sm text-gray-500">Manage the CA used to sign VPN certificates</p>
+        <p className="text-sm text-theme-tertiary">Manage the CA used to sign VPN certificates</p>
       </div>
 
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex justify-between items-center">
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 text-sm flex justify-between items-center">
           <span>{error}</span>
-          <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700">&times;</button>
+          <button onClick={() => setError(null)} className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300">&times;</button>
         </div>
       )}
       {success && (
-        <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm flex justify-between items-center">
+        <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-400 text-sm flex justify-between items-center">
           <span>{success}</span>
-          <button onClick={() => setSuccess(null)} className="text-green-500 hover:text-green-700">&times;</button>
+          <button onClick={() => setSuccess(null)} className="text-green-500 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300">&times;</button>
         </div>
       )}
 
@@ -852,7 +852,7 @@ function CATab() {
           <h4 className="font-medium mb-4">All Certificate Authorities</h4>
           <div className="space-y-3">
             {caList.map((ca) => (
-              <div key={ca.id} className={`border rounded-lg p-4 ${ca.status === 'active' ? 'border-green-300 bg-green-50' : ''}`}>
+              <div key={ca.id} className={`border rounded-lg p-4 ${ca.status === 'active' ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20' : ''}`}>
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="flex items-center space-x-2 mb-2">
@@ -860,19 +860,19 @@ function CATab() {
                       {getStatusBadge(ca.status)}
                     </div>
                     {ca.description && (
-                      <p className="text-sm text-gray-600 mb-2">{ca.description}</p>
+                      <p className="text-sm text-theme-tertiary mb-2">{ca.description}</p>
                     )}
-                    <div className="grid gap-1 text-sm text-gray-500">
+                    <div className="grid gap-1 text-sm text-theme-tertiary">
                       <div>
-                        <span className="text-gray-400">Fingerprint: </span>
+                        <span className="text-theme-muted">Fingerprint: </span>
                         <span className="font-mono text-xs">{ca.fingerprint || 'N/A'}</span>
                       </div>
                       <div>
-                        <span className="text-gray-400">Valid: </span>
+                        <span className="text-theme-muted">Valid: </span>
                         {formatDate(ca.not_before)} - {formatDate(ca.not_after)}
                       </div>
                       <div>
-                        <span className="text-gray-400">Created: </span>
+                        <span className="text-theme-muted">Created: </span>
                         {formatDate(ca.created_at)}
                       </div>
                     </div>
@@ -891,8 +891,11 @@ function CATab() {
                       <button
                         onClick={() => handleRevoke(ca.id)}
                         disabled={revoking === ca.id}
-                        className="btn text-sm text-red-600 bg-red-50 border border-red-200 hover:bg-red-100"
+                        className="btn text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30 inline-flex items-center"
                       >
+                        <svg className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                        </svg>
                         {revoking === ca.id ? 'Revoking...' : 'Revoke'}
                       </button>
                     )}
@@ -911,23 +914,23 @@ function CATab() {
             <h4 className="font-medium mb-4">Active CA Certificate Details</h4>
             <div className="grid gap-3 text-sm">
               <div className="flex">
-                <span className="text-gray-500 w-32">Subject:</span>
+                <span className="text-theme-tertiary w-32">Subject:</span>
                 <span className="font-mono">{caInfo.subject}</span>
               </div>
               <div className="flex">
-                <span className="text-gray-500 w-32">Serial Number:</span>
+                <span className="text-theme-tertiary w-32">Serial Number:</span>
                 <span className="font-mono uppercase">{caInfo.serial_number}</span>
               </div>
               <div className="flex">
-                <span className="text-gray-500 w-32">Valid From:</span>
+                <span className="text-theme-tertiary w-32">Valid From:</span>
                 <span>{formatDate(caInfo.not_before)}</span>
               </div>
               <div className="flex">
-                <span className="text-gray-500 w-32">Valid Until:</span>
+                <span className="text-theme-tertiary w-32">Valid Until:</span>
                 <span>{formatDate(caInfo.not_after)}</span>
               </div>
               <div className="flex">
-                <span className="text-gray-500 w-32">Fingerprint:</span>
+                <span className="text-theme-tertiary w-32">Fingerprint:</span>
                 <span className="font-mono text-xs break-all">{caInfo.fingerprint}</span>
               </div>
             </div>
@@ -945,10 +948,10 @@ function CATab() {
           <div className="border rounded-lg p-4">
             <h4 className="font-medium mb-4">CA Management</h4>
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-theme-tertiary rounded-lg">
                 <div>
                   <p className="font-medium">Graceful CA Rotation</p>
-                  <p className="text-sm text-gray-500">Prepare a new CA, then activate it when ready (recommended)</p>
+                  <p className="text-sm text-theme-tertiary">Prepare a new CA, then activate it when ready (recommended)</p>
                 </div>
                 <button
                   onClick={() => setShowPrepareRotation(!showPrepareRotation)}
@@ -962,17 +965,17 @@ function CATab() {
               </div>
 
               {showPrepareRotation && (
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                   <h5 className="font-medium mb-3">Prepare CA Rotation</h5>
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
+                      <label className="block text-sm font-medium text-theme-secondary mb-1">Description (optional)</label>
                       <input
                         type="text"
                         value={rotationDescription}
                         onChange={(e) => setRotationDescription(e.target.value)}
                         placeholder="e.g., Quarterly CA rotation - January 2026"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                        className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
                       />
                     </div>
                     <div className="flex justify-end space-x-2">
@@ -985,10 +988,10 @@ function CATab() {
                 </div>
               )}
 
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-theme-tertiary rounded-lg">
                 <div>
                   <p className="font-medium">Immediate CA Rotation</p>
-                  <p className="text-sm text-gray-500">Generate and activate a new CA immediately</p>
+                  <p className="text-sm text-theme-tertiary">Generate and activate a new CA immediately</p>
                 </div>
                 <button
                   onClick={handleRotate}
@@ -1001,10 +1004,10 @@ function CATab() {
                   {rotating ? 'Rotating...' : 'Rotate Now'}
                 </button>
               </div>
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-theme-tertiary rounded-lg">
                 <div>
                   <p className="font-medium">Import Custom CA</p>
-                  <p className="text-sm text-gray-500">Use your own CA certificate and private key</p>
+                  <p className="text-sm text-theme-tertiary">Use your own CA certificate and private key</p>
                 </div>
                 <button
                   onClick={() => setShowUpload(!showUpload)}
@@ -1021,31 +1024,31 @@ function CATab() {
 
           {/* Upload Form */}
           {showUpload && (
-            <div className="border rounded-lg p-4 border-primary-200 bg-primary-50">
+            <div className="info-box">
               <h4 className="font-medium mb-4">Import Custom CA</h4>
               <form onSubmit={handleUpload} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">CA Certificate (PEM)</label>
+                  <label className="block text-sm font-medium text-theme-secondary mb-1">CA Certificate (PEM)</label>
                   <textarea
                     value={certPem}
                     onChange={(e) => setCertPem(e.target.value)}
                     rows={8}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-xs focus:ring-2 focus:ring-primary-500"
+                    className="w-full px-3 py-2 border border-theme rounded-lg font-mono text-xs focus:ring-2 focus:ring-primary-500"
                     placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">CA Private Key (PEM)</label>
+                  <label className="block text-sm font-medium text-theme-secondary mb-1">CA Private Key (PEM)</label>
                   <textarea
                     value={keyPem}
                     onChange={(e) => setKeyPem(e.target.value)}
                     rows={8}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-xs focus:ring-2 focus:ring-primary-500"
+                    className="w-full px-3 py-2 border border-theme rounded-lg font-mono text-xs focus:ring-2 focus:ring-primary-500"
                     placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
                     required
                   />
-                  <p className="text-xs text-gray-500 mt-1">Supported formats: PKCS#8, RSA, EC private key</p>
+                  <p className="text-xs text-theme-tertiary mt-1">Supported formats: PKCS#8, RSA, EC private key</p>
                 </div>
                 <div className="flex justify-end space-x-3 pt-4 border-t">
                   <button type="button" onClick={() => { setShowUpload(false); setCertPem(''); setKeyPem(''); }} className="btn btn-secondary">
@@ -1060,16 +1063,16 @@ function CATab() {
           )}
 
           {/* Info */}
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-blue-800 text-sm">
+          <div className="p-4 bg-theme-tertiary border border-theme rounded-lg">
+            <p className="text-sm text-theme-secondary">
               <strong>Graceful Rotation:</strong> When you activate a new CA, the old CA is retired but remains trusted.
               Gateways and mesh hubs will automatically reprovision with the new CA on their next heartbeat.
             </p>
           </div>
         </div>
       ) : (
-        <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-          <p className="text-gray-500">CA not initialized</p>
+        <div className="text-center py-8 bg-theme-tertiary rounded-lg border-2 border-dashed border-theme">
+          <p className="text-theme-tertiary">CA not initialized</p>
         </div>
       )}
     </div>
@@ -1126,16 +1129,16 @@ function GeneralTab() {
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-medium">VPN Settings</h3>
-        <p className="text-sm text-gray-500">Configure VPN session and security settings</p>
+        <p className="text-sm text-theme-tertiary">Configure VPN session and security settings</p>
       </div>
 
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 text-sm">
           {error}
         </div>
       )}
       {success && (
-        <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+        <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-400 text-sm">
           {success}
         </div>
       )}
@@ -1145,28 +1148,28 @@ function GeneralTab() {
           <h4 className="font-medium mb-4">Session Settings</h4>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Session Duration (hours)</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">Session Duration (hours)</label>
               <input
                 type="number"
                 value={settings.session_duration_hours || '12'}
                 onChange={(e) => setSettings({ ...settings, session_duration_hours: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
                 min="1"
                 max="168"
               />
-              <p className="text-xs text-gray-500 mt-1">How long user sessions remain valid</p>
+              <p className="text-xs text-theme-tertiary mt-1">How long user sessions remain valid</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">VPN Certificate Validity (hours)</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">VPN Certificate Validity (hours)</label>
               <input
                 type="number"
                 value={settings.vpn_cert_validity_hours || '24'}
                 onChange={(e) => setSettings({ ...settings, vpn_cert_validity_hours: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
                 min="1"
                 max="168"
               />
-              <p className="text-xs text-gray-500 mt-1">How long VPN certificates remain valid</p>
+              <p className="text-xs text-theme-tertiary mt-1">How long VPN certificates remain valid</p>
             </div>
           </div>
           <div className="mt-4">
@@ -1176,20 +1179,20 @@ function GeneralTab() {
                 id="secure-cookies"
                 checked={settings.secure_cookies === 'true'}
                 onChange={(e) => setSettings({ ...settings, secure_cookies: e.target.checked ? 'true' : 'false' })}
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-theme rounded"
               />
-              <label htmlFor="secure-cookies" className="ml-2 text-sm text-gray-700">
+              <label htmlFor="secure-cookies" className="ml-2 text-sm text-theme-secondary">
                 Secure Cookies (HTTPS only)
               </label>
             </div>
-            <p className="text-xs text-gray-500 mt-1 ml-6">Enable only if using HTTPS</p>
+            <p className="text-xs text-theme-tertiary mt-1 ml-6">Enable only if using HTTPS</p>
           </div>
         </div>
 
         <div className="border rounded-lg p-4">
           <h4 className="font-medium mb-4">Security Settings</h4>
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-theme-tertiary rounded-lg">
               <div>
                 <div className="flex items-center">
                   <input
@@ -1197,21 +1200,21 @@ function GeneralTab() {
                     id="require-fips"
                     checked={settings.require_fips === 'true'}
                     onChange={(e) => setSettings({ ...settings, require_fips: e.target.checked ? 'true' : 'false' })}
-                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-theme rounded"
                   />
-                  <label htmlFor="require-fips" className="ml-2 font-medium text-gray-700">
+                  <label htmlFor="require-fips" className="ml-2 font-medium text-theme-secondary">
                     Require FIPS 140-3 Compliance
                   </label>
                 </div>
-                <p className="text-sm text-gray-500 mt-1 ml-6">
+                <p className="text-sm text-theme-tertiary mt-1 ml-6">
                   When enabled, clients must pass FIPS compliance checks before connecting.
                   This enforces the use of FIPS 140-3 validated cryptographic modules.
                 </p>
               </div>
             </div>
             {settings.require_fips === 'true' && (
-              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-sm text-yellow-800">
+              <div className="p-3 bg-amber-100 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800 rounded-lg">
+                <p className="text-sm text-amber-900 dark:text-amber-300">
                   <strong>Note:</strong> Enabling FIPS requirement will block connections from clients
                   that don't have FIPS mode enabled. Make sure your users' systems are FIPS-compliant
                   before enabling this setting.
@@ -1235,12 +1238,12 @@ function GeneralTab() {
 
         <div className="border rounded-lg p-4">
           <h4 className="font-medium mb-4">OpenVPN Encryption Settings</h4>
-          <p className="text-sm text-gray-500 mb-4">Control which encryption profiles are allowed for VPN gateways</p>
+          <p className="text-sm text-theme-tertiary mb-4">Control which encryption profiles are allowed for VPN gateways</p>
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Allowed Crypto Profiles</label>
-              <p className="text-xs text-gray-500 mb-3">Select which encryption profiles gateways can use. At least one must be selected.</p>
+              <label className="block text-sm font-medium text-theme-secondary mb-2">Allowed Crypto Profiles</label>
+              <p className="text-xs text-theme-tertiary mb-3">Select which encryption profiles gateways can use. At least one must be selected.</p>
               <div className="space-y-2">
                 {[
                   { id: 'modern', name: 'Modern', desc: 'AES-256-GCM, CHACHA20-POLY1305, TLS 1.2+ (Recommended)' },
@@ -1250,7 +1253,7 @@ function GeneralTab() {
                   const allowedProfiles = (settings.allowed_crypto_profiles || 'modern,fips,compatible').split(',')
                   const isChecked = allowedProfiles.includes(profile.id)
                   return (
-                    <label key={profile.id} className="flex items-start p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
+                    <label key={profile.id} className="flex items-start p-3 bg-theme-tertiary rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700">
                       <input
                         type="checkbox"
                         checked={isChecked}
@@ -1267,11 +1270,11 @@ function GeneralTab() {
                           if (profiles.length === 0) profiles = ['modern']
                           setSettings({ ...settings, allowed_crypto_profiles: profiles.join(',') })
                         }}
-                        className="h-4 w-4 mt-0.5 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                        className="h-4 w-4 mt-0.5 text-primary-600 focus:ring-primary-500 border-theme rounded"
                       />
                       <div className="ml-3">
-                        <span className="font-medium text-gray-900">{profile.name}</span>
-                        <p className="text-xs text-gray-500">{profile.desc}</p>
+                        <span className="font-medium text-theme-primary">{profile.name}</span>
+                        <p className="text-xs text-theme-tertiary">{profile.desc}</p>
                       </div>
                     </label>
                   )
@@ -1280,31 +1283,31 @@ function GeneralTab() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Minimum TLS Version</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">Minimum TLS Version</label>
               <select
                 value={settings.min_tls_version || '1.2'}
                 onChange={(e) => setSettings({ ...settings, min_tls_version: e.target.value })}
-                className="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                className="w-full max-w-xs px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
               >
                 <option value="1.0">TLS 1.0 (Legacy)</option>
                 <option value="1.1">TLS 1.1</option>
                 <option value="1.2">TLS 1.2 (Recommended)</option>
                 <option value="1.3">TLS 1.3 (Most Secure)</option>
               </select>
-              <p className="text-xs text-gray-500 mt-1">Minimum TLS version for VPN connections</p>
+              <p className="text-xs text-theme-tertiary mt-1">Minimum TLS version for VPN connections</p>
             </div>
 
             {(settings.allowed_crypto_profiles && !settings.allowed_crypto_profiles.includes('modern')) && (
-              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-sm text-yellow-800">
+              <div className="p-3 bg-theme-tertiary border border-theme rounded-lg">
+                <p className="text-sm text-theme-secondary">
                   <strong>Warning:</strong> The "Modern" profile is recommended for best security. Disabling it may reduce overall security.
                 </p>
               </div>
             )}
 
             {settings.allowed_crypto_profiles === 'compatible' && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-sm text-red-800">
+              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <p className="text-sm text-red-800 dark:text-red-300">
                   <strong>Security Risk:</strong> Only allowing the "Compatible" profile means VPN connections may use weaker encryption (AES-CBC). Consider enabling "Modern" or "FIPS" profiles for better security.
                 </p>
               </div>
@@ -1327,22 +1330,22 @@ function GeneralTab() {
 
         <div className="border rounded-lg p-4">
           <h4 className="font-medium mb-2">Service Provider Metadata</h4>
-          <p className="text-sm text-gray-500 mb-3">Use these values when configuring your identity provider</p>
-          <div className="space-y-2 font-mono text-sm bg-gray-50 p-3 rounded">
+          <p className="text-sm text-theme-tertiary mb-3">Use these values when configuring your identity provider</p>
+          <div className="space-y-2 font-mono text-sm bg-theme-tertiary p-3 rounded">
             <div>
-              <span className="text-gray-500">Entity ID:</span>
+              <span className="text-theme-tertiary">Entity ID:</span>
               <span className="ml-2">{window.location.origin}</span>
             </div>
             <div>
-              <span className="text-gray-500">OIDC Callback:</span>
+              <span className="text-theme-tertiary">OIDC Callback:</span>
               <span className="ml-2">{window.location.origin}/api/v1/auth/oidc/callback</span>
             </div>
             <div>
-              <span className="text-gray-500">SAML ACS:</span>
+              <span className="text-theme-tertiary">SAML ACS:</span>
               <span className="ml-2">{window.location.origin}/api/v1/auth/saml/acs</span>
             </div>
             <div>
-              <span className="text-gray-500">SAML Metadata:</span>
+              <span className="text-theme-tertiary">SAML Metadata:</span>
               <span className="ml-2">{window.location.origin}/api/v1/auth/saml/metadata</span>
             </div>
           </div>

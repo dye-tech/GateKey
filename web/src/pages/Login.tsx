@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { getProviders, localLogin, AuthProvider } from '../api/client'
 
 export default function Login() {
@@ -12,6 +13,7 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
   const { user, refreshSession } = useAuth()
+  const { resolvedTheme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
@@ -90,25 +92,42 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100">
+    <div className="min-h-screen flex items-center justify-center bg-theme-secondary">
+      {/* Theme toggle in corner */}
+      <button
+        onClick={toggleTheme}
+        className="absolute top-4 right-4 p-2 rounded-lg text-theme-secondary hover:bg-theme-tertiary transition-colors"
+        title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
+      >
+        {resolvedTheme === 'dark' ? (
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+        ) : (
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+          </svg>
+        )}
+      </button>
+
       <div className="max-w-md w-full mx-4">
         <div className="card">
           {/* Logo and title */}
           <div className="text-center mb-8">
             <div className="flex justify-center mb-4">
-              <img src="/logo.png" alt="GateKey" className="h-32" />
+              <img src={resolvedTheme === 'dark' ? '/logo-transparent.png' : '/logo.png'} alt="GateKey" className="h-32" />
             </div>
-            <p className="text-gray-500 mt-2">Zero Trust VPN Access</p>
+            <p className="text-theme-tertiary mt-2">Zero Trust VPN Access</p>
           </div>
 
           {/* Error message */}
           {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
               <div className="flex items-center">
                 <svg className="h-5 w-5 text-red-500 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
-                <span className="text-red-700 text-sm font-medium">
+                <span className="text-red-500 text-sm font-medium">
                   {error === 'Failed to load authentication providers'
                     ? 'Service Unavailable'
                     : error}
@@ -116,7 +135,7 @@ export default function Login() {
               </div>
               {error === 'Failed to load authentication providers' && (
                 <div className="mt-2 ml-7">
-                  <p className="text-red-600 text-xs">
+                  <p className="text-red-400 text-xs">
                     Unable to connect to authentication service. Please try again later or contact your administrator.
                   </p>
                   <button
@@ -125,7 +144,7 @@ export default function Login() {
                       setLoading(true)
                       loadProviders()
                     }}
-                    className="mt-2 text-xs text-primary-600 hover:text-primary-800 font-medium"
+                    className="mt-2 text-xs text-primary-500 hover:text-primary-400 font-medium"
                   >
                     Retry Connection
                   </button>
@@ -143,7 +162,7 @@ export default function Login() {
             /* Local login form */
             <form onSubmit={handleLocalLogin} className="space-y-4">
               <div>
-                <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="username" className="block text-sm font-medium text-theme-secondary mb-1">
                   Username
                 </label>
                 <input
@@ -151,14 +170,14 @@ export default function Login() {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="input"
                   placeholder="admin"
                   required
                   autoFocus
                 />
               </div>
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="password" className="block text-sm font-medium text-theme-secondary mb-1">
                   Password
                 </label>
                 <input
@@ -166,7 +185,7 @@ export default function Login() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="input"
                   placeholder="Enter password"
                   required
                 />
@@ -191,7 +210,7 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() => setShowLocalForm(false)}
-                className="w-full text-sm text-gray-500 hover:text-gray-700"
+                className="w-full text-sm text-theme-tertiary hover:text-theme-primary"
               >
                 Back to provider selection
               </button>
@@ -222,17 +241,17 @@ export default function Login() {
               </div>
 
               {providers.filter(p => p.type !== 'local').length === 0 && (
-                <p className="text-center text-gray-500 py-4">
+                <p className="text-center text-theme-tertiary py-4">
                   No SSO providers configured yet.
                 </p>
               )}
 
               {/* Local user login link */}
               {providers.some(p => p.type === 'local') && (
-                <div className="mt-6 pt-4 border-t border-gray-200">
+                <div className="mt-6 pt-4 border-t border-theme">
                   <button
                     onClick={() => setShowLocalForm(true)}
-                    className="w-full flex items-center justify-center space-x-2 text-sm text-gray-600 hover:text-gray-900"
+                    className="w-full flex items-center justify-center space-x-2 text-sm text-theme-tertiary hover:text-theme-primary"
                   >
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -245,8 +264,8 @@ export default function Login() {
           )}
 
           {/* Info text */}
-          <div className="mt-8 pt-6 border-t border-gray-200">
-            <p className="text-xs text-gray-500 text-center">
+          <div className="mt-8 pt-6 border-t border-theme">
+            <p className="text-xs text-theme-muted text-center">
               {showLocalForm
                 ? 'Use your local account credentials to sign in.'
                 : 'Sign in with your organization\'s identity provider to access VPN configurations.'}
@@ -255,7 +274,7 @@ export default function Login() {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-sm text-gray-500 mt-4">
+        <p className="text-center text-sm text-theme-muted mt-4">
           Secure access powered by GateKey SDP
         </p>
       </div>

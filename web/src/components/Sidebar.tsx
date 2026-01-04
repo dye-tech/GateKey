@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 
 interface SidebarProps {
   isOpen: boolean
@@ -8,6 +9,7 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const { user, logout } = useAuth()
+  const { resolvedTheme } = useTheme()
   const location = useLocation()
 
   const navigation = [
@@ -194,15 +196,14 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
       {/* Mobile overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 lg:hidden"
-          style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+          className="fixed inset-0 z-40 lg:hidden bg-black/50"
           onClick={onToggle}
         />
       )}
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 z-50 h-full bg-white shadow-lg transform transition-transform duration-300 ease-in-out ${
+        className={`fixed top-0 left-0 z-50 h-full bg-theme-sidebar shadow-lg border-r border-theme transform transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:translate-x-0 lg:static lg:z-auto ${
           isOpen ? 'w-64' : 'lg:w-20'
@@ -210,10 +211,12 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
       >
         <div className="flex flex-col h-full">
           {/* Logo and collapse button */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          <div className="flex items-center justify-between p-4 border-b border-theme">
             <Link to="/" className="flex items-center">
               <img
-                src={isOpen ? '/logo.png' : '/logo-small.png'}
+                src={isOpen
+                  ? (resolvedTheme === 'dark' ? '/logo-transparent.png' : '/logo.png')
+                  : '/logo-small.png'}
                 alt="GateKey"
                 className={`transition-all duration-300 object-contain ${isOpen ? 'h-20' : 'h-10 lg:mx-auto'}`}
               />
@@ -221,7 +224,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
             {/* Desktop collapse button */}
             <button
               onClick={onToggle}
-              className="hidden lg:flex items-center justify-center w-8 h-8 rounded-md hover:bg-gray-100 text-gray-500"
+              className="hidden lg:flex items-center justify-center w-8 h-8 rounded-md hover:bg-theme-tertiary text-theme-tertiary transition-colors"
               title={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
             >
               <svg
@@ -236,7 +239,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
             {/* Mobile close button */}
             <button
               onClick={onToggle}
-              className="lg:hidden flex items-center justify-center w-8 h-8 rounded-md hover:bg-gray-100 text-gray-500"
+              className="lg:hidden flex items-center justify-center w-8 h-8 rounded-md hover:bg-theme-tertiary text-theme-tertiary transition-colors"
             >
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -254,12 +257,12 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
                   to={item.href}
                   className={`flex items-center px-3 py-2.5 rounded-lg transition-colors ${
                     isActive(item.href)
-                      ? 'bg-primary-50 text-primary-700'
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                      ? 'bg-primary-600/10 text-primary-600 dark:bg-primary-500/20 dark:text-primary-400'
+                      : 'text-theme-secondary hover:bg-theme-tertiary hover:text-theme-primary'
                   }`}
                   title={!isOpen ? item.name : undefined}
                 >
-                  <span className={`flex-shrink-0 ${isActive(item.href) ? 'text-primary-600' : 'text-gray-500'}`}>
+                  <span className={`flex-shrink-0 ${isActive(item.href) ? 'text-primary-600 dark:text-primary-400' : 'text-theme-tertiary'}`}>
                     {renderIcon(item.icon)}
                   </span>
                   <span
@@ -280,14 +283,14 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
                   <div key={group.label}>
                     <div className={`${groupIndex === 0 ? 'mt-6' : 'mt-4'} px-3 ${isOpen ? '' : 'lg:px-2'}`}>
                       <div
-                        className={`flex items-center text-xs font-semibold text-gray-400 uppercase tracking-wider ${
+                        className={`flex items-center text-xs font-semibold text-theme-muted uppercase tracking-wider ${
                           isOpen ? 'px-3' : 'lg:justify-center'
                         }`}
                       >
                         {isOpen ? (
                           group.label
                         ) : (
-                          <span className="hidden lg:block w-8 h-0.5 bg-gray-300 rounded"></span>
+                          <span className="hidden lg:block w-8 h-0.5 bg-theme-tertiary rounded"></span>
                         )}
                       </div>
                     </div>
@@ -298,12 +301,12 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
                           to={item.href}
                           className={`flex items-center px-3 py-2.5 rounded-lg transition-colors ${
                             isActive(item.href)
-                              ? 'bg-primary-50 text-primary-700'
-                              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                              ? 'bg-primary-600/10 text-primary-600 dark:bg-primary-500/20 dark:text-primary-400'
+                              : 'text-theme-secondary hover:bg-theme-tertiary hover:text-theme-primary'
                           }`}
                           title={!isOpen ? item.name : undefined}
                         >
-                          <span className={`flex-shrink-0 ${isActive(item.href) ? 'text-primary-600' : 'text-gray-500'}`}>
+                          <span className={`flex-shrink-0 ${isActive(item.href) ? 'text-primary-600 dark:text-primary-400' : 'text-theme-tertiary'}`}>
                             {renderIcon(item.icon)}
                           </span>
                           <span
@@ -323,13 +326,13 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
           </nav>
 
           {/* Bottom section - Help and Sign out */}
-          <div className="border-t border-gray-200 p-3 space-y-1">
+          <div className="border-t border-theme p-3 space-y-1">
             <Link
               to="/help"
-              className={`flex items-center px-3 py-2.5 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors`}
+              className="flex items-center px-3 py-2.5 rounded-lg text-theme-secondary hover:bg-theme-tertiary hover:text-theme-primary transition-colors"
               title={!isOpen ? 'Help' : undefined}
             >
-              <svg className="h-5 w-5 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="h-5 w-5 text-theme-tertiary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span
@@ -342,10 +345,10 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
             </Link>
             <button
               onClick={logout}
-              className={`w-full flex items-center px-3 py-2.5 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors`}
+              className="w-full flex items-center px-3 py-2.5 rounded-lg text-theme-secondary hover:bg-theme-tertiary hover:text-theme-primary transition-colors"
               title={!isOpen ? 'Sign out' : undefined}
             >
-              <svg className="h-5 w-5 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="h-5 w-5 text-theme-tertiary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
               <span
