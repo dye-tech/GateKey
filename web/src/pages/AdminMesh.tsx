@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
-  getMeshHubs, createMeshHub, deleteMeshHub, provisionMeshHub, getMeshHubInstallScript, updateMeshHub,
-  getMeshSpokes, createMeshSpoke, deleteMeshSpoke, provisionMeshSpoke, getMeshSpokeInstallScript, updateMeshSpoke,
+  getMeshHubs, createMeshHub, deleteMeshHub, provisionMeshHub, getMeshHubInstallScript, updateMeshHub, rotateMeshHubToken,
+  getMeshSpokes, createMeshSpoke, deleteMeshSpoke, provisionMeshSpoke, getMeshSpokeInstallScript, updateMeshSpoke, rotateMeshSpokeToken,
   getMeshHubUsers, assignMeshHubUser, removeMeshHubUser,
   getMeshHubGroups, assignMeshHubGroup, removeMeshHubGroup,
   getMeshHubNetworks, assignMeshHubNetwork, removeMeshHubNetwork, MeshHubNetwork,
@@ -9,7 +9,7 @@ import {
   getMeshSpokeGroups, assignMeshSpokeGroup, removeMeshSpokeGroup,
   getUsers, getGroups, getNetworks, Network,
   MeshHub, MeshHubWithToken, MeshSpoke, MeshSpokeWithToken,
-  CreateMeshHubRequest, CreateMeshSpokeRequest, CryptoProfile
+  CreateMeshHubRequest, CreateMeshSpokeRequest, CryptoProfile, RotateTokenResponse
 } from '../api/client'
 import ActionDropdown from '../components/ActionDropdown'
 
@@ -37,6 +37,9 @@ export default function AdminMesh() {
   const [newSpoke, setNewSpoke] = useState<MeshSpokeWithToken | null>(null)
   const [editingHub, setEditingHub] = useState<MeshHub | null>(null)
   const [editingSpoke, setEditingSpoke] = useState<MeshSpoke | null>(null)
+  const [showRotatedTokenModal, setShowRotatedTokenModal] = useState(false)
+  const [rotatedToken, setRotatedToken] = useState<RotateTokenResponse | null>(null)
+  const [rotatedTokenType, setRotatedTokenType] = useState<'hub' | 'spoke'>('hub')
 
   useEffect(() => {
     loadHubs()
@@ -141,6 +144,46 @@ export default function AdminMesh() {
       setShowInstallScriptModal(true)
     } catch (err) {
       setError('Failed to get install script')
+    }
+  }
+
+  async function handleRotateHubToken(hub: MeshHub) {
+    if (!confirm(
+      `Rotate token for hub "${hub.name}"?\n\n` +
+      `WARNING: The current token will be immediately invalidated. ` +
+      `You will need to update the hub configuration with the new token.`
+    )) {
+      return
+    }
+
+    try {
+      const response = await rotateMeshHubToken(hub.id)
+      setRotatedToken(response)
+      setRotatedTokenType('hub')
+      setShowRotatedTokenModal(true)
+      setError(null)
+    } catch (err) {
+      setError('Failed to rotate hub token')
+    }
+  }
+
+  async function handleRotateSpokeToken(spoke: MeshSpoke) {
+    if (!confirm(
+      `Rotate token for spoke "${spoke.name}"?\n\n` +
+      `WARNING: The current token will be immediately invalidated. ` +
+      `You will need to update the spoke configuration with the new token.`
+    )) {
+      return
+    }
+
+    try {
+      const response = await rotateMeshSpokeToken(spoke.id)
+      setRotatedToken(response)
+      setRotatedTokenType('spoke')
+      setShowRotatedTokenModal(true)
+      setError(null)
+    } catch (err) {
+      setError('Failed to rotate spoke token')
     }
   }
 
@@ -273,6 +316,7 @@ export default function AdminMesh() {
                             { label: 'Edit', icon: 'edit' as const, onClick: () => setEditingHub(hub) },
                             { label: 'Manage Access', icon: 'access' as const, onClick: () => { setAccessHub(hub); setShowAccessModal(true) } },
                             { label: 'Re-provision', icon: 'install' as const, onClick: () => handleProvisionHub(hub) },
+                            { label: 'Rotate Token', icon: 'key' as const, onClick: () => handleRotateHubToken(hub), color: 'yellow' as const },
                             { label: 'Install Script', icon: 'view' as const, onClick: () => handleShowHubInstallScript(hub), color: 'primary' as const },
                             { label: 'Delete', icon: 'delete' as const, onClick: () => handleDeleteHub(hub), color: 'red' as const },
                           ]}
@@ -385,6 +429,7 @@ export default function AdminMesh() {
                                 { label: 'Edit', icon: 'edit' as const, onClick: () => setEditingSpoke(spoke) },
                                 { label: 'Manage Access', icon: 'access' as const, onClick: () => { setAccessSpoke(spoke); setShowSpokeAccessModal(true) } },
                                 { label: 'Re-provision', icon: 'install' as const, onClick: () => handleProvisionSpoke(spoke) },
+                                { label: 'Rotate Token', icon: 'key' as const, onClick: () => handleRotateSpokeToken(spoke), color: 'yellow' as const },
                                 { label: 'Install Script', icon: 'view' as const, onClick: () => handleShowSpokeInstallScript(spoke), color: 'primary' as const },
                                 { label: 'Delete', icon: 'delete' as const, onClick: () => handleDeleteSpoke(spoke), color: 'red' as const },
                               ]}
@@ -517,6 +562,20 @@ export default function AdminMesh() {
           onSuccess={() => {
             setEditingSpoke(null)
             loadSpokes(selectedHub.id)
+          }}
+        />
+      )}
+
+      {/* Rotated Token Modal */}
+      {showRotatedTokenModal && rotatedToken && (
+        <RotatedTokenModal
+          type={rotatedTokenType}
+          name={rotatedTokenType === 'hub' ? rotatedToken.hubName || '' : rotatedToken.spokeName || ''}
+          token={rotatedToken.token}
+          installScript={rotatedToken.installScript}
+          onClose={() => {
+            setShowRotatedTokenModal(false)
+            setRotatedToken(null)
           }}
         />
       )}
@@ -1869,6 +1928,95 @@ function EditSpokeModal({ spoke, onClose, onSuccess }: { spoke: MeshSpoke; onClo
             <p className="text-xs text-theme-tertiary -mt-2">Allow administrators to run commands on this spoke via the Remote Sessions page.</p>
             <div className="flex justify-end space-x-3 pt-4"><button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button><button type="submit" disabled={loading} className="btn btn-primary">{loading ? 'Saving...' : 'Save'}</button></div>
           </form>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Rotated Token Modal Component
+function RotatedTokenModal({ type, name, token, installScript, onClose }: { type: 'hub' | 'spoke'; name: string; token: string; installScript: string; onClose: () => void }) {
+  const [copiedToken, setCopiedToken] = useState(false)
+  const [copiedScript, setCopiedScript] = useState(false)
+
+  function copyToken() {
+    navigator.clipboard.writeText(token)
+    setCopiedToken(true)
+    setTimeout(() => setCopiedToken(false), 2000)
+  }
+
+  function copyScript() {
+    navigator.clipboard.writeText(installScript)
+    setCopiedScript(true)
+    setTimeout(() => setCopiedScript(false), 2000)
+  }
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+      <div className="bg-theme-card rounded-lg shadow-xl max-w-2xl w-full mx-4 p-6">
+        <div className="text-center mb-4">
+          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 dark:bg-yellow-900/30 mb-4">
+            <svg className="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-semibold text-theme-primary">Token Rotated</h2>
+          <p className="text-theme-secondary mt-1">{type === 'hub' ? 'Hub' : 'Spoke'}: {name}</p>
+        </div>
+
+        <div className="instruction-box mb-4">
+          <div className="flex">
+            <svg className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <h3 className="text-sm font-medium text-theme-primary">Save this token!</h3>
+              <p className="text-sm text-theme-secondary mt-1">
+                The old token is now invalid. This new token will only be shown once.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">New Authentication Token</label>
+            <div className="flex">
+              <input
+                type="text"
+                readOnly
+                value={token}
+                className="flex-1 px-3 py-2 bg-theme-tertiary border border-theme rounded-l-lg text-sm font-mono text-theme-primary"
+              />
+              <button
+                onClick={copyToken}
+                className="px-4 py-2 bg-primary-600 text-white rounded-r-lg hover:bg-primary-700"
+              >
+                {copiedToken ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">Install Script</label>
+            <div className="relative">
+              <pre className="bg-theme-tertiary border border-theme rounded-lg p-3 text-sm font-mono text-theme-primary overflow-x-auto whitespace-pre-wrap break-all">
+                {installScript}
+              </pre>
+              <button
+                onClick={copyScript}
+                className="absolute top-2 right-2 px-3 py-1 bg-primary-600 text-white text-sm rounded hover:bg-primary-700"
+              >
+                {copiedScript ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end">
+          <button onClick={onClose} className="btn btn-primary">
+            Done
+          </button>
         </div>
       </div>
     </div>

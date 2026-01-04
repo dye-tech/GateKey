@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import {
-  getAdminGateways, registerGateway, deleteGateway, updateGateway, reprovisionGateway,
+  getAdminGateways, registerGateway, deleteGateway, updateGateway, reprovisionGateway, rotateGatewayToken,
   getGatewayNetworks, getNetworks, assignGatewayToNetwork, removeGatewayFromNetwork,
   getGatewayUsers, assignUserToGateway, removeUserFromGateway,
   getGatewayGroups, assignGroupToGateway, removeGroupFromGateway,
-  AdminGateway, RegisterGatewayResponse, Network, GatewayUser, GatewayGroup, CryptoProfile
+  AdminGateway, RegisterGatewayResponse, Network, GatewayUser, GatewayGroup, CryptoProfile, RotateTokenResponse
 } from '../api/client'
 import ActionDropdown, { ActionItem } from '../components/ActionDropdown'
 
@@ -22,6 +22,8 @@ export default function AdminGateways() {
   const [editingGateway, setEditingGateway] = useState<AdminGateway | null>(null)
   const [showAccessModal, setShowAccessModal] = useState(false)
   const [accessGateway, setAccessGateway] = useState<AdminGateway | null>(null)
+  const [showRotatedTokenModal, setShowRotatedTokenModal] = useState(false)
+  const [rotatedToken, setRotatedToken] = useState<RotateTokenResponse | null>(null)
 
   useEffect(() => {
     loadGateways()
@@ -75,6 +77,26 @@ export default function AdminGateways() {
     setSelectedGateway(gateway)
     setInstallerToken(token || null)
     setShowInstaller(true)
+  }
+
+  async function handleRotateToken(gateway: AdminGateway) {
+    if (!confirm(
+      `Rotate token for gateway "${gateway.name}"?\n\n` +
+      `WARNING: The current token will be immediately invalidated. ` +
+      `You will need to update the gateway configuration with the new token.`
+    )) {
+      return
+    }
+
+    try {
+      const response = await rotateGatewayToken(gateway.id)
+      setRotatedToken(response)
+      setSelectedGateway(gateway)
+      setShowRotatedTokenModal(true)
+      setError(null)
+    } catch (err) {
+      setError('Failed to rotate token')
+    }
   }
 
   return (
@@ -181,6 +203,7 @@ export default function AdminGateways() {
                         { label: 'Edit', icon: 'edit', onClick: () => { setEditingGateway(gateway); setShowEditModal(true) }, color: 'gray' },
                         { label: 'Access', icon: 'access', onClick: () => { setAccessGateway(gateway); setShowAccessModal(true) }, color: 'purple' },
                         { label: 'Re-provision', icon: 'install', onClick: () => handleReprovision(gateway) },
+                        { label: 'Rotate Token', icon: 'key', onClick: () => handleRotateToken(gateway), color: 'yellow' },
                         { label: 'Install', icon: 'install', onClick: () => handleShowInstaller(gateway), color: 'primary' },
                         { label: 'Delete', icon: 'delete', onClick: () => handleDelete(gateway), color: 'red' },
                       ] as ActionItem[]}
@@ -287,6 +310,20 @@ export default function AdminGateways() {
         <GatewayAccessModal
           gateway={accessGateway}
           onClose={() => { setShowAccessModal(false); setAccessGateway(null) }}
+        />
+      )}
+
+      {/* Rotated Token Modal */}
+      {showRotatedTokenModal && rotatedToken && selectedGateway && (
+        <RotatedTokenModal
+          gatewayName={selectedGateway.name}
+          token={rotatedToken.token}
+          installScript={rotatedToken.installScript}
+          onClose={() => {
+            setShowRotatedTokenModal(false)
+            setRotatedToken(null)
+            setSelectedGateway(null)
+          }}
         />
       )}
     </div>
@@ -694,15 +731,15 @@ function InstallerModal({ gateway, token, onClose }: InstallerModalProps) {
 
         <div className="space-y-4">
           {!hasToken && (
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+            <div className="instruction-box">
               <div className="flex">
-                <svg className="h-5 w-5 text-yellow-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: 'var(--instruction-accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
-                <div>
-                  <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-400">Token Required</h3>
-                  <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1">
-                    Replace <code className="bg-yellow-100 dark:bg-yellow-900/30 px-1">YOUR_GATEWAY_TOKEN</code> with the token you received when registering this gateway.
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium instruction-box-title" style={{ color: 'var(--instruction-title)' }}>Token Required</h3>
+                  <p className="text-sm mt-1 instruction-box-text">
+                    Replace <code className="bg-theme-tertiary px-1.5 py-0.5 rounded text-theme-primary font-mono text-xs">YOUR_GATEWAY_TOKEN</code> with the token you received when registering this gateway.
                   </p>
                 </div>
               </div>
@@ -771,19 +808,19 @@ function InstallerModal({ gateway, token, onClose }: InstallerModalProps) {
                   </a>
                 </div>
               </li>
-              <li>Move to <code className="bg-gray-100 dark:bg-gray-800 px-1 text-xs">/usr/local/bin/gatekey-gateway</code></li>
-              <li>Create config at <code className="bg-gray-100 dark:bg-gray-800 px-1 text-xs">/etc/gatekey/gateway.yaml</code></li>
+              <li>Move to <code className="bg-theme-tertiary px-1.5 py-0.5 rounded text-theme-primary font-mono text-xs">/usr/local/bin/gatekey-gateway</code></li>
+              <li>Create config at <code className="bg-theme-tertiary px-1.5 py-0.5 rounded text-theme-primary font-mono text-xs">/etc/gatekey/gateway.yaml</code></li>
               <li>Configure systemd service and start</li>
             </ol>
           </div>
 
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-gray-900 dark:text-blue-400 mb-2">Requirements</h3>
-            <ul className="text-sm text-gray-800 dark:text-blue-400 space-y-1">
-              <li>- Ubuntu 20.04+, Debian 11+, RHEL 8+, or Fedora 35+</li>
-              <li>- Root/sudo access</li>
-              <li>- Outbound HTTPS access to the control plane</li>
-              <li>- Inbound access on VPN port ({gateway.vpnPort}/{gateway.vpnProtocol})</li>
+          <div className="info-box">
+            <h3 className="text-sm font-semibold text-theme-primary mb-2">Requirements</h3>
+            <ul className="text-sm info-box-text space-y-1">
+              <li>• Ubuntu 20.04+, Debian 11+, RHEL 8+, or Fedora 35+</li>
+              <li>• Root/sudo access</li>
+              <li>• Outbound HTTPS access to the control plane</li>
+              <li>• Inbound access on VPN port ({gateway.vpnPort}/{gateway.vpnProtocol})</li>
             </ul>
           </div>
         </div>
@@ -1376,6 +1413,101 @@ function GatewayAccessModal({ gateway, onClose }: GatewayAccessModalProps) {
         <div className="mt-6 flex justify-end">
           <button onClick={onClose} className="btn btn-secondary">
             Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface RotatedTokenModalProps {
+  gatewayName: string
+  token: string
+  installScript: string
+  onClose: () => void
+}
+
+function RotatedTokenModal({ gatewayName, token, installScript, onClose }: RotatedTokenModalProps) {
+  const [copiedToken, setCopiedToken] = useState(false)
+  const [copiedScript, setCopiedScript] = useState(false)
+
+  function copyToken() {
+    navigator.clipboard.writeText(token)
+    setCopiedToken(true)
+    setTimeout(() => setCopiedToken(false), 2000)
+  }
+
+  function copyScript() {
+    navigator.clipboard.writeText(installScript)
+    setCopiedScript(true)
+    setTimeout(() => setCopiedScript(false), 2000)
+  }
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+      <div className="bg-theme-card rounded-lg shadow-xl max-w-2xl w-full mx-4 p-6">
+        <div className="text-center mb-4">
+          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 dark:bg-yellow-900/30 mb-4">
+            <svg className="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-semibold text-theme-primary">Token Rotated</h2>
+          <p className="text-theme-secondary mt-1">Gateway: {gatewayName}</p>
+        </div>
+
+        <div className="instruction-box mb-4">
+          <div className="flex">
+            <svg className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <h3 className="text-sm font-medium text-theme-primary">Save this token!</h3>
+              <p className="text-sm text-theme-secondary mt-1">
+                The old token is now invalid. This new token will only be shown once.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">New Authentication Token</label>
+            <div className="flex">
+              <input
+                type="text"
+                readOnly
+                value={token}
+                className="flex-1 px-3 py-2 bg-theme-tertiary border border-theme rounded-l-lg text-sm font-mono text-theme-primary"
+              />
+              <button
+                onClick={copyToken}
+                className="px-4 py-2 bg-primary-600 text-white rounded-r-lg hover:bg-primary-700"
+              >
+                {copiedToken ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">Install Script</label>
+            <div className="relative">
+              <pre className="bg-theme-tertiary border border-theme rounded-lg p-3 text-sm font-mono text-theme-primary overflow-x-auto whitespace-pre-wrap break-all">
+                {installScript}
+              </pre>
+              <button
+                onClick={copyScript}
+                className="absolute top-2 right-2 px-3 py-1 bg-primary-600 text-white text-sm rounded hover:bg-primary-700"
+              >
+                {copiedScript ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end">
+          <button onClick={onClose} className="btn btn-primary">
+            Done
           </button>
         </div>
       </div>

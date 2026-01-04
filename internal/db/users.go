@@ -453,9 +453,10 @@ func (s *UserStore) ListLocalUsers(ctx context.Context) ([]*LocalUser, error) {
 	return users, rows.Err()
 }
 
-// ListAllGroups returns all unique group names from SSO users and group_access_rules
+// ListAllGroups returns all unique group names from SSO users, group assignments, and local groups
 func (s *UserStore) ListAllGroups(ctx context.Context) ([]string, error) {
-	// Get unique groups from both SSO user groups and group_access_rules
+	// Get unique groups from SSO user groups, group assignments, and local groups
+	// Local groups are prefixed with "local:" to distinguish them from IdP groups
 	rows, err := s.db.Pool.Query(ctx, `
 		SELECT DISTINCT group_name FROM (
 			SELECT jsonb_array_elements_text(groups) as group_name FROM users
@@ -463,6 +464,8 @@ func (s *UserStore) ListAllGroups(ctx context.Context) ([]string, error) {
 			SELECT group_name FROM group_access_rules
 			UNION
 			SELECT group_name FROM group_gateways
+			UNION
+			SELECT 'local:' || name as group_name FROM local_groups
 		) all_groups
 		WHERE group_name IS NOT NULL AND group_name != ''
 		ORDER BY group_name
@@ -484,13 +487,34 @@ func (s *UserStore) ListAllGroups(ctx context.Context) ([]string, error) {
 }
 
 // GetGroupMembers returns all SSO users that belong to a specific group
+// For IdP groups: returns users where groups JSONB contains the group name
+// For local groups (prefixed with "local:"): returns users who are members of the local group
 func (s *UserStore) GetGroupMembers(ctx context.Context, groupName string) ([]*SSOUser, error) {
-	rows, err := s.db.Pool.Query(ctx, `
-		SELECT id, external_id, provider, email, name, groups, is_admin, is_active, last_login_at, created_at, updated_at
-		FROM users
-		WHERE groups ? $1
-		ORDER BY email
-	`, groupName)
+	var rows pgx.Rows
+	var err error
+
+	// Check if this is a local group (prefixed with "local:")
+	if strings.HasPrefix(groupName, "local:") {
+		// Extract the actual group name without the prefix
+		localGroupName := strings.TrimPrefix(groupName, "local:")
+		rows, err = s.db.Pool.Query(ctx, `
+			SELECT u.id, u.external_id, u.provider, u.email, u.name, u.groups, u.is_admin, u.is_active, u.last_login_at, u.created_at, u.updated_at
+			FROM users u
+			INNER JOIN local_group_members lgm ON lgm.user_id = u.id::text AND lgm.member_type = 'sso'
+			INNER JOIN local_groups lg ON lgm.group_id = lg.id
+			WHERE lg.name = $1
+			ORDER BY u.email
+		`, localGroupName)
+	} else {
+		// IdP group - use JSONB query
+		rows, err = s.db.Pool.Query(ctx, `
+			SELECT id, external_id, provider, email, name, groups, is_admin, is_active, last_login_at, created_at, updated_at
+			FROM users
+			WHERE groups ? $1
+			ORDER BY email
+		`, groupName)
+	}
+
 	if err != nil {
 		return nil, err
 	}

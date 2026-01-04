@@ -554,9 +554,19 @@ function AccessRulesModal({ network, onClose }: AccessRulesModalProps) {
           </div>
         )}
 
-        <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded text-amber-800 dark:text-amber-200 text-sm">
-          <strong>Note:</strong> Users/groups must be assigned to access rules to gain access.
-          Rules can be created and assigned from the <a href="/admin/access-rules" className="underline text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100">Access Rules</a> page.
+        <div className="info-box mb-4">
+          <div className="flex">
+            <svg className="h-5 w-5 info-box-icon flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div className="ml-3 text-sm">
+              <strong className="text-theme-primary">Note:</strong>{' '}
+              <span className="info-box-text">Users/groups must be assigned to access rules to gain access.
+              Rules can be created and assigned from the </span>
+              <a href="/admin/access-rules" className="text-primary-600 dark:text-primary-400 hover:underline">Access Rules</a>
+              <span className="info-box-text"> page.</span>
+            </div>
+          </div>
         </div>
 
         {loading ? (
