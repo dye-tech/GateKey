@@ -74,10 +74,11 @@ The hub communicates with the GateKey control plane to:
 	}
 
 	// Hook command - handles OpenVPN hook callbacks
+	// OpenVPN passes extra arguments (temp file path), so we use MinimumNArgs
 	hookCmd := &cobra.Command{
 		Use:   "hook [connect|disconnect]",
 		Short: "Handle an OpenVPN hook callback",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MinimumNArgs(1),
 		RunE:  handleHook,
 	}
 
