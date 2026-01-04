@@ -2079,20 +2079,42 @@ func (s *Server) handleGatewayConnect(c *gin.Context) {
 	}
 
 	// Look up the user by email (common_name is the email)
+	// Try SSO user first, then local user
+	var userID, userEmail string
+	var userGroups []string
+	var userType string
+
 	user, err := s.userStore.GetSSOUserByEmail(ctx, req.CommonName)
-	if err != nil {
-		s.logger.Warn("Gateway connect: user not found",
-			zap.String("common_name", req.CommonName),
-			zap.Error(err))
-		c.JSON(http.StatusForbidden, gin.H{"error": "user not found"})
-		return
+	if err == nil && user != nil {
+		userID = user.ID
+		userEmail = user.Email
+		userGroups = user.Groups
+		userType = "sso"
+	} else {
+		// Try local user
+		localUser, localErr := s.userStore.GetLocalUserByEmail(ctx, req.CommonName)
+		if localErr != nil || localUser == nil {
+			s.logger.Warn("Gateway connect: user not found",
+				zap.String("common_name", req.CommonName),
+				zap.Error(err))
+			c.JSON(http.StatusForbidden, gin.H{"error": "user not found"})
+			return
+		}
+		userID = localUser.ID
+		userEmail = localUser.Email
+		userGroups = []string{} // Local users get groups from local_group_members
+		userType = "local"
+
+		// Get local groups for local user
+		localGroups, _ := s.localGroupStore.GetUserLocalGroups(ctx, userID, "local")
+		userGroups = append(userGroups, localGroups...)
 	}
 
 	// Check if user has access to this gateway (defense in depth)
-	hasAccess, err := s.gatewayStore.UserHasGatewayAccess(ctx, user.ID, gateway.ID, user.Groups)
+	hasAccess, err := s.gatewayStore.UserHasGatewayAccess(ctx, userID, gateway.ID, userGroups)
 	if err != nil || !hasAccess {
 		s.logger.Warn("Gateway connect: access denied",
-			zap.String("user", user.Email),
+			zap.String("user", userEmail),
 			zap.String("gateway", gateway.Name))
 		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
 		return
@@ -2100,7 +2122,7 @@ func (s *Server) handleGatewayConnect(c *gin.Context) {
 
 	// Get the user's access rules for firewall enforcement
 	// Only get rules for networks assigned to this specific gateway
-	accessRules, err := s.accessRuleStore.GetUserAccessRulesForGateway(ctx, user.ID, user.Groups, gateway.ID)
+	accessRules, err := s.accessRuleStore.GetUserAccessRulesForGateway(ctx, userID, userGroups, gateway.ID)
 	if err != nil {
 		s.logger.Error("Gateway connect: failed to get access rules", zap.Error(err))
 		// Continue but with empty rules (default deny)
@@ -2167,9 +2189,30 @@ func (s *Server) handleGatewayConnect(c *gin.Context) {
 		}
 	}
 
+	// Close any existing open connection for this user on this gateway
+	_, err = s.db.Pool.Exec(ctx, `
+		UPDATE gateway_connections
+		SET disconnected_at = NOW(), disconnect_reason = 'reconnect'
+		WHERE gateway_id = $1 AND user_id = $2 AND disconnected_at IS NULL
+	`, gateway.ID, userID)
+	if err != nil {
+		s.logger.Warn("Gateway connect: failed to close existing connections", zap.Error(err))
+	}
+
+	// Insert new connection record
+	_, err = s.db.Pool.Exec(ctx, `
+		INSERT INTO gateway_connections (gateway_id, user_id, user_type, client_ip, tunnel_ip)
+		VALUES ($1, $2, $3, $4, NULLIF($5, '')::inet)
+	`, gateway.ID, userID, userType, req.ClientIP, req.VPNIPv4)
+	if err != nil {
+		s.logger.Error("Gateway connect: failed to insert connection record", zap.Error(err))
+		// Don't fail the connection, just log the error
+	}
+
 	s.logger.Info("Gateway connect: client connected with rules",
 		zap.String("gateway", gateway.Name),
-		zap.String("user", user.Email),
+		zap.String("user", userEmail),
+		zap.String("user_type", userType),
 		zap.String("vpn_ipv4", req.VPNIPv4),
 		zap.Int("rule_count", len(firewallRules)),
 		zap.Bool("full_tunnel", gateway.FullTunnelMode),
@@ -2180,8 +2223,8 @@ func (s *Server) handleGatewayConnect(c *gin.Context) {
 		"status":         "connected",
 		"gateway_id":     gateway.ID,
 		"gateway_name":   gateway.Name,
-		"user_id":        user.ID,
-		"user_email":     user.Email,
+		"user_id":        userID,
+		"user_email":     userEmail,
 		"default_policy": "deny",
 		"firewall_rules": firewallRules,
 		"client_config":  clientConfig,
@@ -2212,14 +2255,35 @@ func (s *Server) handleGatewayDisconnect(c *gin.Context) {
 		return
 	}
 
+	// Look up the user by email to get user ID
+	var userID string
+	if user, err := s.userStore.GetSSOUserByEmail(ctx, req.CommonName); err == nil && user != nil {
+		userID = user.ID
+	} else if localUser, err := s.userStore.GetLocalUserByEmail(ctx, req.CommonName); err == nil && localUser != nil {
+		userID = localUser.ID
+	}
+
+	// Update connection record with disconnect time and stats
+	if userID != "" {
+		_, err = s.db.Pool.Exec(ctx, `
+			UPDATE gateway_connections
+			SET disconnected_at = NOW(),
+				disconnect_reason = 'normal',
+				bytes_sent = $3,
+				bytes_received = $4
+			WHERE gateway_id = $1 AND user_id = $2 AND disconnected_at IS NULL
+		`, gateway.ID, userID, req.BytesSent, req.BytesRecv)
+		if err != nil {
+			s.logger.Warn("Gateway disconnect: failed to update connection record", zap.Error(err))
+		}
+	}
+
 	s.logger.Info("Gateway disconnect: client disconnected",
 		zap.String("gateway", gateway.Name),
 		zap.String("common_name", req.CommonName),
 		zap.Int64("duration_seconds", req.Duration),
 		zap.Int64("bytes_sent", req.BytesSent),
 		zap.Int64("bytes_received", req.BytesRecv))
-
-	// TODO: Update connection record in database and remove firewall rules
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":       "disconnected",

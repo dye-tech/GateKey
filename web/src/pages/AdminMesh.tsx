@@ -7,7 +7,7 @@ import {
   getMeshHubNetworks, assignMeshHubNetwork, removeMeshHubNetwork, MeshHubNetwork,
   getMeshSpokeUsers, assignMeshSpokeUser, removeMeshSpokeUser,
   getMeshSpokeGroups, assignMeshSpokeGroup, removeMeshSpokeGroup,
-  getUsers, getGroups, getNetworks, Network,
+  getUsers, getLocalUsers, getGroups, getNetworks, Network,
   MeshHub, MeshHubWithToken, MeshSpoke, MeshSpokeWithToken,
   CreateMeshHubRequest, CreateMeshSpokeRequest, CryptoProfile, RotateTokenResponse
 } from '../api/client'
@@ -1166,18 +1166,24 @@ function ManageAccessModal({ hub, onClose }: { hub: MeshHub; onClose: () => void
   async function loadData() {
     try {
       setLoading(true)
-      const [hubUsers, hubGroups, hubNetworks, userList, groupList, networkList] = await Promise.all([
+      const [hubUsers, hubGroups, hubNetworks, userList, localUserList, groupList, networkList] = await Promise.all([
         getMeshHubUsers(hub.id),
         getMeshHubGroups(hub.id),
         getMeshHubNetworks(hub.id),
         getUsers(),
+        getLocalUsers(),
         getGroups(),
         getNetworks(),
       ])
       setUsers(hubUsers)
       setGroups(hubGroups)
       setNetworks(hubNetworks)
-      setAllUsers(userList)
+      // Combine SSO and local users, marking local users with (Local) suffix
+      const combinedUsers = [
+        ...userList.map(u => ({ id: u.id, email: u.email, name: u.name })),
+        ...localUserList.map(u => ({ id: u.id, email: u.email, name: `${u.username} (Local)` })),
+      ]
+      setAllUsers(combinedUsers)
       setAllGroups(groupList.map(g => g.name))
       setAllNetworks(networkList)
     } catch (err) {
@@ -1566,15 +1572,21 @@ function ManageSpokeAccessModal({ spoke, onClose }: { spoke: MeshSpoke; onClose:
   async function loadData() {
     try {
       setLoading(true)
-      const [spokeUsers, spokeGroups, userList, groupList] = await Promise.all([
+      const [spokeUsers, spokeGroups, userList, localUserList, groupList] = await Promise.all([
         getMeshSpokeUsers(spoke.id),
         getMeshSpokeGroups(spoke.id),
         getUsers(),
+        getLocalUsers(),
         getGroups(),
       ])
       setUsers(spokeUsers)
       setGroups(spokeGroups)
-      setAllUsers(userList)
+      // Combine SSO and local users, marking local users with (Local) suffix
+      const combinedUsers = [
+        ...userList.map(u => ({ id: u.id, email: u.email, name: u.name })),
+        ...localUserList.map(u => ({ id: u.id, email: u.email, name: `${u.username} (Local)` })),
+      ]
+      setAllUsers(combinedUsers)
       setAllGroups(groupList.map(g => g.name))
     } catch (err) {
       setError('Failed to load access data')

@@ -210,9 +210,12 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() => setShowLocalForm(false)}
-                className="w-full text-sm text-theme-tertiary hover:text-theme-primary"
+                className="w-full btn btn-secondary py-3 flex items-center justify-center space-x-2"
               >
-                Back to provider selection
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                <span>Back to provider selection</span>
               </button>
             </form>
           ) : (
@@ -246,14 +249,14 @@ export default function Login() {
                 </p>
               )}
 
-              {/* Local user login link */}
+              {/* Local user login button */}
               {providers.some(p => p.type === 'local') && (
                 <div className="mt-6 pt-4 border-t border-theme">
                   <button
                     onClick={() => setShowLocalForm(true)}
-                    className="w-full flex items-center justify-center space-x-2 text-sm text-theme-tertiary hover:text-theme-primary"
+                    className="w-full btn btn-secondary py-3 flex items-center justify-center space-x-2"
                   >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
                     <span>Sign in as Local User</span>
