@@ -188,6 +188,27 @@ gatekey disconnect --all      # Disconnect from all gateways
 - `POST /api/v1/settings/ca/revoke/:id` - Revoke a CA
 - `GET /api/v1/settings/ca/fingerprint` - Get active CA fingerprint
 
+### Geo-Fencing (Admin)
+- `GET /api/v1/admin/geo-fence/settings` - Get geo-fence settings (enabled, enforce mode)
+- `PUT /api/v1/admin/geo-fence/settings` - Update geo-fence settings
+- `GET /api/v1/admin/geo-fence/rules` - List all geo-fence rules
+- `POST /api/v1/admin/geo-fence/rules` - Create geo-fence rule (name, CIDR)
+- `PUT /api/v1/admin/geo-fence/rules/:id` - Update geo-fence rule
+- `DELETE /api/v1/admin/geo-fence/rules/:id` - Delete geo-fence rule
+- `GET /api/v1/admin/geo-fence/global` - List global rule assignments
+- `POST /api/v1/admin/geo-fence/global` - Add global rule assignment
+- `DELETE /api/v1/admin/geo-fence/global/:ruleId` - Remove global rule assignment
+- `GET /api/v1/admin/geo-fence/users/:userId/rules` - List user's geo-fence rules
+- `POST /api/v1/admin/geo-fence/users/:userId/rules` - Add user geo-fence rule
+- `DELETE /api/v1/admin/geo-fence/users/:userId/rules/:ruleId` - Remove user rule
+- `GET /api/v1/admin/geo-fence/groups/:groupName/rules` - List group's geo-fence rules
+- `POST /api/v1/admin/geo-fence/groups/:groupName/rules` - Add group geo-fence rule
+- `DELETE /api/v1/admin/geo-fence/groups/:groupName/rules/:ruleId` - Remove group rule
+
+### Topology (Admin)
+- `GET /api/v1/admin/topology` - Get network topology (gateways, hubs, spokes, connections)
+- `GET /api/v1/admin/topology/sessions` - Get active VPN sessions (mesh and gateway connections)
+
 ## Database Tables
 
 - `local_users` - Local admin users
@@ -211,6 +232,12 @@ gatekey disconnect --all      # Disconnect from all gateways
 - `mesh_hub_groups` - Group access to hubs
 - `mesh_gateway_users` - User access to spokes
 - `mesh_gateway_groups` - Group access to spokes
+- `mesh_connections` - Active mesh VPN connections (supports SSO and local users via user_type)
+- `gateway_connections` - Active gateway VPN connections (supports SSO and local users)
+- `geo_fence_rules` - Geo-fencing rules (allowed IP ranges)
+- `geo_fence_global` - Global geo-fencing rule assignments
+- `user_geo_fence_rules` - User-specific geo-fencing rules
+- `group_geo_fence_rules` - Group-specific geo-fencing rules
 
 ## Kubernetes Integration
 
@@ -231,6 +258,7 @@ When running in Kubernetes:
 - **TLS-Auth**: Optional TLS-Auth key for additional security layer
 - **Push-Based Config Updates**: Gateway auto-reprovisions when settings change
 - **Graceful CA Rotation**: Zero-downtime CA rotation with dual-trust period
+- **Geo-Fencing**: IP-based access restrictions using whitelist model (global, group, user rules)
 
 ## Crypto Profiles
 
@@ -374,3 +402,55 @@ Navigate to **Administration → All Configs** to:
 - View all mesh configs (Mesh Configs tab)
 - Filter by user or status
 - Revoke active configs with reason
+
+## Geo-Fencing
+
+IP-based access restrictions using a whitelist model. Only connections from explicitly allowed IP ranges are permitted.
+
+### Features
+- **Whitelist Model**: Define allowed IP ranges (CIDR notation), block all others
+- **Hierarchical Rules**: User rules override group rules, which override global rules
+- **Audit Mode**: Log violations without blocking (for testing)
+- **Enforce Mode**: Block connections from unlisted IPs
+
+### Rule Priority
+1. **User Rules**: Rules assigned directly to a user (highest priority)
+2. **Group Rules**: Rules assigned to user's groups
+3. **Global Rules**: Default rules for all users (lowest priority)
+
+### Enforcement Points
+Geo-fencing is checked at:
+1. `handleGatewayVerify` - During certificate verification
+2. `handleGatewayConnect` - When connection is established (defense-in-depth)
+
+### Web UI
+Navigate to **Administration → Geo-Fencing** to:
+- Enable/disable geo-fencing
+- Set enforcement mode (enforce or audit)
+- Create and manage geo-fence rules
+- Assign rules globally, to groups, or to users
+
+## Network Topology
+
+Visual infrastructure monitoring showing all VPN nodes and active sessions.
+
+### Features
+- **Topology Map**: Interactive visual diagram of gateways, hubs, and spokes
+- **Connection Status**: Real-time status indicators for all nodes
+- **Active Sessions**: Live view of currently connected VPN users
+- **Session Details**: User info, client IP, VPN address, connection time, bandwidth
+
+### Active Sessions
+Displays all connected users across:
+- **Gateway connections**: Traditional VPN gateway users
+- **Mesh connections**: Users connected to mesh hubs
+
+Session data includes:
+- User email and name (SSO or Local user indicator)
+- Node type (gateway or hub) and name
+- Client IP and VPN tunnel IP
+- Connection timestamp
+- Bytes sent/received
+
+### Web UI
+Navigate to **Administration → Topology** to view the network map and active sessions.

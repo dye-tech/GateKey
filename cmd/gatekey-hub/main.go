@@ -73,7 +73,15 @@ The hub communicates with the GateKey control plane to:
 		RunE:  showStatus,
 	}
 
-	rootCmd.AddCommand(runCmd, provisionCmd, statusCmd)
+	// Hook command - handles OpenVPN hook callbacks
+	hookCmd := &cobra.Command{
+		Use:   "hook [connect|disconnect]",
+		Short: "Handle an OpenVPN hook callback",
+		Args:  cobra.ExactArgs(1),
+		RunE:  handleHook,
+	}
+
+	rootCmd.AddCommand(runCmd, provisionCmd, statusCmd, hookCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -559,8 +567,8 @@ func generateServerConfig(prov ProvisionResponse) string {
 
 	sb.WriteString("# Hook scripts for gateway/client management\n")
 	sb.WriteString("script-security 2\n")
-	sb.WriteString("client-connect \"/usr/local/bin/gatekey-hub-hook connect\"\n")
-	sb.WriteString("client-disconnect \"/usr/local/bin/gatekey-hub-hook disconnect\"\n")
+	sb.WriteString("client-connect \"/usr/local/bin/gatekey-hub hook connect\"\n")
+	sb.WriteString("client-disconnect \"/usr/local/bin/gatekey-hub hook disconnect\"\n")
 
 	return sb.String()
 }
@@ -755,6 +763,78 @@ func showStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("OpenVPN Running: %v\n", isOpenVPNRunning())
 	fmt.Printf("Connected Gateways: %d\n", getConnectedGatewayCount())
 	fmt.Printf("Connected Clients: %d\n", getConnectedClientCount())
+
+	return nil
+}
+
+// handleHook handles OpenVPN client connect/disconnect callbacks
+// Called by OpenVPN hooks to notify control plane of client status changes
+func handleHook(cmd *cobra.Command, args []string) error {
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+
+	hookType := args[0] // "connect" or "disconnect"
+
+	// Get client info from OpenVPN environment variables
+	commonName := os.Getenv("common_name")
+	trustedIP := os.Getenv("trusted_ip")
+	ifconfigPoolRemoteIP := os.Getenv("ifconfig_pool_remote_ip")
+	bytesSentStr := os.Getenv("bytes_sent")
+	bytesRecvStr := os.Getenv("bytes_received")
+
+	// Skip gateway connections (handled separately)
+	if strings.HasPrefix(commonName, "mesh-gateway-") {
+		return nil
+	}
+
+	var endpoint string
+	var reqBody map[string]interface{}
+
+	switch hookType {
+	case "connect":
+		endpoint = "/api/v1/mesh-hub/client-connected"
+		reqBody = map[string]interface{}{
+			"token":       cfg.APIToken,
+			"clientEmail": commonName,
+			"clientIp":    trustedIP,
+			"tunnelIp":    ifconfigPoolRemoteIP,
+		}
+	case "disconnect":
+		endpoint = "/api/v1/mesh-hub/client-disconnected"
+		bytesSent, _ := strconv.ParseInt(bytesSentStr, 10, 64)
+		bytesRecv, _ := strconv.ParseInt(bytesRecvStr, 10, 64)
+		reqBody = map[string]interface{}{
+			"token":         cfg.APIToken,
+			"clientEmail":   commonName,
+			"tunnelIp":      ifconfigPoolRemoteIP,
+			"bytesSent":     bytesSent,
+			"bytesReceived": bytesRecv,
+		}
+	default:
+		return fmt.Errorf("unknown hook type: %s", hookType)
+	}
+
+	// Send to control plane
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	url := strings.TrimSuffix(cfg.ControlPlaneURL, "/") + endpoint
+	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	if err != nil {
+		// Don't fail the hook if control plane is unreachable
+		fmt.Fprintf(os.Stderr, "Warning: failed to notify control plane: %v\n", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		fmt.Fprintf(os.Stderr, "Warning: control plane returned %d: %s\n", resp.StatusCode, string(respBody))
+	}
 
 	return nil
 }

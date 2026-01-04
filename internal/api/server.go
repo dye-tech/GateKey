@@ -40,6 +40,7 @@ type Server struct {
 	meshConfigStore *db.MeshConfigStore
 	apiKeyStore     *db.APIKeyStore
 	localGroupStore *db.LocalGroupStore
+	geoFenceStore   *db.GeoFenceStore
 	ca              *pki.CA
 	configGen       *openvpn.ConfigGenerator
 	adminPassword   string             // Initial admin password (shown once at startup)
@@ -102,6 +103,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	meshConfigStore := db.NewMeshConfigStore(database)
 	apiKeyStore := db.NewAPIKeyStore(database)
 	localGroupStore := db.NewLocalGroupStore(database)
+	geoFenceStore := db.NewGeoFenceStore(database)
 
 	// Initialize PKI with database store for CA persistence
 	// This ensures all pods share the same CA
@@ -145,6 +147,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 		meshConfigStore: meshConfigStore,
 		apiKeyStore:     apiKeyStore,
 		localGroupStore: localGroupStore,
+		geoFenceStore:   geoFenceStore,
 		ca:              ca,
 		configGen:       configGen,
 		adminPassword:   adminPassword,
@@ -486,6 +489,24 @@ func (s *Server) setupRoutes() {
 			admin.POST("/users/:id/api-keys", s.handleAdminCreateUserAPIKey)
 			admin.DELETE("/users/:id/api-keys", s.handleAdminRevokeUserAPIKeys)
 			admin.DELETE("/users/:id/api-keys/all", s.handleAdminDeleteUserAPIKeys)
+
+			// Geo-fencing management
+			admin.GET("/geo-fence/settings", s.handleGetGeoFenceSettings)
+			admin.PUT("/geo-fence/settings", s.handleUpdateGeoFenceSettings)
+			admin.GET("/geo-fence/rules", s.handleListGeoFenceRules)
+			admin.POST("/geo-fence/rules", s.handleCreateGeoFenceRule)
+			admin.GET("/geo-fence/rules/:id", s.handleGetGeoFenceRule)
+			admin.PUT("/geo-fence/rules/:id", s.handleUpdateGeoFenceRule)
+			admin.DELETE("/geo-fence/rules/:id", s.handleDeleteGeoFenceRule)
+			admin.GET("/geo-fence/global", s.handleListGlobalGeoRules)
+			admin.POST("/geo-fence/global", s.handleAddGlobalGeoRule)
+			admin.DELETE("/geo-fence/global/:ruleId", s.handleRemoveGlobalGeoRule)
+			admin.GET("/geo-fence/users/:userId/rules", s.handleListUserGeoRules)
+			admin.POST("/geo-fence/users/:userId/rules", s.handleAddUserGeoRule)
+			admin.DELETE("/geo-fence/users/:userId/rules/:ruleId", s.handleRemoveUserGeoRule)
+			admin.GET("/geo-fence/groups/:groupName/rules", s.handleListGroupGeoRules)
+			admin.POST("/geo-fence/groups/:groupName/rules", s.handleAddGroupGeoRule)
+			admin.DELETE("/geo-fence/groups/:groupName/rules/:ruleId", s.handleRemoveGroupGeoRule)
 
 			// Topology and network tools
 			admin.GET("/topology", s.handleGetTopology)

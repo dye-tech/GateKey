@@ -12,6 +12,7 @@ import AdminNetworks from './pages/AdminNetworks'
 import AdminAccessRules from './pages/AdminAccessRules'
 import AdminProxyApps from './pages/AdminProxyApps'
 import AdminMonitoring from './pages/AdminMonitoring'
+import AdminGeoFencing from './pages/AdminGeoFencing'
 import AdminMesh from './pages/AdminMesh'
 import AdminConfigs from './pages/AdminConfigs'
 import AdminTopology from './pages/AdminTopology'
@@ -150,6 +151,13 @@ function AppRoutes() {
         <AdminRoute>
           <Layout>
             <AdminMonitoring />
+          </Layout>
+        </AdminRoute>
+      } />
+      <Route path="/admin/geo-fencing" element={
+        <AdminRoute>
+          <Layout>
+            <AdminGeoFencing />
           </Layout>
         </AdminRoute>
       } />

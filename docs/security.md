@@ -376,6 +376,61 @@ Access rules are enforced in real-time without requiring client reconnection:
 
 **Total time from rule change to enforcement: <15 seconds**
 
+## Geo-Fencing
+
+GateKey supports IP-based geo-fencing to restrict VPN connections based on the client's source IP address. This provides an additional layer of security beyond identity-based access control.
+
+### Whitelist Model
+
+Geo-fencing uses a whitelist-only model:
+- Create rules that define allowed IP ranges (CIDR notation)
+- Assign rules globally, to groups, or to individual users
+- Only connections from listed IPs are permitted
+- Connections from unlisted IPs are blocked (or logged in audit mode)
+
+### Rule Hierarchy
+
+Rules follow a hierarchical priority (most specific wins):
+
+| Priority | Level | Applies To |
+|----------|-------|------------|
+| 1 (highest) | User | Rules assigned directly to the user |
+| 2 | Group | Rules assigned to user's groups |
+| 3 (lowest) | Global | Default rules for everyone |
+
+If a user has user-specific rules, only those are evaluated. Otherwise, group rules apply. If neither exists, global rules are used.
+
+### Enforcement Points
+
+Geo-fencing is checked at two points for defense-in-depth:
+
+1. **Gateway Verify** (`handleGatewayVerify`) - During certificate verification
+2. **Gateway Connect** (`handleGatewayConnect`) - When connection is established
+
+This ensures connections are blocked even if someone obtains a valid certificate.
+
+### Enforcement Modes
+
+| Mode | Behavior |
+|------|----------|
+| **Enforce** | Block connections from unlisted IPs |
+| **Audit** | Log violations but allow connections (for testing) |
+
+### Configuration
+
+Navigate to **Administration → Geo-Fencing** to:
+1. Enable/disable geo-fencing
+2. Select enforcement mode (enforce or audit)
+3. Create rules with allowed IP ranges
+4. Assign rules globally, to groups, or to users
+
+### Example Use Cases
+
+- **Country Restriction**: Allow only IP ranges from specific countries
+- **Office Only**: Restrict access to corporate network IPs
+- **Remote Worker Exception**: Allow specific users from any IP
+- **Contractor Restrictions**: Limit contractors to office network only
+
 ## Audit Logging
 
 All security-relevant events are logged:

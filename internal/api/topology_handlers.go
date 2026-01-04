@@ -248,15 +248,19 @@ func (s *Server) handleGetActiveSessions(c *gin.Context) {
 func (s *Server) getActiveMeshConnections(ctx context.Context) ([]ActiveSession, error) {
 	var sessions []ActiveSession
 
-	// Query mesh hub connections
+	// Query mesh hub connections (supports both SSO and local users)
 	meshRows, err := s.db.Pool.Query(ctx, `
 		SELECT
-			mc.id, mc.hub_id, u.id, u.email, COALESCE(u.name, ''),
+			mc.id::text, mc.hub_id::text, mc.user_id,
+			COALESCE(u.email, lu.email, ''),
+			COALESCE(u.name, lu.username, ''),
 			h.name, host(mc.client_ip), host(mc.tunnel_ip),
-			mc.bytes_sent, mc.bytes_received, mc.connected_at
+			mc.bytes_sent, mc.bytes_received, mc.connected_at,
+			COALESCE(mc.user_type, 'sso')
 		FROM mesh_connections mc
-		JOIN users u ON mc.user_id = u.id
 		JOIN mesh_hubs h ON mc.hub_id = h.id
+		LEFT JOIN users u ON COALESCE(mc.user_type, 'sso') = 'sso' AND mc.user_id = u.id::text
+		LEFT JOIN local_users lu ON mc.user_type = 'local' AND mc.user_id = lu.id::text
 		WHERE mc.disconnected_at IS NULL
 		ORDER BY mc.connected_at DESC
 	`)
@@ -268,10 +272,11 @@ func (s *Server) getActiveMeshConnections(ctx context.Context) ([]ActiveSession,
 	for meshRows.Next() {
 		var sess ActiveSession
 		var clientIP, tunnelIP *string
+		var userType string
 		if err := meshRows.Scan(
 			&sess.ID, &sess.GatewayID, &sess.UserID, &sess.UserEmail, &sess.UserName,
 			&sess.GatewayName, &clientIP, &tunnelIP,
-			&sess.BytesSent, &sess.BytesRecv, &sess.ConnectedAt,
+			&sess.BytesSent, &sess.BytesRecv, &sess.ConnectedAt, &userType,
 		); err != nil {
 			return nil, err
 		}
@@ -281,6 +286,10 @@ func (s *Server) getActiveMeshConnections(ctx context.Context) ([]ActiveSession,
 		}
 		if tunnelIP != nil {
 			sess.VPNAddress = *tunnelIP
+		}
+		// Add (Local) suffix for local users in the name
+		if userType == "local" && sess.UserName != "" && !strings.HasSuffix(sess.UserName, "(Local)") {
+			sess.UserName = sess.UserName + " (Local)"
 		}
 		sessions = append(sessions, sess)
 	}

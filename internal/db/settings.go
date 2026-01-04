@@ -105,6 +105,10 @@ const (
 	SettingAllowedCryptoProfiles = "allowed_crypto_profiles" // Comma-separated: modern,fips,compatible
 	SettingMinTLSVersion         = "min_tls_version"         // 1.0, 1.1, 1.2, 1.3
 	SettingAllowedCiphers        = "allowed_ciphers"         // Comma-separated cipher list
+
+	// Geo-fencing settings
+	SettingGeoFencingEnabled = "geo_fencing_enabled" // bool: enable/disable geo-fencing
+	SettingGeoFencingEnforce = "geo_fencing_enforce" // "enforce" or "audit"
 )
 
 // Default crypto profiles (all enabled by default)

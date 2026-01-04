@@ -102,6 +102,38 @@
   --instruction-title: #0f172a;
   --instruction-text: #334155;
   --instruction-muted: #64748b;
+
+  /* Alert Warning - Light Theme (Warm Amber) */
+  --alert-warning-bg: #fefce8;
+  --alert-warning-border: #fef08a;
+  --alert-warning-accent: #eab308;
+  --alert-warning-icon: #ca8a04;
+  --alert-warning-title: #854d0e;
+  --alert-warning-text: #713f12;
+
+  /* Alert Danger - Light Theme (Red) */
+  --alert-danger-bg: #fef2f2;
+  --alert-danger-border: #fecaca;
+  --alert-danger-accent: #ef4444;
+  --alert-danger-icon: #dc2626;
+  --alert-danger-title: #991b1b;
+  --alert-danger-text: #7f1d1d;
+
+  /* Alert Info - Light Theme (Blue) */
+  --alert-info-bg: #eff6ff;
+  --alert-info-border: #bfdbfe;
+  --alert-info-accent: #3b82f6;
+  --alert-info-icon: #2563eb;
+  --alert-info-title: #1e40af;
+  --alert-info-text: #1e3a8a;
+
+  /* Alert Success - Light Theme (Green) */
+  --alert-success-bg: #f0fdf4;
+  --alert-success-border: #bbf7d0;
+  --alert-success-accent: #22c55e;
+  --alert-success-icon: #16a34a;
+  --alert-success-title: #166534;
+  --alert-success-text: #14532d;
 }
 
 /* ============================================
@@ -193,6 +225,38 @@
   --instruction-title: #f8fafc;
   --instruction-text: #cbd5e1;
   --instruction-muted: #94a3b8;
+
+  /* Alert Warning - Dark Theme (Warm Amber) */
+  --alert-warning-bg: rgba(234, 179, 8, 0.08);
+  --alert-warning-border: rgba(234, 179, 8, 0.2);
+  --alert-warning-accent: #eab308;
+  --alert-warning-icon: #facc15;
+  --alert-warning-title: #fef08a;
+  --alert-warning-text: #fef9c3;
+
+  /* Alert Danger - Dark Theme (Red) */
+  --alert-danger-bg: rgba(239, 68, 68, 0.1);
+  --alert-danger-border: rgba(239, 68, 68, 0.25);
+  --alert-danger-accent: #ef4444;
+  --alert-danger-icon: #f87171;
+  --alert-danger-title: #fca5a5;
+  --alert-danger-text: #fecaca;
+
+  /* Alert Info - Dark Theme (Blue) */
+  --alert-info-bg: rgba(59, 130, 246, 0.1);
+  --alert-info-border: rgba(59, 130, 246, 0.25);
+  --alert-info-accent: #3b82f6;
+  --alert-info-icon: #60a5fa;
+  --alert-info-title: #93c5fd;
+  --alert-info-text: #bfdbfe;
+
+  /* Alert Success - Dark Theme (Green) */
+  --alert-success-bg: rgba(34, 197, 94, 0.1);
+  --alert-success-border: rgba(34, 197, 94, 0.25);
+  --alert-success-accent: #22c55e;
+  --alert-success-icon: #4ade80;
+  --alert-success-title: #86efac;
+  --alert-success-text: #bbf7d0;
 }
 
 /* ============================================
@@ -339,6 +403,98 @@ body {
     border: 1px solid var(--status-info-border);
     color: var(--status-info-text);
     @apply rounded-lg p-4;
+  }
+
+  /* ============================================
+     ALERT BOXES - Enhanced Warning/Error/Info
+     ============================================ */
+
+  /* Alert Warning - Orange/Amber with left accent */
+  .alert-warning {
+    background-color: var(--alert-warning-bg);
+    border: 1px solid var(--alert-warning-border);
+    border-left: 4px solid var(--alert-warning-accent);
+    @apply rounded-lg p-4;
+  }
+
+  .alert-warning-icon {
+    color: var(--alert-warning-icon);
+  }
+
+  .alert-warning-title {
+    color: var(--alert-warning-title);
+    @apply font-semibold flex items-center gap-2;
+  }
+
+  .alert-warning-text {
+    color: var(--alert-warning-text);
+    @apply text-sm mt-2;
+  }
+
+  /* Alert Danger - Red with left accent */
+  .alert-danger {
+    background-color: var(--alert-danger-bg);
+    border: 1px solid var(--alert-danger-border);
+    border-left: 4px solid var(--alert-danger-accent);
+    @apply rounded-lg p-4;
+  }
+
+  .alert-danger-icon {
+    color: var(--alert-danger-icon);
+  }
+
+  .alert-danger-title {
+    color: var(--alert-danger-title);
+    @apply font-semibold flex items-center gap-2;
+  }
+
+  .alert-danger-text {
+    color: var(--alert-danger-text);
+    @apply text-sm mt-2;
+  }
+
+  /* Alert Info - Blue with left accent */
+  .alert-info {
+    background-color: var(--alert-info-bg);
+    border: 1px solid var(--alert-info-border);
+    border-left: 4px solid var(--alert-info-accent);
+    @apply rounded-lg p-4;
+  }
+
+  .alert-info-icon {
+    color: var(--alert-info-icon);
+  }
+
+  .alert-info-title {
+    color: var(--alert-info-title);
+    @apply font-semibold flex items-center gap-2;
+  }
+
+  .alert-info-text {
+    color: var(--alert-info-text);
+    @apply text-sm mt-2;
+  }
+
+  /* Alert Success - Green with left accent */
+  .alert-success {
+    background-color: var(--alert-success-bg);
+    border: 1px solid var(--alert-success-border);
+    border-left: 4px solid var(--alert-success-accent);
+    @apply rounded-lg p-4;
+  }
+
+  .alert-success-icon {
+    color: var(--alert-success-icon);
+  }
+
+  .alert-success-title {
+    color: var(--alert-success-title);
+    @apply font-semibold flex items-center gap-2;
+  }
+
+  .alert-success-text {
+    color: var(--alert-success-text);
+    @apply text-sm mt-2;
   }
 
   /* Table Row Selection */
