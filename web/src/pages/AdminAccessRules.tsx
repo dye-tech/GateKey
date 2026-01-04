@@ -7,6 +7,7 @@ import {
   updateAccessRule,
   getNetworks,
   getUsers,
+  getLocalUsers,
   getGroups,
   assignRuleToUser,
   removeRuleFromUser,
@@ -15,7 +16,6 @@ import {
   AccessRule,
   AccessRuleType,
   Network,
-  SSOUser,
   Group,
 } from '../api/client'
 import ActionDropdown, { ActionItem } from '../components/ActionDropdown'
@@ -506,15 +506,20 @@ function AssignmentModal({ rule, onClose, onUpdate }: AssignmentModalProps) {
   const [selectedGroupName, setSelectedGroupName] = useState('')
   const [customUserId, setCustomUserId] = useState('')
   const [customGroupName, setCustomGroupName] = useState('')
-  const [users, setUsers] = useState<SSOUser[]>([])
+  const [users, setUsers] = useState<{ id: string; email: string; name: string; provider: string }[]>([])
   const [groups, setGroups] = useState<Group[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([getUsers(), getGroups()])
-      .then(([u, g]) => {
-        setUsers(u)
+    Promise.all([getUsers(), getLocalUsers(), getGroups()])
+      .then(([ssoUsers, localUsers, g]) => {
+        // Combine SSO and local users
+        const combinedUsers = [
+          ...ssoUsers.map(u => ({ id: u.id, email: u.email, name: u.name, provider: u.provider })),
+          ...localUsers.map(u => ({ id: u.id, email: u.email, name: `${u.username} (Local)`, provider: 'local' })),
+        ]
+        setUsers(combinedUsers)
         setGroups(g)
       })
       .catch(() => {})

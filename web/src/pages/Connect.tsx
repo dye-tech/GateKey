@@ -29,6 +29,16 @@ export default function Connect() {
   // Get the server URL for CLI command
   const serverUrl = window.location.origin
 
+  // Handle initial tab selection from URL parameter
+  useEffect(() => {
+    const typeParam = searchParams.get('type')
+    if (typeParam === 'mesh') {
+      setConnectionType('mesh')
+    } else if (typeParam === 'gateways') {
+      setConnectionType('gateways')
+    }
+  }, [searchParams])
+
   useEffect(() => {
     loadData()
   }, [])

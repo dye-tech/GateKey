@@ -12,8 +12,8 @@ import {
   assignProxyAppToGroup,
   removeProxyAppFromGroup,
   getUsers,
+  getLocalUsers,
   getGroups,
-  SSOUser,
   Group,
   CreateProxyAppRequest,
 } from '../api/client'
@@ -457,8 +457,8 @@ function AssignAccessModal({ app, onClose }: AssignAccessModalProps) {
   const [assignedUserIds, setAssignedUserIds] = useState<string[]>([])
   const [assignedGroups, setAssignedGroups] = useState<string[]>([])
 
-  // Available items
-  const [allUsers, setAllUsers] = useState<SSOUser[]>([])
+  // Available items - combined SSO and local users
+  const [allUsers, setAllUsers] = useState<{ id: string; email: string; name: string; provider: string }[]>([])
   const [allGroups, setAllGroups] = useState<Group[]>([])
 
   // Selection and manual input fields
@@ -474,13 +474,19 @@ function AssignAccessModal({ app, onClose }: AssignAccessModalProps) {
   async function loadData() {
     try {
       setLoading(true)
-      const [users, groups, appUsers, appGroups] = await Promise.all([
+      const [ssoUsers, localUsers, groups, appUsers, appGroups] = await Promise.all([
         getUsers(),
+        getLocalUsers(),
         getGroups(),
         getProxyAppUsers(app.id),
         getProxyAppGroups(app.id),
       ])
-      setAllUsers(users)
+      // Combine SSO and local users
+      const combinedUsers = [
+        ...ssoUsers.map(u => ({ id: u.id, email: u.email, name: u.name, provider: u.provider })),
+        ...localUsers.map(u => ({ id: u.id, email: u.email, name: `${u.username} (Local)`, provider: 'local' })),
+      ]
+      setAllUsers(combinedUsers)
       setAllGroups(groups)
       setAssignedUserIds(appUsers)
       setAssignedGroups(appGroups)
@@ -585,7 +591,7 @@ function AssignAccessModal({ app, onClose }: AssignAccessModalProps) {
               <h3 className="text-sm font-medium text-theme-secondary mb-2">Assigned Users</h3>
 
               {/* Add user controls */}
-              <div className="mb-3 p-3 bg-theme-tertiary rounded-lg space-y-2">
+              <div className="mb-3 p-3 bg-theme-secondary rounded-lg space-y-2">
                 {availableUsers.length > 0 && (
                   <div className="flex space-x-2">
                     <select
@@ -594,7 +600,7 @@ function AssignAccessModal({ app, onClose }: AssignAccessModalProps) {
                         setSelectedUserId(e.target.value)
                         setCustomUserId('')
                       }}
-                      className="flex-1 px-3 py-2 border border-theme rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                      className="flex-1 px-3 py-2 border border-theme rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-theme-primary text-theme-primary"
                     >
                       <option value="">Select a user...</option>
                       {availableUsers.map((u) => (
@@ -606,7 +612,7 @@ function AssignAccessModal({ app, onClose }: AssignAccessModalProps) {
                     <button
                       onClick={handleAddUser}
                       disabled={!selectedUserId}
-                      className="btn btn-primary text-sm"
+                      className="btn text-sm"
                     >
                       Add
                     </button>
@@ -687,7 +693,7 @@ function AssignAccessModal({ app, onClose }: AssignAccessModalProps) {
               <h3 className="text-sm font-medium text-theme-secondary mb-2">Assigned Groups</h3>
 
               {/* Add group controls */}
-              <div className="mb-3 p-3 bg-theme-tertiary rounded-lg space-y-2">
+              <div className="mb-3 p-3 bg-theme-secondary rounded-lg space-y-2">
                 {availableGroups.length > 0 && (
                   <div className="flex space-x-2">
                     <select
@@ -696,7 +702,7 @@ function AssignAccessModal({ app, onClose }: AssignAccessModalProps) {
                         setSelectedGroupName(e.target.value)
                         setCustomGroupName('')
                       }}
-                      className="flex-1 px-3 py-2 border border-theme rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                      className="flex-1 px-3 py-2 border border-theme rounded-lg text-sm focus:ring-2 focus:ring-primary-500 bg-theme-primary text-theme-primary"
                     >
                       <option value="">Select a group...</option>
                       {availableGroups.map((g) => (
@@ -708,7 +714,7 @@ function AssignAccessModal({ app, onClose }: AssignAccessModalProps) {
                     <button
                       onClick={handleAddGroup}
                       disabled={!selectedGroupName}
-                      className="btn btn-primary text-sm"
+                      className="btn text-sm"
                     >
                       Add
                     </button>
