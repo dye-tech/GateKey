@@ -63,6 +63,24 @@ const sections: Section[] = [
     ),
   },
   {
+    id: 'geo-fencing',
+    title: 'Geo-Fencing',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'topology',
+    title: 'Network Topology',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+      </svg>
+    ),
+  },
+  {
     id: 'proxy-apps',
     title: 'Proxy Apps',
     icon: (
@@ -922,6 +940,227 @@ curl -sSL ${baseUrl}/scripts/install-gateway.sh | \\
               <li>Add users or groups that should have this access</li>
               <li>Rules take effect immediately (within 10 seconds)</li>
             </ol>
+          </div>
+        </section>
+
+        {/* Geo-Fencing Section */}
+        <section id="geo-fencing" className="scroll-mt-24">
+          <div className="card">
+            <h1 className="text-2xl font-bold text-theme-primary mb-2">Geo-Fencing</h1>
+            <p className="text-theme-secondary mb-6">
+              IP-based geo-fencing restricts VPN access based on the client's source IP address. Uses a whitelist approach - only IPs explicitly allowed can connect.
+            </p>
+
+            {/* Overview */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">How It Works</h3>
+            <div className="bg-theme-tertiary rounded-lg p-4 mb-6">
+              <ol className="list-decimal list-inside space-y-2 text-theme-secondary">
+                <li>Create rules that define allowed IP ranges (CIDR notation)</li>
+                <li>Assign rules globally, to groups, or to individual users</li>
+                <li>When geo-fencing is enabled, only allowed IPs can connect</li>
+                <li>Connections from unlisted IPs are blocked (or logged in audit mode)</li>
+              </ol>
+            </div>
+
+            {/* Rule Hierarchy */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Rule Hierarchy</h3>
+            <p className="text-theme-secondary mb-4">
+              Rules follow a priority order (most specific wins):
+            </p>
+            <div className="overflow-x-auto mb-6">
+              <table className="min-w-full divide-y divide-theme">
+                <thead className="bg-theme-tertiary">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Priority</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Level</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Description</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-theme-card divide-y divide-theme text-sm">
+                  <tr>
+                    <td className="px-4 py-3 font-medium">1 (highest)</td>
+                    <td className="px-4 py-3">User</td>
+                    <td className="px-4 py-3">Rules assigned directly to the user</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">2</td>
+                    <td className="px-4 py-3">Group</td>
+                    <td className="px-4 py-3">Rules assigned to user's groups</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">3 (lowest)</td>
+                    <td className="px-4 py-3">Global</td>
+                    <td className="px-4 py-3">Default rules for everyone</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Configuration */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Configuring Geo-Fencing</h3>
+            <ol className="list-decimal list-inside space-y-3 text-theme-secondary mb-6">
+              <li>Navigate to <strong>Administration → Geo-Fencing</strong></li>
+              <li>Toggle <strong>Enable Geo-Fencing</strong></li>
+              <li>Select enforcement mode:
+                <ul className="list-disc list-inside ml-6 mt-2 space-y-1 text-sm">
+                  <li><strong>Enforce:</strong> Block connections from unlisted IPs</li>
+                  <li><strong>Audit:</strong> Log violations but allow connections (for testing)</li>
+                </ul>
+              </li>
+              <li>Create rules with allowed IP ranges (CIDR notation)</li>
+              <li>Assign rules globally, to groups, or to specific users</li>
+            </ol>
+
+            {/* Example Configurations */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Example Configurations</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">Office Network Only</h4>
+                <ul className="text-sm text-theme-secondary space-y-1">
+                  <li>• Create rule: <code className="bg-theme-secondary px-1 rounded">203.0.113.0/24</code></li>
+                  <li>• Add as global rule</li>
+                  <li>• All users must connect from office</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">Allow Specific User Anywhere</h4>
+                <ul className="text-sm text-theme-secondary space-y-1">
+                  <li>• Create rule: <code className="bg-theme-secondary px-1 rounded">0.0.0.0/0</code></li>
+                  <li>• Assign to specific user</li>
+                  <li>• User bypasses geo-fencing</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Best Practices */}
+            <div className="info-box">
+              <h4 className="info-box-title mb-2">Best Practices</h4>
+              <ul className="space-y-1 info-box-text">
+                <li>• Start in <strong>Audit</strong> mode to test before enforcing</li>
+                <li>• Use groups for scalable rule management</li>
+                <li>• Document what IP ranges correspond to which locations</li>
+                <li>• Consider mobile users who may connect from various IPs</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* Topology Section */}
+        <section id="topology" className="scroll-mt-24">
+          <div className="card">
+            <h1 className="text-2xl font-bold text-theme-primary mb-2">Network Topology</h1>
+            <p className="text-theme-secondary mb-6">
+              The Network Topology page provides a visual overview of your entire VPN infrastructure, including gateways, mesh hubs, spokes, and active user sessions.
+            </p>
+
+            {/* Overview */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Accessing Topology</h3>
+            <p className="text-theme-secondary mb-4">
+              Navigate to <strong>Administration → Topology</strong> to view the network topology.
+            </p>
+
+            {/* Features */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Features</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">Topology Map</h4>
+                <ul className="text-sm text-theme-secondary space-y-1">
+                  <li>• Visual network diagram</li>
+                  <li>• Gateways, hubs, and spokes</li>
+                  <li>• Connection status indicators</li>
+                  <li>• Interactive zoom and pan</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">Active Sessions</h4>
+                <ul className="text-sm text-theme-secondary space-y-1">
+                  <li>• Currently connected users</li>
+                  <li>• Client IP and VPN address</li>
+                  <li>• Connection duration</li>
+                  <li>• Bandwidth usage (sent/received)</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Node Types */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Node Types</h3>
+            <div className="overflow-x-auto mb-6">
+              <table className="min-w-full divide-y divide-theme">
+                <thead className="bg-theme-tertiary">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Type</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Description</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-theme-card divide-y divide-theme text-sm">
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Gateway</td>
+                    <td className="px-4 py-3">VPN gateway servers for client access</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Mesh Hub</td>
+                    <td className="px-4 py-3">Central hub for mesh networking (site-to-site)</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Mesh Spoke</td>
+                    <td className="px-4 py-3">Remote site connected to a mesh hub</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Session Information */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Active Sessions Tab</h3>
+            <p className="text-theme-secondary mb-4">
+              The Active Sessions tab shows all currently connected VPN users across all gateways and mesh hubs.
+            </p>
+            <div className="overflow-x-auto mb-6">
+              <table className="min-w-full divide-y divide-theme">
+                <thead className="bg-theme-tertiary">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Field</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Description</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-theme-card divide-y divide-theme text-sm">
+                  <tr>
+                    <td className="px-4 py-3 font-medium">User</td>
+                    <td className="px-4 py-3">User email and name (SSO or Local)</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Node</td>
+                    <td className="px-4 py-3">Gateway or hub the user is connected to</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Client IP</td>
+                    <td className="px-4 py-3">User's real IP address</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">VPN Address</td>
+                    <td className="px-4 py-3">Assigned tunnel IP address</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Connected</td>
+                    <td className="px-4 py-3">When the session started</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Traffic</td>
+                    <td className="px-4 py-3">Bytes sent and received</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Use Cases */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Use Cases</h3>
+            <div className="info-box">
+              <ul className="space-y-2 info-box-text">
+                <li>• <strong>Infrastructure Overview:</strong> See all VPN nodes at a glance</li>
+                <li>• <strong>User Monitoring:</strong> Track who is currently connected</li>
+                <li>• <strong>Troubleshooting:</strong> Identify offline nodes or connection issues</li>
+                <li>• <strong>Capacity Planning:</strong> Monitor user distribution across nodes</li>
+              </ul>
+            </div>
           </div>
         </section>
 

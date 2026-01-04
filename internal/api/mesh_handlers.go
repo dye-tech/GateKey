@@ -1280,10 +1280,11 @@ func (s *Server) handleMeshClientConnected(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	var req struct {
-		Token    string `json:"token" binding:"required"`
-		UserID   string `json:"userId"`
-		ClientIP string `json:"clientIp"`
-		TunnelIP string `json:"tunnelIp"`
+		Token       string `json:"token" binding:"required"`
+		UserID      string `json:"userId"`      // Deprecated: use ClientEmail
+		ClientEmail string `json:"clientEmail"` // Client's email (CN from certificate)
+		ClientIP    string `json:"clientIp"`
+		TunnelIP    string `json:"tunnelIp"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1297,10 +1298,47 @@ func (s *Server) handleMeshClientConnected(c *gin.Context) {
 		return
 	}
 
+	// Determine client email (prefer clientEmail, fall back to userId for backwards compat)
+	clientEmail := req.ClientEmail
+	if clientEmail == "" {
+		clientEmail = req.UserID
+	}
+
 	s.logger.Info("Mesh client connected",
 		zap.String("hub", hub.Name),
-		zap.String("userId", req.UserID),
+		zap.String("clientEmail", clientEmail),
+		zap.String("clientIp", req.ClientIP),
 		zap.String("tunnelIp", req.TunnelIP))
+
+	// Record the connection in mesh_connections table
+	if clientEmail != "" && req.TunnelIP != "" {
+		var userID string
+		var userType string
+
+		// Look up user by email (try SSO first, then local)
+		if user, err := s.userStore.GetSSOUserByEmail(ctx, clientEmail); err == nil && user != nil {
+			userID = user.ID
+			userType = "sso"
+		} else if localUser, err := s.userStore.GetLocalUserByEmail(ctx, clientEmail); err == nil && localUser != nil {
+			userID = localUser.ID
+			userType = "local"
+		}
+
+		if userID != "" {
+			// Insert connection record
+			_, err := s.db.Pool.Exec(ctx, `
+				INSERT INTO mesh_connections (hub_id, user_id, user_type, client_ip, tunnel_ip, connected_at)
+				VALUES ($1, $2, $3, $4::inet, $5::inet, NOW())
+				ON CONFLICT DO NOTHING
+			`, hub.ID, userID, userType, req.ClientIP, req.TunnelIP)
+			if err != nil {
+				s.logger.Warn("Failed to record mesh connection",
+					zap.String("hub", hub.Name),
+					zap.String("clientEmail", clientEmail),
+					zap.Error(err))
+			}
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
@@ -1309,9 +1347,12 @@ func (s *Server) handleMeshClientDisconnected(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	var req struct {
-		Token    string `json:"token" binding:"required"`
-		UserID   string `json:"userId"`
-		TunnelIP string `json:"tunnelIp"`
+		Token         string `json:"token" binding:"required"`
+		UserID        string `json:"userId"`        // Deprecated: use ClientEmail
+		ClientEmail   string `json:"clientEmail"`   // Client's email (CN from certificate)
+		TunnelIP      string `json:"tunnelIp"`
+		BytesSent     int64  `json:"bytesSent"`
+		BytesReceived int64  `json:"bytesReceived"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1325,10 +1366,38 @@ func (s *Server) handleMeshClientDisconnected(c *gin.Context) {
 		return
 	}
 
+	// Determine client email (prefer clientEmail, fall back to userId for backwards compat)
+	clientEmail := req.ClientEmail
+	if clientEmail == "" {
+		clientEmail = req.UserID
+	}
+
 	s.logger.Info("Mesh client disconnected",
 		zap.String("hub", hub.Name),
-		zap.String("userId", req.UserID),
-		zap.String("tunnelIp", req.TunnelIP))
+		zap.String("clientEmail", clientEmail),
+		zap.String("tunnelIp", req.TunnelIP),
+		zap.Int64("bytesSent", req.BytesSent),
+		zap.Int64("bytesReceived", req.BytesReceived))
+
+	// Update the connection record to mark as disconnected
+	if req.TunnelIP != "" {
+		_, err := s.db.Pool.Exec(ctx, `
+			UPDATE mesh_connections
+			SET disconnected_at = NOW(),
+			    bytes_sent = $3,
+			    bytes_received = $4,
+			    disconnect_reason = 'normal'
+			WHERE hub_id = $1
+			  AND tunnel_ip = $2::inet
+			  AND disconnected_at IS NULL
+		`, hub.ID, req.TunnelIP, req.BytesSent, req.BytesReceived)
+		if err != nil {
+			s.logger.Warn("Failed to update mesh connection disconnect",
+				zap.String("hub", hub.Name),
+				zap.String("tunnelIp", req.TunnelIP),
+				zap.Error(err))
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
