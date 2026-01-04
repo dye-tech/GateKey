@@ -424,6 +424,29 @@ func (s *MeshStore) DeleteHub(ctx context.Context, id string) error {
 	return nil
 }
 
+// RotateHubToken generates a new API token for a mesh hub and returns it
+// The old token is immediately invalidated
+func (s *MeshStore) RotateHubToken(ctx context.Context, id string) (string, error) {
+	// Generate new token
+	newToken, err := GenerateMeshToken()
+	if err != nil {
+		return "", err
+	}
+
+	result, err := s.db.Pool.Exec(ctx, `
+		UPDATE mesh_hubs
+		SET api_token = $2, updated_at = NOW()
+		WHERE id = $1
+	`, id, newToken)
+	if err != nil {
+		return "", err
+	}
+	if result.RowsAffected() == 0 {
+		return "", ErrMeshHubNotFound
+	}
+	return newToken, nil
+}
+
 // MarkInactiveHubs marks hubs as offline if they haven't sent a heartbeat recently
 func (s *MeshStore) MarkInactiveHubs(ctx context.Context, threshold time.Duration) (int64, error) {
 	result, err := s.db.Pool.Exec(ctx, `
@@ -668,6 +691,29 @@ func (s *MeshStore) DeleteMeshSpoke(ctx context.Context, id string) error {
 		return ErrMeshSpokeNotFound
 	}
 	return nil
+}
+
+// RotateSpokeToken generates a new token for a mesh spoke and returns it
+// The old token is immediately invalidated
+func (s *MeshStore) RotateSpokeToken(ctx context.Context, id string) (string, error) {
+	// Generate new token
+	newToken, err := GenerateMeshToken()
+	if err != nil {
+		return "", err
+	}
+
+	result, err := s.db.Pool.Exec(ctx, `
+		UPDATE mesh_gateways
+		SET token = $2, updated_at = NOW()
+		WHERE id = $1
+	`, id, newToken)
+	if err != nil {
+		return "", err
+	}
+	if result.RowsAffected() == 0 {
+		return "", ErrMeshSpokeNotFound
+	}
+	return newToken, nil
 }
 
 // MarkInactiveGateways marks mesh gateways as disconnected if they haven't reported recently

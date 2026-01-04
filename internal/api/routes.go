@@ -708,12 +708,17 @@ func (s *Server) handleGetSession(c *gin.Context) {
 
 	// First, check SSO session in database
 	if ssoSession, err := s.stateStore.GetSSOSession(c.Request.Context(), token); err == nil {
+		// Get local group memberships for this SSO user
+		localGroups, _ := s.localGroupStore.GetUserLocalGroups(c.Request.Context(), ssoSession.UserID, "sso")
+		// Merge IdP groups with local groups
+		allGroups := append(ssoSession.Groups, localGroups...)
+
 		c.JSON(http.StatusOK, gin.H{
 			"user": gin.H{
 				"id":       ssoSession.UserID,
 				"email":    ssoSession.Email,
 				"name":     ssoSession.Name,
-				"groups":   ssoSession.Groups,
+				"groups":   allGroups,
 				"isAdmin":  ssoSession.IsAdmin,
 				"provider": ssoSession.Provider,
 			},
@@ -729,13 +734,16 @@ func (s *Server) handleGetSession(c *gin.Context) {
 		return
 	}
 
+	// Get local group memberships for this local user
+	localGroups, _ := s.localGroupStore.GetUserLocalGroups(c.Request.Context(), user.ID, "local")
+
 	// Return user info
 	c.JSON(http.StatusOK, gin.H{
 		"user": gin.H{
 			"id":      user.Username,
 			"email":   user.Email,
 			"name":    user.Username,
-			"groups":  []string{},
+			"groups":  localGroups,
 			"isAdmin": user.IsAdmin,
 		},
 		"authenticated": true,
@@ -2917,6 +2925,61 @@ func (s *Server) handleDeleteGateway(c *gin.Context) {
 
 	s.logger.Info("Gateway deleted", zap.String("id", gatewayID))
 	c.JSON(http.StatusOK, gin.H{"message": "gateway deleted successfully"})
+}
+
+// handleRotateGatewayToken regenerates the authentication token for a gateway
+// The old token is immediately invalidated. Returns new token and install script.
+func (s *Server) handleRotateGatewayToken(c *gin.Context) {
+	gatewayID := c.Param("id")
+	ctx := c.Request.Context()
+
+	// Get gateway info first for the response
+	gateway, err := s.gatewayStore.GetGateway(ctx, gatewayID)
+	if err != nil {
+		if err == db.ErrGatewayNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "gateway not found"})
+			return
+		}
+		s.logger.Error("Failed to get gateway", zap.Error(err), zap.String("id", gatewayID))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get gateway"})
+		return
+	}
+
+	// Rotate the token
+	newToken, err := s.gatewayStore.RotateGatewayToken(ctx, gatewayID)
+	if err != nil {
+		if err == db.ErrGatewayNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "gateway not found"})
+			return
+		}
+		s.logger.Error("Failed to rotate gateway token", zap.Error(err), zap.String("id", gatewayID))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to rotate token"})
+		return
+	}
+
+	// Build control plane URL for install script
+	scheme := "https"
+	if c.Request.TLS == nil {
+		scheme = "http"
+	}
+	controlPlaneURL := fmt.Sprintf("%s://%s", scheme, c.Request.Host)
+
+	// Generate install script with new token
+	installScript := fmt.Sprintf(`curl -sSL %s/scripts/install-gateway.sh | bash -s -- \
+  --server %s \
+  --token %s \
+  --name %s`, controlPlaneURL, controlPlaneURL, newToken, gateway.Name)
+
+	s.logger.Info("Gateway token rotated",
+		zap.String("id", gatewayID),
+		zap.String("gateway", gateway.Name))
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":       "Token rotated successfully. The old token is now invalid. Update the gateway configuration with the new token.",
+		"token":         newToken,
+		"installScript": installScript,
+		"gatewayName":   gateway.Name,
+	})
 }
 
 // handleReprovisionGateway forces a gateway to re-provision its certificates
@@ -5137,4 +5200,256 @@ func (s *Server) logUserLogin(ctx context.Context, userID, userEmail, userName, 
 	if err := s.loginLogStore.Create(ctx, log); err != nil {
 		s.logger.Error("Failed to create login log", zap.Error(err), zap.String("user_email", userEmail))
 	}
+}
+
+// Local Groups handlers
+
+func (s *Server) handleListLocalGroups(c *gin.Context) {
+	ctx := c.Request.Context()
+	groups, err := s.localGroupStore.ListLocalGroups(ctx)
+	if err != nil {
+		s.logger.Error("Failed to list local groups", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list local groups"})
+		return
+	}
+
+	response := make([]gin.H, 0, len(groups))
+	for _, g := range groups {
+		response = append(response, gin.H{
+			"id":           g.ID,
+			"name":         g.Name,
+			"description":  g.Description,
+			"member_count": g.MemberCount,
+			"created_at":   g.CreatedAt.Format(time.RFC3339),
+			"updated_at":   g.UpdatedAt.Format(time.RFC3339),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"groups": response})
+}
+
+func (s *Server) handleGetLocalGroup(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
+
+	group, err := s.localGroupStore.GetLocalGroup(ctx, id)
+	if err != nil {
+		if err == db.ErrLocalGroupNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "local group not found"})
+			return
+		}
+		s.logger.Error("Failed to get local group", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get local group"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"group": gin.H{
+			"id":           group.ID,
+			"name":         group.Name,
+			"description":  group.Description,
+			"member_count": group.MemberCount,
+			"created_at":   group.CreatedAt.Format(time.RFC3339),
+			"updated_at":   group.UpdatedAt.Format(time.RFC3339),
+		},
+	})
+}
+
+func (s *Server) handleCreateLocalGroup(c *gin.Context) {
+	var req struct {
+		Name        string `json:"name" binding:"required"`
+		Description string `json:"description"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := c.Request.Context()
+	group := &db.LocalGroup{
+		Name:        req.Name,
+		Description: req.Description,
+	}
+
+	if err := s.localGroupStore.CreateLocalGroup(ctx, group); err != nil {
+		if err == db.ErrLocalGroupExists {
+			c.JSON(http.StatusConflict, gin.H{"error": "local group with this name already exists"})
+			return
+		}
+		s.logger.Error("Failed to create local group", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create local group"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"group": gin.H{
+			"id":          group.ID,
+			"name":        group.Name,
+			"description": group.Description,
+			"created_at":  group.CreatedAt.Format(time.RFC3339),
+		},
+	})
+}
+
+func (s *Server) handleUpdateLocalGroup(c *gin.Context) {
+	id := c.Param("id")
+	var req struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Get existing group first
+	group, err := s.localGroupStore.GetLocalGroup(ctx, id)
+	if err != nil {
+		if err == db.ErrLocalGroupNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "local group not found"})
+			return
+		}
+		s.logger.Error("Failed to get local group", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get local group"})
+		return
+	}
+
+	// Update fields if provided
+	if req.Name != "" {
+		group.Name = req.Name
+	}
+	if req.Description != "" {
+		group.Description = req.Description
+	}
+
+	if err := s.localGroupStore.UpdateLocalGroup(ctx, group); err != nil {
+		if err == db.ErrLocalGroupExists {
+			c.JSON(http.StatusConflict, gin.H{"error": "local group with this name already exists"})
+			return
+		}
+		s.logger.Error("Failed to update local group", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update local group"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "local group updated"})
+}
+
+func (s *Server) handleDeleteLocalGroup(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
+
+	if err := s.localGroupStore.DeleteLocalGroup(ctx, id); err != nil {
+		if err == db.ErrLocalGroupNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "local group not found"})
+			return
+		}
+		s.logger.Error("Failed to delete local group", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete local group"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "local group deleted"})
+}
+
+func (s *Server) handleListLocalGroupMembers(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
+
+	members, err := s.localGroupStore.GetGroupMembers(ctx, id)
+	if err != nil {
+		s.logger.Error("Failed to get local group members", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get local group members"})
+		return
+	}
+
+	response := make([]gin.H, 0, len(members))
+	for _, m := range members {
+		response = append(response, gin.H{
+			"user_id":     m.UserID,
+			"member_type": m.MemberType,
+			"email":       m.Email,
+			"name":        m.Name,
+			"created_at":  m.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"members": response})
+}
+
+func (s *Server) handleAddLocalGroupMember(c *gin.Context) {
+	id := c.Param("id")
+	var req struct {
+		UserID     string `json:"user_id" binding:"required"`
+		MemberType string `json:"member_type" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Validate member type
+	if req.MemberType != "sso" && req.MemberType != "local" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "member_type must be 'sso' or 'local'"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Verify the group exists
+	_, err := s.localGroupStore.GetLocalGroup(ctx, id)
+	if err != nil {
+		if err == db.ErrLocalGroupNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "local group not found"})
+			return
+		}
+		s.logger.Error("Failed to get local group", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get local group"})
+		return
+	}
+
+	// Verify the user exists
+	if req.MemberType == "sso" {
+		_, err := s.userStore.GetSSOUser(ctx, req.UserID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "SSO user not found"})
+			return
+		}
+	} else {
+		_, err := s.userStore.GetUserByID(ctx, req.UserID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "local user not found"})
+			return
+		}
+	}
+
+	if err := s.localGroupStore.AddMember(ctx, id, req.UserID, req.MemberType); err != nil {
+		s.logger.Error("Failed to add member to local group", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add member to local group"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "member added to local group"})
+}
+
+func (s *Server) handleRemoveLocalGroupMember(c *gin.Context) {
+	id := c.Param("id")
+	userID := c.Param("userId")
+	memberType := c.Param("memberType")
+
+	ctx := c.Request.Context()
+
+	if err := s.localGroupStore.RemoveMember(ctx, id, userID, memberType); err != nil {
+		if err == db.ErrMemberNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "member not found in group"})
+			return
+		}
+		s.logger.Error("Failed to remove member from local group", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove member from local group"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "member removed from local group"})
 }

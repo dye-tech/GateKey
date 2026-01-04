@@ -2658,3 +2658,122 @@ func (s *Server) handleAdminRevokeMeshUserConfigs(c *gin.Context) {
 		"revokedCount": count,
 	})
 }
+
+// handleRotateMeshHubToken regenerates the authentication token for a mesh hub
+// The old token is immediately invalidated. Returns new token and install script.
+func (s *Server) handleRotateMeshHubToken(c *gin.Context) {
+	hubID := c.Param("id")
+	ctx := c.Request.Context()
+
+	// Get hub first to have name for the response
+	hub, err := s.meshStore.GetHub(ctx, hubID)
+	if err != nil {
+		if err == db.ErrMeshHubNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "hub not found"})
+			return
+		}
+		s.logger.Error("Failed to get mesh hub", zap.Error(err), zap.String("id", hubID))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get hub"})
+		return
+	}
+
+	// Rotate the token
+	newToken, err := s.meshStore.RotateHubToken(ctx, hubID)
+	if err != nil {
+		if err == db.ErrMeshHubNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "hub not found"})
+			return
+		}
+		s.logger.Error("Failed to rotate mesh hub token", zap.Error(err), zap.String("id", hubID))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to rotate token"})
+		return
+	}
+
+	// Build install script
+	scheme := "https"
+	if c.Request.TLS == nil {
+		scheme = "http"
+	}
+	controlPlaneURL := fmt.Sprintf("%s://%s", scheme, c.Request.Host)
+
+	installScript := fmt.Sprintf(`curl -sSL %s/scripts/install-mesh-hub.sh | bash -s -- \
+  --server %s \
+  --token %s \
+  --name %s`, controlPlaneURL, controlPlaneURL, newToken, hub.Name)
+
+	s.logger.Info("Mesh hub token rotated",
+		zap.String("id", hubID),
+		zap.String("hub", hub.Name))
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":       "Token rotated successfully. The old token is now invalid. Update the hub configuration with the new token.",
+		"token":         newToken,
+		"installScript": installScript,
+		"hubName":       hub.Name,
+	})
+}
+
+// handleRotateMeshSpokeToken regenerates the authentication token for a mesh spoke
+// The old token is immediately invalidated. Returns new token and install script.
+func (s *Server) handleRotateMeshSpokeToken(c *gin.Context) {
+	spokeID := c.Param("id")
+	ctx := c.Request.Context()
+
+	// Get spoke first to have name and hub info for the response
+	spoke, err := s.meshStore.GetMeshSpoke(ctx, spokeID)
+	if err != nil {
+		if err == db.ErrMeshSpokeNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "spoke not found"})
+			return
+		}
+		s.logger.Error("Failed to get mesh spoke", zap.Error(err), zap.String("id", spokeID))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get spoke"})
+		return
+	}
+
+	// Get hub name for the install script
+	hub, err := s.meshStore.GetHub(ctx, spoke.HubID)
+	if err != nil {
+		s.logger.Error("Failed to get mesh hub", zap.Error(err), zap.String("hubId", spoke.HubID))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get hub"})
+		return
+	}
+
+	// Rotate the token
+	newToken, err := s.meshStore.RotateSpokeToken(ctx, spokeID)
+	if err != nil {
+		if err == db.ErrMeshSpokeNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "spoke not found"})
+			return
+		}
+		s.logger.Error("Failed to rotate mesh spoke token", zap.Error(err), zap.String("id", spokeID))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to rotate token"})
+		return
+	}
+
+	// Build install script
+	scheme := "https"
+	if c.Request.TLS == nil {
+		scheme = "http"
+	}
+	controlPlaneURL := fmt.Sprintf("%s://%s", scheme, c.Request.Host)
+
+	installScript := fmt.Sprintf(`curl -sSL %s/scripts/install-mesh-spoke.sh | bash -s -- \
+  --server %s \
+  --token %s \
+  --hub %s \
+  --name %s`, controlPlaneURL, controlPlaneURL, newToken, hub.Name, spoke.Name)
+
+	s.logger.Info("Mesh spoke token rotated",
+		zap.String("id", spokeID),
+		zap.String("spoke", spoke.Name),
+		zap.String("hub", hub.Name))
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":       "Token rotated successfully. The old token is now invalid. Update the spoke configuration with the new token.",
+		"token":         newToken,
+		"installScript": installScript,
+		"spokeName":     spoke.Name,
+		"hubName":       hub.Name,
+	})
+}

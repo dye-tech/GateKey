@@ -354,6 +354,29 @@ func (s *GatewayStore) UpdateGatewayConfigVersion(ctx context.Context, id, confi
 	return nil
 }
 
+// RotateGatewayToken generates a new token for a gateway and returns it
+// The old token is immediately invalidated
+func (s *GatewayStore) RotateGatewayToken(ctx context.Context, id string) (string, error) {
+	// Generate new token
+	newToken, err := GenerateToken()
+	if err != nil {
+		return "", err
+	}
+
+	result, err := s.db.Pool.Exec(ctx, `
+		UPDATE gateways
+		SET token = $2, updated_at = NOW()
+		WHERE id = $1
+	`, id, newToken)
+	if err != nil {
+		return "", err
+	}
+	if result.RowsAffected() == 0 {
+		return "", ErrGatewayNotFound
+	}
+	return newToken, nil
+}
+
 // AssignUserToGateway assigns a user to a gateway
 func (s *GatewayStore) AssignUserToGateway(ctx context.Context, userID, gatewayID string) error {
 	_, err := s.db.Pool.Exec(ctx, `

@@ -39,6 +39,7 @@ type Server struct {
 	meshStore       *db.MeshStore
 	meshConfigStore *db.MeshConfigStore
 	apiKeyStore     *db.APIKeyStore
+	localGroupStore *db.LocalGroupStore
 	ca              *pki.CA
 	configGen       *openvpn.ConfigGenerator
 	adminPassword   string             // Initial admin password (shown once at startup)
@@ -100,6 +101,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	meshStore := db.NewMeshStore(database)
 	meshConfigStore := db.NewMeshConfigStore(database)
 	apiKeyStore := db.NewAPIKeyStore(database)
+	localGroupStore := db.NewLocalGroupStore(database)
 
 	// Initialize PKI with database store for CA persistence
 	// This ensures all pods share the same CA
@@ -142,6 +144,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 		meshStore:       meshStore,
 		meshConfigStore: meshConfigStore,
 		apiKeyStore:     apiKeyStore,
+		localGroupStore: localGroupStore,
 		ca:              ca,
 		configGen:       configGen,
 		adminPassword:   adminPassword,
@@ -344,6 +347,7 @@ func (s *Server) setupRoutes() {
 			admin.POST("/gateways", s.handleRegisterGateway)
 			admin.PUT("/gateways/:id", s.handleUpdateGateway)
 			admin.DELETE("/gateways/:id", s.handleDeleteGateway)
+			admin.POST("/gateways/:id/rotate-token", s.handleRotateGatewayToken)
 			admin.POST("/gateways/:id/reprovision", s.handleReprovisionGateway)
 			admin.GET("/gateways/:id/networks", s.handleGetGatewayNetworks)
 			admin.POST("/gateways/:id/networks", s.handleAssignGatewayNetwork)
@@ -399,6 +403,16 @@ func (s *Server) setupRoutes() {
 			admin.GET("/groups/:name/members", s.handleGetGroupMembers)
 			admin.GET("/groups/:name/access-rules", s.handleGetGroupAccessRules)
 
+			// Local group management
+			admin.GET("/local-groups", s.handleListLocalGroups)
+			admin.POST("/local-groups", s.handleCreateLocalGroup)
+			admin.GET("/local-groups/:id", s.handleGetLocalGroup)
+			admin.PUT("/local-groups/:id", s.handleUpdateLocalGroup)
+			admin.DELETE("/local-groups/:id", s.handleDeleteLocalGroup)
+			admin.GET("/local-groups/:id/members", s.handleListLocalGroupMembers)
+			admin.POST("/local-groups/:id/members", s.handleAddLocalGroupMember)
+			admin.DELETE("/local-groups/:id/members/:userId/:memberType", s.handleRemoveLocalGroupMember)
+
 			// Proxy application management
 			admin.GET("/proxy-apps", s.handleListProxyApps)
 			admin.POST("/proxy-apps", s.handleCreateProxyApp)
@@ -426,6 +440,7 @@ func (s *Server) setupRoutes() {
 			admin.GET("/mesh/hubs/:id", s.handleGetMeshHub)
 			admin.PUT("/mesh/hubs/:id", s.handleUpdateMeshHub)
 			admin.DELETE("/mesh/hubs/:id", s.handleDeleteMeshHub)
+			admin.POST("/mesh/hubs/:id/rotate-token", s.handleRotateMeshHubToken)
 			admin.POST("/mesh/hubs/:id/provision", s.handleProvisionMeshHub)
 			admin.GET("/mesh/hubs/:id/install-script", s.handleMeshHubInstallScript)
 			admin.GET("/mesh/hubs/:id/users", s.handleGetMeshHubUsers)
@@ -444,6 +459,7 @@ func (s *Server) setupRoutes() {
 			admin.GET("/mesh/spokes/:id", s.handleGetMeshSpoke)
 			admin.PUT("/mesh/spokes/:id", s.handleUpdateMeshSpoke)
 			admin.DELETE("/mesh/spokes/:id", s.handleDeleteMeshSpoke)
+			admin.POST("/mesh/spokes/:id/rotate-token", s.handleRotateMeshSpokeToken)
 			admin.POST("/mesh/spokes/:id/provision", s.handleProvisionMeshSpoke)
 			admin.GET("/mesh/spokes/:id/install-script", s.handleMeshSpokeInstallScript)
 			admin.GET("/mesh/spokes/:id/users", s.handleGetMeshSpokeUsers)
