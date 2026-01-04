@@ -139,19 +139,19 @@ export default function Connect() {
     <div className="space-y-6">
       {/* Header */}
       <div className="card">
-        <h1 className="text-2xl font-bold text-gray-900">Connect to VPN</h1>
-        <p className="text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-theme-primary">Connect to VPN</h1>
+        <p className="text-theme-tertiary mt-1">
           Select a gateway or mesh hub and connect using the GateKey CLI.
         </p>
         {isCliFlow && (
-          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="mt-4 info-box">
             <div className="flex items-center">
-              <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-5 h-5 info-box-icon mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              <span className="text-sm text-blue-700 font-medium">CLI Mode</span>
+              <span className="info-box-title">CLI Mode</span>
             </div>
-            <p className="text-sm text-blue-600 mt-1">
+            <p className="info-box-text mt-1">
               Select a gateway and the configuration will be automatically sent to your CLI client.
             </p>
           </div>
@@ -159,14 +159,14 @@ export default function Connect() {
 
         {/* Connection Type Tabs */}
         {(gateways.length > 0 || meshHubs.length > 0) && (
-          <div className="mt-4 border-b border-gray-200">
+          <div className="mt-4 border-b border-theme">
             <nav className="-mb-px flex space-x-8">
               <button
                 onClick={() => setConnectionType('gateways')}
                 className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
                   connectionType === 'gateways'
                     ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    : 'border-transparent text-theme-tertiary hover:text-theme-secondary hover:border-theme'
                 }`}
               >
                 Gateways ({gateways.length})
@@ -177,7 +177,7 @@ export default function Connect() {
                   className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
                     connectionType === 'mesh'
                       ? 'border-primary-500 text-primary-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      : 'border-transparent text-theme-tertiary hover:text-theme-secondary hover:border-theme'
                   }`}
                 >
                   Mesh Networks ({meshHubs.length})
@@ -190,7 +190,7 @@ export default function Connect() {
 
       {/* Error message */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700">
           {error}
         </div>
       )}
@@ -202,13 +202,13 @@ export default function Connect() {
         </div>
       ) : connectionType === 'gateways' && gateways.length === 0 ? (
         <div className="card text-center py-12">
-          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="mx-auto h-12 w-12 text-theme-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
           </svg>
-          <h3 className="mt-4 text-lg font-medium text-gray-900">No gateways available</h3>
+          <h3 className="mt-4 text-lg font-medium text-theme-primary">No gateways available</h3>
           {isAdmin ? (
             <>
-              <p className="mt-2 text-gray-500">
+              <p className="mt-2 text-theme-tertiary">
                 Get started by adding a VPN gateway.
               </p>
               <Link
@@ -222,7 +222,7 @@ export default function Connect() {
               </Link>
             </>
           ) : (
-            <p className="mt-2 text-gray-500">
+            <p className="mt-2 text-theme-tertiary">
               Contact your administrator to set up VPN gateways.
             </p>
           )}
@@ -232,7 +232,7 @@ export default function Connect() {
           {/* Gateway Selection */}
           <div className="lg:col-span-1">
             <div className="card">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Select Gateway</h2>
+              <h2 className="text-lg font-semibold text-theme-primary mb-4">Select Gateway</h2>
               <div className="space-y-2">
                 {gateways.map((gateway) => (
                   <button
@@ -241,26 +241,26 @@ export default function Connect() {
                     disabled={!gateway.isActive}
                     className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
                       selectedGateway?.id === gateway.id
-                        ? 'border-primary-500 bg-primary-50'
+                        ? 'border-primary-600 selected-highlight'
                         : gateway.isActive
-                        ? 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                        : 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
+                        ? 'border-theme hover:border-primary-400 hover-theme'
+                        : 'border-theme bg-theme-tertiary opacity-60 cursor-not-allowed'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-gray-900">{gateway.name}</p>
-                        <p className="text-sm text-gray-500">{gateway.hostname || gateway.publicIp}</p>
+                        <p className="font-medium text-theme-primary">{gateway.name}</p>
+                        <p className="text-sm text-theme-tertiary">{gateway.hostname || gateway.publicIp}</p>
                       </div>
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                         gateway.isActive
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
+                          ? 'bg-green-600 text-white'
+                          : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
                       }`}>
                         {gateway.isActive ? 'Online' : 'Offline'}
                       </span>
                     </div>
-                    <div className="mt-2 text-xs text-gray-400">
+                    <div className="mt-2 text-xs text-theme-muted">
                       {gateway.vpnProtocol.toUpperCase()}:{gateway.vpnPort}
                     </div>
                   </button>
@@ -274,25 +274,25 @@ export default function Connect() {
             {/* CLI Connect - Primary Action */}
             <div className="card">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">Connect with CLI</h2>
-                <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                <h2 className="text-lg font-semibold text-theme-primary">Connect with CLI</h2>
+                <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-600 text-white">
                   Recommended
                 </span>
               </div>
 
-              <p className="text-gray-600 mb-4">
+              <p className="text-theme-secondary mb-4">
                 Use the GateKey CLI for the easiest connection experience. The CLI handles authentication,
                 configuration, and connection automatically.
               </p>
 
               {/* Setup command (if not already configured) */}
               <div className="mb-4">
-                <p className="text-sm font-medium text-gray-700 mb-2">1. First time setup (run once):</p>
+                <p className="text-sm font-medium text-theme-secondary mb-2">1. First time setup (run once):</p>
                 <div className="bg-gray-900 rounded-lg p-4 font-mono text-sm text-gray-100 flex items-center justify-between">
                   <code className="break-all">{cliSetupCommand}</code>
                   <button
                     onClick={() => copyCommand(cliSetupCommand, 'setup')}
-                    className="ml-4 text-gray-400 hover:text-white transition-colors flex-shrink-0"
+                    className="ml-4 text-theme-muted hover:text-white transition-colors flex-shrink-0"
                     title="Copy to clipboard"
                   >
                     {copied === 'setup' ? (
@@ -310,12 +310,12 @@ export default function Connect() {
 
               {/* Connect command */}
               <div className="mb-4">
-                <p className="text-sm font-medium text-gray-700 mb-2">2. Connect to VPN:</p>
+                <p className="text-sm font-medium text-theme-secondary mb-2">2. Connect to VPN:</p>
                 <div className="bg-gray-900 rounded-lg p-4 font-mono text-sm text-gray-100 flex items-center justify-between">
                   <code>{cliConnectCommand}</code>
                   <button
                     onClick={() => copyCommand(cliConnectCommand, 'connect')}
-                    className="ml-4 text-gray-400 hover:text-white transition-colors flex-shrink-0"
+                    className="ml-4 text-theme-muted hover:text-white transition-colors flex-shrink-0"
                     title="Copy to clipboard"
                   >
                     {copied === 'connect' ? (
@@ -332,13 +332,13 @@ export default function Connect() {
               </div>
 
               {/* CLI not installed? */}
-              <div className="bg-gray-50 rounded-lg p-4 mt-4">
-                <p className="text-sm font-medium text-gray-700 mb-2">Don't have the CLI installed?</p>
+              <div className="bg-theme-tertiary rounded-lg p-4 mt-4">
+                <p className="text-sm font-medium text-theme-secondary mb-2">Don't have the CLI installed?</p>
                 <div className="bg-gray-900 rounded-lg p-3 font-mono text-xs text-gray-100 flex items-center justify-between">
                   <code className="break-all">{cliInstallCommand}</code>
                   <button
                     onClick={() => copyCommand(cliInstallCommand, 'install')}
-                    className="ml-4 text-gray-400 hover:text-white transition-colors flex-shrink-0"
+                    className="ml-4 text-theme-muted hover:text-white transition-colors flex-shrink-0"
                     title="Copy to clipboard"
                   >
                     {copied === 'install' ? (
@@ -352,24 +352,24 @@ export default function Connect() {
                     )}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
+                <p className="text-xs text-theme-tertiary mt-2">
                   Or download from the <a href={`${serverUrl}/downloads/`} className="text-primary-600 hover:underline">downloads page</a>
                 </p>
               </div>
             </div>
 
             {/* Manual Download - Secondary Action */}
-            <div className="card border-gray-200">
+            <div className="card border-theme">
               <button
                 onClick={() => setShowManualDownload(!showManualDownload)}
                 className="w-full flex items-center justify-between text-left"
               >
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Manual Configuration</h2>
-                  <p className="text-sm text-gray-500">Download an OpenVPN config file for use with any OpenVPN client</p>
+                  <h2 className="text-lg font-semibold text-theme-primary">Manual Configuration</h2>
+                  <p className="text-sm text-theme-tertiary">Download an OpenVPN config file for use with any OpenVPN client</p>
                 </div>
                 <svg
-                  className={`w-5 h-5 text-gray-400 transition-transform ${showManualDownload ? 'rotate-180' : ''}`}
+                  className={`w-5 h-5 text-theme-muted transition-transform ${showManualDownload ? 'rotate-180' : ''}`}
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -379,24 +379,24 @@ export default function Connect() {
               </button>
 
               {showManualDownload && (
-                <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="mt-4 pt-4 border-t border-theme">
                   {selectedGateway ? (
                     <div className="space-y-4">
-                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
                         <div className="flex items-start">
-                          <svg className="w-5 h-5 text-amber-600 mr-2 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg className="w-5 h-5 text-amber-600 dark:text-amber-400 mr-2 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                           </svg>
-                          <p className="text-sm text-amber-700">
+                          <p className="text-sm text-amber-700 dark:text-amber-400">
                             Manual configs expire after 24 hours. For persistent access, use the CLI.
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center justify-between p-3 bg-theme-tertiary rounded-lg">
                         <div>
-                          <p className="font-medium text-gray-900">{selectedGateway.name}</p>
-                          <p className="text-sm text-gray-500">{selectedGateway.hostname || selectedGateway.publicIp}</p>
+                          <p className="font-medium text-theme-primary">{selectedGateway.name}</p>
+                          <p className="text-sm text-theme-tertiary">{selectedGateway.hostname || selectedGateway.publicIp}</p>
                         </div>
                         <button
                           onClick={handleConnect}
@@ -425,24 +425,24 @@ export default function Connect() {
                       {/* Platform-specific instructions */}
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
                         <div>
-                          <h3 className="font-medium text-gray-900 mb-2">Windows</h3>
-                          <ol className="text-sm text-gray-600 space-y-1">
+                          <h3 className="font-medium text-theme-primary mb-2">Windows</h3>
+                          <ol className="text-sm text-theme-secondary space-y-1">
                             <li>1. Download OpenVPN GUI</li>
                             <li>2. Import the .ovpn file</li>
                             <li>3. Right-click tray icon &rarr; Connect</li>
                           </ol>
                         </div>
                         <div>
-                          <h3 className="font-medium text-gray-900 mb-2">macOS</h3>
-                          <ol className="text-sm text-gray-600 space-y-1">
+                          <h3 className="font-medium text-theme-primary mb-2">macOS</h3>
+                          <ol className="text-sm text-theme-secondary space-y-1">
                             <li>1. Install Tunnelblick or OpenVPN Connect</li>
                             <li>2. Double-click the .ovpn file</li>
                             <li>3. Click Connect</li>
                           </ol>
                         </div>
                         <div>
-                          <h3 className="font-medium text-gray-900 mb-2">Linux</h3>
-                          <ol className="text-sm text-gray-600 space-y-1">
+                          <h3 className="font-medium text-theme-primary mb-2">Linux</h3>
+                          <ol className="text-sm text-theme-secondary space-y-1">
                             <li>1. Install openvpn package</li>
                             <li>2. Run: sudo openvpn config.ovpn</li>
                             <li>3. Or import to NetworkManager</li>
@@ -451,7 +451,7 @@ export default function Connect() {
                       </div>
                     </div>
                   ) : (
-                    <p className="text-gray-500 text-center py-4">
+                    <p className="text-theme-tertiary text-center py-4">
                       Select a gateway first to generate a configuration.
                     </p>
                   )}
@@ -466,7 +466,7 @@ export default function Connect() {
           {/* Mesh Hub Selection */}
           <div className="lg:col-span-1">
             <div className="card">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Select Mesh Hub</h2>
+              <h2 className="text-lg font-semibold text-theme-primary mb-4">Select Mesh Hub</h2>
               <div className="space-y-2">
                 {meshHubs.map((hub) => (
                   <button
@@ -474,20 +474,20 @@ export default function Connect() {
                     onClick={() => setSelectedMeshHub(hub)}
                     className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
                       selectedMeshHub?.id === hub.id
-                        ? 'border-primary-500 bg-primary-50'
-                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        ? 'border-primary-600 selected-highlight'
+                        : 'border-theme hover:border-primary-400 hover-theme'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-gray-900">{hub.name}</p>
-                        <p className="text-sm text-gray-500">{hub.description || 'Mesh Network'}</p>
+                        <p className="font-medium text-theme-primary">{hub.name}</p>
+                        <p className="text-sm text-theme-tertiary">{hub.description || 'Mesh Network'}</p>
                       </div>
-                      <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                      <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-600 text-white">
                         Online
                       </span>
                     </div>
-                    <div className="mt-2 text-xs text-gray-400">
+                    <div className="mt-2 text-xs text-theme-muted">
                       {hub.connectedspokes} spoke{hub.connectedspokes !== 1 ? 's' : ''} connected
                     </div>
                   </button>
@@ -501,25 +501,25 @@ export default function Connect() {
             {/* CLI Connect - Primary Action */}
             <div className="card">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">Connect with CLI</h2>
-                <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                <h2 className="text-lg font-semibold text-theme-primary">Connect with CLI</h2>
+                <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-600 text-white">
                   Recommended
                 </span>
               </div>
 
-              <p className="text-gray-600 mb-4">
+              <p className="text-theme-secondary mb-4">
                 Use the GateKey CLI for the easiest connection experience. The CLI handles authentication,
                 configuration, and connection automatically.
               </p>
 
               {/* Setup command (if not already configured) */}
               <div className="mb-4">
-                <p className="text-sm font-medium text-gray-700 mb-2">1. First time setup (run once):</p>
+                <p className="text-sm font-medium text-theme-secondary mb-2">1. First time setup (run once):</p>
                 <div className="bg-gray-900 rounded-lg p-4 font-mono text-sm text-gray-100 flex items-center justify-between">
                   <code className="break-all">{cliSetupCommand}</code>
                   <button
                     onClick={() => copyCommand(cliSetupCommand, 'mesh-setup')}
-                    className="ml-4 text-gray-400 hover:text-white transition-colors flex-shrink-0"
+                    className="ml-4 text-theme-muted hover:text-white transition-colors flex-shrink-0"
                     title="Copy to clipboard"
                   >
                     {copied === 'mesh-setup' ? (
@@ -537,12 +537,12 @@ export default function Connect() {
 
               {/* Connect command */}
               <div className="mb-4">
-                <p className="text-sm font-medium text-gray-700 mb-2">2. Connect to Mesh Network:</p>
+                <p className="text-sm font-medium text-theme-secondary mb-2">2. Connect to Mesh Network:</p>
                 <div className="bg-gray-900 rounded-lg p-4 font-mono text-sm text-gray-100 flex items-center justify-between">
                   <code>{cliMeshConnectCommand}</code>
                   <button
                     onClick={() => copyCommand(cliMeshConnectCommand, 'mesh-connect')}
-                    className="ml-4 text-gray-400 hover:text-white transition-colors flex-shrink-0"
+                    className="ml-4 text-theme-muted hover:text-white transition-colors flex-shrink-0"
                     title="Copy to clipboard"
                   >
                     {copied === 'mesh-connect' ? (
@@ -559,13 +559,13 @@ export default function Connect() {
               </div>
 
               {/* CLI not installed? */}
-              <div className="bg-gray-50 rounded-lg p-4 mt-4">
-                <p className="text-sm font-medium text-gray-700 mb-2">Don't have the CLI installed?</p>
+              <div className="bg-theme-tertiary rounded-lg p-4 mt-4">
+                <p className="text-sm font-medium text-theme-secondary mb-2">Don't have the CLI installed?</p>
                 <div className="bg-gray-900 rounded-lg p-3 font-mono text-xs text-gray-100 flex items-center justify-between">
                   <code className="break-all">{cliInstallCommand}</code>
                   <button
                     onClick={() => copyCommand(cliInstallCommand, 'mesh-install')}
-                    className="ml-4 text-gray-400 hover:text-white transition-colors flex-shrink-0"
+                    className="ml-4 text-theme-muted hover:text-white transition-colors flex-shrink-0"
                     title="Copy to clipboard"
                   >
                     {copied === 'mesh-install' ? (
@@ -579,24 +579,24 @@ export default function Connect() {
                     )}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
+                <p className="text-xs text-theme-tertiary mt-2">
                   Or download from the <a href={`${serverUrl}/downloads/`} className="text-primary-600 hover:underline">downloads page</a>
                 </p>
               </div>
             </div>
 
             {/* Manual Download - Secondary Action */}
-            <div className="card border-gray-200">
+            <div className="card border-theme">
               <button
                 onClick={() => setShowManualDownload(!showManualDownload)}
                 className="w-full flex items-center justify-between text-left"
               >
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Manual Configuration</h2>
-                  <p className="text-sm text-gray-500">Download an OpenVPN config file for use with any OpenVPN client</p>
+                  <h2 className="text-lg font-semibold text-theme-primary">Manual Configuration</h2>
+                  <p className="text-sm text-theme-tertiary">Download an OpenVPN config file for use with any OpenVPN client</p>
                 </div>
                 <svg
-                  className={`w-5 h-5 text-gray-400 transition-transform ${showManualDownload ? 'rotate-180' : ''}`}
+                  className={`w-5 h-5 text-theme-muted transition-transform ${showManualDownload ? 'rotate-180' : ''}`}
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -606,24 +606,24 @@ export default function Connect() {
               </button>
 
               {showManualDownload && (
-                <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="mt-4 pt-4 border-t border-theme">
                   {selectedMeshHub ? (
                     <div className="space-y-4">
-                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
                         <div className="flex items-start">
-                          <svg className="w-5 h-5 text-amber-600 mr-2 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg className="w-5 h-5 text-amber-600 dark:text-amber-400 mr-2 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                           </svg>
-                          <p className="text-sm text-amber-700">
+                          <p className="text-sm text-amber-700 dark:text-amber-400">
                             Manual configs expire after 24 hours. For persistent access, use the CLI.
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center justify-between p-3 bg-theme-tertiary rounded-lg">
                         <div>
-                          <p className="font-medium text-gray-900">{selectedMeshHub.name}</p>
-                          <p className="text-sm text-gray-500">{selectedMeshHub.description || 'Mesh Network'}</p>
+                          <p className="font-medium text-theme-primary">{selectedMeshHub.name}</p>
+                          <p className="text-sm text-theme-tertiary">{selectedMeshHub.description || 'Mesh Network'}</p>
                         </div>
                         <button
                           onClick={handleMeshConnect}
@@ -649,9 +649,9 @@ export default function Connect() {
                         </button>
                       </div>
 
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                        <p className="text-sm text-blue-700">
-                          <strong>Note:</strong> Mesh configs provide access to all spoke networks you're authorized for.
+                      <div className="info-box">
+                        <p className="info-box-text">
+                          <strong className="text-theme-primary">Note:</strong> Mesh configs provide access to all spoke networks you're authorized for.
                           Routes are included in the config and will be automatically applied when connected.
                         </p>
                       </div>
@@ -659,24 +659,24 @@ export default function Connect() {
                       {/* Platform-specific instructions */}
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
                         <div>
-                          <h3 className="font-medium text-gray-900 mb-2">Windows</h3>
-                          <ol className="text-sm text-gray-600 space-y-1">
+                          <h3 className="font-medium text-theme-primary mb-2">Windows</h3>
+                          <ol className="text-sm text-theme-secondary space-y-1">
                             <li>1. Download OpenVPN GUI</li>
                             <li>2. Import the .ovpn file</li>
                             <li>3. Right-click tray icon &rarr; Connect</li>
                           </ol>
                         </div>
                         <div>
-                          <h3 className="font-medium text-gray-900 mb-2">macOS</h3>
-                          <ol className="text-sm text-gray-600 space-y-1">
+                          <h3 className="font-medium text-theme-primary mb-2">macOS</h3>
+                          <ol className="text-sm text-theme-secondary space-y-1">
                             <li>1. Install Tunnelblick or OpenVPN Connect</li>
                             <li>2. Double-click the .ovpn file</li>
                             <li>3. Click Connect</li>
                           </ol>
                         </div>
                         <div>
-                          <h3 className="font-medium text-gray-900 mb-2">Linux</h3>
-                          <ol className="text-sm text-gray-600 space-y-1">
+                          <h3 className="font-medium text-theme-primary mb-2">Linux</h3>
+                          <ol className="text-sm text-theme-secondary space-y-1">
                             <li>1. Install openvpn package</li>
                             <li>2. Run: sudo openvpn config.ovpn</li>
                             <li>3. Or import to NetworkManager</li>
@@ -685,7 +685,7 @@ export default function Connect() {
                       </div>
                     </div>
                   ) : (
-                    <p className="text-gray-500 text-center py-4">
+                    <p className="text-theme-tertiary text-center py-4">
                       Select a mesh hub first to generate a configuration.
                     </p>
                   )}
@@ -699,24 +699,24 @@ export default function Connect() {
       {/* Mesh config modal */}
       {meshConfig && (
         <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+          <div className="bg-theme-card rounded-lg shadow-xl max-w-md border border-theme w-full mx-4 p-6">
             <div className="text-center">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
-                <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
+                <svg className="h-6 w-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <h3 className="text-lg font-semibold text-theme-primary mb-2">
                 Mesh Configuration Ready
               </h3>
-              <p className="text-gray-500 mb-4">
+              <p className="text-theme-tertiary mb-4">
                 Your mesh VPN configuration has been generated.
               </p>
-              <div className="bg-gray-50 rounded-lg p-4 mb-4 text-left">
-                <p className="text-sm text-gray-600">
+              <div className="bg-theme-tertiary rounded-lg p-4 mb-4 text-left">
+                <p className="text-sm text-theme-secondary">
                   <strong>Hub:</strong> {meshConfig.hubname}
                 </p>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-theme-secondary">
                   <strong>File:</strong> mesh-{meshConfig.hubname}.ovpn
                 </p>
               </div>
@@ -745,27 +745,27 @@ export default function Connect() {
       {/* Generated config modal */}
       {generatedConfig && (
         <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+          <div className="bg-theme-card rounded-lg shadow-xl max-w-md border border-theme w-full mx-4 p-6">
             <div className="text-center">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
-                <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
+                <svg className="h-6 w-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <h3 className="text-lg font-semibold text-theme-primary mb-2">
                 Configuration Ready
               </h3>
-              <p className="text-gray-500 mb-4">
+              <p className="text-theme-tertiary mb-4">
                 Your VPN configuration has been generated.
               </p>
-              <div className="bg-gray-50 rounded-lg p-4 mb-4 text-left">
-                <p className="text-sm text-gray-600">
+              <div className="bg-theme-tertiary rounded-lg p-4 mb-4 text-left">
+                <p className="text-sm text-theme-secondary">
                   <strong>File:</strong> {generatedConfig.fileName}
                 </p>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-theme-secondary">
                   <strong>Gateway:</strong> {generatedConfig.gatewayName}
                 </p>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-theme-secondary">
                   <strong>Expires:</strong> {new Date(generatedConfig.expiresAt).toLocaleString()}
                 </p>
               </div>
@@ -789,7 +789,7 @@ export default function Connect() {
                   </button>
                   <button
                     onClick={() => setGeneratedConfig(null)}
-                    className="w-full text-gray-500 hover:text-gray-700 text-sm"
+                    className="w-full text-theme-tertiary hover:text-theme-secondary text-sm"
                   >
                     Cancel
                   </button>

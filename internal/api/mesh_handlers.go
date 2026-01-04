@@ -1938,6 +1938,9 @@ func (s *Server) handleListUserMeshHubs(c *gin.Context) {
 			"id":              hub.ID,
 			"name":            hub.Name,
 			"description":     hub.Description,
+			"publicEndpoint":  hub.PublicEndpoint,
+			"vpnPort":         hub.VPNPort,
+			"vpnProtocol":     hub.VPNProtocol,
 			"status":          hub.Status,
 			"connectedspokes": hub.ConnectedSpokes,
 		})

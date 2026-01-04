@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, type JSX } from 'react'
+import { createPortal } from 'react-dom'
 
 export interface ActionItem {
   label: string
@@ -62,20 +63,27 @@ const iconMap: Record<ActionItem['icon'], JSX.Element> = {
 }
 
 const colorMap: Record<NonNullable<ActionItem['color']>, string> = {
-  gray: 'text-gray-700 hover:bg-gray-100',
-  primary: 'text-primary-600 hover:bg-primary-50',
-  purple: 'text-purple-600 hover:bg-purple-50',
-  green: 'text-green-600 hover:bg-green-50',
-  red: 'text-red-600 hover:bg-red-50',
+  gray: 'text-theme-secondary hover-theme',
+  primary: 'text-primary-600 hover-theme',
+  purple: 'text-purple-600 hover-theme',
+  green: 'text-green-600 hover-theme',
+  red: 'text-red-600 hover-theme',
 }
 
 export default function ActionDropdown({ actions }: ActionDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 })
+  const buttonRef = useRef<HTMLButtonElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false)
       }
     }
@@ -83,11 +91,57 @@ export default function ActionDropdown({ actions }: ActionDropdownProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Calculate dropdown position when opening
+  useEffect(() => {
+    if (isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      setDropdownPosition({
+        top: rect.bottom + 8, // 8px gap (mt-2)
+        right: window.innerWidth - rect.right,
+      })
+    }
+  }, [isOpen])
+
+  const dropdownMenu = isOpen && (
+    <div
+      ref={dropdownRef}
+      className="fixed w-48 dropdown-menu z-[9999]"
+      style={{
+        top: dropdownPosition.top,
+        right: dropdownPosition.right,
+      }}
+    >
+      <div>
+        {actions.map((action, index) => (
+          <button
+            key={index}
+            onClick={() => {
+              if (!action.disabled) {
+                action.onClick()
+                setIsOpen(false)
+              }
+            }}
+            disabled={action.disabled}
+            className={`w-full flex items-center px-4 py-2 text-sm ${
+              action.disabled
+                ? 'text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                : colorMap[action.color || 'gray']
+            }`}
+          >
+            <span className="mr-3">{iconMap[action.icon]}</span>
+            {action.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+
   return (
-    <div className="relative inline-block text-left" ref={dropdownRef}>
+    <div className="relative inline-block text-left">
       <button
+        ref={buttonRef}
         onClick={() => setIsOpen(!isOpen)}
-        className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 text-sm font-medium"
+        className="btn-actions"
       >
         Actions
         <svg
@@ -100,32 +154,7 @@ export default function ActionDropdown({ actions }: ActionDropdownProps) {
         </svg>
       </button>
 
-      {isOpen && (
-        <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
-          <div className="py-1">
-            {actions.map((action, index) => (
-              <button
-                key={index}
-                onClick={() => {
-                  if (!action.disabled) {
-                    action.onClick()
-                    setIsOpen(false)
-                  }
-                }}
-                disabled={action.disabled}
-                className={`w-full flex items-center px-4 py-2 text-sm ${
-                  action.disabled
-                    ? 'text-gray-400 cursor-not-allowed'
-                    : colorMap[action.color || 'gray']
-                }`}
-              >
-                <span className="mr-3">{iconMap[action.icon]}</span>
-                {action.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {createPortal(dropdownMenu, document.body)}
     </div>
   )
 }

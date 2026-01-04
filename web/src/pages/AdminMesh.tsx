@@ -148,14 +148,14 @@ export default function AdminMesh() {
     switch (status) {
       case 'online':
       case 'connected':
-        return 'bg-green-100 text-green-800'
+        return 'bg-green-600 text-white'
       case 'offline':
       case 'disconnected':
-        return 'bg-gray-100 text-gray-800'
+        return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
       case 'error':
-        return 'bg-red-100 text-red-800'
+        return 'bg-red-600 text-white'
       default:
-        return 'bg-yellow-100 text-yellow-800'
+        return 'bg-yellow-500 text-white'
     }
   }
 
@@ -165,8 +165,8 @@ export default function AdminMesh() {
       <div className="card">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Mesh Networking</h1>
-            <p className="text-gray-500 mt-1">
+            <h1 className="text-2xl font-bold text-theme-primary">Mesh Networking</h1>
+            <p className="text-theme-tertiary mt-1">
               Manage mesh hubs and spokes for hub-and-spoke VPN connectivity.
             </p>
           </div>
@@ -174,14 +174,14 @@ export default function AdminMesh() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-theme">
         <nav className="-mb-px flex space-x-8" aria-label="Tabs">
           <button
             onClick={() => setActiveTab('hubs')}
             className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'hubs'
                 ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                : 'border-transparent text-theme-tertiary hover:text-theme-secondary hover:border-theme'
             }`}
           >
             Hubs
@@ -191,7 +191,7 @@ export default function AdminMesh() {
             className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'spokes'
                 ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                : 'border-transparent text-theme-tertiary hover:text-theme-secondary hover:border-theme'
             }`}
           >
             Spokes
@@ -201,7 +201,7 @@ export default function AdminMesh() {
 
       {/* Error message */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
           {error}
           <button onClick={() => setError(null)} className="ml-4 text-red-500 hover:text-red-700">×</button>
         </div>
@@ -228,24 +228,24 @@ export default function AdminMesh() {
             </div>
           ) : hubs.length > 0 ? (
             <div className="card p-0">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <table className="min-w-full divide-y divide-theme">
+                <thead className="bg-theme-tertiary">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hub</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Endpoint</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Connections</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Heartbeat</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Hub</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Endpoint</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Connections</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Last Heartbeat</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-theme-tertiary uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-theme-card divide-y divide-theme">
                   {hubs.map((hub) => (
-                    <tr key={hub.id} className={selectedHub?.id === hub.id ? 'bg-primary-50' : ''}>
+                    <tr key={hub.id} className={selectedHub?.id === hub.id ? 'row-selected' : 'row-hover'}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                          <div className="text-sm font-medium text-gray-900">{hub.name}</div>
-                          <div className="text-sm text-gray-500">{hub.description}</div>
+                          <div className="text-sm font-medium text-theme-primary">{hub.name}</div>
+                          <div className="text-sm text-theme-tertiary">{hub.description}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -253,15 +253,15 @@ export default function AdminMesh() {
                           {hub.status.charAt(0).toUpperCase() + hub.status.slice(1)}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-tertiary">
                         <div>{hub.publicEndpoint}</div>
                         <div className="text-xs">{hub.vpnProtocol.toUpperCase()}:{hub.vpnPort}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-tertiary">
                         <div>{hub.connectedSpokes} spokes</div>
                         <div>{hub.connectedClients} clients</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-tertiary">
                         {hub.lastHeartbeat
                           ? new Date(hub.lastHeartbeat).toLocaleString()
                           : 'Never'}
@@ -285,11 +285,11 @@ export default function AdminMesh() {
             </div>
           ) : (
             <div className="card text-center py-12">
-              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="mx-auto h-12 w-12 text-theme-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
               </svg>
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No mesh hubs</h3>
-              <p className="mt-1 text-sm text-gray-500">Get started by creating a new mesh hub.</p>
+              <h3 className="mt-2 text-sm font-medium text-theme-primary">No mesh hubs</h3>
+              <p className="mt-1 text-sm text-theme-tertiary">Get started by creating a new mesh hub.</p>
               <div className="mt-6">
                 <button onClick={() => setShowAddHubModal(true)} className="btn btn-primary">
                   Add Hub
@@ -305,7 +305,7 @@ export default function AdminMesh() {
         <div className="space-y-6">
           {/* Hub Selector */}
           <div className="card">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Select Hub</label>
+            <label className="block text-sm font-medium text-theme-secondary mb-2">Select Hub</label>
             <select
               value={selectedHub?.id || ''}
               onChange={(e) => setSelectedHub(hubs.find(h => h.id === e.target.value) || null)}
@@ -334,25 +334,25 @@ export default function AdminMesh() {
 
               {spokes.length > 0 ? (
                 <div className="card p-0">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+                  <table className="min-w-full divide-y divide-theme">
+                    <thead className="bg-theme-tertiary">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Spoke</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Networks</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tunnel IP</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Seen</th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Spoke</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Networks</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Tunnel IP</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Last Seen</th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-theme-tertiary uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-theme-card divide-y divide-theme">
                       {spokes.map((spoke) => (
                         <tr key={spoke.id}>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div>
-                              <div className="text-sm font-medium text-gray-900">{spoke.name}</div>
-                              <div className="text-sm text-gray-500">{spoke.description}</div>
-                              {spoke.remoteIp && <div className="text-xs text-gray-400">Remote: {spoke.remoteIp}</div>}
+                              <div className="text-sm font-medium text-theme-primary">{spoke.name}</div>
+                              <div className="text-sm text-theme-tertiary">{spoke.description}</div>
+                              {spoke.remoteIp && <div className="text-xs text-theme-muted">Remote: {spoke.remoteIp}</div>}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -360,21 +360,21 @@ export default function AdminMesh() {
                               {spoke.status.charAt(0).toUpperCase() + spoke.status.slice(1)}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-tertiary">
                             {spoke.localNetworks.length > 0 ? (
                               <div className="flex flex-wrap gap-1">
                                 {spoke.localNetworks.map((net, i) => (
-                                  <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs">{net}</span>
+                                  <span key={i} className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-theme-secondary rounded text-xs">{net}</span>
                                 ))}
                               </div>
                             ) : (
-                              <span className="text-gray-400">No networks</span>
+                              <span className="text-theme-muted">No networks</span>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {spoke.tunnelIp || <span className="text-gray-400">Not assigned</span>}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-tertiary">
+                            {spoke.tunnelIp || <span className="text-theme-muted">Not assigned</span>}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-tertiary">
                             {spoke.lastSeen
                               ? new Date(spoke.lastSeen).toLocaleString()
                               : 'Never'}
@@ -397,11 +397,11 @@ export default function AdminMesh() {
                 </div>
               ) : (
                 <div className="card text-center py-12">
-                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="mx-auto h-12 w-12 text-theme-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
                   </svg>
-                  <h3 className="mt-2 text-sm font-medium text-gray-900">No spokes</h3>
-                  <p className="mt-1 text-sm text-gray-500">Add spokes to connect remote sites to this hub.</p>
+                  <h3 className="mt-2 text-sm font-medium text-theme-primary">No spokes</h3>
+                  <p className="mt-1 text-sm text-theme-tertiary">Add spokes to connect remote sites to this hub.</p>
                   <div className="mt-6">
                     <button onClick={() => setShowAddSpokeModal(true)} className="btn btn-primary">
                       Add Spoke
@@ -413,7 +413,7 @@ export default function AdminMesh() {
           )}
 
           {!selectedHub && (
-            <div className="card text-center py-12 text-gray-500">
+            <div className="card text-center py-12 text-theme-tertiary">
               Select a hub to view its spokes
             </div>
           )}
@@ -562,14 +562,14 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
       <div className="flex min-h-screen items-center justify-center p-4">
-        <div className="relative bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
-          <h2 className="text-lg font-semibold mb-4">Add Mesh Hub</h2>
+        <div className="relative modal-content max-w-lg w-full p-6">
+          <h2 className="text-lg font-semibold mb-4 text-theme-primary">Add Mesh Hub</h2>
 
-          {error && <div className="mb-4 p-3 bg-red-50 text-red-700 rounded">{error}</div>}
+          {error && <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded">{error}</div>}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Name</label>
+              <label className="block text-sm font-medium text-theme-secondary">Name</label>
               <input
                 type="text"
                 value={form.name}
@@ -581,7 +581,7 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Description</label>
+              <label className="block text-sm font-medium text-theme-secondary">Description</label>
               <input
                 type="text"
                 value={form.description}
@@ -592,7 +592,7 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Public Endpoint</label>
+              <label className="block text-sm font-medium text-theme-secondary">Public Endpoint</label>
               <input
                 type="text"
                 value={form.publicEndpoint}
@@ -601,12 +601,12 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                 required
                 placeholder="e.g., hub.example.com or 1.2.3.4"
               />
-              <p className="text-xs text-gray-500 mt-1">The public hostname or IP where spokes will connect</p>
+              <p className="text-xs text-theme-tertiary mt-1">The public hostname or IP where spokes will connect</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">VPN Port</label>
+                <label className="block text-sm font-medium text-theme-secondary">VPN Port</label>
                 <input
                   type="number"
                   value={form.vpnPort}
@@ -615,7 +615,7 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Protocol</label>
+                <label className="block text-sm font-medium text-theme-secondary">Protocol</label>
                 <select
                   value={form.vpnProtocol}
                   onChange={(e) => setForm({ ...form, vpnProtocol: e.target.value })}
@@ -628,7 +628,7 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">VPN Subnet</label>
+              <label className="block text-sm font-medium text-theme-secondary">VPN Subnet</label>
               <input
                 type="text"
                 value={form.vpnSubnet}
@@ -639,7 +639,7 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Crypto Profile</label>
+              <label className="block text-sm font-medium text-theme-secondary">Crypto Profile</label>
               <select
                 value={form.cryptoProfile}
                 onChange={(e) => setForm({ ...form, cryptoProfile: e.target.value as CryptoProfile })}
@@ -657,9 +657,9 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                 id="tlsAuth"
                 checked={form.tlsAuthEnabled}
                 onChange={(e) => setForm({ ...form, tlsAuthEnabled: e.target.checked })}
-                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                className="rounded border-theme text-primary-600 focus:ring-primary-500"
               />
-              <label htmlFor="tlsAuth" className="ml-2 text-sm text-gray-700">
+              <label htmlFor="tlsAuth" className="ml-2 text-sm text-theme-secondary">
                 Enable TLS-Auth (additional HMAC layer)
               </label>
             </div>
@@ -670,9 +670,9 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                 id="fullTunnel"
                 checked={form.fullTunnelMode}
                 onChange={(e) => setForm({ ...form, fullTunnelMode: e.target.checked })}
-                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                className="rounded border-theme text-primary-600 focus:ring-primary-500"
               />
-              <label htmlFor="fullTunnel" className="ml-2 text-sm text-gray-700">
+              <label htmlFor="fullTunnel" className="ml-2 text-sm text-theme-secondary">
                 Full Tunnel Mode (route all client traffic through VPN)
               </label>
             </div>
@@ -683,16 +683,16 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                 id="pushDns"
                 checked={form.pushDns}
                 onChange={(e) => setForm({ ...form, pushDns: e.target.checked })}
-                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                className="rounded border-theme text-primary-600 focus:ring-primary-500"
               />
-              <label htmlFor="pushDns" className="ml-2 text-sm text-gray-700">
+              <label htmlFor="pushDns" className="ml-2 text-sm text-theme-secondary">
                 Push DNS servers to clients
               </label>
             </div>
 
             {form.pushDns && (
               <div>
-                <label className="block text-sm font-medium text-gray-700">DNS Servers</label>
+                <label className="block text-sm font-medium text-theme-secondary">DNS Servers</label>
                 <div className="flex space-x-2">
                   <input
                     type="text"
@@ -723,16 +723,16 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                     Add
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Leave empty to use defaults (1.1.1.1, 8.8.8.8)</p>
+                <p className="text-xs text-theme-tertiary mt-1">Leave empty to use defaults (1.1.1.1, 8.8.8.8)</p>
                 {form.dnsServers && form.dnsServers.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
                     {form.dnsServers.map((dns, idx) => (
-                      <span key={idx} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm flex items-center">
+                      <span key={idx} className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-theme-secondary rounded text-sm flex items-center">
                         {dns}
                         <button
                           type="button"
                           onClick={() => setForm({ ...form, dnsServers: form.dnsServers?.filter((_, i) => i !== idx) })}
-                          className="ml-1 text-gray-400 hover:text-red-600"
+                          className="ml-1 text-theme-muted hover:text-red-600"
                         >
                           ×
                         </button>
@@ -749,13 +749,13 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                 id="hubSessionEnabled"
                 checked={form.sessionEnabled ?? true}
                 onChange={(e) => setForm({ ...form, sessionEnabled: e.target.checked })}
-                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                className="rounded border-theme text-primary-600 focus:ring-primary-500"
               />
-              <label htmlFor="hubSessionEnabled" className="ml-2 text-sm text-gray-700">
+              <label htmlFor="hubSessionEnabled" className="ml-2 text-sm text-theme-secondary">
                 Enable Remote Sessions
               </label>
             </div>
-            <p className="text-xs text-gray-500 -mt-2">
+            <p className="text-xs text-theme-tertiary -mt-2">
               Allow administrators to run commands on this hub via the Remote Sessions page.
             </p>
 
@@ -813,14 +813,14 @@ function AddSpokeModal({ hubId, onClose, onSuccess }: { hubId: string; onClose: 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
       <div className="flex min-h-screen items-center justify-center p-4">
-        <div className="relative bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
-          <h2 className="text-lg font-semibold mb-4">Add Mesh Spoke</h2>
+        <div className="relative modal-content max-w-lg w-full p-6">
+          <h2 className="text-lg font-semibold mb-4 text-theme-primary">Add Mesh Spoke</h2>
 
-          {error && <div className="mb-4 p-3 bg-red-50 text-red-700 rounded">{error}</div>}
+          {error && <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded">{error}</div>}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Name</label>
+              <label className="block text-sm font-medium text-theme-secondary">Name</label>
               <input
                 type="text"
                 value={form.name}
@@ -832,7 +832,7 @@ function AddSpokeModal({ hubId, onClose, onSuccess }: { hubId: string; onClose: 
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Description</label>
+              <label className="block text-sm font-medium text-theme-secondary">Description</label>
               <input
                 type="text"
                 value={form.description}
@@ -843,7 +843,7 @@ function AddSpokeModal({ hubId, onClose, onSuccess }: { hubId: string; onClose: 
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Local Networks</label>
+              <label className="block text-sm font-medium text-theme-secondary">Local Networks</label>
               <div className="flex space-x-2">
                 <input
                   type="text"
@@ -855,13 +855,13 @@ function AddSpokeModal({ hubId, onClose, onSuccess }: { hubId: string; onClose: 
                 />
                 <button type="button" onClick={addNetwork} className="btn btn-secondary">Add</button>
               </div>
-              <p className="text-xs text-gray-500 mt-1">Networks behind this spoke that should be routable via the hub</p>
+              <p className="text-xs text-theme-tertiary mt-1">Networks behind this spoke that should be routable via the hub</p>
               {form.localNetworks.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   {form.localNetworks.map((net) => (
-                    <span key={net} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm flex items-center">
+                    <span key={net} className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-theme-secondary rounded text-sm flex items-center">
                       {net}
-                      <button type="button" onClick={() => removeNetwork(net)} className="ml-1 text-gray-400 hover:text-red-600">×</button>
+                      <button type="button" onClick={() => removeNetwork(net)} className="ml-1 text-theme-muted hover:text-red-600">×</button>
                     </span>
                   ))}
                 </div>
@@ -874,13 +874,13 @@ function AddSpokeModal({ hubId, onClose, onSuccess }: { hubId: string; onClose: 
                 id="spokeSessionEnabled"
                 checked={form.sessionEnabled ?? true}
                 onChange={(e) => setForm({ ...form, sessionEnabled: e.target.checked })}
-                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                className="rounded border-theme text-primary-600 focus:ring-primary-500"
               />
-              <label htmlFor="spokeSessionEnabled" className="ml-2 text-sm text-gray-700">
+              <label htmlFor="spokeSessionEnabled" className="ml-2 text-sm text-theme-secondary">
                 Enable Remote Sessions
               </label>
             </div>
-            <p className="text-xs text-gray-500 -mt-2">
+            <p className="text-xs text-theme-tertiary -mt-2">
               Allow administrators to run commands on this spoke via the Remote Sessions page.
             </p>
 
@@ -926,24 +926,24 @@ function TokenModal({ type, name, token, controlPlaneUrl, onClose }: { type: 'hu
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
       <div className="flex min-h-screen items-center justify-center p-4">
-        <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+        <div className="relative modal-content max-w-2xl w-full p-6">
           <div className="flex items-center mb-4">
-            <div className="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="flex-shrink-0 w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="ml-3 text-lg font-semibold">{type === 'hub' ? 'Hub' : 'Spoke'} Created</h2>
+            <h2 className="ml-3 text-lg font-semibold text-theme-primary">{type === 'hub' ? 'Hub' : 'Spoke'} Created</h2>
           </div>
 
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4">
             <div className="flex">
               <svg className="h-5 w-5 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-yellow-800">Save this token!</h3>
-                <p className="text-sm text-yellow-700 mt-1">
+                <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">Save this token!</h3>
+                <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1">
                   This token will only be shown once. You'll need it to set up the {type}.
                 </p>
               </div>
@@ -952,16 +952,16 @@ function TokenModal({ type, name, token, controlPlaneUrl, onClose }: { type: 'hu
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Name</label>
-              <div className="text-gray-900">{name}</div>
+              <label className="block text-sm font-medium text-theme-secondary">Name</label>
+              <div className="text-theme-primary">{name}</div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-theme-secondary">
                 {type === 'hub' ? 'API Token' : 'Spoke Token'}
               </label>
               <div className="flex items-center space-x-2">
-                <code className="flex-1 p-2 bg-gray-100 rounded text-sm font-mono break-all">{token}</code>
+                <code className="flex-1 p-2 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono break-all text-theme-primary">{token}</code>
                 <button onClick={copyToClipboard} className="btn btn-secondary">
                   {copied ? 'Copied!' : 'Copy'}
                 </button>
@@ -970,17 +970,17 @@ function TokenModal({ type, name, token, controlPlaneUrl, onClose }: { type: 'hu
 
             {controlPlaneUrl && (
               <div>
-                <label className="block text-sm font-medium text-gray-700">Control Plane URL</label>
-                <code className="block p-2 bg-gray-100 rounded text-sm font-mono">{controlPlaneUrl}</code>
+                <label className="block text-sm font-medium text-theme-secondary">Control Plane URL</label>
+                <code className="block p-2 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono text-theme-primary">{controlPlaneUrl}</code>
               </div>
             )}
 
             {/* Setup Command */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-theme-secondary mb-2">
                 Quick Setup Command
               </label>
-              <p className="text-xs text-gray-500 mb-2">
+              <p className="text-xs text-theme-tertiary mb-2">
                 Run this command on your {type === 'hub' ? 'hub server' : 'spoke server'} to install and configure:
               </p>
               <div className="relative">
@@ -1031,29 +1031,29 @@ function InstallScriptModal({ type, name, script, onClose }: { type: 'hub' | 'sp
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
       <div className="flex min-h-screen items-center justify-center p-4">
-        <div className="relative bg-white rounded-lg shadow-xl max-w-3xl w-full p-6">
+        <div className="relative modal-content max-w-3xl w-full p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">
+            <h2 className="text-lg font-semibold text-theme-primary">
               Install Script - {type === 'hub' ? 'Hub' : 'Spoke'}: {name}
             </h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <button onClick={onClose} className="text-theme-muted hover:text-theme-tertiary">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
 
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
             <div className="flex items-start">
               <svg className="h-5 w-5 text-blue-500 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-gray-800">Installation Instructions</h3>
-                <p className="text-sm text-gray-600 mt-1">
+                <h3 className="text-sm font-medium text-gray-800 dark:text-blue-300">Installation Instructions</h3>
+                <p className="text-sm text-gray-700 dark:text-blue-400 mt-1">
                   Run this script on your {type === 'hub' ? 'hub server' : 'spoke server'} with root privileges:
                 </p>
-                <code className="block mt-2 text-sm bg-gray-100 px-2 py-1 rounded text-gray-700">
+                <code className="block mt-2 text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-theme-secondary">
                   sudo bash install-{type}.sh
                 </code>
               </div>
@@ -1094,7 +1094,9 @@ function ManageAccessModal({ hub, onClose }: { hub: MeshHub; onClose: () => void
   const [allNetworks, setAllNetworks] = useState<Network[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedUser, setSelectedUser] = useState('')
+  const [customUserInput, setCustomUserInput] = useState('')
   const [selectedGroup, setSelectedGroup] = useState('')
+  const [customGroupInput, setCustomGroupInput] = useState('')
   const [selectedNetwork, setSelectedNetwork] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -1127,11 +1129,18 @@ function ManageAccessModal({ hub, onClose }: { hub: MeshHub; onClose: () => void
   }
 
   async function handleAddUser() {
-    if (!selectedUser) return
+    const userToAdd = selectedUser || customUserInput.trim()
+    if (!userToAdd) return
+    if (users.includes(userToAdd)) {
+      setError('User already assigned')
+      return
+    }
     try {
-      await assignMeshHubUser(hub.id, selectedUser)
-      setUsers([...users, selectedUser])
+      await assignMeshHubUser(hub.id, userToAdd)
+      setUsers([...users, userToAdd])
       setSelectedUser('')
+      setCustomUserInput('')
+      setError(null)
     } catch (err) {
       setError('Failed to add user')
     }
@@ -1147,11 +1156,18 @@ function ManageAccessModal({ hub, onClose }: { hub: MeshHub; onClose: () => void
   }
 
   async function handleAddGroup() {
-    if (!selectedGroup) return
+    const groupToAdd = selectedGroup || customGroupInput.trim()
+    if (!groupToAdd) return
+    if (groups.includes(groupToAdd)) {
+      setError('Group already assigned')
+      return
+    }
     try {
-      await assignMeshHubGroup(hub.id, selectedGroup)
-      setGroups([...groups, selectedGroup])
+      await assignMeshHubGroup(hub.id, groupToAdd)
+      setGroups([...groups, groupToAdd])
       setSelectedGroup('')
+      setCustomGroupInput('')
+      setError(null)
     } catch (err) {
       setError('Failed to add group')
     }
@@ -1196,10 +1212,10 @@ function ManageAccessModal({ hub, onClose }: { hub: MeshHub; onClose: () => void
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
       <div className="flex min-h-screen items-center justify-center p-4">
-        <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+        <div className="relative modal-content max-w-2xl w-full p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Manage Access - {hub.name}</h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <h2 className="text-lg font-semibold text-theme-primary">Manage Access - {hub.name}</h2>
+            <button onClick={onClose} className="text-theme-muted hover:text-theme-tertiary">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -1207,26 +1223,27 @@ function ManageAccessModal({ hub, onClose }: { hub: MeshHub; onClose: () => void
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-400 text-sm">
               {error}
             </div>
           )}
 
           {/* Zero-Trust Info */}
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-blue-700 text-sm">
-            <strong>Zero-Trust Model:</strong> Users only get routes to networks they have explicit access rules for.
-            Assign networks to this hub, then ensure users have access rules within those networks.
+          <div className="info-box mb-4">
+            <strong className="text-theme-primary">Zero-Trust Model:</strong>{' '}
+            <span className="info-box-text">Users only get routes to networks they have explicit access rules for.
+            Assign networks to this hub, then ensure users have access rules within those networks.</span>
           </div>
 
           {/* Tabs */}
-          <div className="border-b border-gray-200 mb-4">
+          <div className="border-b border-theme mb-4">
             <nav className="-mb-px flex space-x-8">
               <button
                 onClick={() => setActiveTab('users')}
                 className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'users'
                     ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    : 'border-transparent text-theme-tertiary hover:text-theme-secondary'
                 }`}
               >
                 Users ({users.length})
@@ -1236,7 +1253,7 @@ function ManageAccessModal({ hub, onClose }: { hub: MeshHub; onClose: () => void
                 className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'groups'
                     ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    : 'border-transparent text-theme-tertiary hover:text-theme-secondary'
                 }`}
               >
                 Groups ({groups.length})
@@ -1246,7 +1263,7 @@ function ManageAccessModal({ hub, onClose }: { hub: MeshHub; onClose: () => void
                 className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'networks'
                     ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    : 'border-transparent text-theme-tertiary hover:text-theme-secondary'
                 }`}
               >
                 Networks ({networks.length})
@@ -1284,19 +1301,19 @@ function ManageAccessModal({ hub, onClose }: { hub: MeshHub; onClose: () => void
               </div>
 
               {/* Network List */}
-              <div className="border rounded-lg divide-y">
+              <div className="border border-theme rounded-lg divide-y divide-theme">
                 {networks.length === 0 ? (
-                  <div className="p-4 text-center text-gray-500">
+                  <div className="p-4 text-center text-theme-tertiary">
                     No networks assigned to this hub. Add networks to enable zero-trust access control.
                   </div>
                 ) : (
                   networks.map((network) => (
-                    <div key={network.id} className="p-3 flex items-center justify-between">
+                    <div key={network.id} className="p-3 flex items-center justify-between bg-theme-card">
                       <div>
-                        <div className="font-medium text-gray-900">{network.name}</div>
-                        <div className="text-sm text-gray-500">{network.cidr}</div>
+                        <div className="font-medium text-theme-primary">{network.name}</div>
+                        <div className="text-sm text-theme-tertiary">{network.cidr}</div>
                         {network.description && (
-                          <div className="text-xs text-gray-400">{network.description}</div>
+                          <div className="text-xs text-theme-muted">{network.description}</div>
                         )}
                       </div>
                       <button
@@ -1315,45 +1332,64 @@ function ManageAccessModal({ hub, onClose }: { hub: MeshHub; onClose: () => void
           ) : activeTab === 'users' ? (
             <div className="space-y-4">
               {/* Add User */}
-              <div className="flex space-x-2">
-                <select
-                  value={selectedUser}
-                  onChange={(e) => setSelectedUser(e.target.value)}
-                  className="input flex-1"
-                >
-                  <option value="">Select a user...</option>
-                  {availableUsers.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.email} {user.name && `(${user.name})`}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={handleAddUser}
-                  disabled={!selectedUser}
-                  className="btn btn-primary"
-                >
-                  Add
-                </button>
+              <div className="space-y-2">
+                <div className="flex space-x-2">
+                  <select
+                    value={selectedUser}
+                    onChange={(e) => {
+                      setSelectedUser(e.target.value)
+                      setCustomUserInput('')
+                    }}
+                    className="input flex-1 text-sm"
+                  >
+                    <option value="">Select from list...</option>
+                    {availableUsers.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.email} {user.name && `(${user.name})`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-theme-tertiary">or type:</span>
+                  <input
+                    type="text"
+                    value={customUserInput}
+                    onChange={(e) => {
+                      setCustomUserInput(e.target.value)
+                      setSelectedUser('')
+                    }}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddUser())}
+                    placeholder="username or email"
+                    className="input flex-1 text-sm"
+                  />
+                  <button
+                    onClick={handleAddUser}
+                    disabled={!selectedUser && !customUserInput.trim()}
+                    className="btn btn-primary"
+                  >
+                    Add
+                  </button>
+                </div>
               </div>
 
               {/* User List */}
-              <div className="border rounded-lg divide-y">
+              <div className="border border-theme rounded-lg divide-y divide-theme">
                 {users.length === 0 ? (
-                  <div className="p-4 text-center text-gray-500">
+                  <div className="p-4 text-center text-theme-tertiary">
                     No users assigned to this hub
                   </div>
                 ) : (
                   users.map((userId) => {
                     const user = allUsers.find(u => u.id === userId)
                     return (
-                      <div key={userId} className="p-3 flex items-center justify-between">
+                      <div key={userId} className="p-3 flex items-center justify-between bg-theme-card">
                         <div>
-                          <div className="font-medium text-gray-900">
+                          <div className="font-medium text-theme-primary">
                             {user?.email || userId}
                           </div>
                           {user?.name && (
-                            <div className="text-sm text-gray-500">{user.name}</div>
+                            <div className="text-sm text-theme-tertiary">{user.name}</div>
                           )}
                         </div>
                         <button
@@ -1373,38 +1409,57 @@ function ManageAccessModal({ hub, onClose }: { hub: MeshHub; onClose: () => void
           ) : (
             <div className="space-y-4">
               {/* Add Group */}
-              <div className="flex space-x-2">
-                <select
-                  value={selectedGroup}
-                  onChange={(e) => setSelectedGroup(e.target.value)}
-                  className="input flex-1"
-                >
-                  <option value="">Select a group...</option>
-                  {availableGroups.map((group) => (
-                    <option key={group} value={group}>
-                      {group}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={handleAddGroup}
-                  disabled={!selectedGroup}
-                  className="btn btn-primary"
-                >
-                  Add
-                </button>
+              <div className="space-y-2">
+                <div className="flex space-x-2">
+                  <select
+                    value={selectedGroup}
+                    onChange={(e) => {
+                      setSelectedGroup(e.target.value)
+                      setCustomGroupInput('')
+                    }}
+                    className="input flex-1 text-sm"
+                  >
+                    <option value="">Select from list...</option>
+                    {availableGroups.map((group) => (
+                      <option key={group} value={group}>
+                        {group}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-theme-tertiary">or type:</span>
+                  <input
+                    type="text"
+                    value={customGroupInput}
+                    onChange={(e) => {
+                      setCustomGroupInput(e.target.value)
+                      setSelectedGroup('')
+                    }}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddGroup())}
+                    placeholder="group name"
+                    className="input flex-1 text-sm"
+                  />
+                  <button
+                    onClick={handleAddGroup}
+                    disabled={!selectedGroup && !customGroupInput.trim()}
+                    className="btn btn-primary"
+                  >
+                    Add
+                  </button>
+                </div>
               </div>
 
               {/* Group List */}
-              <div className="border rounded-lg divide-y">
+              <div className="border border-theme rounded-lg divide-y divide-theme">
                 {groups.length === 0 ? (
-                  <div className="p-4 text-center text-gray-500">
+                  <div className="p-4 text-center text-theme-tertiary">
                     No groups assigned to this hub
                   </div>
                 ) : (
                   groups.map((group) => (
-                    <div key={group} className="p-3 flex items-center justify-between">
-                      <div className="font-medium text-gray-900">{group}</div>
+                    <div key={group} className="p-3 flex items-center justify-between bg-theme-card">
+                      <div className="font-medium text-theme-primary">{group}</div>
                       <button
                         onClick={() => handleRemoveGroup(group)}
                         className="text-red-600 hover:text-red-800"
@@ -1440,7 +1495,9 @@ function ManageSpokeAccessModal({ spoke, onClose }: { spoke: MeshSpoke; onClose:
   const [allGroups, setAllGroups] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedUser, setSelectedUser] = useState('')
+  const [customUserInput, setCustomUserInput] = useState('')
   const [selectedGroup, setSelectedGroup] = useState('')
+  const [customGroupInput, setCustomGroupInput] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -1468,11 +1525,18 @@ function ManageSpokeAccessModal({ spoke, onClose }: { spoke: MeshSpoke; onClose:
   }
 
   async function handleAddUser() {
-    if (!selectedUser) return
+    const userToAdd = selectedUser || customUserInput.trim()
+    if (!userToAdd) return
+    if (users.includes(userToAdd)) {
+      setError('User already assigned')
+      return
+    }
     try {
-      await assignMeshSpokeUser(spoke.id, selectedUser)
-      setUsers([...users, selectedUser])
+      await assignMeshSpokeUser(spoke.id, userToAdd)
+      setUsers([...users, userToAdd])
       setSelectedUser('')
+      setCustomUserInput('')
+      setError(null)
     } catch (err) {
       setError('Failed to add user')
     }
@@ -1488,11 +1552,18 @@ function ManageSpokeAccessModal({ spoke, onClose }: { spoke: MeshSpoke; onClose:
   }
 
   async function handleAddGroup() {
-    if (!selectedGroup) return
+    const groupToAdd = selectedGroup || customGroupInput.trim()
+    if (!groupToAdd) return
+    if (groups.includes(groupToAdd)) {
+      setError('Group already assigned')
+      return
+    }
     try {
-      await assignMeshSpokeGroup(spoke.id, selectedGroup)
-      setGroups([...groups, selectedGroup])
+      await assignMeshSpokeGroup(spoke.id, groupToAdd)
+      setGroups([...groups, groupToAdd])
       setSelectedGroup('')
+      setCustomGroupInput('')
+      setError(null)
     } catch (err) {
       setError('Failed to add group')
     }
@@ -1513,15 +1584,15 @@ function ManageSpokeAccessModal({ spoke, onClose }: { spoke: MeshSpoke; onClose:
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
       <div className="flex min-h-screen items-center justify-center p-4">
-        <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+        <div className="relative modal-content max-w-2xl w-full p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-lg font-semibold">Manage Spoke Access - {spoke.name}</h2>
-              <p className="text-sm text-gray-500 mt-1">
+              <h2 className="text-lg font-semibold text-theme-primary">Manage Spoke Access - {spoke.name}</h2>
+              <p className="text-sm text-theme-tertiary mt-1">
                 Control which users/groups can route traffic to networks behind this spoke
               </p>
             </div>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <button onClick={onClose} className="text-theme-muted hover:text-theme-tertiary">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -1530,31 +1601,31 @@ function ManageSpokeAccessModal({ spoke, onClose }: { spoke: MeshSpoke; onClose:
 
           {/* Show spoke networks */}
           {spoke.localNetworks.length > 0 && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="text-sm font-medium text-blue-800 mb-1">Networks accessible via this spoke:</div>
+            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <div className="text-sm font-medium text-gray-800 dark:text-blue-300 mb-1">Networks accessible via this spoke:</div>
               <div className="flex flex-wrap gap-2">
                 {spoke.localNetworks.map((net, i) => (
-                  <span key={i} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm font-mono">{net}</span>
+                  <span key={i} className="px-2 py-1 bg-blue-600 text-white rounded text-sm font-mono">{net}</span>
                 ))}
               </div>
             </div>
           )}
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-400 text-sm">
               {error}
             </div>
           )}
 
           {/* Tabs */}
-          <div className="border-b border-gray-200 mb-4">
+          <div className="border-b border-theme mb-4">
             <nav className="-mb-px flex space-x-8">
               <button
                 onClick={() => setActiveTab('users')}
                 className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'users'
                     ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    : 'border-transparent text-theme-tertiary hover:text-theme-secondary'
                 }`}
               >
                 Users ({users.length})
@@ -1564,7 +1635,7 @@ function ManageSpokeAccessModal({ spoke, onClose }: { spoke: MeshSpoke; onClose:
                 className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'groups'
                     ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    : 'border-transparent text-theme-tertiary hover:text-theme-secondary'
                 }`}
               >
                 Groups ({groups.length})
@@ -1579,45 +1650,64 @@ function ManageSpokeAccessModal({ spoke, onClose }: { spoke: MeshSpoke; onClose:
           ) : activeTab === 'users' ? (
             <div className="space-y-4">
               {/* Add User */}
-              <div className="flex space-x-2">
-                <select
-                  value={selectedUser}
-                  onChange={(e) => setSelectedUser(e.target.value)}
-                  className="input flex-1"
-                >
-                  <option value="">Select a user...</option>
-                  {availableUsers.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.email} {user.name && `(${user.name})`}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={handleAddUser}
-                  disabled={!selectedUser}
-                  className="btn btn-primary"
-                >
-                  Add
-                </button>
+              <div className="space-y-2">
+                <div className="flex space-x-2">
+                  <select
+                    value={selectedUser}
+                    onChange={(e) => {
+                      setSelectedUser(e.target.value)
+                      setCustomUserInput('')
+                    }}
+                    className="input flex-1 text-sm"
+                  >
+                    <option value="">Select from list...</option>
+                    {availableUsers.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.email} {user.name && `(${user.name})`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-theme-tertiary">or type:</span>
+                  <input
+                    type="text"
+                    value={customUserInput}
+                    onChange={(e) => {
+                      setCustomUserInput(e.target.value)
+                      setSelectedUser('')
+                    }}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddUser())}
+                    placeholder="username or email"
+                    className="input flex-1 text-sm"
+                  />
+                  <button
+                    onClick={handleAddUser}
+                    disabled={!selectedUser && !customUserInput.trim()}
+                    className="btn btn-primary"
+                  >
+                    Add
+                  </button>
+                </div>
               </div>
 
               {/* User List */}
-              <div className="border rounded-lg divide-y">
+              <div className="border border-theme rounded-lg divide-y divide-theme">
                 {users.length === 0 ? (
-                  <div className="p-4 text-center text-gray-500">
+                  <div className="p-4 text-center text-theme-tertiary">
                     No users have access to this spoke's networks
                   </div>
                 ) : (
                   users.map((userId) => {
                     const user = allUsers.find(u => u.id === userId)
                     return (
-                      <div key={userId} className="p-3 flex items-center justify-between">
+                      <div key={userId} className="p-3 flex items-center justify-between bg-theme-card">
                         <div>
-                          <div className="font-medium text-gray-900">
+                          <div className="font-medium text-theme-primary">
                             {user?.email || userId}
                           </div>
                           {user?.name && (
-                            <div className="text-sm text-gray-500">{user.name}</div>
+                            <div className="text-sm text-theme-tertiary">{user.name}</div>
                           )}
                         </div>
                         <button
@@ -1637,38 +1727,57 @@ function ManageSpokeAccessModal({ spoke, onClose }: { spoke: MeshSpoke; onClose:
           ) : (
             <div className="space-y-4">
               {/* Add Group */}
-              <div className="flex space-x-2">
-                <select
-                  value={selectedGroup}
-                  onChange={(e) => setSelectedGroup(e.target.value)}
-                  className="input flex-1"
-                >
-                  <option value="">Select a group...</option>
-                  {availableGroups.map((group) => (
-                    <option key={group} value={group}>
-                      {group}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={handleAddGroup}
-                  disabled={!selectedGroup}
-                  className="btn btn-primary"
-                >
-                  Add
-                </button>
+              <div className="space-y-2">
+                <div className="flex space-x-2">
+                  <select
+                    value={selectedGroup}
+                    onChange={(e) => {
+                      setSelectedGroup(e.target.value)
+                      setCustomGroupInput('')
+                    }}
+                    className="input flex-1 text-sm"
+                  >
+                    <option value="">Select from list...</option>
+                    {availableGroups.map((group) => (
+                      <option key={group} value={group}>
+                        {group}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-theme-tertiary">or type:</span>
+                  <input
+                    type="text"
+                    value={customGroupInput}
+                    onChange={(e) => {
+                      setCustomGroupInput(e.target.value)
+                      setSelectedGroup('')
+                    }}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddGroup())}
+                    placeholder="group name"
+                    className="input flex-1 text-sm"
+                  />
+                  <button
+                    onClick={handleAddGroup}
+                    disabled={!selectedGroup && !customGroupInput.trim()}
+                    className="btn btn-primary"
+                  >
+                    Add
+                  </button>
+                </div>
               </div>
 
               {/* Group List */}
-              <div className="border rounded-lg divide-y">
+              <div className="border border-theme rounded-lg divide-y divide-theme">
                 {groups.length === 0 ? (
-                  <div className="p-4 text-center text-gray-500">
+                  <div className="p-4 text-center text-theme-tertiary">
                     No groups have access to this spoke's networks
                   </div>
                 ) : (
                   groups.map((group) => (
-                    <div key={group} className="p-3 flex items-center justify-between">
-                      <div className="font-medium text-gray-900">{group}</div>
+                    <div key={group} className="p-3 flex items-center justify-between bg-theme-card">
+                      <div className="font-medium text-theme-primary">{group}</div>
                       <button
                         onClick={() => handleRemoveGroup(group)}
                         className="text-red-600 hover:text-red-800"
@@ -1711,21 +1820,21 @@ function EditHubModal({ hub, onClose, onSuccess }: { hub: MeshHub; onClose: () =
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
       <div className="flex min-h-screen items-center justify-center p-4">
-        <div className="relative bg-white rounded-lg shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
-          <h2 className="text-lg font-semibold mb-4">Edit Hub: {hub.name}</h2>
-          {error && <div className="mb-4 p-3 bg-red-50 text-red-700 rounded">{error}</div>}
+        <div className="relative modal-content max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+          <h2 className="text-lg font-semibold mb-4 text-theme-primary">Edit Hub: {hub.name}</h2>
+          {error && <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded">{error}</div>}
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div><label className="block text-sm font-medium text-gray-700">Name</label><input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input" required /></div>
-            <div><label className="block text-sm font-medium text-gray-700">Description</label><input type="text" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input" /></div>
-            <div><label className="block text-sm font-medium text-gray-700">Public Endpoint</label><input type="text" value={form.publicEndpoint} onChange={(e) => setForm({ ...form, publicEndpoint: e.target.value })} className="input" /></div>
-            <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700">Port</label><input type="number" value={form.vpnPort} onChange={(e) => setForm({ ...form, vpnPort: parseInt(e.target.value) })} className="input" /></div><div><label className="block text-sm font-medium text-gray-700">Protocol</label><select value={form.vpnProtocol} onChange={(e) => setForm({ ...form, vpnProtocol: e.target.value })} className="input"><option value="udp">UDP</option><option value="tcp">TCP</option></select></div></div>
-            <div><label className="block text-sm font-medium text-gray-700">VPN Subnet</label><input type="text" value={form.vpnSubnet} onChange={(e) => setForm({ ...form, vpnSubnet: e.target.value })} className="input" /></div>
-            <div><label className="block text-sm font-medium text-gray-700">Crypto Profile</label><select value={form.cryptoProfile} onChange={(e) => setForm({ ...form, cryptoProfile: e.target.value as CryptoProfile })} className="input"><option value="modern">Modern</option><option value="fips">FIPS</option><option value="compatible">Compatible</option></select></div>
+            <div><label className="block text-sm font-medium text-theme-secondary">Name</label><input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input" required /></div>
+            <div><label className="block text-sm font-medium text-theme-secondary">Description</label><input type="text" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input" /></div>
+            <div><label className="block text-sm font-medium text-theme-secondary">Public Endpoint</label><input type="text" value={form.publicEndpoint} onChange={(e) => setForm({ ...form, publicEndpoint: e.target.value })} className="input" /></div>
+            <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-theme-secondary">Port</label><input type="number" value={form.vpnPort} onChange={(e) => setForm({ ...form, vpnPort: parseInt(e.target.value) })} className="input" /></div><div><label className="block text-sm font-medium text-theme-secondary">Protocol</label><select value={form.vpnProtocol} onChange={(e) => setForm({ ...form, vpnProtocol: e.target.value })} className="input"><option value="udp">UDP</option><option value="tcp">TCP</option></select></div></div>
+            <div><label className="block text-sm font-medium text-theme-secondary">VPN Subnet</label><input type="text" value={form.vpnSubnet} onChange={(e) => setForm({ ...form, vpnSubnet: e.target.value })} className="input" /></div>
+            <div><label className="block text-sm font-medium text-theme-secondary">Crypto Profile</label><select value={form.cryptoProfile} onChange={(e) => setForm({ ...form, cryptoProfile: e.target.value as CryptoProfile })} className="input"><option value="modern">Modern</option><option value="fips">FIPS</option><option value="compatible">Compatible</option></select></div>
             <div className="space-y-2"><label className="flex items-center"><input type="checkbox" checked={form.tlsAuthEnabled} onChange={(e) => setForm({ ...form, tlsAuthEnabled: e.target.checked })} className="mr-2" /><span className="text-sm">TLS-Auth</span></label><label className="flex items-center"><input type="checkbox" checked={form.fullTunnelMode} onChange={(e) => setForm({ ...form, fullTunnelMode: e.target.checked })} className="mr-2" /><span className="text-sm">Full Tunnel</span></label><label className="flex items-center"><input type="checkbox" checked={form.pushDns} onChange={(e) => setForm({ ...form, pushDns: e.target.checked })} className="mr-2" /><span className="text-sm">Push DNS</span></label></div>
-            {form.pushDns && <div><label className="block text-sm font-medium text-gray-700">DNS Servers</label><div className="flex space-x-2"><input type="text" value={dnsInput} onChange={(e) => setDnsInput(e.target.value)} className="input flex-1" placeholder="1.1.1.1" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (dnsInput) { setForm({ ...form, dnsServers: [...form.dnsServers, dnsInput] }); setDnsInput('') } } }} /><button type="button" onClick={() => { if (dnsInput) { setForm({ ...form, dnsServers: [...form.dnsServers, dnsInput] }); setDnsInput('') } }} className="btn btn-secondary">Add</button></div>{form.dnsServers.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.dnsServers.map((d) => <span key={d} className="px-2 py-1 bg-gray-100 rounded text-sm">{d}<button type="button" onClick={() => setForm({ ...form, dnsServers: form.dnsServers.filter(x => x !== d) })} className="ml-1 text-red-600">×</button></span>)}</div>}</div>}
-            <div><label className="block text-sm font-medium text-gray-700">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="192.168.1.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((n) => <span key={n} className="px-2 py-1 bg-gray-100 rounded text-sm">{n}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(x => x !== n) })} className="ml-1 text-red-600">×</button></span>)}</div>}</div>
-            <div className="flex items-center"><input type="checkbox" id="editHubSessionEnabled" checked={form.sessionEnabled ?? true} onChange={(e) => setForm({ ...form, sessionEnabled: e.target.checked })} className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" /><label htmlFor="editHubSessionEnabled" className="ml-2 text-sm text-gray-700">Enable Remote Sessions</label></div>
-            <p className="text-xs text-gray-500 -mt-2">Allow administrators to run commands on this hub via the Remote Sessions page.</p>
+            {form.pushDns && <div><label className="block text-sm font-medium text-theme-secondary">DNS Servers</label><div className="flex space-x-2"><input type="text" value={dnsInput} onChange={(e) => setDnsInput(e.target.value)} className="input flex-1" placeholder="1.1.1.1" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (dnsInput) { setForm({ ...form, dnsServers: [...form.dnsServers, dnsInput] }); setDnsInput('') } } }} /><button type="button" onClick={() => { if (dnsInput) { setForm({ ...form, dnsServers: [...form.dnsServers, dnsInput] }); setDnsInput('') } }} className="btn btn-secondary">Add</button></div>{form.dnsServers.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.dnsServers.map((d) => <span key={d} className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm text-theme-primary">{d}<button type="button" onClick={() => setForm({ ...form, dnsServers: form.dnsServers.filter(x => x !== d) })} className="ml-1 text-red-600">×</button></span>)}</div>}</div>}
+            <div><label className="block text-sm font-medium text-theme-secondary">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="192.168.1.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((n) => <span key={n} className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm text-theme-primary">{n}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(x => x !== n) })} className="ml-1 text-red-600">×</button></span>)}</div>}</div>
+            <div className="flex items-center"><input type="checkbox" id="editHubSessionEnabled" checked={form.sessionEnabled ?? true} onChange={(e) => setForm({ ...form, sessionEnabled: e.target.checked })} className="rounded border-theme text-primary-600 focus:ring-primary-500" /><label htmlFor="editHubSessionEnabled" className="ml-2 text-sm text-theme-secondary">Enable Remote Sessions</label></div>
+            <p className="text-xs text-theme-tertiary -mt-2">Allow administrators to run commands on this hub via the Remote Sessions page.</p>
             <div className="flex justify-end space-x-3 pt-4"><button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button><button type="submit" disabled={loading} className="btn btn-primary">{loading ? 'Saving...' : 'Save'}</button></div>
           </form>
         </div>
@@ -1749,15 +1858,15 @@ function EditSpokeModal({ spoke, onClose, onSuccess }: { spoke: MeshSpoke; onClo
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
       <div className="flex min-h-screen items-center justify-center p-4">
-        <div className="relative bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
-          <h2 className="text-lg font-semibold mb-4">Edit Spoke: {spoke.name}</h2>
-          {error && <div className="mb-4 p-3 bg-red-50 text-red-700 rounded">{error}</div>}
+        <div className="relative modal-content max-w-lg w-full p-6">
+          <h2 className="text-lg font-semibold mb-4 text-theme-primary">Edit Spoke: {spoke.name}</h2>
+          {error && <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded">{error}</div>}
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div><label className="block text-sm font-medium text-gray-700">Name</label><input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input" required /></div>
-            <div><label className="block text-sm font-medium text-gray-700">Description</label><input type="text" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input" /></div>
-            <div><label className="block text-sm font-medium text-gray-700">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="e.g., 10.0.0.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div><p className="text-xs text-gray-500 mt-1">Networks behind this spoke routable via hub</p>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((net) => <span key={net} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm flex items-center">{net}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(n => n !== net) })} className="ml-1 text-gray-400 hover:text-red-600">×</button></span>)}</div>}</div>
-            <div className="flex items-center"><input type="checkbox" id="editSpokeSessionEnabled" checked={form.sessionEnabled ?? true} onChange={(e) => setForm({ ...form, sessionEnabled: e.target.checked })} className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" /><label htmlFor="editSpokeSessionEnabled" className="ml-2 text-sm text-gray-700">Enable Remote Sessions</label></div>
-            <p className="text-xs text-gray-500 -mt-2">Allow administrators to run commands on this spoke via the Remote Sessions page.</p>
+            <div><label className="block text-sm font-medium text-theme-secondary">Name</label><input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input" required /></div>
+            <div><label className="block text-sm font-medium text-theme-secondary">Description</label><input type="text" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input" /></div>
+            <div><label className="block text-sm font-medium text-theme-secondary">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="e.g., 10.0.0.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div><p className="text-xs text-theme-tertiary mt-1">Networks behind this spoke routable via hub</p>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((net) => <span key={net} className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-theme-secondary rounded text-sm flex items-center">{net}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(n => n !== net) })} className="ml-1 text-theme-muted hover:text-red-600">×</button></span>)}</div>}</div>
+            <div className="flex items-center"><input type="checkbox" id="editSpokeSessionEnabled" checked={form.sessionEnabled ?? true} onChange={(e) => setForm({ ...form, sessionEnabled: e.target.checked })} className="rounded border-theme text-primary-600 focus:ring-primary-500" /><label htmlFor="editSpokeSessionEnabled" className="ml-2 text-sm text-theme-secondary">Enable Remote Sessions</label></div>
+            <p className="text-xs text-theme-tertiary -mt-2">Allow administrators to run commands on this spoke via the Remote Sessions page.</p>
             <div className="flex justify-end space-x-3 pt-4"><button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button><button type="submit" disabled={loading} className="btn btn-primary">{loading ? 'Saving...' : 'Save'}</button></div>
           </form>
         </div>

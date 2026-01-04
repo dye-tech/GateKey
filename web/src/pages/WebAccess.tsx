@@ -31,14 +31,14 @@ export default function WebAccess() {
     <div className="space-y-6">
       {/* Header */}
       <div className="card">
-        <h1 className="text-2xl font-bold text-gray-900">Web Access</h1>
-        <p className="text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-theme-primary">Web Access</h1>
+        <p className="text-theme-tertiary mt-1">
           Access internal web applications directly from your browser without VPN client
         </p>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded">
           {error}
         </div>
       )}
@@ -49,11 +49,11 @@ export default function WebAccess() {
         </div>
       ) : apps.length === 0 ? (
         <div className="card text-center py-12">
-          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="mx-auto h-12 w-12 text-theme-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
           </svg>
-          <h3 className="mt-4 text-lg font-medium text-gray-900">No applications available</h3>
-          <p className="mt-2 text-gray-500">
+          <h3 className="mt-4 text-lg font-medium text-theme-primary">No applications available</h3>
+          <p className="mt-2 text-theme-tertiary">
             You don't have access to any web applications yet.
             Contact your administrator if you need access.
           </p>
@@ -80,7 +80,7 @@ export default function WebAccess() {
                       }}
                     />
                   ) : (
-                    <div className="h-12 w-12 rounded-lg bg-primary-100 text-primary-600 flex items-center justify-center">
+                    <div className="h-12 w-12 rounded-lg bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 flex items-center justify-center">
                       <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
                       </svg>
@@ -90,25 +90,25 @@ export default function WebAccess() {
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-semibold text-gray-900 group-hover:text-primary-600 transition-colors">
+                  <h3 className="text-lg font-semibold text-theme-primary group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
                     {app.name}
                   </h3>
-                  <p className="text-sm text-gray-500 mt-1 line-clamp-2">
+                  <p className="text-sm text-theme-tertiary mt-1 line-clamp-2">
                     {app.description || 'No description'}
                   </p>
                 </div>
 
                 {/* Launch indicator */}
                 <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <svg className="h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="h-5 w-5 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                   </svg>
                 </div>
               </div>
 
               {/* Footer */}
-              <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
-                <span className="text-xs text-gray-400 font-mono">
+              <div className="mt-4 pt-4 border-t border-theme flex items-center justify-between">
+                <span className="text-xs text-theme-muted font-mono">
                   {app.slug}
                 </span>
                 <button
@@ -116,7 +116,7 @@ export default function WebAccess() {
                     e.stopPropagation()
                     openApp(app)
                   }}
-                  className="text-sm font-medium text-primary-600 hover:text-primary-800"
+                  className="text-sm font-medium text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-300"
                 >
                   Open
                   <svg className="inline-block ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -131,14 +131,14 @@ export default function WebAccess() {
 
       {/* Info section */}
       {apps.length > 0 && (
-        <div className="card bg-blue-50 border-blue-100">
+        <div className="info-box">
           <div className="flex items-start space-x-3">
-            <svg className="h-5 w-5 text-blue-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="h-5 w-5 info-box-icon mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <div>
-              <h4 className="text-sm font-medium text-blue-900">Secure Web Access</h4>
-              <p className="text-sm text-blue-700 mt-1">
+              <h4 className="info-box-title">Secure Web Access</h4>
+              <p className="info-box-text mt-1">
                 These applications are accessed through a secure reverse proxy. Your session is authenticated
                 and all access is logged. No VPN client installation required.
               </p>

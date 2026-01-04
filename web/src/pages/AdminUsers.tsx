@@ -74,25 +74,25 @@ export default function AdminUsers() {
     <div className="space-y-6">
       {/* Header */}
       <div className="card">
-        <h1 className="text-2xl font-bold text-gray-900">Users & Groups</h1>
-        <p className="text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-theme-primary">Users & Groups</h1>
+        <p className="text-theme-tertiary mt-1">
           Manage SSO users, local admins, and groups for access control.
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-theme">
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab('sso')}
             className={`py-2 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'sso'
                 ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                : 'border-transparent text-theme-tertiary hover:text-theme-secondary hover:border-theme'
             }`}
           >
             SSO Users
-            <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
+            <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-theme-secondary text-theme-tertiary">
               {ssoUsers.length}
             </span>
           </button>
@@ -101,11 +101,11 @@ export default function AdminUsers() {
             className={`py-2 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'local'
                 ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                : 'border-transparent text-theme-tertiary hover:text-theme-secondary hover:border-theme'
             }`}
           >
             Local Users
-            <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
+            <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-theme-secondary text-theme-tertiary">
               {localUsers.length}
             </span>
           </button>
@@ -114,11 +114,11 @@ export default function AdminUsers() {
             className={`py-2 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'groups'
                 ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                : 'border-transparent text-theme-tertiary hover:text-theme-secondary hover:border-theme'
             }`}
           >
             Groups
-            <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
+            <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-theme-secondary text-theme-tertiary">
               {groups.length}
             </span>
           </button>
@@ -127,7 +127,7 @@ export default function AdminUsers() {
 
       {/* Error message */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
           {error}
         </div>
       )}
@@ -213,11 +213,11 @@ function SSOUsersTab({ users, onViewUser }: SSOUsersTabProps) {
   if (users.length === 0) {
     return (
       <div className="card text-center py-12">
-        <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="mx-auto h-12 w-12 text-theme-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
         </svg>
-        <h3 className="mt-4 text-lg font-medium text-gray-900">No SSO users yet</h3>
-        <p className="mt-2 text-gray-500">
+        <h3 className="mt-4 text-lg font-medium text-theme-primary">No SSO users yet</h3>
+        <p className="mt-2 text-theme-tertiary">
           SSO users will appear here after they log in via OIDC or SAML.
         </p>
       </div>
@@ -226,30 +226,30 @@ function SSOUsersTab({ users, onViewUser }: SSOUsersTabProps) {
 
   return (
     <div className="card p-0">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
+      <table className="min-w-full divide-y divide-theme">
+        <thead className="bg-theme-tertiary">
           <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
               User
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
               Provider
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
               Groups
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
               Status
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
               Last Login
             </th>
-            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-6 py-3 text-right text-xs font-medium text-theme-tertiary uppercase tracking-wider">
               Actions
             </th>
           </tr>
         </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
+        <tbody className="bg-theme-card divide-y divide-theme">
           {users.map((user) => (
             <tr key={user.id}>
               <td className="px-6 py-4 whitespace-nowrap">
@@ -260,13 +260,13 @@ function SSOUsersTab({ users, onViewUser }: SSOUsersTabProps) {
                     </span>
                   </div>
                   <div className="ml-4">
-                    <div className="text-sm font-medium text-gray-900">{user.name || 'Unnamed'}</div>
-                    <div className="text-sm text-gray-500">{user.email}</div>
+                    <div className="text-sm font-medium text-theme-primary">{user.name || 'Unnamed'}</div>
+                    <div className="text-sm text-theme-tertiary">{user.email}</div>
                   </div>
                 </div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
-                <span className="px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full bg-blue-100 text-blue-800">
+                <span className="px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full bg-blue-600 text-white">
                   {user.provider}
                 </span>
               </td>
@@ -274,15 +274,15 @@ function SSOUsersTab({ users, onViewUser }: SSOUsersTabProps) {
                 <div className="flex flex-wrap gap-1">
                   {user.groups.length > 0 ? (
                     user.groups.slice(0, 3).map((group) => (
-                      <span key={group} className="px-2 py-0.5 text-xs bg-gray-100 text-gray-700 rounded">
+                      <span key={group} className="px-2 py-0.5 text-xs bg-theme-secondary text-theme-secondary rounded">
                         {group}
                       </span>
                     ))
                   ) : (
-                    <span className="text-xs text-gray-400 italic">No groups</span>
+                    <span className="text-xs text-theme-muted italic">No groups</span>
                   )}
                   {user.groups.length > 3 && (
-                    <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-500 rounded">
+                    <span className="px-2 py-0.5 text-xs bg-theme-secondary text-theme-tertiary rounded">
                       +{user.groups.length - 3} more
                     </span>
                   )}
@@ -291,8 +291,8 @@ function SSOUsersTab({ users, onViewUser }: SSOUsersTabProps) {
               <td className="px-6 py-4 whitespace-nowrap">
                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                   user.isActive
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-gray-100 text-gray-800'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-theme-secondary text-theme-primary'
                 }`}>
                   {user.isActive ? 'Active' : 'Inactive'}
                 </span>
@@ -302,7 +302,7 @@ function SSOUsersTab({ users, onViewUser }: SSOUsersTabProps) {
                   </span>
                 )}
               </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-tertiary">
                 {user.lastLoginAt
                   ? new Date(user.lastLoginAt).toLocaleString()
                   : 'Never'}
@@ -343,40 +343,40 @@ function LocalUsersTab({ users, onCreateUser, onDeleteUser }: LocalUsersTabProps
 
       {users.length === 0 ? (
         <div className="card text-center py-12">
-          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="mx-auto h-12 w-12 text-theme-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
           </svg>
-          <h3 className="mt-4 text-lg font-medium text-gray-900">No local users</h3>
-          <p className="mt-2 text-gray-500">
+          <h3 className="mt-4 text-lg font-medium text-theme-primary">No local users</h3>
+          <p className="mt-2 text-theme-tertiary">
             Click "Add Local User" to create a local account.
           </p>
         </div>
       ) : (
         <div className="card p-0">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-theme">
+            <thead className="bg-theme-tertiary">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                   Username
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                   Email
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                   Role
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                   Last Login
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                   Created
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-theme-card divide-y divide-theme">
               {users.map((user) => (
                 <tr key={user.id}>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -387,28 +387,28 @@ function LocalUsersTab({ users, onCreateUser, onDeleteUser }: LocalUsersTabProps
                         </span>
                       </div>
                       <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{user.username}</div>
+                        <div className="text-sm font-medium text-theme-primary">{user.username}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-tertiary">
                     {user.email}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                       user.isAdmin
                         ? 'bg-orange-100 text-orange-800'
-                        : 'bg-gray-100 text-gray-800'
+                        : 'bg-theme-secondary text-theme-primary'
                     }`}>
                       {user.isAdmin ? 'Admin' : 'User'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-tertiary">
                     {user.lastLoginAt
                       ? new Date(user.lastLoginAt).toLocaleString()
                       : 'Never'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-tertiary">
                     {new Date(user.createdAt).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -437,11 +437,11 @@ function GroupsTab({ groups, onViewGroup }: GroupsTabProps) {
   if (groups.length === 0) {
     return (
       <div className="card text-center py-12">
-        <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="mx-auto h-12 w-12 text-theme-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
         </svg>
-        <h3 className="mt-4 text-lg font-medium text-gray-900">No groups found</h3>
-        <p className="mt-2 text-gray-500">
+        <h3 className="mt-4 text-lg font-medium text-theme-primary">No groups found</h3>
+        <p className="mt-2 text-theme-tertiary">
           Groups are synced from your identity provider when users log in, or created when assigning access rules.
         </p>
       </div>
@@ -464,11 +464,11 @@ function GroupsTab({ groups, onViewGroup }: GroupsTabProps) {
                 </svg>
               </div>
               <div className="ml-3">
-                <div className="text-sm font-medium text-gray-900">{group.name}</div>
-                <div className="text-xs text-gray-500">{group.memberCount} members</div>
+                <div className="text-sm font-medium text-theme-primary">{group.name}</div>
+                <div className="text-xs text-theme-tertiary">{group.memberCount} members</div>
               </div>
             </div>
-            <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="h-5 w-5 text-theme-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </div>
@@ -610,8 +610,8 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
-      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-hidden">
-        <div className="p-6 border-b border-gray-200">
+      <div className="bg-theme-card rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-hidden">
+        <div className="p-6 border-b border-theme">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <div className="h-12 w-12 rounded-full bg-primary-100 flex items-center justify-center">
@@ -620,13 +620,13 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
                 </span>
               </div>
               <div className="ml-4">
-                <h2 className="text-xl font-semibold text-gray-900">{user.name || 'Unnamed User'}</h2>
-                <p className="text-sm text-gray-500">{user.email}</p>
+                <h2 className="text-xl font-semibold text-theme-primary">{user.name || 'Unnamed User'}</h2>
+                <p className="text-sm text-theme-tertiary">{user.email}</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-theme-muted hover:text-theme-tertiary"
             >
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -636,14 +636,14 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-200 px-6">
+        <div className="border-b border-theme px-6">
           <nav className="-mb-px flex space-x-6 overflow-x-auto">
             <button
               onClick={() => setActiveTab('info')}
               className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                 activeTab === 'info'
                   ? 'border-primary-500 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  : 'border-transparent text-theme-tertiary hover:text-theme-secondary'
               }`}
             >
               Info
@@ -653,7 +653,7 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
               className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                 activeTab === 'gateways'
                   ? 'border-primary-500 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  : 'border-transparent text-theme-tertiary hover:text-theme-secondary'
               }`}
             >
               Gateways ({userGateways.length})
@@ -663,7 +663,7 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
               className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                 activeTab === 'configs'
                   ? 'border-primary-500 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  : 'border-transparent text-theme-tertiary hover:text-theme-secondary'
               }`}
             >
               VPN Configs ({activeGwConfigs.length + activeMeshConfigs.length})
@@ -673,7 +673,7 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
               className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                 activeTab === 'apikeys'
                   ? 'border-primary-500 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  : 'border-transparent text-theme-tertiary hover:text-theme-secondary'
               }`}
             >
               API Keys ({activeAPIKeys.length})
@@ -682,7 +682,7 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
         </div>
 
         {error && (
-          <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          <div className="mx-6 mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-400 text-sm">
             {error}
             <button onClick={() => setError(null)} className="ml-2 text-red-500 hover:text-red-700">&times;</button>
           </div>
@@ -698,18 +698,18 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
               {/* User Info */}
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div>
-                  <label className="text-xs text-gray-500 uppercase">Provider</label>
-                  <p className="text-sm font-medium text-gray-900">{user.provider}</p>
+                  <label className="text-xs text-theme-tertiary uppercase">Provider</label>
+                  <p className="text-sm font-medium text-theme-primary">{user.provider}</p>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 uppercase">External ID</label>
-                  <p className="text-sm font-medium text-gray-900 font-mono text-xs break-all">{user.externalId}</p>
+                  <label className="text-xs text-theme-tertiary uppercase">External ID</label>
+                  <p className="text-sm font-medium text-theme-primary font-mono text-xs break-all">{user.externalId}</p>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 uppercase">Status</label>
+                  <label className="text-xs text-theme-tertiary uppercase">Status</label>
                   <p className="text-sm">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                      user.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                      user.isActive ? 'bg-green-600 text-white' : 'bg-theme-secondary text-theme-primary'
                     }`}>
                       {user.isActive ? 'Active' : 'Inactive'}
                     </span>
@@ -721,8 +721,8 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
                   </p>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 uppercase">Last Login</label>
-                  <p className="text-sm text-gray-900">
+                  <label className="text-xs text-theme-tertiary uppercase">Last Login</label>
+                  <p className="text-sm text-theme-primary">
                     {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : 'Never'}
                   </p>
                 </div>
@@ -730,38 +730,38 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
 
               {/* Groups */}
               <div className="mb-6">
-                <label className="text-xs text-gray-500 uppercase mb-2 block">Groups ({user.groups.length})</label>
+                <label className="text-xs text-theme-tertiary uppercase mb-2 block">Groups ({user.groups.length})</label>
                 <div className="flex flex-wrap gap-2">
                   {user.groups.length > 0 ? (
                     user.groups.map((group) => (
-                      <span key={group} className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">
+                      <span key={group} className="px-3 py-1 bg-purple-600 text-white rounded-full text-sm">
                         {group}
                       </span>
                     ))
                   ) : (
-                    <span className="text-sm text-gray-400 italic">No groups assigned</span>
+                    <span className="text-sm text-theme-muted italic">No groups assigned</span>
                   )}
                 </div>
               </div>
 
               {/* Access Rules */}
               <div>
-                <label className="text-xs text-gray-500 uppercase mb-2 block">
+                <label className="text-xs text-theme-tertiary uppercase mb-2 block">
                   Access Rules ({accessRules.length})
                 </label>
                 {accessRules.length > 0 ? (
-                  <div className="border border-gray-200 rounded-lg divide-y divide-gray-200">
+                  <div className="border border-theme rounded-lg divide-y divide-theme">
                     {accessRules.map((rule) => (
                       <div key={rule.id} className="p-3 flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{rule.name}</p>
-                          <p className="text-xs text-gray-500">
-                            <span className="font-mono bg-gray-100 px-1 rounded">{rule.value}</span>
+                          <p className="text-sm font-medium text-theme-primary">{rule.name}</p>
+                          <p className="text-xs text-theme-tertiary">
+                            <span className="font-mono bg-theme-secondary px-1 rounded">{rule.value}</span>
                             <span className="ml-2">({rule.ruleType})</span>
                           </p>
                         </div>
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          rule.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                          rule.isActive ? 'bg-green-600 text-white' : 'bg-theme-secondary text-theme-primary'
                         }`}>
                           {rule.isActive ? 'Active' : 'Inactive'}
                         </span>
@@ -769,7 +769,7 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-400 italic">No access rules assigned (directly or via groups)</p>
+                  <p className="text-sm text-theme-muted italic">No access rules assigned (directly or via groups)</p>
                 )}
               </div>
             </>
@@ -781,7 +781,7 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
                 <select
                   value={selectedGateway}
                   onChange={(e) => setSelectedGateway(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  className="flex-1 px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="">Select a gateway to assign...</option>
                   {availableGateways.map(g => (
@@ -800,20 +800,20 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
               {/* Assigned Gateways */}
               <div className="space-y-2">
                 {userGateways.length === 0 ? (
-                  <p className="text-gray-500 text-sm py-4 text-center">No gateways assigned to this user</p>
+                  <p className="text-theme-tertiary text-sm py-4 text-center">No gateways assigned to this user</p>
                 ) : (
                   userGateways.map(gateway => (
-                    <div key={gateway.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div key={gateway.id} className="flex items-center justify-between p-3 bg-theme-tertiary rounded-lg">
                       <div>
                         <div className="font-medium text-sm flex items-center">
                           {gateway.name}
                           <span className={`ml-2 px-1.5 py-0.5 text-xs rounded-full ${
-                            gateway.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                            gateway.isActive ? 'bg-green-600 text-white' : 'bg-theme-secondary text-theme-tertiary'
                           }`}>
                             {gateway.isActive ? 'Online' : 'Offline'}
                           </span>
                         </div>
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-theme-tertiary">
                           {gateway.hostname || gateway.publicIp} - {gateway.vpnProtocol.toUpperCase()}:{gateway.vpnPort}
                         </div>
                       </div>
@@ -836,7 +836,7 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
                 <div className="flex justify-end">
                   <button
                     onClick={handleRevokeAllConfigs}
-                    className="btn bg-red-100 text-red-700 hover:bg-red-200 text-sm"
+                    className="btn bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 text-sm"
                   >
                     Revoke All Active Configs
                   </button>
@@ -845,26 +845,26 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
 
               {/* Gateway Configs */}
               <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-2">Gateway Configs ({gatewayConfigs.length})</h4>
+                <h4 className="text-sm font-medium text-theme-secondary mb-2">Gateway Configs ({gatewayConfigs.length})</h4>
                 {gatewayConfigs.length === 0 ? (
-                  <p className="text-gray-400 text-sm italic">No gateway configs</p>
+                  <p className="text-theme-muted text-sm italic">No gateway configs</p>
                 ) : (
                   <div className="border rounded-lg divide-y">
                     {gatewayConfigs.map(cfg => (
-                      <div key={cfg.id} className={`p-3 flex items-center justify-between ${cfg.isRevoked || isExpired(cfg.expiresAt) ? 'bg-gray-50' : ''}`}>
+                      <div key={cfg.id} className={`p-3 flex items-center justify-between ${cfg.isRevoked || isExpired(cfg.expiresAt) ? 'bg-theme-tertiary' : ''}`}>
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium">{cfg.gatewayName}</span>
-                            <span className="px-1.5 py-0.5 text-xs rounded bg-blue-100 text-blue-700">Gateway</span>
+                            <span className="px-1.5 py-0.5 text-xs rounded bg-blue-600 text-white">Gateway</span>
                             {cfg.isRevoked ? (
-                              <span className="px-1.5 py-0.5 text-xs rounded bg-red-100 text-red-700">Revoked</span>
+                              <span className="px-1.5 py-0.5 text-xs rounded bg-red-600 text-white">Revoked</span>
                             ) : isExpired(cfg.expiresAt) ? (
-                              <span className="px-1.5 py-0.5 text-xs rounded bg-gray-100 text-gray-600">Expired</span>
+                              <span className="px-1.5 py-0.5 text-xs rounded bg-theme-secondary text-theme-tertiary">Expired</span>
                             ) : (
-                              <span className="px-1.5 py-0.5 text-xs rounded bg-green-100 text-green-700">Active</span>
+                              <span className="px-1.5 py-0.5 text-xs rounded bg-green-600 text-white">Active</span>
                             )}
                           </div>
-                          <div className="text-xs text-gray-500 mt-1">
+                          <div className="text-xs text-theme-tertiary mt-1">
                             {cfg.fileName} &bull; Expires: {new Date(cfg.expiresAt).toLocaleString()}
                           </div>
                         </div>
@@ -872,8 +872,11 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
                           <button
                             onClick={() => handleRevokeConfig(cfg.id, 'gateway')}
                             disabled={revoking === cfg.id}
-                            className="text-red-600 hover:text-red-800 text-sm disabled:opacity-50"
+                            className="inline-flex items-center text-red-600 hover:text-red-800 text-sm disabled:opacity-50"
                           >
+                            <svg className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                            </svg>
                             {revoking === cfg.id ? 'Revoking...' : 'Revoke'}
                           </button>
                         )}
@@ -885,26 +888,26 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
 
               {/* Mesh Configs */}
               <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-2">Mesh Hub Configs ({meshConfigs.length})</h4>
+                <h4 className="text-sm font-medium text-theme-secondary mb-2">Mesh Hub Configs ({meshConfigs.length})</h4>
                 {meshConfigs.length === 0 ? (
-                  <p className="text-gray-400 text-sm italic">No mesh configs</p>
+                  <p className="text-theme-muted text-sm italic">No mesh configs</p>
                 ) : (
                   <div className="border rounded-lg divide-y">
                     {meshConfigs.map(cfg => (
-                      <div key={cfg.id} className={`p-3 flex items-center justify-between ${cfg.isRevoked || isExpired(cfg.expiresAt) ? 'bg-gray-50' : ''}`}>
+                      <div key={cfg.id} className={`p-3 flex items-center justify-between ${cfg.isRevoked || isExpired(cfg.expiresAt) ? 'bg-theme-tertiary' : ''}`}>
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium">{cfg.hubName}</span>
-                            <span className="px-1.5 py-0.5 text-xs rounded bg-purple-100 text-purple-700">Mesh Hub</span>
+                            <span className="px-1.5 py-0.5 text-xs rounded bg-purple-600 text-white">Mesh Hub</span>
                             {cfg.isRevoked ? (
-                              <span className="px-1.5 py-0.5 text-xs rounded bg-red-100 text-red-700">Revoked</span>
+                              <span className="px-1.5 py-0.5 text-xs rounded bg-red-600 text-white">Revoked</span>
                             ) : isExpired(cfg.expiresAt) ? (
-                              <span className="px-1.5 py-0.5 text-xs rounded bg-gray-100 text-gray-600">Expired</span>
+                              <span className="px-1.5 py-0.5 text-xs rounded bg-theme-secondary text-theme-tertiary">Expired</span>
                             ) : (
-                              <span className="px-1.5 py-0.5 text-xs rounded bg-green-100 text-green-700">Active</span>
+                              <span className="px-1.5 py-0.5 text-xs rounded bg-green-600 text-white">Active</span>
                             )}
                           </div>
-                          <div className="text-xs text-gray-500 mt-1">
+                          <div className="text-xs text-theme-tertiary mt-1">
                             {cfg.fileName} &bull; Expires: {new Date(cfg.expiresAt).toLocaleString()}
                           </div>
                         </div>
@@ -912,8 +915,11 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
                           <button
                             onClick={() => handleRevokeConfig(cfg.id, 'mesh')}
                             disabled={revoking === cfg.id}
-                            className="text-red-600 hover:text-red-800 text-sm disabled:opacity-50"
+                            className="inline-flex items-center text-red-600 hover:text-red-800 text-sm disabled:opacity-50"
                           >
+                            <svg className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                            </svg>
                             {revoking === cfg.id ? 'Revoking...' : 'Revoke'}
                           </button>
                         )}
@@ -931,7 +937,7 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
                 <div className="flex justify-end">
                   <button
                     onClick={handleDeleteAllAPIKeys}
-                    className="btn bg-red-100 text-red-700 hover:bg-red-200 text-sm"
+                    className="btn bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 text-sm"
                   >
                     Delete All API Keys
                   </button>
@@ -939,41 +945,44 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
               )}
 
               {apiKeys.length === 0 ? (
-                <p className="text-gray-400 text-sm italic text-center py-4">No API keys</p>
+                <p className="text-theme-muted text-sm italic text-center py-4">No API keys</p>
               ) : (
                 <div className="border rounded-lg divide-y">
                   {apiKeys.map(key => (
-                    <div key={key.id} className={`p-3 flex items-center justify-between ${key.isRevoked ? 'bg-gray-50' : ''}`}>
+                    <div key={key.id} className={`p-3 flex items-center justify-between ${key.isRevoked ? 'bg-theme-tertiary' : ''}`}>
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium">{key.name}</span>
-                          <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">{key.keyPrefix}...</code>
+                          <code className="text-xs bg-theme-secondary px-1.5 py-0.5 rounded">{key.keyPrefix}...</code>
                           {key.isRevoked ? (
-                            <span className="px-1.5 py-0.5 text-xs rounded bg-red-100 text-red-700">Revoked</span>
+                            <span className="px-1.5 py-0.5 text-xs rounded bg-red-600 text-white">Revoked</span>
                           ) : key.expiresAt && isExpired(key.expiresAt) ? (
-                            <span className="px-1.5 py-0.5 text-xs rounded bg-gray-100 text-gray-600">Expired</span>
+                            <span className="px-1.5 py-0.5 text-xs rounded bg-theme-secondary text-theme-tertiary">Expired</span>
                           ) : (
-                            <span className="px-1.5 py-0.5 text-xs rounded bg-green-100 text-green-700">Active</span>
+                            <span className="px-1.5 py-0.5 text-xs rounded bg-green-600 text-white">Active</span>
                           )}
                           {key.isAdminProvisioned && (
                             <span className="px-1.5 py-0.5 text-xs rounded bg-orange-100 text-orange-700">Admin</span>
                           )}
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">
+                        <div className="text-xs text-theme-tertiary mt-1">
                           Created: {new Date(key.createdAt).toLocaleString()}
                           {key.lastUsedAt && ` • Last used: ${new Date(key.lastUsedAt).toLocaleString()}`}
                           {key.expiresAt && ` • Expires: ${new Date(key.expiresAt).toLocaleString()}`}
                         </div>
                         {key.description && (
-                          <div className="text-xs text-gray-400 mt-1">{key.description}</div>
+                          <div className="text-xs text-theme-muted mt-1">{key.description}</div>
                         )}
                       </div>
                       {!key.isRevoked && (
                         <button
                           onClick={() => handleRevokeAPIKey(key.id)}
                           disabled={revoking === key.id}
-                          className="text-red-600 hover:text-red-800 text-sm disabled:opacity-50"
+                          className="inline-flex items-center text-red-600 hover:text-red-800 text-sm disabled:opacity-50"
                         >
+                          <svg className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                          </svg>
                           {revoking === key.id ? 'Revoking...' : 'Revoke'}
                         </button>
                       )}
@@ -985,7 +994,7 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
           )}
         </div>
 
-        <div className="p-4 border-t border-gray-200 flex justify-end">
+        <div className="p-4 border-t border-theme flex justify-end">
           <button onClick={onClose} className="btn btn-secondary">
             Close
           </button>
@@ -1021,8 +1030,8 @@ function GroupDetailsModal({ groupName, onClose }: GroupDetailsModalProps) {
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden">
-        <div className="p-6 border-b border-gray-200">
+      <div className="bg-theme-card rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden">
+        <div className="p-6 border-b border-theme">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
@@ -1031,13 +1040,13 @@ function GroupDetailsModal({ groupName, onClose }: GroupDetailsModalProps) {
                 </svg>
               </div>
               <div className="ml-4">
-                <h2 className="text-xl font-semibold text-gray-900">{groupName}</h2>
-                <p className="text-sm text-gray-500">{members.length} members</p>
+                <h2 className="text-xl font-semibold text-theme-primary">{groupName}</h2>
+                <p className="text-sm text-theme-tertiary">{members.length} members</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-theme-muted hover:text-theme-tertiary"
             >
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1047,14 +1056,14 @@ function GroupDetailsModal({ groupName, onClose }: GroupDetailsModalProps) {
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-200 px-6">
+        <div className="border-b border-theme px-6">
           <nav className="-mb-px flex space-x-8">
             <button
               onClick={() => setActiveTab('members')}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'members'
                   ? 'border-primary-500 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  : 'border-transparent text-theme-tertiary hover:text-theme-secondary'
               }`}
             >
               Members ({members.length})
@@ -1064,7 +1073,7 @@ function GroupDetailsModal({ groupName, onClose }: GroupDetailsModalProps) {
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'rules'
                   ? 'border-primary-500 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  : 'border-transparent text-theme-tertiary hover:text-theme-secondary'
               }`}
             >
               Access Rules ({accessRules.length})
@@ -1081,38 +1090,38 @@ function GroupDetailsModal({ groupName, onClose }: GroupDetailsModalProps) {
             members.length > 0 ? (
               <div className="space-y-2">
                 {members.map((member) => (
-                  <div key={member.id} className="flex items-center p-3 bg-gray-50 rounded-lg">
+                  <div key={member.id} className="flex items-center p-3 bg-theme-tertiary rounded-lg">
                     <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center">
                       <span className="text-primary-700 font-medium text-xs">
                         {member.name ? member.name.charAt(0).toUpperCase() : member.email.charAt(0).toUpperCase()}
                       </span>
                     </div>
                     <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-900">{member.name || member.email}</p>
-                      {member.name && <p className="text-xs text-gray-500">{member.email}</p>}
+                      <p className="text-sm font-medium text-theme-primary">{member.name || member.email}</p>
+                      {member.name && <p className="text-xs text-theme-tertiary">{member.email}</p>}
                     </div>
-                    <span className="ml-auto px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded">
+                    <span className="ml-auto px-2 py-0.5 text-xs bg-blue-600 text-white rounded">
                       {member.provider}
                     </span>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-center text-gray-500 py-8">No members in this group</p>
+              <p className="text-center text-theme-tertiary py-8">No members in this group</p>
             )
           ) : accessRules.length > 0 ? (
             <div className="space-y-2">
               {accessRules.map((rule) => (
-                <div key={rule.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div key={rule.id} className="flex items-center justify-between p-3 bg-theme-tertiary rounded-lg">
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{rule.name}</p>
-                    <p className="text-xs text-gray-500">
-                      <span className="font-mono bg-white px-1 rounded border">{rule.value}</span>
+                    <p className="text-sm font-medium text-theme-primary">{rule.name}</p>
+                    <p className="text-xs text-theme-tertiary">
+                      <span className="font-mono bg-theme-card px-1 rounded border border-theme">{rule.value}</span>
                       <span className="ml-2">({rule.ruleType})</span>
                     </p>
                   </div>
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                    rule.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                    rule.isActive ? 'bg-green-600 text-white' : 'bg-theme-secondary text-theme-primary'
                   }`}>
                     {rule.isActive ? 'Active' : 'Inactive'}
                   </span>
@@ -1120,11 +1129,11 @@ function GroupDetailsModal({ groupName, onClose }: GroupDetailsModalProps) {
               ))}
             </div>
           ) : (
-            <p className="text-center text-gray-500 py-8">No access rules assigned to this group</p>
+            <p className="text-center text-theme-tertiary py-8">No access rules assigned to this group</p>
           )}
         </div>
 
-        <div className="p-4 border-t border-gray-200 flex justify-end">
+        <div className="p-4 border-t border-theme flex justify-end">
           <button onClick={onClose} className="btn btn-secondary">
             Close
           </button>
@@ -1181,15 +1190,15 @@ function CreateUserModal({ onClose, onSuccess }: CreateUserModalProps) {
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+      <div className="bg-theme-card rounded-lg shadow-xl max-w-md w-full mx-4">
         <form onSubmit={handleSubmit}>
-          <div className="p-6 border-b border-gray-200">
+          <div className="p-6 border-b border-theme">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900">Create Local User</h2>
+              <h2 className="text-xl font-semibold text-theme-primary">Create Local User</h2>
               <button
                 type="button"
                 onClick={onClose}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-theme-muted hover:text-theme-tertiary"
               >
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1200,13 +1209,13 @@ function CreateUserModal({ onClose, onSuccess }: CreateUserModalProps) {
 
           <div className="p-6 space-y-4">
             {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 text-sm">
                 {error}
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-theme-secondary mb-1">
                 Username
               </label>
               <input
@@ -1220,7 +1229,7 @@ function CreateUserModal({ onClose, onSuccess }: CreateUserModalProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-theme-secondary mb-1">
                 Email
               </label>
               <input
@@ -1234,7 +1243,7 @@ function CreateUserModal({ onClose, onSuccess }: CreateUserModalProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-theme-secondary mb-1">
                 Password
               </label>
               <input
@@ -1249,7 +1258,7 @@ function CreateUserModal({ onClose, onSuccess }: CreateUserModalProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-theme-secondary mb-1">
                 Confirm Password
               </label>
               <input
@@ -1268,18 +1277,18 @@ function CreateUserModal({ onClose, onSuccess }: CreateUserModalProps) {
                 id="isAdmin"
                 checked={isAdmin}
                 onChange={(e) => setIsAdmin(e.target.checked)}
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-theme rounded"
               />
-              <label htmlFor="isAdmin" className="ml-2 block text-sm text-gray-700">
+              <label htmlFor="isAdmin" className="ml-2 block text-sm text-theme-secondary">
                 Administrator
-                <span className="block text-xs text-gray-500">
+                <span className="block text-xs text-theme-tertiary">
                   Admins have full access to manage gateways, users, and settings
                 </span>
               </label>
             </div>
           </div>
 
-          <div className="p-4 border-t border-gray-200 flex justify-end gap-3">
+          <div className="p-4 border-t border-theme flex justify-end gap-3">
             <button type="button" onClick={onClose} className="btn btn-secondary">
               Cancel
             </button>
