@@ -75,7 +75,25 @@ func (s *StateStore) SaveCLICallback(ctx context.Context, state, callbackURL str
 	return err
 }
 
+// PeekCLICallback retrieves a CLI callback URL without deleting it
+// Use this when you need to read the callback URL during the OAuth flow
+func (s *StateStore) PeekCLICallback(ctx context.Context, state string) (string, error) {
+	var callbackURL string
+	err := s.db.Pool.QueryRow(ctx, `
+		SELECT cli_callback_url FROM oauth_states
+		WHERE state = $1 AND provider_type = 'cli' AND expires_at > NOW()
+	`, state).Scan(&callbackURL)
+	if err == pgx.ErrNoRows {
+		return "", ErrSessionNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	return callbackURL, nil
+}
+
 // GetCLICallback retrieves and deletes a CLI callback URL
+// This is called at the end of the CLI login flow to consume the one-time state
 func (s *StateStore) GetCLICallback(ctx context.Context, state string) (string, error) {
 	var callbackURL string
 	err := s.db.Pool.QueryRow(ctx, `
