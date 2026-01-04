@@ -38,6 +38,46 @@ import (
 // cliCallbackStore stores CLI callback URLs by state
 var cliCallbackStore sync.Map
 
+// renderCLIRedirectPage returns an HTML page with JavaScript that redirects to a custom URL scheme.
+// Chrome blocks 302 redirects to custom URL schemes (like gatekey://) for security,
+// so we use JavaScript to trigger the deep link instead.
+func renderCLIRedirectPage(c *gin.Context, redirectURL string) {
+	htmlPage := `<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Redirecting to GateKey...</title>
+	<style>
+		body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f5f5f5; }
+		.container { text-align: center; padding: 40px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+		.spinner { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
+		@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+		a { color: #3498db; text-decoration: none; }
+		a:hover { text-decoration: underline; }
+	</style>
+</head>
+<body>
+	<div class="container">
+		<div class="spinner"></div>
+		<p>Opening GateKey app...</p>
+		<p><a href="` + redirectURL + `" id="manual-link">Click here if not redirected automatically</a></p>
+	</div>
+	<script>
+		// Try immediate redirect
+		window.location.href = "` + redirectURL + `";
+
+		// Fallback: try again after a short delay
+		setTimeout(function() {
+			window.location.href = "` + redirectURL + `";
+		}, 500);
+	</script>
+</body>
+</html>`
+
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.String(http.StatusOK, htmlPage)
+}
+
 // cidrToRoute converts a CIDR notation (e.g., "192.168.50.0/23") to OpenVPN route format (e.g., "route 192.168.50.0 255.255.254.0")
 func cidrToRoute(cidr string) string {
 	_, ipNet, err := net.ParseCIDR(cidr)
@@ -125,8 +165,9 @@ func (s *Server) handleOIDCLogin(c *gin.Context) {
 	var cliCallbackURL string
 	if cliState != "" {
 		s.logger.Info("OIDC login with CLI state", zap.String("cli_state", cliState))
-		// Look up the CLI callback URL from database
-		callbackURL, err := s.stateStore.GetCLICallback(c.Request.Context(), cliState)
+		// Look up the CLI callback URL from database (peek without deleting)
+		// The state will be deleted later in handleCLIComplete when the flow finishes
+		callbackURL, err := s.stateStore.PeekCLICallback(c.Request.Context(), cliState)
 		if err != nil {
 			s.logger.Warn("CLI callback URL not found", zap.String("cli_state", cliState), zap.Error(err))
 		} else {
@@ -328,10 +369,10 @@ func (s *Server) handleOIDCCallback(c *gin.Context) {
 	// Check if this is a CLI login flow
 	if stateData.CLICallbackURL != "" {
 		s.logger.Info("OIDC callback with CLI callback URL", zap.String("callback_url", stateData.CLICallbackURL))
-		// Redirect to CLI callback with token
+		// Redirect to CLI callback with token using HTML page (Chrome blocks 302 to custom schemes)
 		redirectURL := stateData.CLICallbackURL + "?token=" + token + "&email=" + url.QueryEscape(email) + "&name=" + url.QueryEscape(name) + "&expires_in=86400"
 		s.logger.Info("Redirecting to CLI", zap.String("redirect_url", redirectURL))
-		c.Redirect(http.StatusFound, redirectURL)
+		renderCLIRedirectPage(c, redirectURL)
 		return
 	} else {
 		s.logger.Info("OIDC callback without CLI callback URL (normal web login)")
@@ -400,13 +441,30 @@ func (s *Server) handleSAMLLogin(c *gin.Context) {
 		return
 	}
 
+	// Check for CLI state (to redirect back to CLI after auth)
+	cliState := c.Query("cli_state")
+	var cliCallbackURL string
+	if cliState != "" {
+		s.logger.Info("SAML login with CLI state", zap.String("cli_state", cliState))
+		// Look up the CLI callback URL from database (peek without deleting)
+		// The state will be deleted later in handleCLIComplete when the flow finishes
+		callbackURL, err := s.stateStore.PeekCLICallback(c.Request.Context(), cliState)
+		if err != nil {
+			s.logger.Warn("CLI callback URL not found", zap.String("cli_state", cliState), zap.Error(err))
+		} else {
+			cliCallbackURL = callbackURL
+			s.logger.Info("Found CLI callback URL", zap.String("callback_url", cliCallbackURL))
+		}
+	}
+
 	// Store state data in database for validation (expires in 10 minutes)
 	oauthState := &db.OAuthState{
-		State:        relayState,
-		Provider:     providerName,
-		ProviderType: "saml",
-		RelayState:   relayState,
-		ExpiresAt:    time.Now().Add(10 * time.Minute),
+		State:          relayState,
+		Provider:       providerName,
+		ProviderType:   "saml",
+		RelayState:     cliState, // Store CLI state for redirect after auth
+		CLICallbackURL: cliCallbackURL,
+		ExpiresAt:      time.Now().Add(10 * time.Minute),
 	}
 	if err := s.stateStore.SaveState(c.Request.Context(), oauthState); err != nil {
 		s.logger.Error("Failed to save state", zap.Error(err))
@@ -611,7 +669,22 @@ func (s *Server) handleSAMLACS(c *gin.Context) {
 	// Log the successful login
 	s.logUserLogin(c.Request.Context(), userID, email, name, "saml", stateData.Provider, ipAddress, userAgent, token, true, "")
 
-	// Redirect to dashboard
+	// Check if this is a CLI login flow
+	if stateData.CLICallbackURL != "" {
+		s.logger.Info("SAML callback with CLI callback URL", zap.String("callback_url", stateData.CLICallbackURL))
+		// Redirect to CLI callback with token using HTML page (Chrome blocks 302 to custom schemes)
+		redirectURL := stateData.CLICallbackURL + "?token=" + token + "&email=" + url.QueryEscape(email) + "&name=" + url.QueryEscape(name) + "&expires_in=86400"
+		s.logger.Info("Redirecting to CLI", zap.String("redirect_url", redirectURL))
+		renderCLIRedirectPage(c, redirectURL)
+		return
+	} else if stateData.RelayState != "" {
+		// CLI flow without direct callback - redirect to login page with state
+		s.logger.Info("SAML callback with CLI state", zap.String("cli_state", stateData.RelayState))
+		c.Redirect(http.StatusFound, "/login?cli=true&state="+url.QueryEscape(stateData.RelayState))
+		return
+	}
+
+	// Redirect to dashboard for normal web login
 	c.Redirect(http.StatusFound, "/")
 }
 
@@ -1085,12 +1158,14 @@ func (s *Server) handleCLIComplete(c *gin.Context) {
 		zap.Bool("is_admin", session.IsAdmin),
 		zap.String("callback_url", callbackURL))
 
-	// Redirect to CLI callback with token (include is_admin flag)
+	// Build redirect URL with token (include is_admin flag)
 	redirectURL := callbackURL + "?token=" + session.Token + "&email=" + url.QueryEscape(session.Email) + "&name=" + url.QueryEscape(session.Name) + "&expires_in=86400"
 	if session.IsAdmin {
 		redirectURL += "&is_admin=true"
 	}
-	c.Redirect(http.StatusFound, redirectURL)
+
+	// Redirect to CLI callback using HTML page (Chrome blocks 302 to custom schemes)
+	renderCLIRedirectPage(c, redirectURL)
 }
 
 func (s *Server) handleCLICallback(c *gin.Context) {
@@ -1129,7 +1204,8 @@ func (s *Server) handleCLICallback(c *gin.Context) {
 	}
 	redirectURL += "&expires_in=86400" // 24 hours
 
-	c.Redirect(http.StatusFound, redirectURL)
+	// Redirect to CLI callback using HTML page (Chrome blocks 302 to custom schemes)
+	renderCLIRedirectPage(c, redirectURL)
 }
 
 func (s *Server) handleTokenRefresh(c *gin.Context) {
@@ -1357,7 +1433,8 @@ func (s *Server) handleDownloadConfig(c *gin.Context) {
 		// Redirect to CLI with config data encoded
 		_ = s.configStore.MarkDownloaded(c.Request.Context(), configID) // Best effort
 		redirectURL := vpnConfig.CLICallbackURL + "?config_id=" + configID
-		c.Redirect(http.StatusFound, redirectURL)
+		// Use HTML page for CLI redirect (Chrome blocks 302 to custom schemes)
+		renderCLIRedirectPage(c, redirectURL)
 		return
 	}
 

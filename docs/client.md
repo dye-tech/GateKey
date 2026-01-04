@@ -599,6 +599,22 @@ gatekey login --no-browser
 | 3 | Connection failed |
 | 4 | Already connected |
 
+## Android Client
+
+For mobile devices, GateKey provides a native Android client with the same functionality:
+
+- **Browser-based SSO**: Same OAuth flow as desktop client
+- **API Key Login**: For automated/headless scenarios
+- **Gateway Connections**: Connect to any gateway
+- **Mesh Hub Support**: Connect to mesh networks
+- **Embedded OpenVPN3**: No external VPN app required
+
+The Android client is available as:
+- **APK**: Build from source or download from releases
+- **Play Store**: Coming soon
+
+See the [Android Client README](https://github.com/gatekey/gatekey-android-client) for installation and usage instructions.
+
 ## See Also
 
 - [API Keys Guide](api-keys.md) - API key authentication
@@ -608,3 +624,4 @@ gatekey login --no-browser
 - [Deployment Guide](deployment.md)
 - [API Reference](api.md)
 - [FIPS Compliance](fips-compliance.md)
+- [Platform Compatibility](compatibility.md) - Supported platforms including Android
