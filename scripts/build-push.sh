@@ -29,6 +29,10 @@ docker build -t "${REGISTRY}/${PROJECT}/gatekey-server:${VERSION}" -f Dockerfile
 echo -e "${YELLOW}Building gatekey-gateway...${NC}"
 docker build -t "${REGISTRY}/${PROJECT}/gatekey-gateway:${VERSION}" -f Dockerfile.gateway .
 
+# Build hub image
+echo -e "${YELLOW}Building gatekey-hub...${NC}"
+docker build -t "${REGISTRY}/${PROJECT}/gatekey-hub:${VERSION}" -f Dockerfile.hub .
+
 # Build web image (if web directory exists and has package.json)
 if [ -f "web/package.json" ]; then
     echo -e "${YELLOW}Building gatekey-web...${NC}"
@@ -48,6 +52,9 @@ echo -e "${GREEN}Pushed gatekey-server:${VERSION}${NC}"
 docker push "${REGISTRY}/${PROJECT}/gatekey-gateway:${VERSION}"
 echo -e "${GREEN}Pushed gatekey-gateway:${VERSION}${NC}"
 
+docker push "${REGISTRY}/${PROJECT}/gatekey-hub:${VERSION}"
+echo -e "${GREEN}Pushed gatekey-hub:${VERSION}${NC}"
+
 if [ -f "web/package.json" ]; then
     docker push "${REGISTRY}/${PROJECT}/gatekey-web:${VERSION}"
     echo -e "${GREEN}Pushed gatekey-web:${VERSION}${NC}"
@@ -58,6 +65,7 @@ echo ""
 echo "Images:"
 echo "  - ${REGISTRY}/${PROJECT}/gatekey-server:${VERSION}"
 echo "  - ${REGISTRY}/${PROJECT}/gatekey-gateway:${VERSION}"
+echo "  - ${REGISTRY}/${PROJECT}/gatekey-hub:${VERSION}"
 if [ -f "web/package.json" ]; then
     echo "  - ${REGISTRY}/${PROJECT}/gatekey-web:${VERSION}"
 fi

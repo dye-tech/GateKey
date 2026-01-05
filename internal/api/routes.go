@@ -26,6 +26,7 @@ import (
 	"github.com/crewjam/saml/samlsp"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 
@@ -42,6 +43,15 @@ var cliCallbackStore sync.Map
 // Chrome blocks 302 redirects to custom URL schemes (like gatekey://) for security,
 // so we use JavaScript to trigger the deep link instead.
 func renderCLIRedirectPage(c *gin.Context, redirectURL string) {
+	// Extract query string from redirect URL for Android intent format
+	// gatekey://callback?token=xxx -> intent://callback?token=xxx#Intent;scheme=gatekey;package=com.gatekey.client;end
+	intentURL := redirectURL
+	if strings.HasPrefix(redirectURL, "gatekey://") {
+		// Convert to Android intent:// format for better compatibility
+		path := strings.TrimPrefix(redirectURL, "gatekey://")
+		intentURL = "intent://" + path + "#Intent;scheme=gatekey;package=com.gatekey.client;end"
+	}
+
 	htmlPage := `<!DOCTYPE html>
 <html>
 <head>
@@ -52,23 +62,49 @@ func renderCLIRedirectPage(c *gin.Context, redirectURL string) {
 		.container { text-align: center; padding: 40px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
 		.spinner { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
 		@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-		a { color: #3498db; text-decoration: none; }
-		a:hover { text-decoration: underline; }
+		a { color: #3498db; text-decoration: none; display: inline-block; margin: 10px; padding: 12px 24px; background: #3498db; color: white; border-radius: 6px; }
+		a:hover { background: #2980b9; text-decoration: none; }
+		.manual { margin-top: 20px; }
 	</style>
 </head>
 <body>
 	<div class="container">
 		<div class="spinner"></div>
 		<p>Opening GateKey app...</p>
-		<p><a href="` + redirectURL + `" id="manual-link">Click here if not redirected automatically</a></p>
+		<div class="manual">
+			<p>If the app doesn't open automatically:</p>
+			<a href="` + redirectURL + `" id="manual-link">Open GateKey App</a>
+		</div>
 	</div>
+	<iframe id="launcher" style="display:none;"></iframe>
 	<script>
-		// Try immediate redirect
-		window.location.href = "` + redirectURL + `";
+		var customUrl = "` + redirectURL + `";
+		var intentUrl = "` + intentURL + `";
 
-		// Fallback: try again after a short delay
+		// Detect if Android
+		var isAndroid = /android/i.test(navigator.userAgent);
+
+		function tryLaunch() {
+			if (isAndroid) {
+				// Try Android intent:// format first (most reliable)
+				window.location.href = intentUrl;
+			} else {
+				// iOS and desktop - use custom scheme directly
+				window.location.href = customUrl;
+			}
+		}
+
+		// Try iframe approach first (works on some browsers)
+		try {
+			document.getElementById('launcher').src = customUrl;
+		} catch(e) {}
+
+		// Then try direct navigation
+		setTimeout(tryLaunch, 100);
+
+		// Fallback attempts
 		setTimeout(function() {
-			window.location.href = "` + redirectURL + `";
+			window.location.href = customUrl;
 		}, 500);
 	</script>
 </body>
@@ -2801,6 +2837,111 @@ func (s *Server) handleGatewayAllRules(c *gin.Context) {
 		"hash":        rulesHash,
 		"timestamp":   time.Now().UTC().Format(time.RFC3339),
 	})
+}
+
+// handleGatewayClientStats receives periodic client stats from the gateway
+// This enables real-time traffic monitoring and stale connection detection
+func (s *Server) handleGatewayClientStats(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var req struct {
+		Token   string `json:"token" binding:"required"`
+		Clients []struct {
+			Email          string `json:"email"`
+			TunnelIP       string `json:"tunnelIp"`
+			ClientIP       string `json:"clientIp"`
+			BytesSent      int64  `json:"bytesSent"`
+			BytesReceived  int64  `json:"bytesReceived"`
+			ConnectedSince string `json:"connectedSince"`
+		} `json:"clients"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	gateway, err := s.gatewayStore.GetGatewayByToken(ctx, req.Token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
+
+	// Build a map of currently connected tunnel IPs
+	connectedTunnelIPs := make(map[string]bool)
+	for _, client := range req.Clients {
+		if client.TunnelIP != "" {
+			connectedTunnelIPs[client.TunnelIP] = true
+		}
+	}
+
+	// Update stats for each connected client
+	for _, client := range req.Clients {
+		if client.TunnelIP == "" {
+			continue
+		}
+
+		// Update the gateway_connection record with current traffic stats
+		_, err := s.db.Pool.Exec(ctx, `
+			UPDATE gateway_connections
+			SET bytes_sent = $3,
+			    bytes_received = $4,
+			    last_seen_at = NOW()
+			WHERE gateway_id = $1
+			  AND tunnel_ip = $2::inet
+			  AND disconnected_at IS NULL
+		`, gateway.ID, client.TunnelIP, client.BytesSent, client.BytesReceived)
+		if err != nil {
+			s.logger.Debug("Failed to update client stats",
+				zap.String("email", client.Email),
+				zap.String("tunnelIp", client.TunnelIP),
+				zap.Error(err))
+		}
+	}
+
+	// Mark stale connections as disconnected
+	// If a connection is not in the current list from the gateway, it's stale
+	tunnelIPs := make([]string, 0, len(connectedTunnelIPs))
+	for ip := range connectedTunnelIPs {
+		tunnelIPs = append(tunnelIPs, ip)
+	}
+
+	var result pgconn.CommandTag
+	if len(tunnelIPs) == 0 {
+		// No clients connected - mark all old connections as stale
+		result, err = s.db.Pool.Exec(ctx, `
+			UPDATE gateway_connections
+			SET disconnected_at = NOW(),
+			    disconnect_reason = 'stale'
+			WHERE gateway_id = $1
+			  AND disconnected_at IS NULL
+			  AND last_seen_at < NOW() - INTERVAL '30 seconds'
+		`, gateway.ID)
+	} else {
+		// Some clients connected - only mark those not in the list
+		result, err = s.db.Pool.Exec(ctx, `
+			UPDATE gateway_connections
+			SET disconnected_at = NOW(),
+			    disconnect_reason = 'stale'
+			WHERE gateway_id = $1
+			  AND disconnected_at IS NULL
+			  AND last_seen_at < NOW() - INTERVAL '30 seconds'
+			  AND tunnel_ip NOT IN (
+			      SELECT unnest($2::inet[])
+			  )
+		`, gateway.ID, tunnelIPs)
+	}
+	if err != nil {
+		s.logger.Debug("Failed to mark stale connections", zap.Error(err))
+	} else {
+		if staleCount := result.RowsAffected(); staleCount > 0 {
+			s.logger.Info("Marked stale gateway connections as disconnected",
+				zap.String("gateway", gateway.Name),
+				zap.Int64("count", staleCount))
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
 // User handlers

@@ -299,6 +299,7 @@ func (s *Server) setupRoutes() {
 			gateway.POST("/provision", s.handleGatewayProvision)
 			gateway.POST("/client-rules", s.handleGatewayClientRules)
 			gateway.POST("/all-rules", s.handleGatewayAllRules)
+			gateway.POST("/client-stats", s.handleGatewayClientStats) // Periodic client stats sync
 		}
 
 		// Mesh Hub internal routes (hub → control plane communication)
@@ -314,6 +315,7 @@ func (s *Server) setupRoutes() {
 			meshHub.POST("/client-disconnected", s.handleMeshClientDisconnected)
 			meshHub.POST("/client-rules", s.handleMeshClientRules)        // Get access rules for a client
 			meshHub.POST("/all-client-rules", s.handleMeshAllClientRules) // Get access rules for all clients
+			meshHub.POST("/client-stats", s.handleMeshClientStats)        // Periodic client stats sync
 		}
 
 		// Mesh Spoke internal routes (spoke → control plane for initial setup)

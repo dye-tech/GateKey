@@ -1070,7 +1070,7 @@ func (s *MeshStore) GetUserMeshAccessRules(ctx context.Context, hubID, userID st
 		AND ar.is_active = true
 		AND (
 			-- User has direct access to the rule
-			EXISTS (SELECT 1 FROM user_access_rules uar WHERE uar.access_rule_id = ar.id AND uar.user_id = $2::uuid)
+			EXISTS (SELECT 1 FROM user_access_rules uar WHERE uar.access_rule_id = ar.id AND uar.user_id = $2)
 			-- Or user's group has access to the rule
 			OR EXISTS (SELECT 1 FROM group_access_rules gar WHERE gar.access_rule_id = ar.id AND gar.group_name = ANY($3))
 		)
@@ -1129,7 +1129,7 @@ func (s *MeshStore) GetUserMeshAccessRulesDetailed(ctx context.Context, hubID, u
 		AND ar.is_active = true
 		AND (
 			-- User has direct access to the rule
-			EXISTS (SELECT 1 FROM user_access_rules uar WHERE uar.access_rule_id = ar.id AND uar.user_id = $2::uuid)
+			EXISTS (SELECT 1 FROM user_access_rules uar WHERE uar.access_rule_id = ar.id AND uar.user_id = $2)
 			-- Or user's group has access to the rule
 			OR EXISTS (SELECT 1 FROM group_access_rules gar WHERE gar.access_rule_id = ar.id AND gar.group_name = ANY($3))
 		)

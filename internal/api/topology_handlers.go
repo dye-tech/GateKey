@@ -194,18 +194,19 @@ func (s *Server) handleGetTopology(c *gin.Context) {
 
 // ActiveSession represents an active VPN session
 type ActiveSession struct {
-	ID          string    `json:"id"`
-	UserID      string    `json:"userId"`
-	UserEmail   string    `json:"userEmail"`
-	UserName    string    `json:"userName"`
-	GatewayID   string    `json:"gatewayId"`
-	GatewayName string    `json:"gatewayName"`
-	NodeType    string    `json:"nodeType"` // gateway, hub
-	ClientIP    string    `json:"clientIp"`
-	VPNAddress  string    `json:"vpnAddress"`
-	ConnectedAt time.Time `json:"connectedAt"`
-	BytesSent   int64     `json:"bytesSent"`
-	BytesRecv   int64     `json:"bytesRecv"`
+	ID          string     `json:"id"`
+	UserID      string     `json:"userId"`
+	UserEmail   string     `json:"userEmail"`
+	UserName    string     `json:"userName"`
+	GatewayID   string     `json:"gatewayId"`
+	GatewayName string     `json:"gatewayName"`
+	NodeType    string     `json:"nodeType"` // gateway, hub
+	ClientIP    string     `json:"clientIp"`
+	VPNAddress  string     `json:"vpnAddress"`
+	ConnectedAt time.Time  `json:"connectedAt"`
+	BytesSent   int64      `json:"bytesSent"`
+	BytesRecv   int64      `json:"bytesRecv"`
+	LastSeenAt  *time.Time `json:"lastSeenAt,omitempty"`
 }
 
 // ActiveSessionsResponse contains all active sessions
@@ -248,6 +249,23 @@ func (s *Server) handleGetActiveSessions(c *gin.Context) {
 func (s *Server) getActiveMeshConnections(ctx context.Context) ([]ActiveSession, error) {
 	var sessions []ActiveSession
 
+	// First, mark any very stale connections as disconnected (safety net if stats sync isn't working)
+	// Connections not seen for 2+ minutes are considered stale
+	_, _ = s.db.Pool.Exec(ctx, `
+		UPDATE mesh_connections
+		SET disconnected_at = NOW(), disconnect_reason = 'stale'
+		WHERE disconnected_at IS NULL
+		  AND last_seen_at IS NOT NULL
+		  AND last_seen_at < NOW() - INTERVAL '2 minutes'
+	`)
+	_, _ = s.db.Pool.Exec(ctx, `
+		UPDATE gateway_connections
+		SET disconnected_at = NOW(), disconnect_reason = 'stale'
+		WHERE disconnected_at IS NULL
+		  AND last_seen_at IS NOT NULL
+		  AND last_seen_at < NOW() - INTERVAL '2 minutes'
+	`)
+
 	// Query mesh hub connections (supports both SSO and local users)
 	meshRows, err := s.db.Pool.Query(ctx, `
 		SELECT
@@ -256,7 +274,8 @@ func (s *Server) getActiveMeshConnections(ctx context.Context) ([]ActiveSession,
 			COALESCE(u.name, lu.username, ''),
 			h.name, host(mc.client_ip), host(mc.tunnel_ip),
 			mc.bytes_sent, mc.bytes_received, mc.connected_at,
-			COALESCE(mc.user_type, 'sso')
+			COALESCE(mc.user_type, 'sso'),
+			mc.last_seen_at
 		FROM mesh_connections mc
 		JOIN mesh_hubs h ON mc.hub_id = h.id
 		LEFT JOIN users u ON COALESCE(mc.user_type, 'sso') = 'sso' AND mc.user_id = u.id::text
@@ -277,6 +296,7 @@ func (s *Server) getActiveMeshConnections(ctx context.Context) ([]ActiveSession,
 			&sess.ID, &sess.GatewayID, &sess.UserID, &sess.UserEmail, &sess.UserName,
 			&sess.GatewayName, &clientIP, &tunnelIP,
 			&sess.BytesSent, &sess.BytesRecv, &sess.ConnectedAt, &userType,
+			&sess.LastSeenAt,
 		); err != nil {
 			return nil, err
 		}
@@ -305,7 +325,8 @@ func (s *Server) getActiveMeshConnections(ctx context.Context) ([]ActiveSession,
 			COALESCE(u.name, lu.username, ''),
 			g.name, host(gc.client_ip), host(gc.tunnel_ip),
 			gc.bytes_sent, gc.bytes_received, gc.connected_at,
-			gc.user_type
+			gc.user_type,
+			gc.last_seen_at
 		FROM gateway_connections gc
 		JOIN gateways g ON gc.gateway_id = g.id
 		LEFT JOIN users u ON gc.user_type = 'sso' AND gc.user_id = u.id::text
@@ -326,6 +347,7 @@ func (s *Server) getActiveMeshConnections(ctx context.Context) ([]ActiveSession,
 			&sess.ID, &sess.GatewayID, &sess.UserID, &sess.UserEmail, &sess.UserName,
 			&sess.GatewayName, &clientIP, &tunnelIP,
 			&sess.BytesSent, &sess.BytesRecv, &sess.ConnectedAt, &userType,
+			&sess.LastSeenAt,
 		); err != nil {
 			return nil, err
 		}
