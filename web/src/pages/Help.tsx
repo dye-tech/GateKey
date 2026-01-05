@@ -45,6 +45,15 @@ const sections: Section[] = [
     ),
   },
   {
+    id: 'wireguard',
+    title: 'WireGuard',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+      </svg>
+    ),
+  },
+  {
     id: 'networks',
     title: 'Networks',
     icon: (
@@ -805,6 +814,319 @@ curl -sSL ${baseUrl}/scripts/install-gateway.sh | \\
           </div>
         </section>
 
+        {/* WireGuard Section */}
+        <section id="wireguard" className="scroll-mt-24">
+          <div className="card">
+            <h1 className="text-2xl font-bold text-theme-primary mb-2">WireGuard VPN Support</h1>
+            <p className="text-theme-secondary mb-6">
+              GateKey supports WireGuard as an alternative VPN protocol alongside OpenVPN. WireGuard gateways offer modern, high-performance VPN with simpler configuration.
+            </p>
+
+            {/* WireGuard vs OpenVPN */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">WireGuard vs OpenVPN</h3>
+            <div className="overflow-x-auto mb-6">
+              <table className="min-w-full divide-y divide-theme">
+                <thead className="bg-theme-tertiary">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Feature</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">OpenVPN</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">WireGuard</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-theme-card divide-y divide-theme text-sm">
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Protocol</td>
+                    <td className="px-4 py-3">UDP or TCP</td>
+                    <td className="px-4 py-3">UDP only</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Default Port</td>
+                    <td className="px-4 py-3">1194</td>
+                    <td className="px-4 py-3">51820</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Cryptography</td>
+                    <td className="px-4 py-3">Configurable (AES, ChaCha20)</td>
+                    <td className="px-4 py-3">Fixed (Curve25519, ChaCha20-Poly1305)</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Config File</td>
+                    <td className="px-4 py-3">.ovpn file</td>
+                    <td className="px-4 py-3">.conf file</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Key Type</td>
+                    <td className="px-4 py-3">X.509 Certificates</td>
+                    <td className="px-4 py-3">Curve25519 Key Pairs</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Performance</td>
+                    <td className="px-4 py-3">Good</td>
+                    <td className="px-4 py-3">Excellent (lower latency)</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Gateway Binary</td>
+                    <td className="px-4 py-3">gatekey-gateway</td>
+                    <td className="px-4 py-3">gatekey-wireguard-gateway</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* When to Use Each */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">When to Use Each</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">Use WireGuard When</h4>
+                <ul className="text-sm text-theme-secondary space-y-1">
+                  <li>• Performance is critical (lower latency)</li>
+                  <li>• UDP access is reliable (not blocked)</li>
+                  <li>• Simpler configuration is preferred</li>
+                  <li>• Mobile users (better roaming)</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">Use OpenVPN When</h4>
+                <ul className="text-sm text-theme-secondary space-y-1">
+                  <li>• UDP is blocked (TCP fallback needed)</li>
+                  <li>• Legacy client support required</li>
+                  <li>• Need configurable cryptography</li>
+                  <li>• Existing OpenVPN infrastructure</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Creating a WireGuard Gateway */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Creating a WireGuard Gateway</h3>
+            <ol className="list-decimal list-inside space-y-3 text-theme-secondary mb-6">
+              <li>Navigate to <strong>Administration → Gateways</strong></li>
+              <li>Click <strong>Add Gateway</strong></li>
+              <li>Select <strong>WireGuard</strong> as the gateway type</li>
+              <li>Enter the gateway details:
+                <ul className="list-disc list-inside ml-6 mt-2 space-y-1 text-sm">
+                  <li><strong>Name:</strong> Unique identifier (e.g., wg-us-east-1)</li>
+                  <li><strong>Hostname:</strong> Public DNS name or IP</li>
+                  <li><strong>WireGuard Port:</strong> Default 51820</li>
+                  <li><strong>VPN Subnet:</strong> Client IP range (default: 172.31.255.0/24)</li>
+                  <li><strong>Full Tunnel Mode:</strong> Route all traffic through VPN (optional)</li>
+                  <li><strong>Push DNS:</strong> Push DNS settings to clients (optional)</li>
+                </ul>
+              </li>
+              <li>Click <strong>Register Gateway</strong></li>
+              <li><strong>Save the authentication token</strong> - it will only be shown once!</li>
+            </ol>
+
+            {/* Installing WireGuard Gateway */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Installing WireGuard Gateway Agent</h3>
+            <p className="text-theme-secondary mb-4">
+              Run the installer script on your gateway server:
+            </p>
+            <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto mb-6">
+              <pre className="text-green-400 text-sm">{`curl -sSL ${baseUrl}/scripts/install-wireguard-gateway.sh | sudo bash -s -- \\
+  --server ${baseUrl} \\
+  --token YOUR_GATEWAY_TOKEN \\
+  --name wg-gateway-name`}</pre>
+            </div>
+
+            {/* WireGuard Gateway Agent */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Gateway Agent Operations</h3>
+            <div className="overflow-x-auto mb-6">
+              <table className="min-w-full divide-y divide-theme">
+                <thead className="bg-theme-tertiary">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Operation</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Interval</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Description</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-theme-card divide-y divide-theme text-sm">
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Heartbeat</td>
+                    <td className="px-4 py-3">30s</td>
+                    <td className="px-4 py-3">Reports gateway status to control plane</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Peer Sync</td>
+                    <td className="px-4 py-3">10s</td>
+                    <td className="px-4 py-3">Fetches authorized peers, removes expired</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Stats Report</td>
+                    <td className="px-4 py-3">5s</td>
+                    <td className="px-4 py-3">Reports peer traffic stats and handshakes</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Connecting to WireGuard */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Connecting to WireGuard Gateway</h3>
+            <ol className="list-decimal list-inside space-y-3 text-theme-secondary mb-6">
+              <li>Navigate to <strong>Connect</strong> in the web UI</li>
+              <li>Select a WireGuard gateway (marked with purple <span className="inline-block px-1.5 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 text-xs font-medium rounded">WG</span> badge)</li>
+              <li>Click <strong>Connect</strong></li>
+              <li>Download the <code className="bg-theme-secondary px-1 rounded">.conf</code> file</li>
+              <li>Import into your WireGuard client</li>
+            </ol>
+
+            {/* Client Apps */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">WireGuard Client Apps</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">Linux</h4>
+                <div className="bg-gray-900 rounded p-2 overflow-x-auto">
+                  <pre className="text-green-400 text-xs">{`sudo apt install wireguard-tools
+sudo wg-quick up /path/to/config.conf`}</pre>
+                </div>
+              </div>
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">macOS</h4>
+                <p className="text-sm text-theme-secondary">
+                  Install from App Store, then Import Tunnel(s) from File
+                </p>
+              </div>
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">Windows</h4>
+                <p className="text-sm text-theme-secondary">
+                  Download from wireguard.com, then Import tunnel(s) from file
+                </p>
+              </div>
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">iOS</h4>
+                <p className="text-sm text-theme-secondary">
+                  Install from App Store, then import via file or QR code
+                </p>
+              </div>
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">Android</h4>
+                <p className="text-sm text-theme-secondary">
+                  Install from Google Play, then import via file or QR code
+                </p>
+              </div>
+            </div>
+
+            {/* Config Format */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Configuration File Format</h3>
+            <p className="text-theme-secondary mb-4">
+              WireGuard configs generated by GateKey follow this format:
+            </p>
+            <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto mb-6">
+              <pre className="text-green-400 text-sm">{`# GateKey WireGuard Configuration
+# Gateway: production-gateway
+# User: user@example.com
+# Expires: 2026-01-06T12:00:00Z
+
+[Interface]
+PrivateKey = <client-private-key>
+Address = 172.31.255.5/32
+DNS = 1.1.1.1, 8.8.8.8
+
+[Peer]
+PublicKey = <gateway-public-key>
+Endpoint = wg.vpn.example.com:51820
+AllowedIPs = 10.0.0.0/8, 192.168.0.0/16
+PresharedKey = <optional-psk>
+PersistentKeepalive = 25`}</pre>
+            </div>
+
+            {/* Security Features */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Security Features</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">Key Management</h4>
+                <ul className="text-sm text-theme-secondary space-y-1">
+                  <li>• Server-generated keypairs</li>
+                  <li>• Private key embedded in config</li>
+                  <li>• Generate new config for key rotation</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">Preshared Keys (PSK)</h4>
+                <ul className="text-sm text-theme-secondary space-y-1">
+                  <li>• Post-quantum security layer</li>
+                  <li>• Symmetric encryption on top of Curve25519</li>
+                  <li>• Optional per-client PSK</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">Config Expiration</h4>
+                <ul className="text-sm text-theme-secondary space-y-1">
+                  <li>• Default: 24 hours (configurable)</li>
+                  <li>• Expired peers auto-removed</li>
+                  <li>• Regenerate config when expired</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">Zero-Trust Enforcement</h4>
+                <ul className="text-sm text-theme-secondary space-y-1">
+                  <li>• Per-peer nftables firewall rules</li>
+                  <li>• AllowedIPs based on access rules</li>
+                  <li>• Real-time revocation (~10 seconds)</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Troubleshooting */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Troubleshooting</h3>
+            <div className="space-y-4 mb-6">
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">Gateway Shows as Offline</h4>
+                <div className="bg-gray-900 rounded p-2 overflow-x-auto">
+                  <pre className="text-green-400 text-xs">{`# Check gateway agent is running
+systemctl status gatekey-wireguard-gateway
+
+# Verify network connectivity to control plane
+curl -s ${baseUrl}/health
+
+# Check logs for errors
+journalctl -u gatekey-wireguard-gateway -f`}</pre>
+                </div>
+              </div>
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">No Handshake</h4>
+                <div className="bg-gray-900 rounded p-2 overflow-x-auto">
+                  <pre className="text-green-400 text-xs">{`# Check client can reach gateway
+nc -zvu gateway.example.com 51820
+
+# Verify config is not expired (check comments in .conf)
+
+# Check firewall allows UDP 51820
+sudo nft list ruleset | grep 51820`}</pre>
+                </div>
+              </div>
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">Traffic Not Flowing</h4>
+                <div className="bg-gray-900 rounded p-2 overflow-x-auto">
+                  <pre className="text-green-400 text-xs">{`# Verify AllowedIPs in config match destinations
+cat /path/to/config.conf | grep AllowedIPs
+
+# Check gateway firewall rules
+sudo nft list table inet gatex
+
+# Ensure IP forwarding is enabled
+cat /proc/sys/net/ipv4/ip_forward`}</pre>
+                </div>
+              </div>
+            </div>
+
+            {/* Info Box */}
+            <div className="info-box">
+              <div className="flex">
+                <svg className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="ml-3">
+                  <h3 className="info-box-title">Mixed Environment Support</h3>
+                  <p className="mt-1 info-box-text">
+                    You can run both OpenVPN and WireGuard gateways simultaneously. Each gateway type is independent,
+                    allowing you to migrate gradually or offer both protocols to users based on their needs.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Networks Section */}
         <section id="networks" className="scroll-mt-24">
           <div className="card">
@@ -953,8 +1275,8 @@ curl -sSL ${baseUrl}/scripts/install-gateway.sh | \\
 
             {/* Overview */}
             <h3 className="text-lg font-medium text-theme-primary mb-3">How It Works</h3>
-            <div className="bg-theme-tertiary rounded-lg p-4 mb-6">
-              <ol className="list-decimal list-inside space-y-2 text-theme-secondary">
+            <div className="info-box mb-6">
+              <ol className="list-decimal list-inside space-y-2 info-box-text">
                 <li>Create rules that define allowed IP ranges (CIDR notation)</li>
                 <li>Assign rules globally, to groups, or to individual users</li>
                 <li>When geo-fencing is enabled, only allowed IPs can connect</li>
@@ -1174,10 +1496,10 @@ curl -sSL ${baseUrl}/scripts/install-gateway.sh | \\
 
             {/* How It Works */}
             <h3 className="text-lg font-medium text-theme-primary mb-3">How It Works</h3>
-            <div className="bg-theme-tertiary rounded-lg p-4 mb-6">
-              <ol className="list-decimal list-inside space-y-2 text-theme-secondary">
+            <div className="info-box mb-6">
+              <ol className="list-decimal list-inside space-y-2 info-box-text">
                 <li>User authenticates via SSO</li>
-                <li>User accesses <code className="bg-theme-secondary px-1 rounded">{baseUrl}/proxy/app-slug/</code></li>
+                <li>User accesses <code className="bg-slate-200 dark:bg-slate-700 px-1 rounded text-slate-800 dark:text-slate-200">{baseUrl}/proxy/app-slug/</code></li>
                 <li>GateKey verifies user has permission to access the app</li>
                 <li>Traffic is proxied to the internal application</li>
                 <li>User headers (email, groups) are injected for the backend</li>
@@ -1811,11 +2133,11 @@ output: table`}</pre>
             <p className="text-theme-secondary mb-4">
               Connect to and execute shell commands on remote hubs, gateways, and spokes. Access via <strong>Administration → Diagnostics → Remote Sessions</strong>.
             </p>
-            <div className="bg-theme-tertiary rounded-lg p-4 mb-6">
-              <h4 className="font-medium text-theme-primary mb-2">How It Works</h4>
-              <ul className="text-sm text-theme-secondary space-y-2">
+            <div className="info-box mb-6">
+              <h4 className="info-box-title mb-2">How It Works</h4>
+              <ul className="text-sm info-box-text space-y-2">
                 <li>• Agents connect <strong>outbound</strong> to the control plane (no inbound firewall rules needed)</li>
-                <li>• Enable remote sessions by setting <code className="bg-theme-secondary px-1 rounded">session_enabled: true</code> in agent config</li>
+                <li>• Enable remote sessions by setting <code className="bg-slate-200 dark:bg-slate-700 px-1 rounded text-slate-800 dark:text-slate-200">session_enabled: true</code> in agent config</li>
                 <li>• Connected agents appear in the Remote Sessions list</li>
                 <li>• Click "Connect" to open an interactive terminal</li>
               </ul>
@@ -1977,20 +2299,59 @@ gatekey-admin session connect hub-1     # Interactive shell`}</pre>
                 <thead className="bg-theme-tertiary">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Binary</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Protocol</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Description</th>
                   </tr>
                 </thead>
                 <tbody className="bg-theme-card divide-y divide-theme text-sm">
                   <tr>
                     <td className="px-4 py-3 font-medium font-mono">gatekey-hub</td>
-                    <td className="px-4 py-3">Runs on the central hub server. Manages OpenVPN server and syncs with control plane.</td>
+                    <td className="px-4 py-3"><span className="px-1.5 py-0.5 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 text-xs font-medium rounded">OpenVPN</span></td>
+                    <td className="px-4 py-3">OpenVPN mesh hub server. Manages OpenVPN and syncs with control plane.</td>
                   </tr>
                   <tr>
                     <td className="px-4 py-3 font-medium font-mono">gatekey-mesh-gateway</td>
-                    <td className="px-4 py-3">Runs on remote sites. Connects to hub and advertises local networks.</td>
+                    <td className="px-4 py-3"><span className="px-1.5 py-0.5 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 text-xs font-medium rounded">OpenVPN</span></td>
+                    <td className="px-4 py-3">OpenVPN mesh spoke. Connects to hub and advertises local networks.</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium font-mono">gatekey-wireguard-hub</td>
+                    <td className="px-4 py-3"><span className="px-1.5 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 text-xs font-medium rounded">WireGuard</span></td>
+                    <td className="px-4 py-3">WireGuard mesh hub server. High-performance alternative with lower latency.</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium font-mono">gatekey-wireguard-mesh-gateway</td>
+                    <td className="px-4 py-3"><span className="px-1.5 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 text-xs font-medium rounded">WireGuard</span></td>
+                    <td className="px-4 py-3">WireGuard mesh spoke. Connects to WireGuard hub from remote sites.</td>
                   </tr>
                 </tbody>
               </table>
+            </div>
+
+            {/* WireGuard Mesh */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">WireGuard Mesh</h3>
+            <p className="text-theme-secondary mb-4">
+              GateKey supports WireGuard for mesh networking, providing a high-performance alternative to OpenVPN mesh with lower latency and simpler configuration.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">WireGuard Mesh Advantages</h4>
+                <ul className="text-sm text-theme-secondary space-y-1">
+                  <li>• Lower latency than OpenVPN</li>
+                  <li>• Better NAT traversal with built-in keepalive</li>
+                  <li>• Simpler configuration (.conf files)</li>
+                  <li>• Modern cryptography (Curve25519)</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">When to Use OpenVPN Mesh</h4>
+                <ul className="text-sm text-theme-secondary space-y-1">
+                  <li>• UDP is blocked (TCP fallback needed)</li>
+                  <li>• Existing OpenVPN infrastructure</li>
+                  <li>• Need configurable cryptography</li>
+                  <li>• Legacy client support required</li>
+                </ul>
+              </div>
             </div>
 
             {/* Access Control */}

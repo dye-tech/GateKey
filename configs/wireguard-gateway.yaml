@@ -1,0 +1,47 @@
+# GateKey WireGuard Gateway Agent Configuration
+# This file configures the WireGuard gateway agent.
+
+# Control plane URL
+control_plane_url: "https://gatex.example.com"
+
+# Gateway authentication token (obtain from control plane)
+token: "${GATEX_GATEWAY_TOKEN}"
+
+# Heartbeat interval
+heartbeat_interval: "30s"
+
+# Peer sync interval (how often to fetch authorized peers from control plane)
+peer_sync_interval: "10s"
+
+# Stats report interval (how often to report peer traffic stats)
+stats_report_interval: "5s"
+
+# Log level: debug, info, warn, error
+log_level: "info"
+
+# WireGuard configuration
+wireguard:
+  # Interface name
+  interface: "wg0"
+  # Listen port (default: from control plane provisioning)
+  listen_port: 51820
+  # Path to store interface config
+  config_path: "/etc/wireguard/wg0.conf"
+
+# Firewall configuration
+firewall:
+  # Firewall backend: nftables or iptables
+  backend: "nftables"
+  # Chain name for gatex rules
+  chain: "GATEX"
+  # Table name (nftables only)
+  table: "gatex"
+  # Default policy: accept or drop
+  default_policy: "drop"
+
+# Network configuration
+network:
+  # VPN interface name (same as wireguard.interface)
+  interface: "wg0"
+  # VPN network CIDR (populated from control plane during provisioning)
+  network: "172.31.255.0/24"

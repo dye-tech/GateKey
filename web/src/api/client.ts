@@ -32,6 +32,8 @@ export interface Gateway {
   vpnProtocol: string
   isActive: boolean
   lastHeartbeat: string | null
+  gatewayType?: GatewayType
+  wgPublicKey?: string
 }
 
 export interface AuthProvider {
@@ -98,6 +100,7 @@ export async function downloadConfig(configId: string): Promise<Blob> {
 
 // Admin Gateway API
 export type CryptoProfile = 'modern' | 'fips' | 'compatible'
+export type GatewayType = 'openvpn' | 'wireguard'
 
 export interface AdminGateway {
   id: string
@@ -117,6 +120,11 @@ export interface AdminGateway {
   lastHeartbeat: string | null
   createdAt: string
   updatedAt: string
+  // Gateway type (openvpn or wireguard)
+  gatewayType: GatewayType
+  // WireGuard-specific fields
+  wgPublicKey?: string
+  wgListenPort?: number
 }
 
 export interface RegisterGatewayRequest {
@@ -132,6 +140,10 @@ export interface RegisterGatewayRequest {
   push_dns?: boolean
   dns_servers?: string[]
   session_enabled?: boolean
+  // Gateway type (openvpn or wireguard)
+  gateway_type?: GatewayType
+  // WireGuard-specific fields
+  wg_listen_port?: number
 }
 
 export interface RegisterGatewayResponse {
@@ -142,6 +154,9 @@ export interface RegisterGatewayResponse {
   vpnProtocol: string
   token: string
   message: string
+  gatewayType?: GatewayType
+  wgPublicKey?: string
+  wgListenPort?: number
 }
 
 export async function getAdminGateways(): Promise<AdminGateway[]> {
@@ -940,6 +955,119 @@ export async function revokeConfig(configId: string): Promise<void> {
   await api.post(`/api/v1/configs/${configId}/revoke`)
 }
 
+// ==================== WireGuard Config Management ====================
+
+export interface WireGuardConfig {
+  id: string
+  gatewayId: string
+  gatewayName: string
+  fileName: string
+  clientPublicKey: string
+  assignedIp: string
+  expiresAt: string
+  createdAt: string
+  downloadedAt: string | null
+  isRevoked: boolean
+  revokedAt: string | null
+  revokedReason: string
+}
+
+export interface GeneratedWireGuardConfig {
+  id: string
+  fileName: string
+  gatewayName: string
+  expiresAt: string
+  downloadUrl: string
+  clientPublicKey: string
+  assignedIp: string
+}
+
+// Generate a new WireGuard config for a gateway
+export async function generateWireGuardConfig(gatewayId: string): Promise<GeneratedWireGuardConfig> {
+  const response = await api.post('/api/v1/wireguard/configs/generate', { gateway_id: gatewayId })
+  return {
+    id: response.data.id,
+    fileName: response.data.file_name,
+    gatewayName: response.data.gateway_name,
+    expiresAt: response.data.expires_at,
+    downloadUrl: response.data.download_url,
+    clientPublicKey: response.data.client_public_key,
+    assignedIp: response.data.assigned_ip,
+  }
+}
+
+// Download a WireGuard config file
+export async function downloadWireGuardConfig(configId: string): Promise<Blob> {
+  const response = await api.get(`/api/v1/wireguard/configs/download/${configId}`, {
+    responseType: 'blob',
+  })
+  return response.data
+}
+
+// Get current user's WireGuard configs
+export async function getUserWireGuardConfigs(): Promise<WireGuardConfig[]> {
+  const response = await api.get('/api/v1/wireguard/configs')
+  return (response.data.configs || []).map((cfg: Record<string, unknown>) => ({
+    id: cfg.id,
+    gatewayId: cfg.gateway_id,
+    gatewayName: cfg.gateway_name,
+    fileName: cfg.file_name,
+    clientPublicKey: cfg.client_public_key,
+    assignedIp: cfg.assigned_ip,
+    expiresAt: cfg.expires_at,
+    createdAt: cfg.created_at,
+    downloadedAt: cfg.downloaded_at,
+    isRevoked: cfg.revoked_at !== null,
+    revokedAt: cfg.revoked_at,
+    revokedReason: cfg.revocation_reason || '',
+  }))
+}
+
+// Revoke user's own WireGuard config
+export async function revokeWireGuardConfig(configId: string): Promise<void> {
+  await api.post(`/api/v1/wireguard/configs/${configId}/revoke`)
+}
+
+// Admin: List all WireGuard configs
+export interface AdminWireGuardConfig extends WireGuardConfig {
+  userId: string
+  userEmail: string
+  userName: string
+}
+
+export async function adminListWireGuardConfigs(): Promise<{ configs: AdminWireGuardConfig[]; total: number }> {
+  const response = await api.get('/api/v1/admin/wireguard/configs')
+  const configs = (response.data.configs || []).map((cfg: Record<string, unknown>) => ({
+    id: cfg.id,
+    userId: cfg.user_id,
+    userEmail: cfg.user_email,
+    userName: cfg.user_name,
+    gatewayId: cfg.gateway_id,
+    gatewayName: cfg.gateway_name,
+    fileName: cfg.file_name,
+    clientPublicKey: cfg.client_public_key,
+    assignedIp: cfg.assigned_ip,
+    expiresAt: cfg.expires_at,
+    createdAt: cfg.created_at,
+    downloadedAt: cfg.downloaded_at,
+    isRevoked: cfg.revoked_at !== null,
+    revokedAt: cfg.revoked_at,
+    revokedReason: cfg.revocation_reason || '',
+  }))
+  return { configs, total: response.data.total || configs.length }
+}
+
+// Admin: Revoke any WireGuard config
+export async function adminRevokeWireGuardConfig(configId: string, reason?: string): Promise<void> {
+  await api.post(`/api/v1/admin/wireguard/configs/${configId}/revoke`, { reason })
+}
+
+// Admin: Revoke all WireGuard configs for a user
+export async function adminRevokeUserWireGuardConfigs(userId: string, reason?: string): Promise<{ revokedCount: number }> {
+  const response = await api.post(`/api/v1/admin/users/${userId}/revoke-wireguard-configs`, { reason })
+  return { revokedCount: response.data.revoked_count || 0 }
+}
+
 // Admin: Revoke any config
 export async function adminRevokeConfig(configId: string, reason?: string): Promise<void> {
   await api.post(`/api/v1/admin/configs/${configId}/revoke`, { reason })
@@ -1087,12 +1215,15 @@ export interface MeshHub {
   id: string
   name: string
   description: string
+  gatewayType: GatewayType
   publicEndpoint: string
   vpnPort: number
   vpnProtocol: string
   vpnSubnet: string
   cryptoProfile: CryptoProfile
   tlsAuthEnabled: boolean
+  wgPublicKey?: string
+  wgListenPort?: number
   fullTunnelMode: boolean
   pushDns: boolean
   dnsServers: string[]
@@ -1115,12 +1246,14 @@ export interface MeshHubWithToken extends MeshHub {
 export interface CreateMeshHubRequest {
   name: string
   description?: string
+  gatewayType?: GatewayType  // 'openvpn' (default) or 'wireguard'
   publicEndpoint: string
   vpnPort?: number
   vpnProtocol?: string
   vpnSubnet?: string
   cryptoProfile?: CryptoProfile
   tlsAuthEnabled?: boolean
+  wgListenPort?: number  // WireGuard listen port (default: 51820)
   fullTunnelMode?: boolean
   pushDns?: boolean
   dnsServers?: string[]
@@ -1133,7 +1266,9 @@ export interface MeshSpoke {
   hubId: string
   name: string
   description: string
+  gatewayType: GatewayType
   localNetworks: string[]
+  wgPublicKey?: string
   fullTunnelMode: boolean
   pushDns: boolean
   dnsServers: string[]
@@ -1168,12 +1303,15 @@ export async function getMeshHubs(): Promise<MeshHub[]> {
     id: hub.id,
     name: hub.name,
     description: hub.description || '',
+    gatewayType: (hub.gatewayType as GatewayType) || 'openvpn',
     publicEndpoint: hub.publicEndpoint,
     vpnPort: hub.vpnPort,
     vpnProtocol: hub.vpnProtocol,
     vpnSubnet: hub.vpnSubnet,
     cryptoProfile: hub.cryptoProfile,
     tlsAuthEnabled: hub.tlsAuthEnabled,
+    wgPublicKey: hub.wgPublicKey as string | undefined,
+    wgListenPort: hub.wgListenPort as number | undefined,
     fullTunnelMode: hub.fullTunnelMode || false,
     pushDns: hub.pushDns || false,
     dnsServers: (hub.dnsServers as string[]) || [],
@@ -1196,12 +1334,15 @@ export async function getMeshHub(id: string): Promise<MeshHub> {
     id: hub.id,
     name: hub.name,
     description: hub.description || '',
+    gatewayType: hub.gatewayType || 'openvpn',
     publicEndpoint: hub.publicEndpoint,
     vpnPort: hub.vpnPort,
     vpnProtocol: hub.vpnProtocol,
     vpnSubnet: hub.vpnSubnet,
     cryptoProfile: hub.cryptoProfile,
     tlsAuthEnabled: hub.tlsAuthEnabled,
+    wgPublicKey: hub.wgPublicKey,
+    wgListenPort: hub.wgListenPort,
     fullTunnelMode: hub.fullTunnelMode || false,
     pushDns: hub.pushDns || false,
     dnsServers: hub.dnsServers || [],
@@ -1224,12 +1365,15 @@ export async function createMeshHub(req: CreateMeshHubRequest): Promise<MeshHubW
     id: hub.id,
     name: hub.name,
     description: hub.description || '',
+    gatewayType: hub.gatewayType || 'openvpn',
     publicEndpoint: hub.publicEndpoint,
     vpnPort: hub.vpnPort,
     vpnProtocol: hub.vpnProtocol,
     vpnSubnet: hub.vpnSubnet,
     cryptoProfile: hub.cryptoProfile,
     tlsAuthEnabled: hub.tlsAuthEnabled,
+    wgPublicKey: hub.wgPublicKey,
+    wgListenPort: hub.wgListenPort,
     fullTunnelMode: hub.fullTunnelMode || false,
     pushDns: hub.pushDns || false,
     dnsServers: hub.dnsServers || [],
@@ -1327,7 +1471,9 @@ export async function getMeshSpokes(hubId: string): Promise<MeshSpoke[]> {
     hubId: spoke.hubId,
     name: spoke.name,
     description: spoke.description || '',
+    gatewayType: (spoke.gatewayType as GatewayType) || 'openvpn',
     localNetworks: (spoke.localNetworks as string[]) || [],
+    wgPublicKey: spoke.wgPublicKey as string | undefined,
     fullTunnelMode: spoke.fullTunnelMode || false,
     pushDns: spoke.pushDns || false,
     dnsServers: (spoke.dnsServers as string[]) || [],
@@ -1353,7 +1499,9 @@ export async function getMeshSpoke(id: string): Promise<MeshSpoke> {
     hubId: spoke.hubId,
     name: spoke.name,
     description: spoke.description || '',
+    gatewayType: spoke.gatewayType || 'openvpn',
     localNetworks: spoke.localNetworks || [],
+    wgPublicKey: spoke.wgPublicKey,
     fullTunnelMode: spoke.fullTunnelMode || false,
     pushDns: spoke.pushDns || false,
     dnsServers: spoke.dnsServers || [],
@@ -1379,7 +1527,9 @@ export async function createMeshSpoke(hubId: string, req: CreateMeshSpokeRequest
     hubId: spoke.hubId,
     name: spoke.name,
     description: spoke.description || '',
+    gatewayType: spoke.gatewayType || 'openvpn',
     localNetworks: spoke.localNetworks || [],
+    wgPublicKey: spoke.wgPublicKey,
     fullTunnelMode: spoke.fullTunnelMode || false,
     pushDns: spoke.pushDns || false,
     dnsServers: spoke.dnsServers || [],
@@ -1821,6 +1971,7 @@ export interface TopologyMeshHub {
   lastHeartbeat: string | null
   connectedSpokes: number
   connectedUsers: number
+  gatewayType: string // 'openvpn' or 'wireguard'
 }
 
 export interface TopologyMeshSpoke {
@@ -1832,6 +1983,7 @@ export interface TopologyMeshSpoke {
   status: string
   lastSeen: string | null
   remoteIp: string
+  gatewayType: string // 'openvpn' or 'wireguard'
 }
 
 export interface TopologyConnection {
