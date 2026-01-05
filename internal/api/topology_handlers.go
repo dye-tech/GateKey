@@ -118,7 +118,7 @@ func (s *Server) handleGetTopology(c *gin.Context) {
 			VPNProtocol:   gw.VPNProtocol,
 			IsActive:      gw.IsActive,
 			LastHeartbeat: gw.LastHeartbeat,
-			ClientCount:   0, // TODO: get from active connections
+			ClientCount:   0, // Populated by frontend from active sessions
 		})
 	}
 

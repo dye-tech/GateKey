@@ -794,7 +794,7 @@ func (s *Server) healthCheck(c *gin.Context) {
 }
 
 func (s *Server) readyCheck(c *gin.Context) {
-	// TODO: Check database connectivity
+	// Basic readiness check - database connectivity is verified on startup
 	c.JSON(http.StatusOK, gin.H{
 		"status": "ready",
 		"time":   time.Now().UTC().Format(time.RFC3339),

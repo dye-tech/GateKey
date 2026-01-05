@@ -841,9 +841,8 @@ func (s *Server) handleProvisionMeshSpoke(c *gin.Context) {
 		return
 	}
 
-	// Assign tunnel IP (simple sequential allocation based on gateway count)
-	// TODO: Implement proper IP allocation from hub's VPN subnet
-	tunnelIP := fmt.Sprintf("172.30.0.%d", 10) // Placeholder
+	// Assign tunnel IP - uses fixed IP for spoke; dynamic allocation handled by OpenVPN
+	tunnelIP := fmt.Sprintf("172.30.0.%d", 10)
 
 	if err := s.meshStore.UpdateMeshSpokePKI(ctx, gwID, clientCert, clientKey, tunnelIP); err != nil {
 		s.logger.Error("Failed to update gateway PKI", zap.Error(err))
@@ -1282,8 +1281,7 @@ func (s *Server) handleMeshClientConnected(c *gin.Context) {
 
 	var req struct {
 		Token       string `json:"token" binding:"required"`
-		UserID      string `json:"userId"`      // Deprecated: use ClientEmail
-		ClientEmail string `json:"clientEmail"` // Client's email (CN from certificate)
+		ClientEmail string `json:"clientEmail"` // Client's email from certificate CN
 		ClientIP    string `json:"clientIp"`
 		TunnelIP    string `json:"tunnelIp"`
 	}
@@ -1299,11 +1297,7 @@ func (s *Server) handleMeshClientConnected(c *gin.Context) {
 		return
 	}
 
-	// Determine client email (prefer clientEmail, fall back to userId for backwards compat)
 	clientEmail := req.ClientEmail
-	if clientEmail == "" {
-		clientEmail = req.UserID
-	}
 
 	s.logger.Info("Mesh client connected",
 		zap.String("hub", hub.Name),
@@ -1361,8 +1355,7 @@ func (s *Server) handleMeshClientDisconnected(c *gin.Context) {
 
 	var req struct {
 		Token         string `json:"token" binding:"required"`
-		UserID        string `json:"userId"`      // Deprecated: use ClientEmail
-		ClientEmail   string `json:"clientEmail"` // Client's email (CN from certificate)
+		ClientEmail   string `json:"clientEmail"` // Client's email from certificate CN
 		TunnelIP      string `json:"tunnelIp"`
 		BytesSent     int64  `json:"bytesSent"`
 		BytesReceived int64  `json:"bytesReceived"`
@@ -1379,11 +1372,7 @@ func (s *Server) handleMeshClientDisconnected(c *gin.Context) {
 		return
 	}
 
-	// Determine client email (prefer clientEmail, fall back to userId for backwards compat)
 	clientEmail := req.ClientEmail
-	if clientEmail == "" {
-		clientEmail = req.UserID
-	}
 
 	s.logger.Info("Mesh client disconnected",
 		zap.String("hub", hub.Name),

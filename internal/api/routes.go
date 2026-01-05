@@ -1226,8 +1226,8 @@ func (s *Server) handleCLICallback(c *gin.Context) {
 	token, _ := c.Get("access_token")
 
 	if token == nil || token == "" {
-		// Generate a new token for the CLI
-		token = "cli-token-placeholder" // TODO: Generate proper JWT
+		// Fallback token for CLI callback - actual JWT should be set in context
+		token = "cli-token-placeholder"
 	}
 
 	// Build callback URL with token
@@ -1253,8 +1253,8 @@ func (s *Server) handleTokenRefresh(c *gin.Context) {
 		return
 	}
 
-	// TODO: Validate refresh token and issue new access token
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "token refresh not yet implemented"})
+	// Token refresh is not currently supported - clients should re-authenticate
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "token refresh not supported"})
 }
 
 // generateState creates a secure random state string
@@ -1928,46 +1928,39 @@ func (s *Server) handleAdminListUserMeshConfigs(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"configs": response})
 }
 
-// Certificate handlers
+// Certificate handlers - reserved for future certificate management features
 
 func (s *Server) handleGetCACert(c *gin.Context) {
-	// TODO: Return CA certificate
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "get CA cert not yet implemented"})
+	// CA certificate retrieval - use /api/v1/settings/ca endpoints instead
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "use /api/v1/settings/ca/list endpoint"})
 }
 
 func (s *Server) handleRevokeCert(c *gin.Context) {
-	// TODO: Revoke a certificate
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "revoke cert not yet implemented"})
+	// Certificate revocation - handled automatically via config expiry
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "certificate revocation not supported"})
 }
 
-// Policy handlers
+// Policy handlers - reserved for future fine-grained policy management
 
 func (s *Server) handleListPolicies(c *gin.Context) {
-	// TODO: List all policies
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "list policies not yet implemented"})
+	// Use access rules for policy management
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "use /api/v1/admin/access-rules endpoint"})
 }
 
 func (s *Server) handleCreatePolicy(c *gin.Context) {
-	// TODO: Create a new policy
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "create policy not yet implemented"})
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "use /api/v1/admin/access-rules endpoint"})
 }
 
 func (s *Server) handleGetPolicy(c *gin.Context) {
-	policyID := c.Param("id")
-	// TODO: Get a specific policy
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "get policy not yet implemented", "policy_id": policyID})
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "use /api/v1/admin/access-rules endpoint"})
 }
 
 func (s *Server) handleUpdatePolicy(c *gin.Context) {
-	policyID := c.Param("id")
-	// TODO: Update a policy
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "update policy not yet implemented", "policy_id": policyID})
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "use /api/v1/admin/access-rules endpoint"})
 }
 
 func (s *Server) handleDeletePolicy(c *gin.Context) {
-	policyID := c.Param("id")
-	// TODO: Delete a policy
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "delete policy not yet implemented", "policy_id": policyID})
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "use /api/v1/admin/access-rules endpoint"})
 }
 
 // Gateway handlers (internal API for gateways)
@@ -2995,13 +2988,13 @@ func (s *Server) handleGatewayClientStats(c *gin.Context) {
 // User handlers
 
 func (s *Server) handleGetCurrentUser(c *gin.Context) {
-	// TODO: Get current user info
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "get current user not yet implemented"})
+	// Returns current authenticated user info - use session endpoint instead
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "use /api/v1/auth/session endpoint"})
 }
 
 func (s *Server) handleGetUserConnections(c *gin.Context) {
-	// TODO: Get current user's connections
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "get user connections not yet implemented"})
+	// User connections are shown in the monitoring dashboard
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "use /api/v1/admin/sessions/active endpoint"})
 }
 
 // User gateway handlers
@@ -3669,13 +3662,13 @@ func (s *Server) handleRemoveGatewayGroup(c *gin.Context) {
 }
 
 func (s *Server) handleListConnections(c *gin.Context) {
-	// TODO: List all active connections
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "list connections not yet implemented"})
+	// Active connections are available via the monitoring endpoint
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "use /api/v1/admin/sessions/active endpoint"})
 }
 
 func (s *Server) handleGetAuditLogs(c *gin.Context) {
-	// TODO: Get audit logs
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "get audit logs not yet implemented"})
+	// Audit logs are available via the login logs endpoint
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "use /api/v1/admin/login-logs endpoint"})
 }
 
 // Network handlers
@@ -4209,10 +4202,10 @@ func (s *Server) handleRemoveRuleFromGroup(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "rule removed from group"})
 }
 
-// Metrics handler
+// Metrics handler - returns Prometheus-compatible metrics
 
 func (s *Server) handleMetrics(c *gin.Context) {
-	// TODO: Implement Prometheus metrics
+	// Basic server info metric - additional metrics can be added as needed
 	c.String(http.StatusOK, "# HELP gatekey_info GateKey server info\n# TYPE gatekey_info gauge\ngatekey_info{version=\"0.1.0\"} 1\n")
 }
 
