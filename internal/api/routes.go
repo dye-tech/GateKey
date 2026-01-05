@@ -3122,13 +3122,12 @@ func (s *Server) handleListGateways(c *gin.Context) {
 		gwData := gin.H{
 			"id":             gw.ID,
 			"name":           gw.Name,
+			"gatewayType":    gw.GatewayType,
 			"hostname":       gw.Hostname,
 			"publicIp":       gw.PublicIP,
 			"vpnPort":        gw.VPNPort,
 			"vpnProtocol":    gw.VPNProtocol,
-			"cryptoProfile":  gw.CryptoProfile,
 			"vpnSubnet":      gw.VPNSubnet,
-			"tlsAuthEnabled": gw.TLSAuthEnabled,
 			"fullTunnelMode": gw.FullTunnelMode,
 			"pushDns":        gw.PushDNS,
 			"dnsServers":     gw.DNSServers,
@@ -3136,6 +3135,19 @@ func (s *Server) handleListGateways(c *gin.Context) {
 			"createdAt":      gw.CreatedAt.Format(time.RFC3339),
 			"updatedAt":      gw.UpdatedAt.Format(time.RFC3339),
 		}
+
+		// Add type-specific fields
+		if gw.GatewayType == db.GatewayTypeOpenVPN || gw.GatewayType == "" {
+			gwData["cryptoProfile"] = gw.CryptoProfile
+			gwData["tlsAuthEnabled"] = gw.TLSAuthEnabled
+		}
+		if gw.GatewayType == db.GatewayTypeWireGuard {
+			gwData["wgListenPort"] = gw.WGListenPort
+			if gw.WGPublicKey != "" {
+				gwData["wgPublicKey"] = gw.WGPublicKey
+			}
+		}
+
 		if gw.LastHeartbeat != nil {
 			gwData["lastHeartbeat"] = gw.LastHeartbeat.Format(time.RFC3339)
 		}
@@ -3149,16 +3161,18 @@ func (s *Server) handleRegisterGateway(c *gin.Context) {
 	// Register a new gateway (admin only)
 	var req struct {
 		Name           string   `json:"name" binding:"required"`
+		GatewayType    string   `json:"gateway_type"`     // "openvpn" or "wireguard" (default: openvpn)
 		Hostname       string   `json:"hostname"`
 		PublicIP       string   `json:"public_ip"`
 		VPNPort        int      `json:"vpn_port"`
 		VPNProtocol    string   `json:"vpn_protocol"`
-		CryptoProfile  string   `json:"crypto_profile"`   // modern, fips, or compatible
+		CryptoProfile  string   `json:"crypto_profile"`   // modern, fips, or compatible (OpenVPN only)
 		VPNSubnet      string   `json:"vpn_subnet"`       // VPN client subnet (e.g., "10.8.0.0/24")
-		TLSAuthEnabled *bool    `json:"tls_auth_enabled"` // Enable TLS-Auth (default: true)
+		TLSAuthEnabled *bool    `json:"tls_auth_enabled"` // Enable TLS-Auth (default: true, OpenVPN only)
 		FullTunnelMode *bool    `json:"full_tunnel_mode"` // Route all traffic through VPN (default: false)
 		PushDNS        *bool    `json:"push_dns"`         // Push DNS servers to clients (default: false)
 		DNSServers     []string `json:"dns_servers"`      // DNS server IPs to push
+		WGListenPort   int      `json:"wg_listen_port"`   // WireGuard listen port (default: 51820)
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -3172,9 +3186,25 @@ func (s *Server) handleRegisterGateway(c *gin.Context) {
 		return
 	}
 
-	// Default values
+	// Default gateway type to OpenVPN
+	gatewayType := req.GatewayType
+	if gatewayType == "" {
+		gatewayType = db.GatewayTypeOpenVPN
+	}
+
+	// Validate gateway type
+	if gatewayType != db.GatewayTypeOpenVPN && gatewayType != db.GatewayTypeWireGuard {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid gateway_type: must be 'openvpn' or 'wireguard'"})
+		return
+	}
+
+	// Default values based on gateway type
 	if req.VPNPort == 0 {
-		req.VPNPort = 1194
+		if gatewayType == db.GatewayTypeWireGuard {
+			req.VPNPort = db.DefaultWGListenPort
+		} else {
+			req.VPNPort = 1194
+		}
 	}
 	if req.VPNProtocol == "" {
 		req.VPNProtocol = "udp"
@@ -3188,20 +3218,33 @@ func (s *Server) handleRegisterGateway(c *gin.Context) {
 	if req.DNSServers == nil {
 		req.DNSServers = []string{}
 	}
-	// Validate crypto profile is valid
-	switch req.CryptoProfile {
-	case db.CryptoProfileModern, db.CryptoProfileFIPS, db.CryptoProfileCompatible:
-		// Valid
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid crypto_profile: must be 'modern', 'fips', or 'compatible'"})
-		return
+	if req.WGListenPort == 0 {
+		req.WGListenPort = db.DefaultWGListenPort
 	}
 
-	// Validate crypto profile is allowed by system settings
 	ctx := c.Request.Context()
-	if err := s.validateCryptoProfileAllowed(ctx, req.CryptoProfile); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+
+	// OpenVPN-specific validation
+	if gatewayType == db.GatewayTypeOpenVPN {
+		// Validate crypto profile is valid
+		switch req.CryptoProfile {
+		case db.CryptoProfileModern, db.CryptoProfileFIPS, db.CryptoProfileCompatible:
+			// Valid
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid crypto_profile: must be 'modern', 'fips', or 'compatible'"})
+			return
+		}
+
+		// Validate crypto profile is allowed by system settings
+		if err := s.validateCryptoProfileAllowed(ctx, req.CryptoProfile); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	// WireGuard-specific: force UDP protocol
+	if gatewayType == db.GatewayTypeWireGuard {
+		req.VPNProtocol = "udp"
 	}
 
 	// Generate authentication token
@@ -3212,10 +3255,13 @@ func (s *Server) handleRegisterGateway(c *gin.Context) {
 		return
 	}
 
-	// Default TLS Auth to true if not specified
+	// Default TLS Auth to true if not specified (OpenVPN only)
 	tlsAuthEnabled := true
 	if req.TLSAuthEnabled != nil {
 		tlsAuthEnabled = *req.TLSAuthEnabled
+	}
+	if gatewayType == db.GatewayTypeWireGuard {
+		tlsAuthEnabled = false // Not applicable for WireGuard
 	}
 
 	// Default Full Tunnel Mode to false if not specified
@@ -3232,6 +3278,7 @@ func (s *Server) handleRegisterGateway(c *gin.Context) {
 
 	gateway := &db.Gateway{
 		Name:           req.Name,
+		GatewayType:    gatewayType,
 		Hostname:       req.Hostname,
 		PublicIP:       req.PublicIP,
 		VPNPort:        req.VPNPort,
@@ -3242,6 +3289,7 @@ func (s *Server) handleRegisterGateway(c *gin.Context) {
 		FullTunnelMode: fullTunnelMode,
 		PushDNS:        pushDNS,
 		DNSServers:     req.DNSServers,
+		WGListenPort:   req.WGListenPort,
 		Token:          token,
 	}
 
@@ -3265,22 +3313,36 @@ func (s *Server) handleRegisterGateway(c *gin.Context) {
 
 	s.logger.Info("Gateway registered",
 		zap.String("name", req.Name),
+		zap.String("type", gatewayType),
 		zap.String("hostname", req.Hostname))
 
-	c.JSON(http.StatusCreated, gin.H{
+	response := gin.H{
 		"id":             createdGateway.ID,
 		"name":           createdGateway.Name,
+		"gatewayType":    createdGateway.GatewayType,
 		"hostname":       createdGateway.Hostname,
 		"vpnPort":        createdGateway.VPNPort,
 		"vpnProtocol":    createdGateway.VPNProtocol,
-		"cryptoProfile":  createdGateway.CryptoProfile,
-		"tlsAuthEnabled": createdGateway.TLSAuthEnabled,
+		"vpnSubnet":      createdGateway.VPNSubnet,
 		"fullTunnelMode": createdGateway.FullTunnelMode,
 		"pushDns":        createdGateway.PushDNS,
 		"dnsServers":     createdGateway.DNSServers,
 		"token":          token, // Only returned on creation
 		"message":        "Gateway registered successfully. Save the token - it will not be shown again.",
-	})
+	}
+
+	// Add type-specific fields
+	if gatewayType == db.GatewayTypeOpenVPN {
+		response["cryptoProfile"] = createdGateway.CryptoProfile
+		response["tlsAuthEnabled"] = createdGateway.TLSAuthEnabled
+	} else if gatewayType == db.GatewayTypeWireGuard {
+		response["wgListenPort"] = createdGateway.WGListenPort
+		if createdGateway.WGPublicKey != "" {
+			response["wgPublicKey"] = createdGateway.WGPublicKey
+		}
+	}
+
+	c.JSON(http.StatusCreated, response)
 }
 
 func (s *Server) handleDeleteGateway(c *gin.Context) {

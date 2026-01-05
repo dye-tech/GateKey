@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
-import { getGateways, generateConfig, getUserMeshHubs, generateMeshClientConfig, Gateway, GeneratedConfig, UserMeshHub } from '../api/client'
+import { getGateways, generateConfig, generateWireGuardConfig, getUserMeshHubs, generateMeshClientConfig, Gateway, GeneratedConfig, GeneratedWireGuardConfig, UserMeshHub } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 
 type ConnectionType = 'gateways' | 'mesh'
@@ -16,6 +16,7 @@ export default function Connect() {
   const [selectedMeshHub, setSelectedMeshHub] = useState<UserMeshHub | null>(null)
   const [generating, setGenerating] = useState(false)
   const [generatedConfig, setGeneratedConfig] = useState<GeneratedConfig | null>(null)
+  const [generatedWgConfig, setGeneratedWgConfig] = useState<GeneratedWireGuardConfig | null>(null)
   const [meshConfig, setMeshConfig] = useState<{ hubname: string; config: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
@@ -74,8 +75,13 @@ export default function Connect() {
     setError(null)
 
     try {
-      const config = await generateConfig(selectedGateway.id, cliCallbackUrl || undefined)
-      setGeneratedConfig(config)
+      if (selectedGateway.gatewayType === 'wireguard') {
+        const config = await generateWireGuardConfig(selectedGateway.id)
+        setGeneratedWgConfig(config)
+      } else {
+        const config = await generateConfig(selectedGateway.id, cliCallbackUrl || undefined)
+        setGeneratedConfig(config)
+      }
     } catch (err) {
       setError('Failed to generate configuration')
     } finally {
@@ -118,6 +124,15 @@ export default function Connect() {
     window.location.href = generatedConfig.downloadUrl
     setTimeout(() => {
       setGeneratedConfig(null)
+      setShowManualDownload(false)
+    }, 1000)
+  }
+
+  function handleWgDownload() {
+    if (!generatedWgConfig) return
+    window.location.href = generatedWgConfig.downloadUrl
+    setTimeout(() => {
+      setGeneratedWgConfig(null)
       setShowManualDownload(false)
     }, 1000)
   }
@@ -259,7 +274,16 @@ export default function Connect() {
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-theme-primary">{gateway.name}</p>
+                        <div className="flex items-center space-x-2">
+                          <p className="font-medium text-theme-primary">{gateway.name}</p>
+                          <span className={`px-1.5 py-0.5 text-xs font-medium rounded ${
+                            gateway.gatewayType === 'wireguard'
+                              ? 'bg-purple-600 text-white'
+                              : 'bg-blue-600 text-white'
+                          }`}>
+                            {gateway.gatewayType === 'wireguard' ? 'WG' : 'OVPN'}
+                          </span>
+                        </div>
                         <p className="text-sm text-theme-tertiary">{gateway.hostname || gateway.publicIp}</p>
                       </div>
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${
@@ -271,7 +295,7 @@ export default function Connect() {
                       </span>
                     </div>
                     <div className="mt-2 text-xs text-theme-muted">
-                      {gateway.vpnProtocol.toUpperCase()}:{gateway.vpnPort}
+                      {gateway.gatewayType === 'wireguard' ? 'UDP' : gateway.vpnProtocol.toUpperCase()}:{gateway.vpnPort}
                     </div>
                   </button>
                 ))}
@@ -376,7 +400,11 @@ export default function Connect() {
               >
                 <div>
                   <h2 className="text-lg font-semibold text-theme-primary">Manual Configuration</h2>
-                  <p className="text-sm text-theme-tertiary">Download an OpenVPN config file for use with any OpenVPN client</p>
+                  <p className="text-sm text-theme-tertiary">
+                    {selectedGateway?.gatewayType === 'wireguard'
+                      ? 'Download a WireGuard config file for use with any WireGuard client'
+                      : 'Download an OpenVPN config file for use with any OpenVPN client'}
+                  </p>
                 </div>
                 <svg
                   className={`w-5 h-5 text-theme-muted transition-transform ${showManualDownload ? 'rotate-180' : ''}`}
@@ -405,7 +433,16 @@ export default function Connect() {
 
                       <div className="flex items-center justify-between p-3 bg-theme-tertiary rounded-lg">
                         <div>
-                          <p className="font-medium text-theme-primary">{selectedGateway.name}</p>
+                          <div className="flex items-center space-x-2">
+                            <p className="font-medium text-theme-primary">{selectedGateway.name}</p>
+                            <span className={`px-1.5 py-0.5 text-xs font-medium rounded ${
+                              selectedGateway.gatewayType === 'wireguard'
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-blue-600 text-white'
+                            }`}>
+                              {selectedGateway.gatewayType === 'wireguard' ? 'WG' : 'OVPN'}
+                            </span>
+                          </div>
                           <p className="text-sm text-theme-tertiary">{selectedGateway.hostname || selectedGateway.publicIp}</p>
                         </div>
                         <button
@@ -432,33 +469,62 @@ export default function Connect() {
                         </button>
                       </div>
 
-                      {/* Platform-specific instructions */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
-                        <div>
-                          <h3 className="font-medium text-theme-primary mb-2">Windows</h3>
-                          <ol className="text-sm text-theme-secondary space-y-1">
-                            <li>1. Download OpenVPN GUI</li>
-                            <li>2. Import the .ovpn file</li>
-                            <li>3. Right-click tray icon &rarr; Connect</li>
-                          </ol>
+                      {/* Platform-specific instructions - varies by gateway type */}
+                      {selectedGateway.gatewayType === 'wireguard' ? (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+                          <div>
+                            <h3 className="font-medium text-theme-primary mb-2">Windows</h3>
+                            <ol className="text-sm text-theme-secondary space-y-1">
+                              <li>1. Download WireGuard for Windows</li>
+                              <li>2. Import the .conf file</li>
+                              <li>3. Click Activate</li>
+                            </ol>
+                          </div>
+                          <div>
+                            <h3 className="font-medium text-theme-primary mb-2">macOS</h3>
+                            <ol className="text-sm text-theme-secondary space-y-1">
+                              <li>1. Install WireGuard from App Store</li>
+                              <li>2. Import the .conf file</li>
+                              <li>3. Click Activate</li>
+                            </ol>
+                          </div>
+                          <div>
+                            <h3 className="font-medium text-theme-primary mb-2">Linux</h3>
+                            <ol className="text-sm text-theme-secondary space-y-1">
+                              <li>1. Install wireguard-tools</li>
+                              <li>2. Run: sudo wg-quick up config.conf</li>
+                              <li>3. Or import to NetworkManager</li>
+                            </ol>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="font-medium text-theme-primary mb-2">macOS</h3>
-                          <ol className="text-sm text-theme-secondary space-y-1">
-                            <li>1. Install Tunnelblick or OpenVPN Connect</li>
-                            <li>2. Double-click the .ovpn file</li>
-                            <li>3. Click Connect</li>
-                          </ol>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+                          <div>
+                            <h3 className="font-medium text-theme-primary mb-2">Windows</h3>
+                            <ol className="text-sm text-theme-secondary space-y-1">
+                              <li>1. Download OpenVPN GUI</li>
+                              <li>2. Import the .ovpn file</li>
+                              <li>3. Right-click tray icon &rarr; Connect</li>
+                            </ol>
+                          </div>
+                          <div>
+                            <h3 className="font-medium text-theme-primary mb-2">macOS</h3>
+                            <ol className="text-sm text-theme-secondary space-y-1">
+                              <li>1. Install Tunnelblick or OpenVPN Connect</li>
+                              <li>2. Double-click the .ovpn file</li>
+                              <li>3. Click Connect</li>
+                            </ol>
+                          </div>
+                          <div>
+                            <h3 className="font-medium text-theme-primary mb-2">Linux</h3>
+                            <ol className="text-sm text-theme-secondary space-y-1">
+                              <li>1. Install openvpn package</li>
+                              <li>2. Run: sudo openvpn config.ovpn</li>
+                              <li>3. Or import to NetworkManager</li>
+                            </ol>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="font-medium text-theme-primary mb-2">Linux</h3>
-                          <ol className="text-sm text-theme-secondary space-y-1">
-                            <li>1. Install openvpn package</li>
-                            <li>2. Run: sudo openvpn config.ovpn</li>
-                            <li>3. Or import to NetworkManager</li>
-                          </ol>
-                        </div>
-                      </div>
+                      )}
                     </div>
                   ) : (
                     <p className="text-theme-tertiary text-center py-4">
@@ -823,6 +889,59 @@ export default function Connect() {
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WireGuard generated config modal */}
+      {generatedWgConfig && (
+        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+          <div className="bg-theme-card rounded-lg shadow-xl max-w-md border border-theme w-full mx-4 p-6">
+            <div className="text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-purple-100 dark:bg-purple-900/30 mb-4">
+                <svg className="h-6 w-6 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-theme-primary mb-2">
+                WireGuard Configuration Ready
+              </h3>
+              <p className="text-theme-tertiary mb-4">
+                Your WireGuard configuration has been generated.
+              </p>
+              <div className="bg-theme-tertiary rounded-lg p-4 mb-4 text-left">
+                <p className="text-sm text-theme-secondary">
+                  <strong>File:</strong> {generatedWgConfig.fileName}
+                </p>
+                <p className="text-sm text-theme-secondary">
+                  <strong>Gateway:</strong> {generatedWgConfig.gatewayName}
+                </p>
+                <p className="text-sm text-theme-secondary">
+                  <strong>Assigned IP:</strong> {generatedWgConfig.assignedIp}
+                </p>
+                <p className="text-sm text-theme-secondary">
+                  <strong>Expires:</strong> {new Date(generatedWgConfig.expiresAt).toLocaleString()}
+                </p>
+              </div>
+
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setGeneratedWgConfig(null)}
+                  className="flex-1 btn btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleWgDownload}
+                  className="flex-1 btn btn-primary"
+                >
+                  <svg className="w-4 h-4 mr-2 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Download
+                </button>
+              </div>
             </div>
           </div>
         </div>

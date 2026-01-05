@@ -20,21 +20,26 @@ var (
 type Gateway struct {
 	ID             string
 	Name           string
+	GatewayType    string   // "openvpn" or "wireguard"
 	Hostname       string
 	PublicIP       string
 	VPNPort        int
 	VPNProtocol    string
-	CryptoProfile  string   // "modern", "fips", or "compatible"
+	CryptoProfile  string   // "modern", "fips", or "compatible" (OpenVPN only)
 	VPNSubnet      string   // VPN client subnet (e.g., "10.8.0.0/24")
-	TLSAuthEnabled bool     // Enable TLS-Auth for additional security
-	TLSAuthKey     string   // TLS-Auth static key (generated during provisioning)
+	TLSAuthEnabled bool     // Enable TLS-Auth for additional security (OpenVPN only)
+	TLSAuthKey     string   // TLS-Auth static key (generated during provisioning) (OpenVPN only)
 	FullTunnelMode bool     // When true, route all traffic through VPN (push 0.0.0.0/0)
 	PushDNS        bool     // When true, push DNS servers to VPN clients
 	DNSServers     []string // DNS server IPs to push to clients
 	ConfigVersion  string   // Hash of config settings - changes trigger gateway reprovision
-	Token          string
-	PublicKey      string
-	IsActive       bool
+	// WireGuard-specific fields
+	WGPrivateKey string // WireGuard private key (WireGuard only)
+	WGPublicKey  string // WireGuard public key (WireGuard only)
+	WGListenPort int    // WireGuard listen port (default 51820) (WireGuard only)
+	Token        string
+	PublicKey    string
+	IsActive     bool
 	LastHeartbeat  *time.Time
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
@@ -42,6 +47,15 @@ type Gateway struct {
 
 // Default VPN subnet if not specified
 const DefaultVPNSubnet = "172.31.255.0/24"
+
+// Default WireGuard listen port
+const DefaultWGListenPort = 51820
+
+// GatewayType constants
+const (
+	GatewayTypeOpenVPN   = "openvpn"
+	GatewayTypeWireGuard = "wireguard"
+)
 
 // CryptoProfile constants
 const (
@@ -71,7 +85,12 @@ func GenerateToken() (string, error) {
 
 // CreateGateway registers a new gateway
 func (s *GatewayStore) CreateGateway(ctx context.Context, gw *Gateway) error {
-	// Default to modern crypto profile if not specified
+	// Default gateway type to OpenVPN for backward compatibility
+	gatewayType := gw.GatewayType
+	if gatewayType == "" {
+		gatewayType = GatewayTypeOpenVPN
+	}
+	// Default to modern crypto profile if not specified (OpenVPN only)
 	cryptoProfile := gw.CryptoProfile
 	if cryptoProfile == "" {
 		cryptoProfile = CryptoProfileModern
@@ -81,11 +100,16 @@ func (s *GatewayStore) CreateGateway(ctx context.Context, gw *Gateway) error {
 	if vpnSubnet == "" {
 		vpnSubnet = DefaultVPNSubnet
 	}
+	// Default WireGuard listen port
+	wgListenPort := gw.WGListenPort
+	if wgListenPort == 0 {
+		wgListenPort = DefaultWGListenPort
+	}
 	// Use NULLIF to convert empty string to NULL for hostname and inet type
 	_, err := s.db.Pool.Exec(ctx, `
-		INSERT INTO gateways (name, hostname, public_ip, vpn_port, vpn_protocol, crypto_profile, vpn_subnet, tls_auth_enabled, full_tunnel_mode, push_dns, dns_servers, token, public_key)
-		VALUES ($1, NULLIF($2, ''), NULLIF($3, '')::inet, $4, $5, $6, $7::cidr, $8, $9, $10, $11, $12, $13)
-	`, gw.Name, gw.Hostname, gw.PublicIP, gw.VPNPort, gw.VPNProtocol, cryptoProfile, vpnSubnet, gw.TLSAuthEnabled, gw.FullTunnelMode, gw.PushDNS, gw.DNSServers, gw.Token, gw.PublicKey)
+		INSERT INTO gateways (name, gateway_type, hostname, public_ip, vpn_port, vpn_protocol, crypto_profile, vpn_subnet, tls_auth_enabled, full_tunnel_mode, push_dns, dns_servers, wg_private_key, wg_public_key, wg_listen_port, token, public_key)
+		VALUES ($1, $2, NULLIF($3, ''), NULLIF($4, '')::inet, $5, $6, $7, $8::cidr, $9, $10, $11, $12, NULLIF($13, ''), NULLIF($14, ''), $15, $16, $17)
+	`, gw.Name, gatewayType, gw.Hostname, gw.PublicIP, gw.VPNPort, gw.VPNProtocol, cryptoProfile, vpnSubnet, gw.TLSAuthEnabled, gw.FullTunnelMode, gw.PushDNS, gw.DNSServers, gw.WGPrivateKey, gw.WGPublicKey, wgListenPort, gw.Token, gw.PublicKey)
 	if err != nil && strings.Contains(err.Error(), "duplicate key") {
 		return ErrGatewayExists
 	}
@@ -95,11 +119,12 @@ func (s *GatewayStore) CreateGateway(ctx context.Context, gw *Gateway) error {
 // GetGateway retrieves a gateway by ID
 func (s *GatewayStore) GetGateway(ctx context.Context, id string) (*Gateway, error) {
 	var gw Gateway
-	var hostname, publicIP, vpnSubnet, tlsAuthKey *string
+	var hostname, publicIP, vpnSubnet, tlsAuthKey, wgPrivateKey, wgPublicKey *string
+	var wgListenPort *int
 	err := s.db.Pool.QueryRow(ctx, `
-		SELECT id, name, hostname, host(public_ip), vpn_port, vpn_protocol, crypto_profile, vpn_subnet::text, tls_auth_enabled, COALESCE(tls_auth_key, ''), full_tunnel_mode, push_dns, dns_servers, COALESCE(config_version, ''), token, public_key, is_active, last_heartbeat, created_at, updated_at
+		SELECT id, name, COALESCE(gateway_type, 'openvpn'), hostname, host(public_ip), vpn_port, vpn_protocol, crypto_profile, vpn_subnet::text, tls_auth_enabled, COALESCE(tls_auth_key, ''), full_tunnel_mode, push_dns, dns_servers, COALESCE(config_version, ''), wg_private_key, wg_public_key, wg_listen_port, token, public_key, is_active, last_heartbeat, created_at, updated_at
 		FROM gateways WHERE id = $1
-	`, id).Scan(&gw.ID, &gw.Name, &hostname, &publicIP, &gw.VPNPort, &gw.VPNProtocol, &gw.CryptoProfile, &vpnSubnet, &gw.TLSAuthEnabled, &gw.TLSAuthKey, &gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers, &gw.ConfigVersion, &gw.Token, &gw.PublicKey, &gw.IsActive, &gw.LastHeartbeat, &gw.CreatedAt, &gw.UpdatedAt)
+	`, id).Scan(&gw.ID, &gw.Name, &gw.GatewayType, &hostname, &publicIP, &gw.VPNPort, &gw.VPNProtocol, &gw.CryptoProfile, &vpnSubnet, &gw.TLSAuthEnabled, &gw.TLSAuthKey, &gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers, &gw.ConfigVersion, &wgPrivateKey, &wgPublicKey, &wgListenPort, &gw.Token, &gw.PublicKey, &gw.IsActive, &gw.LastHeartbeat, &gw.CreatedAt, &gw.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, ErrGatewayNotFound
 	}
@@ -116,6 +141,17 @@ func (s *GatewayStore) GetGateway(ctx context.Context, id string) (*Gateway, err
 		gw.VPNSubnet = *vpnSubnet
 	} else {
 		gw.VPNSubnet = DefaultVPNSubnet
+	}
+	if wgPrivateKey != nil {
+		gw.WGPrivateKey = *wgPrivateKey
+	}
+	if wgPublicKey != nil {
+		gw.WGPublicKey = *wgPublicKey
+	}
+	if wgListenPort != nil {
+		gw.WGListenPort = *wgListenPort
+	} else {
+		gw.WGListenPort = DefaultWGListenPort
 	}
 	_ = tlsAuthKey // unused, using COALESCE instead
 	return &gw, nil
@@ -124,11 +160,12 @@ func (s *GatewayStore) GetGateway(ctx context.Context, id string) (*Gateway, err
 // GetGatewayByName retrieves a gateway by name
 func (s *GatewayStore) GetGatewayByName(ctx context.Context, name string) (*Gateway, error) {
 	var gw Gateway
-	var hostname, publicIP, vpnSubnet *string
+	var hostname, publicIP, vpnSubnet, wgPrivateKey, wgPublicKey *string
+	var wgListenPort *int
 	err := s.db.Pool.QueryRow(ctx, `
-		SELECT id, name, hostname, host(public_ip), vpn_port, vpn_protocol, crypto_profile, vpn_subnet::text, tls_auth_enabled, COALESCE(tls_auth_key, ''), full_tunnel_mode, push_dns, dns_servers, COALESCE(config_version, ''), token, public_key, is_active, last_heartbeat, created_at, updated_at
+		SELECT id, name, COALESCE(gateway_type, 'openvpn'), hostname, host(public_ip), vpn_port, vpn_protocol, crypto_profile, vpn_subnet::text, tls_auth_enabled, COALESCE(tls_auth_key, ''), full_tunnel_mode, push_dns, dns_servers, COALESCE(config_version, ''), wg_private_key, wg_public_key, wg_listen_port, token, public_key, is_active, last_heartbeat, created_at, updated_at
 		FROM gateways WHERE name = $1
-	`, name).Scan(&gw.ID, &gw.Name, &hostname, &publicIP, &gw.VPNPort, &gw.VPNProtocol, &gw.CryptoProfile, &vpnSubnet, &gw.TLSAuthEnabled, &gw.TLSAuthKey, &gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers, &gw.ConfigVersion, &gw.Token, &gw.PublicKey, &gw.IsActive, &gw.LastHeartbeat, &gw.CreatedAt, &gw.UpdatedAt)
+	`, name).Scan(&gw.ID, &gw.Name, &gw.GatewayType, &hostname, &publicIP, &gw.VPNPort, &gw.VPNProtocol, &gw.CryptoProfile, &vpnSubnet, &gw.TLSAuthEnabled, &gw.TLSAuthKey, &gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers, &gw.ConfigVersion, &wgPrivateKey, &wgPublicKey, &wgListenPort, &gw.Token, &gw.PublicKey, &gw.IsActive, &gw.LastHeartbeat, &gw.CreatedAt, &gw.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, ErrGatewayNotFound
 	}
@@ -145,6 +182,17 @@ func (s *GatewayStore) GetGatewayByName(ctx context.Context, name string) (*Gate
 		gw.VPNSubnet = *vpnSubnet
 	} else {
 		gw.VPNSubnet = DefaultVPNSubnet
+	}
+	if wgPrivateKey != nil {
+		gw.WGPrivateKey = *wgPrivateKey
+	}
+	if wgPublicKey != nil {
+		gw.WGPublicKey = *wgPublicKey
+	}
+	if wgListenPort != nil {
+		gw.WGListenPort = *wgListenPort
+	} else {
+		gw.WGListenPort = DefaultWGListenPort
 	}
 	return &gw, nil
 }
@@ -152,11 +200,12 @@ func (s *GatewayStore) GetGatewayByName(ctx context.Context, name string) (*Gate
 // GetGatewayByToken retrieves a gateway by its authentication token
 func (s *GatewayStore) GetGatewayByToken(ctx context.Context, token string) (*Gateway, error) {
 	var gw Gateway
-	var hostname, publicIP, vpnSubnet *string
+	var hostname, publicIP, vpnSubnet, wgPrivateKey, wgPublicKey *string
+	var wgListenPort *int
 	err := s.db.Pool.QueryRow(ctx, `
-		SELECT id, name, hostname, host(public_ip), vpn_port, vpn_protocol, crypto_profile, vpn_subnet::text, tls_auth_enabled, COALESCE(tls_auth_key, ''), full_tunnel_mode, push_dns, dns_servers, COALESCE(config_version, ''), token, public_key, is_active, last_heartbeat, created_at, updated_at
+		SELECT id, name, COALESCE(gateway_type, 'openvpn'), hostname, host(public_ip), vpn_port, vpn_protocol, crypto_profile, vpn_subnet::text, tls_auth_enabled, COALESCE(tls_auth_key, ''), full_tunnel_mode, push_dns, dns_servers, COALESCE(config_version, ''), wg_private_key, wg_public_key, wg_listen_port, token, public_key, is_active, last_heartbeat, created_at, updated_at
 		FROM gateways WHERE token = $1
-	`, token).Scan(&gw.ID, &gw.Name, &hostname, &publicIP, &gw.VPNPort, &gw.VPNProtocol, &gw.CryptoProfile, &vpnSubnet, &gw.TLSAuthEnabled, &gw.TLSAuthKey, &gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers, &gw.ConfigVersion, &gw.Token, &gw.PublicKey, &gw.IsActive, &gw.LastHeartbeat, &gw.CreatedAt, &gw.UpdatedAt)
+	`, token).Scan(&gw.ID, &gw.Name, &gw.GatewayType, &hostname, &publicIP, &gw.VPNPort, &gw.VPNProtocol, &gw.CryptoProfile, &vpnSubnet, &gw.TLSAuthEnabled, &gw.TLSAuthKey, &gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers, &gw.ConfigVersion, &wgPrivateKey, &wgPublicKey, &wgListenPort, &gw.Token, &gw.PublicKey, &gw.IsActive, &gw.LastHeartbeat, &gw.CreatedAt, &gw.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, ErrGatewayNotFound
 	}
@@ -173,6 +222,17 @@ func (s *GatewayStore) GetGatewayByToken(ctx context.Context, token string) (*Ga
 		gw.VPNSubnet = *vpnSubnet
 	} else {
 		gw.VPNSubnet = DefaultVPNSubnet
+	}
+	if wgPrivateKey != nil {
+		gw.WGPrivateKey = *wgPrivateKey
+	}
+	if wgPublicKey != nil {
+		gw.WGPublicKey = *wgPublicKey
+	}
+	if wgListenPort != nil {
+		gw.WGListenPort = *wgListenPort
+	} else {
+		gw.WGListenPort = DefaultWGListenPort
 	}
 	return &gw, nil
 }
@@ -185,10 +245,18 @@ func (s *GatewayStore) SetTLSAuthKey(ctx context.Context, gatewayID, tlsAuthKey 
 	return err
 }
 
+// SetWireGuardKeys updates the WireGuard keys for a gateway (used during provisioning)
+func (s *GatewayStore) SetWireGuardKeys(ctx context.Context, gatewayID, privateKey, publicKey string) error {
+	_, err := s.db.Pool.Exec(ctx, `
+		UPDATE gateways SET wg_private_key = $2, wg_public_key = $3, updated_at = NOW() WHERE id = $1
+	`, gatewayID, privateKey, publicKey)
+	return err
+}
+
 // ListGateways retrieves all gateways
 func (s *GatewayStore) ListGateways(ctx context.Context) ([]*Gateway, error) {
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT id, name, hostname, host(public_ip), vpn_port, vpn_protocol, crypto_profile, vpn_subnet::text, tls_auth_enabled, full_tunnel_mode, push_dns, dns_servers, is_active, last_heartbeat, created_at, updated_at
+		SELECT id, name, COALESCE(gateway_type, 'openvpn'), hostname, host(public_ip), vpn_port, vpn_protocol, crypto_profile, vpn_subnet::text, tls_auth_enabled, full_tunnel_mode, push_dns, dns_servers, wg_public_key, wg_listen_port, is_active, last_heartbeat, created_at, updated_at
 		FROM gateways
 		ORDER BY name
 	`)
@@ -200,8 +268,9 @@ func (s *GatewayStore) ListGateways(ctx context.Context) ([]*Gateway, error) {
 	var gateways []*Gateway
 	for rows.Next() {
 		var gw Gateway
-		var hostname, publicIP, vpnSubnet *string
-		if err := rows.Scan(&gw.ID, &gw.Name, &hostname, &publicIP, &gw.VPNPort, &gw.VPNProtocol, &gw.CryptoProfile, &vpnSubnet, &gw.TLSAuthEnabled, &gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers, &gw.IsActive, &gw.LastHeartbeat, &gw.CreatedAt, &gw.UpdatedAt); err != nil {
+		var hostname, publicIP, vpnSubnet, wgPublicKey *string
+		var wgListenPort *int
+		if err := rows.Scan(&gw.ID, &gw.Name, &gw.GatewayType, &hostname, &publicIP, &gw.VPNPort, &gw.VPNProtocol, &gw.CryptoProfile, &vpnSubnet, &gw.TLSAuthEnabled, &gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers, &wgPublicKey, &wgListenPort, &gw.IsActive, &gw.LastHeartbeat, &gw.CreatedAt, &gw.UpdatedAt); err != nil {
 			return nil, err
 		}
 		if hostname != nil {
@@ -215,6 +284,14 @@ func (s *GatewayStore) ListGateways(ctx context.Context) ([]*Gateway, error) {
 		} else {
 			gw.VPNSubnet = DefaultVPNSubnet
 		}
+		if wgPublicKey != nil {
+			gw.WGPublicKey = *wgPublicKey
+		}
+		if wgListenPort != nil {
+			gw.WGListenPort = *wgListenPort
+		} else {
+			gw.WGListenPort = DefaultWGListenPort
+		}
 		gateways = append(gateways, &gw)
 	}
 	return gateways, rows.Err()
@@ -223,7 +300,7 @@ func (s *GatewayStore) ListGateways(ctx context.Context) ([]*Gateway, error) {
 // ListActiveGateways retrieves all active gateways
 func (s *GatewayStore) ListActiveGateways(ctx context.Context) ([]*Gateway, error) {
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT id, name, hostname, host(public_ip), vpn_port, vpn_protocol, crypto_profile, vpn_subnet::text, tls_auth_enabled, full_tunnel_mode, push_dns, dns_servers, is_active, last_heartbeat, created_at, updated_at
+		SELECT id, name, COALESCE(gateway_type, 'openvpn'), hostname, host(public_ip), vpn_port, vpn_protocol, crypto_profile, vpn_subnet::text, tls_auth_enabled, full_tunnel_mode, push_dns, dns_servers, wg_public_key, wg_listen_port, is_active, last_heartbeat, created_at, updated_at
 		FROM gateways
 		WHERE is_active = true
 		ORDER BY name
@@ -236,8 +313,9 @@ func (s *GatewayStore) ListActiveGateways(ctx context.Context) ([]*Gateway, erro
 	var gateways []*Gateway
 	for rows.Next() {
 		var gw Gateway
-		var hostname, publicIP, vpnSubnet *string
-		if err := rows.Scan(&gw.ID, &gw.Name, &hostname, &publicIP, &gw.VPNPort, &gw.VPNProtocol, &gw.CryptoProfile, &vpnSubnet, &gw.TLSAuthEnabled, &gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers, &gw.IsActive, &gw.LastHeartbeat, &gw.CreatedAt, &gw.UpdatedAt); err != nil {
+		var hostname, publicIP, vpnSubnet, wgPublicKey *string
+		var wgListenPort *int
+		if err := rows.Scan(&gw.ID, &gw.Name, &gw.GatewayType, &hostname, &publicIP, &gw.VPNPort, &gw.VPNProtocol, &gw.CryptoProfile, &vpnSubnet, &gw.TLSAuthEnabled, &gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers, &wgPublicKey, &wgListenPort, &gw.IsActive, &gw.LastHeartbeat, &gw.CreatedAt, &gw.UpdatedAt); err != nil {
 			return nil, err
 		}
 		if hostname != nil {
@@ -250,6 +328,14 @@ func (s *GatewayStore) ListActiveGateways(ctx context.Context) ([]*Gateway, erro
 			gw.VPNSubnet = *vpnSubnet
 		} else {
 			gw.VPNSubnet = DefaultVPNSubnet
+		}
+		if wgPublicKey != nil {
+			gw.WGPublicKey = *wgPublicKey
+		}
+		if wgListenPort != nil {
+			gw.WGListenPort = *wgListenPort
+		} else {
+			gw.WGListenPort = DefaultWGListenPort
 		}
 		gateways = append(gateways, &gw)
 	}
@@ -320,12 +406,19 @@ func (s *GatewayStore) UpdateGateway(ctx context.Context, gw *Gateway) error {
 	if vpnSubnet == "" {
 		vpnSubnet = DefaultVPNSubnet
 	}
+	// Default WireGuard listen port
+	wgListenPort := gw.WGListenPort
+	if wgListenPort == 0 {
+		wgListenPort = DefaultWGListenPort
+	}
 	result, err := s.db.Pool.Exec(ctx, `
 		UPDATE gateways
 		SET name = $2, hostname = NULLIF($3, ''), public_ip = NULLIF($4, '')::inet,
-		    vpn_port = $5, vpn_protocol = $6, crypto_profile = $7, vpn_subnet = $8::cidr, tls_auth_enabled = $9, full_tunnel_mode = $10, push_dns = $11, dns_servers = $12, updated_at = NOW()
+		    vpn_port = $5, vpn_protocol = $6, crypto_profile = $7, vpn_subnet = $8::cidr,
+		    tls_auth_enabled = $9, full_tunnel_mode = $10, push_dns = $11, dns_servers = $12,
+		    wg_listen_port = $13, updated_at = NOW()
 		WHERE id = $1
-	`, gw.ID, gw.Name, gw.Hostname, gw.PublicIP, gw.VPNPort, gw.VPNProtocol, cryptoProfile, vpnSubnet, gw.TLSAuthEnabled, gw.FullTunnelMode, gw.PushDNS, gw.DNSServers)
+	`, gw.ID, gw.Name, gw.Hostname, gw.PublicIP, gw.VPNPort, gw.VPNProtocol, cryptoProfile, vpnSubnet, gw.TLSAuthEnabled, gw.FullTunnelMode, gw.PushDNS, gw.DNSServers, wgListenPort)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {
 			return ErrGatewayExists
@@ -480,8 +573,8 @@ func (s *GatewayStore) GetGatewayGroups(ctx context.Context, gatewayID string) (
 func (s *GatewayStore) ListUserGateways(ctx context.Context, userID string, groups []string) ([]*Gateway, error) {
 	// Query gateways that the user can access via direct assignment or group membership
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT DISTINCT g.id, g.name, g.hostname, host(g.public_ip), g.vpn_port, g.vpn_protocol,
-		       g.crypto_profile, g.is_active, g.last_heartbeat, g.created_at, g.updated_at
+		SELECT DISTINCT g.id, g.name, COALESCE(g.gateway_type, 'openvpn'), g.hostname, host(g.public_ip), g.vpn_port, g.vpn_protocol,
+		       g.crypto_profile, g.vpn_subnet::text, g.wg_public_key, g.wg_listen_port, g.is_active, g.last_heartbeat, g.created_at, g.updated_at
 		FROM gateways g
 		WHERE g.id IN (
 			SELECT gateway_id FROM user_gateways WHERE user_id = $1
@@ -498,8 +591,9 @@ func (s *GatewayStore) ListUserGateways(ctx context.Context, userID string, grou
 	var gateways []*Gateway
 	for rows.Next() {
 		var gw Gateway
-		var hostname, publicIP *string
-		if err := rows.Scan(&gw.ID, &gw.Name, &hostname, &publicIP, &gw.VPNPort, &gw.VPNProtocol, &gw.CryptoProfile, &gw.IsActive, &gw.LastHeartbeat, &gw.CreatedAt, &gw.UpdatedAt); err != nil {
+		var hostname, publicIP, vpnSubnet, wgPublicKey *string
+		var wgListenPort *int
+		if err := rows.Scan(&gw.ID, &gw.Name, &gw.GatewayType, &hostname, &publicIP, &gw.VPNPort, &gw.VPNProtocol, &gw.CryptoProfile, &vpnSubnet, &wgPublicKey, &wgListenPort, &gw.IsActive, &gw.LastHeartbeat, &gw.CreatedAt, &gw.UpdatedAt); err != nil {
 			return nil, err
 		}
 		if hostname != nil {
@@ -507,6 +601,19 @@ func (s *GatewayStore) ListUserGateways(ctx context.Context, userID string, grou
 		}
 		if publicIP != nil {
 			gw.PublicIP = *publicIP
+		}
+		if vpnSubnet != nil {
+			gw.VPNSubnet = *vpnSubnet
+		} else {
+			gw.VPNSubnet = DefaultVPNSubnet
+		}
+		if wgPublicKey != nil {
+			gw.WGPublicKey = *wgPublicKey
+		}
+		if wgListenPort != nil {
+			gw.WGListenPort = *wgListenPort
+		} else {
+			gw.WGListenPort = DefaultWGListenPort
 		}
 		gateways = append(gateways, &gw)
 	}
@@ -529,8 +636,8 @@ func (s *GatewayStore) UserHasGatewayAccess(ctx context.Context, userID, gateway
 // GetGatewaysForUser returns all gateways directly assigned to a user (not via groups)
 func (s *GatewayStore) GetGatewaysForUser(ctx context.Context, userID string) ([]*Gateway, error) {
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT g.id, g.name, g.hostname, host(g.public_ip), g.vpn_port, g.vpn_protocol,
-		       g.crypto_profile, g.is_active, g.last_heartbeat, g.created_at, g.updated_at
+		SELECT g.id, g.name, COALESCE(g.gateway_type, 'openvpn'), g.hostname, host(g.public_ip), g.vpn_port, g.vpn_protocol,
+		       g.crypto_profile, g.vpn_subnet::text, g.wg_public_key, g.wg_listen_port, g.is_active, g.last_heartbeat, g.created_at, g.updated_at
 		FROM gateways g
 		INNER JOIN user_gateways ug ON g.id = ug.gateway_id
 		WHERE ug.user_id = $1
@@ -544,8 +651,9 @@ func (s *GatewayStore) GetGatewaysForUser(ctx context.Context, userID string) ([
 	var gateways []*Gateway
 	for rows.Next() {
 		var gw Gateway
-		var hostname, publicIP *string
-		if err := rows.Scan(&gw.ID, &gw.Name, &hostname, &publicIP, &gw.VPNPort, &gw.VPNProtocol, &gw.CryptoProfile, &gw.IsActive, &gw.LastHeartbeat, &gw.CreatedAt, &gw.UpdatedAt); err != nil {
+		var hostname, publicIP, vpnSubnet, wgPublicKey *string
+		var wgListenPort *int
+		if err := rows.Scan(&gw.ID, &gw.Name, &gw.GatewayType, &hostname, &publicIP, &gw.VPNPort, &gw.VPNProtocol, &gw.CryptoProfile, &vpnSubnet, &wgPublicKey, &wgListenPort, &gw.IsActive, &gw.LastHeartbeat, &gw.CreatedAt, &gw.UpdatedAt); err != nil {
 			return nil, err
 		}
 		if hostname != nil {
@@ -553,6 +661,19 @@ func (s *GatewayStore) GetGatewaysForUser(ctx context.Context, userID string) ([
 		}
 		if publicIP != nil {
 			gw.PublicIP = *publicIP
+		}
+		if vpnSubnet != nil {
+			gw.VPNSubnet = *vpnSubnet
+		} else {
+			gw.VPNSubnet = DefaultVPNSubnet
+		}
+		if wgPublicKey != nil {
+			gw.WGPublicKey = *wgPublicKey
+		}
+		if wgListenPort != nil {
+			gw.WGListenPort = *wgListenPort
+		} else {
+			gw.WGListenPort = DefaultWGListenPort
 		}
 		gateways = append(gateways, &gw)
 	}
