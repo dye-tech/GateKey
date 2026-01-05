@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.uber.org/zap"
 
 	"github.com/gatekey-project/gatekey/internal/db"
@@ -1325,11 +1326,23 @@ func (s *Server) handleMeshClientConnected(c *gin.Context) {
 		}
 
 		if userID != "" {
+			// Close any existing active connections for this user on this hub
+			_, err = s.db.Pool.Exec(ctx, `
+				UPDATE mesh_connections
+				SET disconnected_at = NOW(), disconnect_reason = 'reconnect'
+				WHERE hub_id = $1 AND user_id = $2 AND disconnected_at IS NULL
+			`, hub.ID, userID)
+			if err != nil {
+				s.logger.Warn("Failed to close existing mesh connections",
+					zap.String("hub", hub.Name),
+					zap.String("clientEmail", clientEmail),
+					zap.Error(err))
+			}
+
 			// Insert connection record
-			_, err := s.db.Pool.Exec(ctx, `
-				INSERT INTO mesh_connections (hub_id, user_id, user_type, client_ip, tunnel_ip, connected_at)
-				VALUES ($1, $2, $3, $4::inet, $5::inet, NOW())
-				ON CONFLICT DO NOTHING
+			_, err = s.db.Pool.Exec(ctx, `
+				INSERT INTO mesh_connections (hub_id, user_id, user_type, client_ip, tunnel_ip, connected_at, last_seen_at)
+				VALUES ($1, $2, $3, $4::inet, $5::inet, NOW(), NOW())
 			`, hub.ID, userID, userType, req.ClientIP, req.TunnelIP)
 			if err != nil {
 				s.logger.Warn("Failed to record mesh connection",
@@ -1480,6 +1493,117 @@ func (s *Server) handleMeshAllClientRules(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"clientRules": clientRules,
 	})
+}
+
+// handleMeshClientStats receives periodic client stats from the hub
+// This enables real-time traffic monitoring and stale connection detection
+func (s *Server) handleMeshClientStats(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var req struct {
+		Token   string `json:"token" binding:"required"`
+		Clients []struct {
+			Email          string `json:"email"`
+			TunnelIP       string `json:"tunnelIp"`
+			ClientIP       string `json:"clientIp"`
+			BytesSent      int64  `json:"bytesSent"`
+			BytesReceived  int64  `json:"bytesReceived"`
+			ConnectedSince string `json:"connectedSince"`
+		} `json:"clients"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	hub, err := s.meshStore.GetHubByToken(ctx, req.Token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
+
+	// Build a map of currently connected tunnel IPs
+	connectedTunnelIPs := make(map[string]bool)
+	for _, client := range req.Clients {
+		if client.TunnelIP != "" {
+			connectedTunnelIPs[client.TunnelIP] = true
+		}
+	}
+
+	// Update stats for each connected client
+	for _, client := range req.Clients {
+		if client.TunnelIP == "" {
+			continue
+		}
+
+		// Update the mesh_connection record with current traffic stats
+		_, err := s.db.Pool.Exec(ctx, `
+			UPDATE mesh_connections
+			SET bytes_sent = $3,
+			    bytes_received = $4,
+			    last_seen_at = NOW()
+			WHERE hub_id = $1
+			  AND tunnel_ip = $2::inet
+			  AND disconnected_at IS NULL
+		`, hub.ID, client.TunnelIP, client.BytesSent, client.BytesReceived)
+		if err != nil {
+			s.logger.Debug("Failed to update client stats",
+				zap.String("email", client.Email),
+				zap.String("tunnelIp", client.TunnelIP),
+				zap.Error(err))
+		}
+	}
+
+	// Mark stale connections as disconnected
+	// If a connection is not in the current list from the hub, it's stale
+	tunnelIPs := tunnelIPsToArray(connectedTunnelIPs)
+
+	var result pgconn.CommandTag
+	if len(tunnelIPs) == 0 {
+		// No clients connected - mark all old connections as stale
+		result, err = s.db.Pool.Exec(ctx, `
+			UPDATE mesh_connections
+			SET disconnected_at = NOW(),
+			    disconnect_reason = 'stale'
+			WHERE hub_id = $1
+			  AND disconnected_at IS NULL
+			  AND last_seen_at < NOW() - INTERVAL '30 seconds'
+		`, hub.ID)
+	} else {
+		// Some clients connected - only mark those not in the list
+		result, err = s.db.Pool.Exec(ctx, `
+			UPDATE mesh_connections
+			SET disconnected_at = NOW(),
+			    disconnect_reason = 'stale'
+			WHERE hub_id = $1
+			  AND disconnected_at IS NULL
+			  AND last_seen_at < NOW() - INTERVAL '30 seconds'
+			  AND tunnel_ip NOT IN (
+			      SELECT unnest($2::inet[])
+			  )
+		`, hub.ID, tunnelIPs)
+	}
+	if err != nil {
+		s.logger.Debug("Failed to mark stale connections", zap.Error(err))
+	} else {
+		if staleCount := result.RowsAffected(); staleCount > 0 {
+			s.logger.Info("Marked stale mesh connections as disconnected",
+				zap.String("hub", hub.Name),
+				zap.Int64("count", staleCount))
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// tunnelIPsToArray converts a map of tunnel IPs to a PostgreSQL inet array
+func tunnelIPsToArray(ips map[string]bool) []string {
+	result := make([]string, 0, len(ips))
+	for ip := range ips {
+		result = append(result, ip)
+	}
+	return result
 }
 
 // ==================== Spoke Internal API (Spoke → Control Plane) ====================

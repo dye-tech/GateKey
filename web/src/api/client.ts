@@ -1868,6 +1868,7 @@ export interface ActiveSession {
   connectedAt: string
   bytesSent: number
   bytesRecv: number
+  lastSeenAt?: string
 }
 
 export async function getActiveSessions(): Promise<{ sessions: ActiveSession[]; total: number }> {
