@@ -2875,14 +2875,14 @@ func (s *Server) handleGatewayClientStats(c *gin.Context) {
 		}
 	}
 
-	// Update stats for each connected client
+	// Update or create stats for each connected client
 	for _, client := range req.Clients {
 		if client.TunnelIP == "" {
 			continue
 		}
 
-		// Update the gateway_connection record with current traffic stats
-		_, err := s.db.Pool.Exec(ctx, `
+		// Try to update existing connection record
+		result, err := s.db.Pool.Exec(ctx, `
 			UPDATE gateway_connections
 			SET bytes_sent = $3,
 			    bytes_received = $4,
@@ -2896,11 +2896,59 @@ func (s *Server) handleGatewayClientStats(c *gin.Context) {
 				zap.String("email", client.Email),
 				zap.String("tunnelIp", client.TunnelIP),
 				zap.Error(err))
+			continue
+		}
+
+		// If no rows updated, connection record doesn't exist - create it
+		// This handles the case where client-connect hook failed or wasn't configured
+		if result.RowsAffected() == 0 && client.Email != "" {
+			// Look up user to get their ID
+			var userID string
+			var userType string
+			user, err := s.userStore.GetSSOUserByEmail(ctx, client.Email)
+			if err == nil && user != nil {
+				userID = user.ID
+				userType = "sso"
+			} else {
+				// Try local user
+				localUser, localErr := s.userStore.GetLocalUserByEmail(ctx, client.Email)
+				if localErr == nil && localUser != nil {
+					userID = localUser.ID
+					userType = "local"
+				}
+			}
+
+			if userID != "" {
+				// Close any existing active connections for this user on this gateway
+				_, _ = s.db.Pool.Exec(ctx, `
+					UPDATE gateway_connections
+					SET disconnected_at = NOW(), disconnect_reason = 'reconnect'
+					WHERE gateway_id = $1 AND user_id = $2 AND disconnected_at IS NULL
+				`, gateway.ID, userID)
+
+				// Create new connection record
+				_, err = s.db.Pool.Exec(ctx, `
+					INSERT INTO gateway_connections (gateway_id, user_id, user_type, client_ip, tunnel_ip, bytes_sent, bytes_received, connected_at, last_seen_at)
+					VALUES ($1, $2, $3, $4::inet, $5::inet, $6, $7, NOW(), NOW())
+				`, gateway.ID, userID, userType, client.ClientIP, client.TunnelIP, client.BytesSent, client.BytesReceived)
+				if err != nil {
+					s.logger.Warn("Failed to create gateway connection from stats",
+						zap.String("email", client.Email),
+						zap.String("tunnelIp", client.TunnelIP),
+						zap.Error(err))
+				} else {
+					s.logger.Info("Created gateway connection from stats sync",
+						zap.String("gateway", gateway.Name),
+						zap.String("email", client.Email),
+						zap.String("tunnelIp", client.TunnelIP))
+				}
+			}
 		}
 	}
 
 	// Mark stale connections as disconnected
 	// If a connection is not in the current list from the gateway, it's stale
+	// Use 2 minute threshold to allow for OpenVPN routing table population delay
 	tunnelIPs := make([]string, 0, len(connectedTunnelIPs))
 	for ip := range connectedTunnelIPs {
 		tunnelIPs = append(tunnelIPs, ip)
@@ -2915,7 +2963,7 @@ func (s *Server) handleGatewayClientStats(c *gin.Context) {
 			    disconnect_reason = 'stale'
 			WHERE gateway_id = $1
 			  AND disconnected_at IS NULL
-			  AND last_seen_at < NOW() - INTERVAL '30 seconds'
+			  AND last_seen_at < NOW() - INTERVAL '2 minutes'
 		`, gateway.ID)
 	} else {
 		// Some clients connected - only mark those not in the list
@@ -2925,7 +2973,7 @@ func (s *Server) handleGatewayClientStats(c *gin.Context) {
 			    disconnect_reason = 'stale'
 			WHERE gateway_id = $1
 			  AND disconnected_at IS NULL
-			  AND last_seen_at < NOW() - INTERVAL '30 seconds'
+			  AND last_seen_at < NOW() - INTERVAL '2 minutes'
 			  AND tunnel_ip NOT IN (
 			      SELECT unnest($2::inet[])
 			  )
