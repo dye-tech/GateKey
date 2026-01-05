@@ -104,6 +104,44 @@ jobs:
             org.opencontainers.image.source=https://github.com/dye-tech/GateKey
             org.opencontainers.image.licenses=Apache-2.0
 
+      - name: Build and push gatekey-gateway
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.gateway
+          platforms: linux/amd64,linux/arm64
+          push: true
+          sbom: true
+          provenance: true
+          tags: |
+            dyetech/gatekey-gateway:${{ steps.version.outputs.VERSION }}
+            dyetech/gatekey-gateway:latest
+          labels: |
+            org.opencontainers.image.title=GateKey Gateway
+            org.opencontainers.image.description=GateKey Zero-Trust VPN Gateway Agent
+            org.opencontainers.image.version=${{ steps.version.outputs.VERSION }}
+            org.opencontainers.image.source=https://github.com/dye-tech/GateKey
+            org.opencontainers.image.licenses=Apache-2.0
+
+      - name: Build and push gatekey-hub
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.hub
+          platforms: linux/amd64,linux/arm64
+          push: true
+          sbom: true
+          provenance: true
+          tags: |
+            dyetech/gatekey-hub:${{ steps.version.outputs.VERSION }}
+            dyetech/gatekey-hub:latest
+          labels: |
+            org.opencontainers.image.title=GateKey Mesh Hub
+            org.opencontainers.image.description=GateKey Zero-Trust VPN Mesh Hub Server
+            org.opencontainers.image.version=${{ steps.version.outputs.VERSION }}
+            org.opencontainers.image.source=https://github.com/dye-tech/GateKey
+            org.opencontainers.image.licenses=Apache-2.0
+
   update-homebrew:
     name: Update Homebrew Tap
     needs: release

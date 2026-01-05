@@ -274,6 +274,9 @@ func runHub(cmd *cobra.Command, args []string) error {
 	// Start firewall enforcement loop (zero-trust)
 	go firewallEnforcementLoop(ctx, cfg)
 
+	// Start client stats sync loop (real-time traffic updates)
+	go clientStatsSyncLoop(ctx, cfg)
+
 	// Wait for shutdown signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -795,6 +798,10 @@ func handleHook(cmd *cobra.Command, args []string) error {
 
 	switch hookType {
 	case "connect":
+		// Note: We previously tried to verify the client is in the status file,
+		// but the hook runs before OpenVPN updates the status file, so this check
+		// was blocking legitimate connections. The server-side debounce logic in
+		// handleMeshClientConnected handles spurious connect events instead.
 		endpoint = "/api/v1/mesh-hub/client-connected"
 		reqBody = map[string]interface{}{
 			"token":       cfg.APIToken,
@@ -914,13 +921,47 @@ func countConnections(prefix string) int {
 	return count
 }
 
+// isClientConnected checks if a specific client (by common name) is in the OpenVPN status file
+func isClientConnected(commonName string) bool {
+	statusFile := "/var/log/openvpn/hub-status.log"
+	data, err := os.ReadFile(statusFile)
+	if err != nil {
+		// If we can't read status file, assume connected to avoid blocking legitimate connections
+		return true
+	}
+
+	lines := strings.Split(string(data), "\n")
+	inClientList := false
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "ROUTING TABLE") {
+			inClientList = false
+		}
+		if strings.HasPrefix(line, "Common Name,") {
+			inClientList = true
+			continue
+		}
+		if inClientList && line != "" {
+			parts := strings.Split(line, ",")
+			if len(parts) >= 1 && parts[0] == commonName {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 // ==================== Firewall Enforcement ====================
 
 // ConnectedClient represents a connected VPN client
 type ConnectedClient struct {
-	CN       string // Common Name (email)
-	TunnelIP string // VPN tunnel IP
-	RealIP   string // Real client IP
+	CN             string // Common Name (email)
+	TunnelIP       string // VPN tunnel IP
+	RealIP         string // Real client IP
+	BytesSent      int64  // Bytes sent to client
+	BytesRecv      int64  // Bytes received from client
+	ConnectedSince string // Connection timestamp
 }
 
 // AccessRule represents an access rule from the control plane
@@ -966,6 +1007,7 @@ func firewallEnforcementLoop(ctx context.Context, cfg *HubConfig) {
 }
 
 // getConnectedClients parses OpenVPN status to get connected clients
+// Status file format: Common Name,Real Address,Bytes Received,Bytes Sent,Connected Since
 func getConnectedClients() []ConnectedClient {
 	statusFile := "/var/log/openvpn/hub-status.log"
 	data, err := os.ReadFile(statusFile)
@@ -976,7 +1018,7 @@ func getConnectedClients() []ConnectedClient {
 	var clients []ConnectedClient
 	lines := strings.Split(string(data), "\n")
 
-	// Parse client list (Common Name, Real Address, Virtual Address, ...)
+	// Parse client list (Common Name, Real Address, Bytes Received, Bytes Sent, Connected Since)
 	inClientList := false
 	for _, line := range lines {
 		if strings.HasPrefix(line, "ROUTING TABLE") {
@@ -988,7 +1030,7 @@ func getConnectedClients() []ConnectedClient {
 		}
 		if inClientList && line != "" {
 			parts := strings.Split(line, ",")
-			if len(parts) >= 3 {
+			if len(parts) >= 5 {
 				cn := parts[0]
 				// Skip mesh gateways - they don't need client firewall rules
 				if strings.HasPrefix(cn, "mesh-gateway-") {
@@ -998,9 +1040,16 @@ func getConnectedClients() []ConnectedClient {
 				if idx := strings.Index(realIP, ":"); idx > 0 {
 					realIP = realIP[:idx]
 				}
+				// Parse bytes received and sent
+				bytesRecv, _ := strconv.ParseInt(parts[2], 10, 64)
+				bytesSent, _ := strconv.ParseInt(parts[3], 10, 64)
+				connectedSince := parts[4]
 				clients = append(clients, ConnectedClient{
-					CN:     cn,
-					RealIP: realIP,
+					CN:             cn,
+					RealIP:         realIP,
+					BytesRecv:      bytesRecv,
+					BytesSent:      bytesSent,
+					ConnectedSince: connectedSince,
 				})
 			}
 		}
@@ -1276,5 +1325,84 @@ func removeClientFirewallRules(ctx context.Context, cn string) {
 	connectionID := fmt.Sprintf("mesh-client-%s", strings.ReplaceAll(tunnelIP, ".", "-"))
 	if err := firewallMgr.RemoveRules(ctx, connectionID); err != nil {
 		logger.Debug("Error removing firewall rules", zap.String("cn", cn), zap.Error(err))
+	}
+}
+
+// ==================== Client Stats Sync ====================
+
+// ClientStatsEntry represents a single client's stats for the sync payload
+type ClientStatsEntry struct {
+	Email          string `json:"email"`
+	TunnelIP       string `json:"tunnelIp"`
+	ClientIP       string `json:"clientIp"`
+	BytesSent      int64  `json:"bytesSent"`
+	BytesReceived  int64  `json:"bytesReceived"`
+	ConnectedSince string `json:"connectedSince"`
+}
+
+// clientStatsSyncLoop periodically sends client stats to the control plane
+// This enables real-time traffic monitoring and stale connection detection
+func clientStatsSyncLoop(ctx context.Context, cfg *HubConfig) {
+	// Sync every 5 seconds for near real-time updates
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			syncClientStats(ctx, cfg)
+		}
+	}
+}
+
+// syncClientStats sends current connected clients and their traffic stats to control plane
+func syncClientStats(ctx context.Context, cfg *HubConfig) {
+	clients := getConnectedClients()
+
+	// Build stats payload
+	var stats []ClientStatsEntry
+	for _, c := range clients {
+		if c.CN == "" || c.TunnelIP == "" {
+			continue
+		}
+		stats = append(stats, ClientStatsEntry{
+			Email:          c.CN,
+			TunnelIP:       c.TunnelIP,
+			ClientIP:       c.RealIP,
+			BytesSent:      c.BytesSent,
+			BytesReceived:  c.BytesRecv,
+			ConnectedSince: c.ConnectedSince,
+		})
+	}
+
+	reqBody := struct {
+		Token   string             `json:"token"`
+		Clients []ClientStatsEntry `json:"clients"`
+	}{
+		Token:   cfg.APIToken,
+		Clients: stats,
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		logger.Warn("Failed to marshal client stats", zap.Error(err))
+		return
+	}
+
+	url := strings.TrimSuffix(cfg.ControlPlaneURL, "/") + "/api/v1/mesh-hub/client-stats"
+	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	if err != nil {
+		logger.Debug("Failed to sync client stats", zap.Error(err))
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		logger.Debug("Control plane returned error for client stats",
+			zap.Int("status", resp.StatusCode),
+			zap.String("body", string(respBody)))
 	}
 }

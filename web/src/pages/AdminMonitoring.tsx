@@ -49,6 +49,24 @@ function formatDuration(connectedAt: string): string {
   return `${hours}h ${mins}m`
 }
 
+// Format last seen time and check if stale (>15 seconds old)
+function formatLastSeen(lastSeenAt: string | undefined): { text: string; isStale: boolean } {
+  if (!lastSeenAt) {
+    return { text: 'Unknown', isStale: true }
+  }
+  const lastSeen = new Date(lastSeenAt).getTime()
+  const now = Date.now()
+  const diffSeconds = Math.floor((now - lastSeen) / 1000)
+
+  // Consider stale if not seen in 15+ seconds
+  const isStale = diffSeconds > 15
+
+  if (diffSeconds < 5) return { text: 'Just now', isStale: false }
+  if (diffSeconds < 60) return { text: `${diffSeconds}s ago`, isStale }
+  if (diffSeconds < 3600) return { text: `${Math.floor(diffSeconds / 60)}m ago`, isStale }
+  return { text: `${Math.floor(diffSeconds / 3600)}h ago`, isStale: true }
+}
+
 export default function AdminMonitoring() {
   const [activeTab, setActiveTab] = useState<TabType>('realtime')
   const [logs, setLogs] = useState<LoginLog[]>([])
@@ -407,13 +425,14 @@ export default function AdminMonitoring() {
                         <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Client IP</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">VPN IP</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Duration</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Last Seen</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Traffic</th>
                       </tr>
                     </thead>
                     <tbody className="bg-theme-card divide-y divide-theme">
                       {sessions.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="px-4 py-8 text-center text-theme-tertiary">
+                          <td colSpan={7} className="px-4 py-8 text-center text-theme-tertiary">
                             No active VPN sessions
                           </td>
                         </tr>
@@ -446,6 +465,19 @@ export default function AdminMonitoring() {
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-sm text-theme-tertiary">
                               {formatDuration(session.connectedAt)}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm">
+                              {(() => {
+                                const { text, isStale } = formatLastSeen(session.lastSeenAt)
+                                return (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`w-2 h-2 rounded-full ${isStale ? 'bg-yellow-500' : 'bg-green-500'}`} />
+                                    <span className={isStale ? 'text-yellow-600 dark:text-yellow-400' : 'text-theme-tertiary'}>
+                                      {text}
+                                    </span>
+                                  </div>
+                                )
+                              })()}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-sm">
                               <div className="flex items-center gap-3">

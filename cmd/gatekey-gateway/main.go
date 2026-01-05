@@ -249,6 +249,9 @@ func runAgent(cmd *cobra.Command, args []string) error {
 	// Start rule refresh loop
 	go ruleRefreshLoop(ctx, cfg)
 
+	// Start client stats sync loop (real-time traffic updates)
+	go clientStatsSyncLoop(ctx, cfg)
+
 	// Wait for shutdown signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -679,6 +682,14 @@ func handleHook(cmd *cobra.Command, args []string) error {
 		os.Exit(0)
 
 	case openvpn.HookClientConnect:
+		// Verify the client is actually connected by checking OpenVPN status file
+		// This prevents spurious connect events that OpenVPN sends during disconnect
+		time.Sleep(100 * time.Millisecond) // Brief delay to let status file update
+		if !isClientConnected(req.CommonName) {
+			fmt.Fprintf(os.Stderr, "Skipping connect notification - client %s not in status file\n", req.CommonName)
+			os.Exit(0)
+		}
+
 		resp, err := client.Connect(req)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Connect notification failed: %v\n", err)
@@ -754,6 +765,41 @@ func writeClientFile(vpnIP string, client ConnectedClient) error {
 func removeClientFile(vpnIP string) {
 	filename := fmt.Sprintf("%s/%s.json", clientsDir, strings.ReplaceAll(vpnIP, ".", "-"))
 	os.Remove(filename)
+}
+
+// isClientConnected checks if a specific client (by common name) is in the OpenVPN status file
+func isClientConnected(commonName string) bool {
+	statusFile := "/var/log/openvpn/server-status.log"
+	data, err := os.ReadFile(statusFile)
+	if err != nil {
+		// Try alternate path
+		data, err = os.ReadFile("/var/log/openvpn/status.log")
+		if err != nil {
+			// If we can't read status file, assume connected to avoid blocking legitimate connections
+			return true
+		}
+	}
+
+	lines := strings.Split(string(data), "\n")
+	inClientList := false
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "ROUTING TABLE") {
+			inClientList = false
+		}
+		if strings.HasPrefix(line, "Common Name,") {
+			inClientList = true
+			continue
+		}
+		if inClientList && line != "" {
+			parts := strings.Split(line, ",")
+			if len(parts) >= 1 && parts[0] == commonName {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // loadConnectedClients loads all connected client files.
@@ -836,4 +882,146 @@ func syncConnectedClients(cfg *GatewayConfig) {
 			delete(connectedUsers, vpnIP)
 		}
 	}
+}
+
+// ==================== Client Stats Sync ====================
+
+// ClientStatsEntry represents a single client's stats for the sync payload
+type ClientStatsEntry struct {
+	Email          string `json:"email"`
+	TunnelIP       string `json:"tunnelIp"`
+	ClientIP       string `json:"clientIp"`
+	BytesSent      int64  `json:"bytesSent"`
+	BytesReceived  int64  `json:"bytesReceived"`
+	ConnectedSince string `json:"connectedSince"`
+}
+
+// clientStatsSyncLoop periodically sends client stats to the control plane
+func clientStatsSyncLoop(ctx context.Context, cfg *GatewayConfig) {
+	// Sync every 5 seconds for near real-time updates
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			syncClientStats(ctx, cfg)
+		}
+	}
+}
+
+// syncClientStats sends current connected clients and their traffic stats to control plane
+func syncClientStats(ctx context.Context, cfg *GatewayConfig) {
+	// Get traffic stats from OpenVPN status file
+	trafficStats := parseTrafficStats()
+
+	// Build stats payload
+	var stats []ClientStatsEntry
+	for vpnIP, client := range connectedUsers {
+		traffic := trafficStats[vpnIP]
+		stats = append(stats, ClientStatsEntry{
+			Email:          client.UserEmail,
+			TunnelIP:       vpnIP,
+			ClientIP:       "", // Could be extracted from status file if needed
+			BytesSent:      traffic.BytesSent,
+			BytesReceived:  traffic.BytesRecv,
+			ConnectedSince: client.ConnectedAt.Format(time.RFC3339),
+		})
+	}
+
+	reqBody := struct {
+		Token   string             `json:"token"`
+		Clients []ClientStatsEntry `json:"clients"`
+	}{
+		Token:   cfg.Token,
+		Clients: stats,
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		logger.Debug("Failed to marshal client stats", zap.Error(err))
+		return
+	}
+
+	url := strings.TrimSuffix(cfg.ControlPlaneURL, "/") + "/api/v1/gateway/client-stats"
+	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	if err != nil {
+		logger.Debug("Failed to sync client stats", zap.Error(err))
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		logger.Debug("Control plane returned error for client stats",
+			zap.Int("status", resp.StatusCode),
+			zap.String("body", string(respBody)))
+	}
+}
+
+// TrafficStats holds traffic data for a client
+type TrafficStats struct {
+	BytesSent int64
+	BytesRecv int64
+}
+
+// parseTrafficStats parses the OpenVPN status file to get traffic stats
+// Status file format: Common Name,Real Address,Bytes Received,Bytes Sent,Connected Since
+func parseTrafficStats() map[string]TrafficStats {
+	stats := make(map[string]TrafficStats)
+
+	// Try common status file locations
+	statusFile := "/var/log/openvpn/openvpn-status.log"
+	if _, err := os.Stat(statusFile); os.IsNotExist(err) {
+		statusFile = "/run/openvpn/server.status"
+		if _, err := os.Stat(statusFile); os.IsNotExist(err) {
+			return stats
+		}
+	}
+
+	data, err := os.ReadFile(statusFile)
+	if err != nil {
+		return stats
+	}
+
+	lines := strings.Split(string(data), "\n")
+	inClientList := false
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "ROUTING TABLE") {
+			inClientList = false
+		}
+		if strings.HasPrefix(line, "Common Name,") {
+			inClientList = true
+			continue
+		}
+		if inClientList && line != "" {
+			parts := strings.Split(line, ",")
+			if len(parts) >= 5 {
+				// Common Name,Real Address,Bytes Received,Bytes Sent,Connected Since
+				bytesRecv, _ := strconv.ParseInt(parts[2], 10, 64)
+				bytesSent, _ := strconv.ParseInt(parts[3], 10, 64)
+
+				// Get tunnel IP from routing table (need to match by common name)
+				// For now, we'll try to get it from our connectedUsers map
+				// The common name is typically the user's email
+				commonName := parts[0]
+
+				// Find tunnel IP by matching email
+				for vpnIP, client := range connectedUsers {
+					if client.UserEmail == commonName {
+						stats[vpnIP] = TrafficStats{
+							BytesSent: bytesSent,
+							BytesRecv: bytesRecv,
+						}
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return stats
 }
