@@ -1361,8 +1361,8 @@ func (s *Server) handleMeshClientDisconnected(c *gin.Context) {
 
 	var req struct {
 		Token         string `json:"token" binding:"required"`
-		UserID        string `json:"userId"`        // Deprecated: use ClientEmail
-		ClientEmail   string `json:"clientEmail"`   // Client's email (CN from certificate)
+		UserID        string `json:"userId"`      // Deprecated: use ClientEmail
+		ClientEmail   string `json:"clientEmail"` // Client's email (CN from certificate)
 		TunnelIP      string `json:"tunnelIp"`
 		BytesSent     int64  `json:"bytesSent"`
 		BytesReceived int64  `json:"bytesReceived"`
