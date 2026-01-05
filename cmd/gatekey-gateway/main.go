@@ -914,21 +914,31 @@ func clientStatsSyncLoop(ctx context.Context, cfg *GatewayConfig) {
 
 // syncClientStats sends current connected clients and their traffic stats to control plane
 func syncClientStats(ctx context.Context, cfg *GatewayConfig) {
-	// Get traffic stats from OpenVPN status file
-	trafficStats := parseTrafficStats()
+	// Parse OpenVPN status file directly to discover all connected clients
+	// This is more reliable than depending on hooks to populate connectedUsers
+	stats := parseOpenVPNClients()
 
-	// Build stats payload
-	var stats []ClientStatsEntry
+	// Also include any clients from connectedUsers that might have more info
 	for vpnIP, client := range connectedUsers {
-		traffic := trafficStats[vpnIP]
-		stats = append(stats, ClientStatsEntry{
-			Email:          client.UserEmail,
-			TunnelIP:       vpnIP,
-			ClientIP:       "", // Could be extracted from status file if needed
-			BytesSent:      traffic.BytesSent,
-			BytesReceived:  traffic.BytesRecv,
-			ConnectedSince: client.ConnectedAt.Format(time.RFC3339),
-		})
+		found := false
+		for i := range stats {
+			if stats[i].TunnelIP == vpnIP {
+				// Update with more complete info if available
+				if stats[i].Email == "" && client.UserEmail != "" {
+					stats[i].Email = client.UserEmail
+				}
+				found = true
+				break
+			}
+		}
+		if !found && client.UserEmail != "" {
+			// Client not in status file but in our map (should be rare)
+			stats = append(stats, ClientStatsEntry{
+				Email:          client.UserEmail,
+				TunnelIP:       vpnIP,
+				ConnectedSince: client.ConnectedAt.Format(time.RFC3339),
+			})
+		}
 	}
 
 	reqBody := struct {
@@ -967,61 +977,190 @@ type TrafficStats struct {
 	BytesRecv int64
 }
 
-// parseTrafficStats parses the OpenVPN status file to get traffic stats
-// Status file format: Common Name,Real Address,Bytes Received,Bytes Sent,Connected Since
-func parseTrafficStats() map[string]TrafficStats {
-	stats := make(map[string]TrafficStats)
+// parseOpenVPNClients parses the OpenVPN status file to discover all connected clients
+// This reads both CLIENT LIST and ROUTING TABLE to get complete client info
+// Status file format:
+// CLIENT LIST: Common Name,Real Address,Bytes Received,Bytes Sent,Connected Since
+// ROUTING TABLE: Virtual Address,Common Name,Real Address,Last Ref
+func parseOpenVPNClients() []ClientStatsEntry {
+	var clients []ClientStatsEntry
 
 	// Try common status file locations
-	statusFile := "/var/log/openvpn/openvpn-status.log"
-	if _, err := os.Stat(statusFile); os.IsNotExist(err) {
-		statusFile = "/run/openvpn/server.status"
-		if _, err := os.Stat(statusFile); os.IsNotExist(err) {
-			return stats
+	statusFile := ""
+	statusPaths := []string{
+		"/var/log/openvpn/status.log",
+		"/var/log/openvpn/openvpn-status.log",
+		"/var/log/openvpn/server-status.log",
+		"/run/openvpn/server.status",
+	}
+	for _, path := range statusPaths {
+		if _, err := os.Stat(path); err == nil {
+			statusFile = path
+			break
 		}
+	}
+	if statusFile == "" {
+		return clients
 	}
 
 	data, err := os.ReadFile(statusFile)
 	if err != nil {
-		return stats
+		return clients
 	}
 
 	lines := strings.Split(string(data), "\n")
-	inClientList := false
 
+	// First pass: collect client stats from CLIENT LIST
+	// Handles both OpenVPN 2.4 format (Common Name,Real Address,Bytes Received,...)
+	// and OpenVPN 2.6 format (CLIENT_LIST,Common Name,Real Address,Virtual Address,...)
+	type clientInfo struct {
+		Email         string
+		ClientIP      string
+		TunnelIP      string
+		BytesRecv     int64
+		BytesSent     int64
+		ConnectedTime string
+	}
+	clientStats := make(map[string]*clientInfo) // keyed by common name (email)
+
+	for _, line := range lines {
+		// OpenVPN 2.6 format: CLIENT_LIST,CommonName,RealAddr,VirtualAddr,VirtualIPv6,BytesRecv,BytesSent,ConnectedSince,...
+		if strings.HasPrefix(line, "CLIENT_LIST,") {
+			parts := strings.Split(line, ",")
+			if len(parts) >= 8 {
+				commonName := parts[1]
+				realAddr := parts[2]
+				virtualAddr := parts[3]
+				bytesRecv, _ := strconv.ParseInt(parts[5], 10, 64)
+				bytesSent, _ := strconv.ParseInt(parts[6], 10, 64)
+				connectedSince := parts[7]
+
+				// Extract client IP from real address (format: IP:port)
+				clientIP := realAddr
+				if idx := strings.LastIndex(realAddr, ":"); idx > 0 {
+					clientIP = realAddr[:idx]
+				}
+
+				clientStats[commonName] = &clientInfo{
+					Email:         commonName,
+					ClientIP:      clientIP,
+					TunnelIP:      virtualAddr,
+					BytesRecv:     bytesRecv,
+					BytesSent:     bytesSent,
+					ConnectedTime: connectedSince,
+				}
+			}
+			continue
+		}
+
+		// OpenVPN 2.6 format: ROUTING_TABLE,VirtualAddr,CommonName,RealAddr,...
+		if strings.HasPrefix(line, "ROUTING_TABLE,") {
+			parts := strings.Split(line, ",")
+			if len(parts) >= 3 {
+				virtualAddr := parts[1]
+				commonName := parts[2]
+
+				// Update tunnel IP if we have client info (in case CLIENT_LIST didn't have it)
+				if info, ok := clientStats[commonName]; ok && info.TunnelIP == "" {
+					if !strings.Contains(virtualAddr, ":") { // Skip IPv6
+						info.TunnelIP = virtualAddr
+					}
+				}
+			}
+			continue
+		}
+	}
+
+	// Also handle legacy OpenVPN 2.4 format
+	inClientList := false
+	inRoutingTable := false
 	for _, line := range lines {
 		if strings.HasPrefix(line, "ROUTING TABLE") {
 			inClientList = false
+			inRoutingTable = true
+			continue
+		}
+		if strings.HasPrefix(line, "GLOBAL STATS") {
+			break
 		}
 		if strings.HasPrefix(line, "Common Name,") {
 			inClientList = true
 			continue
 		}
-		if inClientList && line != "" {
+		if strings.HasPrefix(line, "Virtual Address,") {
+			continue // Skip header
+		}
+
+		// Legacy client list format
+		if inClientList && line != "" && !strings.HasPrefix(line, "CLIENT_LIST") {
 			parts := strings.Split(line, ",")
 			if len(parts) >= 5 {
-				// Common Name,Real Address,Bytes Received,Bytes Sent,Connected Since
+				commonName := parts[0]
+				realAddr := parts[1]
 				bytesRecv, _ := strconv.ParseInt(parts[2], 10, 64)
 				bytesSent, _ := strconv.ParseInt(parts[3], 10, 64)
+				connectedSince := parts[4]
 
-				// Get tunnel IP from routing table (need to match by common name)
-				// For now, we'll try to get it from our connectedUsers map
-				// The common name is typically the user's email
-				commonName := parts[0]
+				clientIP := realAddr
+				if idx := strings.LastIndex(realAddr, ":"); idx > 0 {
+					clientIP = realAddr[:idx]
+				}
 
-				// Find tunnel IP by matching email
-				for vpnIP, client := range connectedUsers {
-					if client.UserEmail == commonName {
-						stats[vpnIP] = TrafficStats{
-							BytesSent: bytesSent,
-							BytesRecv: bytesRecv,
-						}
-						break
+				if _, exists := clientStats[commonName]; !exists {
+					clientStats[commonName] = &clientInfo{
+						Email:         commonName,
+						ClientIP:      clientIP,
+						BytesRecv:     bytesRecv,
+						BytesSent:     bytesSent,
+						ConnectedTime: connectedSince,
+					}
+				}
+			}
+		}
+
+		// Legacy routing table format
+		if inRoutingTable && line != "" && !strings.HasPrefix(line, "ROUTING_TABLE") {
+			parts := strings.Split(line, ",")
+			if len(parts) >= 3 {
+				virtualAddr := parts[0]
+				commonName := parts[1]
+
+				if info, ok := clientStats[commonName]; ok && info.TunnelIP == "" {
+					if !strings.Contains(virtualAddr, ":") {
+						info.TunnelIP = virtualAddr
 					}
 				}
 			}
 		}
 	}
 
+	// Build final client list
+	for _, info := range clientStats {
+		if info.TunnelIP != "" {
+			clients = append(clients, ClientStatsEntry{
+				Email:          info.Email,
+				TunnelIP:       info.TunnelIP,
+				ClientIP:       info.ClientIP,
+				BytesSent:      info.BytesSent,
+				BytesReceived:  info.BytesRecv,
+				ConnectedSince: info.ConnectedTime,
+			})
+		}
+	}
+
+	return clients
+}
+
+// parseTrafficStats parses the OpenVPN status file to get traffic stats (legacy function)
+// Kept for backward compatibility
+func parseTrafficStats() map[string]TrafficStats {
+	stats := make(map[string]TrafficStats)
+	clients := parseOpenVPNClients()
+	for _, c := range clients {
+		stats[c.TunnelIP] = TrafficStats{
+			BytesSent: c.BytesSent,
+			BytesRecv: c.BytesReceived,
+		}
+	}
 	return stats
 }
