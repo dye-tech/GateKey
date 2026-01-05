@@ -4,7 +4,7 @@ import {
   getGatewayNetworks, getNetworks, assignGatewayToNetwork, removeGatewayFromNetwork,
   getGatewayUsers, assignUserToGateway, removeUserFromGateway,
   getGatewayGroups, assignGroupToGateway, removeGroupFromGateway,
-  AdminGateway, RegisterGatewayResponse, Network, GatewayUser, GatewayGroup, CryptoProfile, RotateTokenResponse
+  AdminGateway, RegisterGatewayResponse, Network, GatewayUser, GatewayGroup, CryptoProfile, GatewayType, RotateTokenResponse
 } from '../api/client'
 import ActionDropdown, { ActionItem } from '../components/ActionDropdown'
 
@@ -143,6 +143,9 @@ export default function AdminGateways() {
                   Gateway
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
+                  Type
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">
@@ -172,6 +175,20 @@ export default function AdminGateways() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      gateway.gatewayType === 'wireguard'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-blue-600 text-white'
+                    }`}>
+                      {gateway.gatewayType === 'wireguard' ? 'WireGuard' : 'OpenVPN'}
+                    </span>
+                    {gateway.gatewayType === 'wireguard' && gateway.wgPublicKey && (
+                      <div className="text-xs text-theme-tertiary mt-1 truncate max-w-24" title={gateway.wgPublicKey}>
+                        {gateway.wgPublicKey.substring(0, 12)}...
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                       gateway.isActive
                         ? 'bg-green-600 text-white'
                         : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
@@ -180,17 +197,24 @@ export default function AdminGateways() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-tertiary">
-                    <div>{gateway.vpnProtocol.toUpperCase()}:{gateway.vpnPort}</div>
-                    <div className="text-xs">
-                      <span className={`px-1.5 py-0.5 rounded ${
-                        gateway.cryptoProfile === 'fips' ? 'bg-purple-600 text-white' :
-                        gateway.cryptoProfile === 'compatible' ? 'bg-yellow-500 text-white' :
-                        'bg-blue-600 text-white'
-                      }`}>
-                        {gateway.cryptoProfile === 'fips' ? 'FIPS' :
-                         gateway.cryptoProfile === 'compatible' ? 'Compatible' : 'Modern'}
-                      </span>
-                    </div>
+                    <div>{gateway.gatewayType === 'wireguard' ? 'UDP' : gateway.vpnProtocol.toUpperCase()}:{gateway.vpnPort}</div>
+                    {gateway.gatewayType === 'openvpn' && (
+                      <div className="text-xs">
+                        <span className={`px-1.5 py-0.5 rounded ${
+                          gateway.cryptoProfile === 'fips' ? 'bg-purple-600 text-white' :
+                          gateway.cryptoProfile === 'compatible' ? 'bg-yellow-500 text-white' :
+                          'bg-blue-600 text-white'
+                        }`}>
+                          {gateway.cryptoProfile === 'fips' ? 'FIPS' :
+                           gateway.cryptoProfile === 'compatible' ? 'Compatible' : 'Modern'}
+                        </span>
+                      </div>
+                    )}
+                    {gateway.gatewayType === 'wireguard' && (
+                      <div className="text-xs text-theme-muted">
+                        ChaCha20-Poly1305
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-tertiary">
                     {gateway.lastHeartbeat
@@ -269,6 +293,9 @@ export default function AdminGateways() {
               pushDns: false, // Default for new gateways
               dnsServers: [], // Default for new gateways
               sessionEnabled: true, // Default for new gateways
+              gatewayType: newGateway.gatewayType || 'openvpn',
+              wgPublicKey: newGateway.wgPublicKey,
+              wgListenPort: newGateway.wgListenPort,
               isActive: false,
               lastHeartbeat: null,
               createdAt: new Date().toISOString(),
@@ -336,6 +363,7 @@ interface AddGatewayModalProps {
 }
 
 function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
+  const [gatewayType, setGatewayType] = useState<GatewayType>('openvpn')
   const [name, setName] = useState('')
   const [hostname, setHostname] = useState('')
   const [publicIp, setPublicIp] = useState('')
@@ -350,6 +378,15 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
   const [sessionEnabled, setSessionEnabled] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Update port when gateway type changes
+  useEffect(() => {
+    if (gatewayType === 'wireguard') {
+      setVpnPort('51820')
+    } else {
+      setVpnPort('1194')
+    }
+  }, [gatewayType])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -368,15 +405,17 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
         name,
         hostname: hostname || undefined,
         public_ip: publicIp || undefined,
-        vpn_port: parseInt(vpnPort) || 1194,
-        vpn_protocol: vpnProtocol,
-        crypto_profile: cryptoProfile,
+        vpn_port: parseInt(vpnPort) || (gatewayType === 'wireguard' ? 51820 : 1194),
+        vpn_protocol: gatewayType === 'wireguard' ? 'udp' : vpnProtocol,
+        crypto_profile: gatewayType === 'wireguard' ? undefined : cryptoProfile,
         vpn_subnet: vpnSubnet || '172.31.255.0/24',
-        tls_auth_enabled: tlsAuthEnabled,
+        tls_auth_enabled: gatewayType === 'wireguard' ? undefined : tlsAuthEnabled,
         full_tunnel_mode: fullTunnelMode,
         push_dns: pushDns,
         dns_servers: pushDns ? dnsServers.split(',').map(s => s.trim()).filter(s => s) : [],
         session_enabled: sessionEnabled,
+        gateway_type: gatewayType,
+        wg_listen_port: gatewayType === 'wireguard' ? parseInt(vpnPort) || 51820 : undefined,
       })
       onSuccess(gateway)
     } catch (err: unknown) {
@@ -413,6 +452,46 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
             />
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">
+              Gateway Type *
+            </label>
+            <div className="flex space-x-2">
+              <button
+                type="button"
+                onClick={() => setGatewayType('openvpn')}
+                className={`flex-1 px-4 py-2 rounded-lg border font-medium text-sm transition-colors ${
+                  gatewayType === 'openvpn'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-theme-card text-theme-secondary border-theme hover:bg-theme-tertiary'
+                }`}
+              >
+                <svg className="w-4 h-4 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                OpenVPN
+              </button>
+              <button
+                type="button"
+                onClick={() => setGatewayType('wireguard')}
+                className={`flex-1 px-4 py-2 rounded-lg border font-medium text-sm transition-colors ${
+                  gatewayType === 'wireguard'
+                    ? 'bg-purple-600 text-white border-purple-600'
+                    : 'bg-theme-card text-theme-secondary border-theme hover:bg-theme-tertiary'
+                }`}
+              >
+                <svg className="w-4 h-4 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                WireGuard
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-theme-tertiary">
+              {gatewayType === 'openvpn' && 'OpenVPN provides wide client compatibility with TCP/UDP options.'}
+              {gatewayType === 'wireguard' && 'WireGuard is a modern, high-performance VPN protocol (UDP only).'}
+            </p>
+          </div>
+
           <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg mb-2">
             <p className="text-sm text-gray-800 dark:text-blue-400">Provide either a hostname or IP address (at least one is required)</p>
           </div>
@@ -443,7 +522,7 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className={gatewayType === 'openvpn' ? 'grid grid-cols-2 gap-4' : ''}>
             <div>
               <label className="block text-sm font-medium text-theme-secondary mb-1">
                 VPN Port
@@ -454,42 +533,51 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
                 onChange={(e) => setVpnPort(e.target.value)}
                 className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
+              {gatewayType === 'wireguard' && (
+                <p className="mt-1 text-xs text-theme-tertiary">
+                  WireGuard uses UDP only. Default port is 51820.
+                </p>
+              )}
             </div>
 
+            {gatewayType === 'openvpn' && (
+              <div>
+                <label className="block text-sm font-medium text-theme-secondary mb-1">
+                  Protocol
+                </label>
+                <select
+                  value={vpnProtocol}
+                  onChange={(e) => setVpnProtocol(e.target.value)}
+                  className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                >
+                  <option value="udp">UDP</option>
+                  <option value="tcp">TCP</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {gatewayType === 'openvpn' && (
             <div>
               <label className="block text-sm font-medium text-theme-secondary mb-1">
-                Protocol
+                Crypto Profile
               </label>
               <select
-                value={vpnProtocol}
-                onChange={(e) => setVpnProtocol(e.target.value)}
+                value={cryptoProfile}
+                onChange={(e) => setCryptoProfile(e.target.value as CryptoProfile)}
                 className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
-                <option value="udp">UDP</option>
-                <option value="tcp">TCP</option>
+                <option value="modern">Modern (Recommended) - AES-256-GCM, CHACHA20-POLY1305</option>
+                <option value="fips">FIPS 140-3 Compliant - AES-256-GCM, AES-128-GCM</option>
+                <option value="compatible">Compatible - AES-256-GCM, AES-128-GCM, AES-256-CBC, AES-128-CBC</option>
               </select>
+              <p className="mt-1 text-xs text-theme-tertiary">
+                {cryptoProfile === 'fips' && 'FIPS mode uses only FIPS 140-3 validated cryptographic algorithms (AES-GCM).'}
+                {cryptoProfile === 'compatible' && 'Compatible mode supports older OpenVPN 2.3.x clients with CBC fallback.'}
+                {cryptoProfile === 'modern' && 'Modern mode uses the latest secure ciphers including CHACHA20-POLY1305.'}
+              </p>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-theme-secondary mb-1">
-              Crypto Profile
-            </label>
-            <select
-              value={cryptoProfile}
-              onChange={(e) => setCryptoProfile(e.target.value as CryptoProfile)}
-              className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option value="modern">Modern (Recommended) - AES-256-GCM, CHACHA20-POLY1305</option>
-              <option value="fips">FIPS 140-3 Compliant - AES-256-GCM, AES-128-GCM</option>
-              <option value="compatible">Compatible - AES-256-GCM, AES-128-GCM, AES-256-CBC, AES-128-CBC</option>
-            </select>
-            <p className="mt-1 text-xs text-theme-tertiary">
-              {cryptoProfile === 'fips' && 'FIPS mode uses only FIPS 140-3 validated cryptographic algorithms (AES-GCM).'}
-              {cryptoProfile === 'compatible' && 'Compatible mode supports older OpenVPN 2.3.x clients with CBC fallback.'}
-              {cryptoProfile === 'modern' && 'Modern mode uses the latest secure ciphers including CHACHA20-POLY1305.'}
-            </p>
-          </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-theme-secondary mb-1">
@@ -507,21 +595,25 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
             </p>
           </div>
 
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="tlsAuthEnabled"
-              checked={tlsAuthEnabled}
-              onChange={(e) => setTlsAuthEnabled(e.target.checked)}
-              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-theme rounded"
-            />
-            <label htmlFor="tlsAuthEnabled" className="ml-2 block text-sm text-theme-secondary">
-              Enable TLS Authentication
-            </label>
-          </div>
-          <p className="text-xs text-theme-tertiary -mt-2">
-            TLS-Auth provides additional security. Disable for simpler direct IP connections.
-          </p>
+          {gatewayType === 'openvpn' && (
+            <>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="tlsAuthEnabled"
+                  checked={tlsAuthEnabled}
+                  onChange={(e) => setTlsAuthEnabled(e.target.checked)}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-theme rounded"
+                />
+                <label htmlFor="tlsAuthEnabled" className="ml-2 block text-sm text-theme-secondary">
+                  Enable TLS Authentication
+                </label>
+              </div>
+              <p className="text-xs text-theme-tertiary -mt-2">
+                TLS-Auth provides additional security. Disable for simpler direct IP connections.
+              </p>
+            </>
+          )}
 
           <div className="flex items-center">
             <input
@@ -640,14 +732,14 @@ function TokenModal({ gateway, onClose, onShowInstaller }: TokenModalProps) {
           <h2 className="text-xl font-semibold text-theme-primary">Gateway Registered!</h2>
         </div>
 
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4">
+        <div className="bg-slate-100 dark:bg-slate-800 border-l-4 border-l-indigo-500 dark:border-l-indigo-400 rounded-lg p-4 mb-4">
           <div className="flex">
-            <svg className="h-5 w-5 text-yellow-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
             <div>
-              <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-400">Save this token!</h3>
-              <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1">
+              <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100">Save this token!</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
                 This token will only be shown once. You'll need it to configure the gateway agent.
               </p>
             </div>
@@ -667,7 +759,7 @@ function TokenModal({ gateway, onClose, onShowInstaller }: TokenModalProps) {
                 type="text"
                 readOnly
                 value={gateway.token}
-                className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-theme rounded-l-lg text-sm font-mono"
+                className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-theme rounded-l-lg text-sm font-mono text-gray-900 dark:text-gray-100"
               />
               <button
                 onClick={copyToken}
@@ -708,8 +800,10 @@ function InstallerModal({ gateway, token, onClose }: InstallerModalProps) {
   const serverUrl = window.location.origin
   const tokenValue = token || 'YOUR_GATEWAY_TOKEN'
   const hasToken = !!token
+  const isWireGuard = gateway.gatewayType === 'wireguard'
 
-  const installCommand = `curl -sSL ${serverUrl}/scripts/install-gateway.sh | sudo bash -s -- \\
+  const installScript = isWireGuard ? 'install-wireguard-gateway.sh' : 'install-gateway.sh'
+  const installCommand = `curl -sSL ${serverUrl}/scripts/${installScript} | sudo bash -s -- \\
   --server ${serverUrl} \\
   --token ${tokenValue} \\
   --name ${gateway.name}`
@@ -747,14 +841,14 @@ function InstallerModal({ gateway, token, onClose }: InstallerModalProps) {
           )}
 
           {hasToken && (
-            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+            <div className="bg-gray-50 dark:bg-gray-800 border-l-4 border-l-teal-500 dark:border-l-teal-400 rounded-lg p-4">
               <div className="flex">
-                <svg className="h-5 w-5 text-green-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-5 w-5 text-teal-600 dark:text-teal-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 <div>
-                  <h3 className="text-sm font-medium text-green-800 dark:text-green-400">Token Included</h3>
-                  <p className="text-sm text-green-700 dark:text-green-400 mt-1">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Token Included</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
                     The gateway token is already included in the command below. Copy and run it on your gateway server.
                   </p>
                 </div>
@@ -798,18 +892,18 @@ function InstallerModal({ gateway, token, onClose }: InstallerModalProps) {
             <h3 className="text-sm font-medium text-theme-secondary mb-2">Manual Installation</h3>
             <ol className="text-sm text-theme-secondary space-y-2 list-decimal list-inside">
               <li>
-                Download the gateway binary:
+                Download the {isWireGuard ? 'WireGuard gateway' : 'gateway'} binary:
                 <div className="mt-1 ml-5 space-x-2">
-                  <a href="/downloads/gatekey-gateway-linux-amd64" className="text-primary-600 hover:underline text-xs">
+                  <a href={`/downloads/gatekey-${isWireGuard ? 'wireguard-gateway' : 'gateway'}-linux-amd64`} className="text-primary-600 hover:underline text-xs">
                     Linux AMD64
                   </a>
-                  <a href="/downloads/gatekey-gateway-linux-arm64" className="text-primary-600 hover:underline text-xs">
+                  <a href={`/downloads/gatekey-${isWireGuard ? 'wireguard-gateway' : 'gateway'}-linux-arm64`} className="text-primary-600 hover:underline text-xs">
                     Linux ARM64
                   </a>
                 </div>
               </li>
-              <li>Move to <code className="bg-theme-tertiary px-1.5 py-0.5 rounded text-theme-primary font-mono text-xs">/usr/local/bin/gatekey-gateway</code></li>
-              <li>Create config at <code className="bg-theme-tertiary px-1.5 py-0.5 rounded text-theme-primary font-mono text-xs">/etc/gatekey/gateway.yaml</code></li>
+              <li>Move to <code className="bg-theme-tertiary px-1.5 py-0.5 rounded text-theme-primary font-mono text-xs">/usr/local/bin/gatekey-{isWireGuard ? 'wireguard-gateway' : 'gateway'}</code></li>
+              <li>Create config at <code className="bg-theme-tertiary px-1.5 py-0.5 rounded text-theme-primary font-mono text-xs">/etc/gatekey/{isWireGuard ? 'wireguard-gateway' : 'gateway'}.yaml</code></li>
               <li>Configure systemd service and start</li>
             </ol>
           </div>
@@ -819,8 +913,9 @@ function InstallerModal({ gateway, token, onClose }: InstallerModalProps) {
             <ul className="text-sm info-box-text space-y-1">
               <li>• Ubuntu 20.04+, Debian 11+, RHEL 8+, or Fedora 35+</li>
               <li>• Root/sudo access</li>
+              {isWireGuard && <li>• wireguard-tools package (wg, wg-quick)</li>}
               <li>• Outbound HTTPS access to the control plane</li>
-              <li>• Inbound access on VPN port ({gateway.vpnPort}/{gateway.vpnProtocol})</li>
+              <li>• Inbound access on VPN port ({gateway.vpnPort}/{isWireGuard ? 'UDP' : gateway.vpnProtocol})</li>
             </ul>
           </div>
         </div>
@@ -1456,14 +1551,14 @@ function RotatedTokenModal({ gatewayName, token, installScript, onClose }: Rotat
           <p className="text-theme-secondary mt-1">Gateway: {gatewayName}</p>
         </div>
 
-        <div className="instruction-box mb-4">
+        <div className="bg-slate-100 dark:bg-slate-800 border-l-4 border-l-indigo-500 dark:border-l-indigo-400 rounded-lg p-4 mb-4">
           <div className="flex">
-            <svg className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
             <div>
-              <h3 className="text-sm font-medium text-theme-primary">Save this token!</h3>
-              <p className="text-sm text-theme-secondary mt-1">
+              <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100">Save this token!</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
                 The old token is now invalid. This new token will only be shown once.
               </p>
             </div>

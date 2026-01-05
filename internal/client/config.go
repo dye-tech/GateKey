@@ -12,11 +12,12 @@ import (
 
 // Config holds the client configuration.
 type Config struct {
-	ServerURL     string `yaml:"server_url"`
-	OpenVPNBinary string `yaml:"openvpn_binary"`
-	ConfigDir     string `yaml:"config_dir"`
-	LogLevel      string `yaml:"log_level"`
-	APIKey        string `yaml:"api_key,omitempty"`
+	ServerURL       string `yaml:"server_url"`
+	OpenVPNBinary   string `yaml:"openvpn_binary"`
+	WireGuardBinary string `yaml:"wireguard_binary"`
+	ConfigDir       string `yaml:"config_dir"`
+	LogLevel        string `yaml:"log_level"`
+	APIKey          string `yaml:"api_key,omitempty"`
 
 	// Runtime paths (not saved to config)
 	configPath string `yaml:"-"`
@@ -29,10 +30,11 @@ func DefaultConfig() *Config {
 	dataDir := filepath.Join(homeDir, ".gatekey")
 
 	return &Config{
-		OpenVPNBinary: "openvpn",
-		ConfigDir:     filepath.Join(dataDir, "configs"),
-		LogLevel:      "info",
-		dataDir:       dataDir,
+		OpenVPNBinary:   "openvpn",
+		WireGuardBinary: "wg-quick",
+		ConfigDir:       filepath.Join(dataDir, "configs"),
+		LogLevel:        "info",
+		dataDir:         dataDir,
 	}
 }
 
@@ -136,6 +138,8 @@ func (c *Config) Set(key, value string) error {
 		c.ServerURL = value
 	case "openvpn_binary", "openvpn":
 		c.OpenVPNBinary = value
+	case "wireguard_binary", "wireguard":
+		c.WireGuardBinary = value
 	case "config_dir":
 		c.ConfigDir = value
 	case "log_level":
@@ -158,11 +162,12 @@ func (c *Config) Set(key, value string) error {
 func (c *Config) Print() error {
 	fmt.Println("GateKey Client Configuration")
 	fmt.Println("==========================")
-	fmt.Printf("Config file:    %s\n", c.configPath)
-	fmt.Printf("Server URL:     %s\n", c.ServerURL)
-	fmt.Printf("OpenVPN binary: %s\n", c.OpenVPNBinary)
-	fmt.Printf("Config dir:     %s\n", c.ConfigDir)
-	fmt.Printf("Log level:      %s\n", c.LogLevel)
+	fmt.Printf("Config file:       %s\n", c.configPath)
+	fmt.Printf("Server URL:        %s\n", c.ServerURL)
+	fmt.Printf("OpenVPN binary:    %s\n", c.OpenVPNBinary)
+	fmt.Printf("WireGuard binary:  %s\n", c.WireGuardBinary)
+	fmt.Printf("Config dir:        %s\n", c.ConfigDir)
+	fmt.Printf("Log level:         %s\n", c.LogLevel)
 	return nil
 }
 
@@ -209,4 +214,14 @@ func (c *Config) GatewayLogPath(gatewayName string) string {
 // GatewayConfigPath returns the path to the OpenVPN config for a specific gateway.
 func (c *Config) GatewayConfigPath(gatewayName string) string {
 	return filepath.Join(c.dataDir, fmt.Sprintf("%s.ovpn", gatewayName))
+}
+
+// WireGuardConfigPath returns the path to the WireGuard config for a specific gateway.
+func (c *Config) WireGuardConfigPath(gatewayName string) string {
+	return filepath.Join(c.dataDir, fmt.Sprintf("%s.conf", gatewayName))
+}
+
+// WireGuardLogPath returns the path to the WireGuard log file for a specific gateway.
+func (c *Config) WireGuardLogPath(gatewayName string) string {
+	return filepath.Join(c.dataDir, fmt.Sprintf("wireguard-%s.log", gatewayName))
 }

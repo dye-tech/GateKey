@@ -41,6 +41,8 @@ type Server struct {
 	apiKeyStore     *db.APIKeyStore
 	localGroupStore *db.LocalGroupStore
 	geoFenceStore   *db.GeoFenceStore
+	wgConfigStore   *db.WireGuardConfigStore // WireGuard config store
+	wgPeerStore     *db.WireGuardPeerStore   // WireGuard peer store
 	ca              *pki.CA
 	configGen       *openvpn.ConfigGenerator
 	adminPassword   string             // Initial admin password (shown once at startup)
@@ -104,6 +106,8 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	apiKeyStore := db.NewAPIKeyStore(database)
 	localGroupStore := db.NewLocalGroupStore(database)
 	geoFenceStore := db.NewGeoFenceStore(database)
+	wgConfigStore := db.NewWireGuardConfigStore(database)
+	wgPeerStore := db.NewWireGuardPeerStore(database)
 
 	// Initialize PKI with database store for CA persistence
 	// This ensures all pods share the same CA
@@ -148,6 +152,8 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 		apiKeyStore:     apiKeyStore,
 		localGroupStore: localGroupStore,
 		geoFenceStore:   geoFenceStore,
+		wgConfigStore:   wgConfigStore,
+		wgPeerStore:     wgPeerStore,
 		ca:              ca,
 		configGen:       configGen,
 		adminPassword:   adminPassword,
@@ -289,7 +295,7 @@ func (s *Server) setupRoutes() {
 			policies.DELETE("/:id", s.handleDeletePolicy)
 		}
 
-		// Gateway routes (internal)
+		// Gateway routes (internal - OpenVPN)
 		gateway := v1.Group("/gateway")
 		{
 			gateway.POST("/verify", s.handleGatewayVerify)
@@ -300,6 +306,15 @@ func (s *Server) setupRoutes() {
 			gateway.POST("/client-rules", s.handleGatewayClientRules)
 			gateway.POST("/all-rules", s.handleGatewayAllRules)
 			gateway.POST("/client-stats", s.handleGatewayClientStats) // Periodic client stats sync
+		}
+
+		// WireGuard Gateway routes (internal - WireGuard gateway agents)
+		wgGateway := v1.Group("/wireguard-gateway")
+		{
+			wgGateway.POST("/provision", s.handleWireGuardGatewayProvision)
+			wgGateway.POST("/heartbeat", s.handleWireGuardGatewayHeartbeat)
+			wgGateway.POST("/sync-peers", s.handleWireGuardGatewaySyncPeers)
+			wgGateway.POST("/peer-stats", s.handleWireGuardGatewayPeerStats)
 		}
 
 		// Mesh Hub internal routes (hub → control plane communication)
@@ -330,6 +345,22 @@ func (s *Server) setupRoutes() {
 		{
 			meshGateway.POST("/provision", s.handleMeshSpokeProvisionRequest)
 			meshGateway.POST("/heartbeat", s.handleMeshSpokeHeartbeat)
+		}
+
+		// WireGuard Mesh Hub internal routes (WG hub → control plane communication)
+		wgMeshHub := v1.Group("/wg-mesh-hub")
+		{
+			wgMeshHub.POST("/provision", s.handleWireGuardMeshHubProvision)
+			wgMeshHub.POST("/heartbeat", s.handleWireGuardMeshHubHeartbeat)
+			wgMeshHub.POST("/sync-peers", s.handleWireGuardMeshHubSyncPeers)
+			wgMeshHub.POST("/peer-stats", s.handleWireGuardMeshHubPeerStats)
+		}
+
+		// WireGuard Mesh Spoke internal routes (WG spoke → control plane)
+		wgMeshSpoke := v1.Group("/wg-mesh-spoke")
+		{
+			wgMeshSpoke.POST("/provision", s.handleWireGuardMeshSpokeProvision)
+			wgMeshSpoke.POST("/heartbeat", s.handleWireGuardMeshSpokeHeartbeat)
 		}
 
 		// User routes
@@ -482,6 +513,11 @@ func (s *Server) setupRoutes() {
 			admin.POST("/mesh-configs/:id/revoke", s.handleAdminRevokeMeshConfig)
 			admin.POST("/users/:id/revoke-mesh-configs", s.handleAdminRevokeMeshUserConfigs)
 
+			// Admin WireGuard config management
+			admin.GET("/wireguard/configs", s.handleAdminListWireGuardConfigs)
+			admin.POST("/wireguard/configs/:id/revoke", s.handleAdminRevokeWireGuardConfig)
+			admin.GET("/wireguard/peers", s.handleAdminListWireGuardPeers)
+
 			// API key management (admin)
 			admin.GET("/api-keys", s.handleAdminListAPIKeys)
 			admin.POST("/api-keys", s.handleAdminCreateAPIKey)
@@ -543,6 +579,15 @@ func (s *Server) setupRoutes() {
 		v1.GET("/mesh-configs", s.handleListUserMeshConfigs)
 		v1.GET("/mesh-configs/:id/download", s.handleDownloadMeshConfig)
 		v1.POST("/mesh-configs/:id/revoke", s.handleRevokeMeshConfig)
+
+		// User WireGuard config management
+		wgConfigs := v1.Group("/wireguard")
+		{
+			wgConfigs.POST("/configs/generate", s.handleGenerateWireGuardConfig)
+			wgConfigs.GET("/configs", s.handleListUserWireGuardConfigs)
+			wgConfigs.GET("/configs/:id/download", s.handleDownloadWireGuardConfig)
+			wgConfigs.POST("/configs/:id/revoke", s.handleRevokeWireGuardConfig)
+		}
 	}
 
 	// WebSocket endpoints for remote sessions (outside API group - no JSON middleware)
@@ -692,6 +737,25 @@ func (s *Server) cleanupExpiredConfigs(ctx context.Context) {
 			zap.Int64("deleted", meshCount),
 			zap.Int("validity_hours", validityHours),
 			zap.Duration("buffer", olderThan))
+	}
+
+	// Clean up WireGuard configs
+	wgCount, err := s.wgConfigStore.DeleteExpired(ctx, olderThan)
+	if err != nil {
+		s.logger.Error("Failed to cleanup expired WireGuard configs", zap.Error(err))
+	} else if wgCount > 0 {
+		s.logger.Info("Cleaned up expired WireGuard configs",
+			zap.Int64("deleted", wgCount),
+			zap.Int("validity_hours", validityHours),
+			zap.Duration("buffer", olderThan))
+	}
+
+	// Clean up stale WireGuard peers (no handshake in 5 minutes)
+	stalePeers, err := s.wgPeerStore.CleanupStale(ctx, 5*time.Minute)
+	if err != nil {
+		s.logger.Error("Failed to cleanup stale WireGuard peers", zap.Error(err))
+	} else if stalePeers > 0 {
+		s.logger.Info("Cleaned up stale WireGuard peers", zap.Int64("marked_disconnected", stalePeers))
 	}
 
 	// Clean up revoked API keys (delete after 24 hours)

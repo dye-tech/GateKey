@@ -1,0 +1,312 @@
+package wireguard
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+
+	"go.uber.org/zap"
+)
+
+// InterfaceConfig holds WireGuard interface configuration.
+type InterfaceConfig struct {
+	PrivateKey string // Base64-encoded private key
+	ListenPort int    // UDP listen port
+	Address    string // CIDR notation (e.g., "10.0.0.1/24")
+}
+
+// InterfaceStats contains statistics for a WireGuard interface.
+type InterfaceStats struct {
+	PublicKey  string
+	ListenPort int
+	Peers      []InterfacePeerStats
+}
+
+// InterfacePeerStats contains statistics for a single peer.
+type InterfacePeerStats struct {
+	PublicKey           string
+	Endpoint            string
+	AllowedIPs          []string
+	LatestHandshake     int64 // Unix timestamp
+	TransferRx          int64 // Bytes received
+	TransferTx          int64 // Bytes transmitted
+	PersistentKeepalive int
+}
+
+// InterfaceManager manages a WireGuard network interface.
+type InterfaceManager struct {
+	name   string
+	config InterfaceConfig
+	logger *zap.Logger
+}
+
+// NewInterfaceManager creates a new interface manager.
+func NewInterfaceManager(name string, logger *zap.Logger) *InterfaceManager {
+	return &InterfaceManager{
+		name:   name,
+		logger: logger,
+	}
+}
+
+// Setup creates and configures the WireGuard interface.
+func (m *InterfaceManager) Setup(ctx context.Context, config InterfaceConfig) error {
+	m.config = config
+	// 1. Create the interface
+	if err := m.createInterface(ctx); err != nil {
+		return fmt.Errorf("failed to create interface: %w", err)
+	}
+
+	// 2. Set the private key
+	if err := m.setPrivateKey(ctx); err != nil {
+		// Cleanup on failure
+		m.Teardown(ctx)
+		return fmt.Errorf("failed to set private key: %w", err)
+	}
+
+	// 3. Set listen port
+	if err := m.setListenPort(ctx); err != nil {
+		m.Teardown(ctx)
+		return fmt.Errorf("failed to set listen port: %w", err)
+	}
+
+	// 4. Set address
+	if err := m.setAddress(ctx); err != nil {
+		m.Teardown(ctx)
+		return fmt.Errorf("failed to set address: %w", err)
+	}
+
+	// 5. Bring up the interface
+	if err := m.bringUp(ctx); err != nil {
+		m.Teardown(ctx)
+		return fmt.Errorf("failed to bring up interface: %w", err)
+	}
+
+	return nil
+}
+
+// Teardown removes the WireGuard interface.
+func (m *InterfaceManager) Teardown(ctx context.Context) error {
+	cmd := exec.CommandContext(ctx, "ip", "link", "delete", m.name)
+	if err := cmd.Run(); err != nil {
+		// Don't return error if interface doesn't exist
+		if !strings.Contains(err.Error(), "Cannot find device") {
+			return fmt.Errorf("failed to delete interface: %w", err)
+		}
+	}
+	return nil
+}
+
+// createInterface creates the WireGuard interface.
+func (m *InterfaceManager) createInterface(ctx context.Context) error {
+	// Check if interface already exists
+	cmd := exec.CommandContext(ctx, "ip", "link", "show", m.name)
+	if cmd.Run() == nil {
+		// Interface exists, delete it first
+		if err := m.Teardown(ctx); err != nil {
+			return err
+		}
+	}
+
+	cmd = exec.CommandContext(ctx, "ip", "link", "add", m.name, "type", "wireguard")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("ip link add failed: %s: %w", string(output), err)
+	}
+	return nil
+}
+
+// setPrivateKey sets the WireGuard private key.
+func (m *InterfaceManager) setPrivateKey(ctx context.Context) error {
+	// Write private key to temp file (wg command reads from file)
+	tmpFile, err := os.CreateTemp("", "wg-key-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	if _, err := tmpFile.WriteString(m.config.PrivateKey); err != nil {
+		return fmt.Errorf("failed to write private key: %w", err)
+	}
+	tmpFile.Close()
+
+	cmd := exec.CommandContext(ctx, "wg", "set", m.name, "private-key", tmpFile.Name())
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("wg set private-key failed: %s: %w", string(output), err)
+	}
+	return nil
+}
+
+// setListenPort sets the WireGuard listen port.
+func (m *InterfaceManager) setListenPort(ctx context.Context) error {
+	cmd := exec.CommandContext(ctx, "wg", "set", m.name, "listen-port", fmt.Sprintf("%d", m.config.ListenPort))
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("wg set listen-port failed: %s: %w", string(output), err)
+	}
+	return nil
+}
+
+// setAddress assigns an IP address to the interface.
+func (m *InterfaceManager) setAddress(ctx context.Context) error {
+	cmd := exec.CommandContext(ctx, "ip", "address", "add", m.config.Address, "dev", m.name)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		// Ignore "RTNETLINK answers: File exists" error (address already set)
+		if !strings.Contains(string(output), "File exists") {
+			return fmt.Errorf("ip address add failed: %s: %w", string(output), err)
+		}
+	}
+	return nil
+}
+
+// bringUp brings the interface up.
+func (m *InterfaceManager) bringUp(ctx context.Context) error {
+	cmd := exec.CommandContext(ctx, "ip", "link", "set", m.name, "up")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("ip link set up failed: %s: %w", string(output), err)
+	}
+	return nil
+}
+
+// GetStats retrieves interface and peer statistics.
+func (m *InterfaceManager) GetStats(ctx context.Context) (*InterfaceStats, error) {
+	cmd := exec.CommandContext(ctx, "wg", "show", m.name, "dump")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("wg show failed: %w", err)
+	}
+
+	return parseWgShowDump(string(output))
+}
+
+// parseWgShowDump parses the output of "wg show <interface> dump".
+// Format: each line is tab-separated
+// Line 1: private-key, public-key, listen-port, fwmark
+// Subsequent lines (peers): public-key, preshared-key, endpoint, allowed-ips, latest-handshake, transfer-rx, transfer-tx, persistent-keepalive
+func parseWgShowDump(output string) (*InterfaceStats, error) {
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	if len(lines) == 0 {
+		return nil, fmt.Errorf("empty output")
+	}
+
+	stats := &InterfaceStats{}
+
+	// Parse interface line
+	ifaceParts := strings.Split(lines[0], "\t")
+	if len(ifaceParts) >= 3 {
+		stats.PublicKey = ifaceParts[1]
+		fmt.Sscanf(ifaceParts[2], "%d", &stats.ListenPort)
+	}
+
+	// Parse peer lines
+	for _, line := range lines[1:] {
+		parts := strings.Split(line, "\t")
+		if len(parts) < 8 {
+			continue
+		}
+
+		peer := InterfacePeerStats{
+			PublicKey: parts[0],
+			Endpoint:  parts[2],
+		}
+
+		if parts[3] != "(none)" {
+			peer.AllowedIPs = strings.Split(parts[3], ",")
+		}
+
+		fmt.Sscanf(parts[4], "%d", &peer.LatestHandshake)
+		fmt.Sscanf(parts[5], "%d", &peer.TransferRx)
+		fmt.Sscanf(parts[6], "%d", &peer.TransferTx)
+		fmt.Sscanf(parts[7], "%d", &peer.PersistentKeepalive)
+
+		stats.Peers = append(stats.Peers, peer)
+	}
+
+	return stats, nil
+}
+
+// IsInterfaceUp checks if the interface exists and is up.
+func (m *InterfaceManager) IsInterfaceUp(ctx context.Context) bool {
+	cmd := exec.CommandContext(ctx, "ip", "link", "show", m.name, "up")
+	return cmd.Run() == nil
+}
+
+// AddPeer adds a peer to the WireGuard interface.
+func (m *InterfaceManager) AddPeer(ctx context.Context, peer PeerConfig) error {
+	args := []string{"set", m.name, "peer", peer.PublicKey}
+
+	// Add preshared key if provided
+	var tmpPSKFile *os.File
+	if peer.PresharedKey != "" {
+		// Write PSK to temp file
+		var err error
+		tmpPSKFile, err = os.CreateTemp("", "wg-psk-*")
+		if err != nil {
+			return fmt.Errorf("failed to create temp file for PSK: %w", err)
+		}
+		defer os.Remove(tmpPSKFile.Name())
+		if _, err := tmpPSKFile.WriteString(peer.PresharedKey); err != nil {
+			tmpPSKFile.Close()
+			return fmt.Errorf("failed to write PSK: %w", err)
+		}
+		tmpPSKFile.Close()
+		args = append(args, "preshared-key", tmpPSKFile.Name())
+	}
+
+	// Add endpoint if provided (for client-mode connections)
+	if peer.Endpoint != "" {
+		args = append(args, "endpoint", peer.Endpoint)
+	}
+
+	// Add allowed IPs
+	if len(peer.AllowedIPs) > 0 {
+		args = append(args, "allowed-ips", strings.Join(peer.AllowedIPs, ","))
+	}
+
+	// Add persistent keepalive if provided (for NAT traversal)
+	if peer.PersistentKeepalive > 0 {
+		args = append(args, "persistent-keepalive", fmt.Sprintf("%d", peer.PersistentKeepalive))
+	}
+
+	cmd := exec.CommandContext(ctx, "wg", args...)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("wg set peer failed: %s: %w", string(output), err)
+	}
+
+	if m.logger != nil {
+		m.logger.Info("Added WireGuard peer",
+			zap.String("interface", m.name),
+			zap.String("public_key", peer.PublicKey),
+			zap.Strings("allowed_ips", peer.AllowedIPs),
+			zap.String("endpoint", peer.Endpoint),
+			zap.Int("persistent_keepalive", peer.PersistentKeepalive))
+	}
+
+	return nil
+}
+
+// RemovePeer removes a peer from the WireGuard interface.
+func (m *InterfaceManager) RemovePeer(ctx context.Context, publicKey string) error {
+	cmd := exec.CommandContext(ctx, "wg", "set", m.name, "peer", publicKey, "remove")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("wg set peer remove failed: %s: %w", string(output), err)
+	}
+
+	if m.logger != nil {
+		m.logger.Info("Removed WireGuard peer",
+			zap.String("interface", m.name),
+			zap.String("public_key", publicKey))
+	}
+
+	return nil
+}
+
+// GetName returns the interface name.
+func (m *InterfaceManager) GetName() string {
+	return m.name
+}
+
+// GetConfig returns the current interface configuration.
+func (m *InterfaceManager) GetConfig() InterfaceConfig {
+	return m.config
+}

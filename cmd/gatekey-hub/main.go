@@ -352,17 +352,17 @@ func heartbeatLoop(ctx context.Context, cfg *HubConfig) {
 
 func sendHeartbeat(ctx context.Context, cfg *HubConfig) (*HeartbeatResponse, error) {
 	reqBody := struct {
-		Token             string `json:"token"`
-		Status            string `json:"status"`
-		ConnectedGateways int    `json:"connectedGateways"`
-		ConnectedClients  int    `json:"connectedClients"`
-		ConfigVersion     string `json:"configVersion"`
+		Token            string `json:"token"`
+		Status           string `json:"status"`
+		ConnectedSpokes  int    `json:"connectedSpokes"`
+		ConnectedClients int    `json:"connectedClients"`
+		ConfigVersion    string `json:"configVersion"`
 	}{
-		Token:             cfg.APIToken,
-		Status:            "online",
-		ConnectedGateways: getConnectedGatewayCount(),
-		ConnectedClients:  getConnectedClientCount(),
-		ConfigVersion:     currentConfigVer,
+		Token:            cfg.APIToken,
+		Status:           "online",
+		ConnectedSpokes:  getConnectedGatewayCount(),
+		ConnectedClients: getConnectedClientCount(),
+		ConfigVersion:    currentConfigVer,
 	}
 
 	body, err := json.Marshal(reqBody)

@@ -45,6 +45,7 @@ type TopologyMeshHub struct {
 	LastHeartbeat   *time.Time `json:"lastHeartbeat"`
 	ConnectedSpokes int        `json:"connectedSpokes"`
 	ConnectedUsers  int        `json:"connectedUsers"`
+	GatewayType     string     `json:"gatewayType"` // openvpn or wireguard
 }
 
 // TopologyMeshSpoke represents a mesh spoke in the topology
@@ -57,6 +58,7 @@ type TopologyMeshSpoke struct {
 	Status        string     `json:"status"`
 	LastSeen      *time.Time `json:"lastSeen"`
 	RemoteIP      string     `json:"remoteIp"`
+	GatewayType   string     `json:"gatewayType"` // openvpn or wireguard
 }
 
 // TopologyConnection represents a connection between nodes
@@ -153,6 +155,7 @@ func (s *Server) handleGetTopology(c *gin.Context) {
 			LastHeartbeat:   hub.LastHeartbeat,
 			ConnectedSpokes: hub.ConnectedSpokes,
 			ConnectedUsers:  hub.ConnectedClients,
+			GatewayType:     hub.GatewayType,
 		})
 
 		// Get spokes for this hub
@@ -172,6 +175,7 @@ func (s *Server) handleGetTopology(c *gin.Context) {
 				Status:        spoke.Status,
 				LastSeen:      spoke.LastSeen,
 				RemoteIP:      spoke.RemoteIP,
+				GatewayType:   spoke.GatewayType,
 			})
 
 			// Add connection from hub to spoke

@@ -28,6 +28,7 @@ type ConnectionState struct {
 	Connected    bool      `json:"connected"`
 	Gateway      string    `json:"gateway,omitempty"`
 	GatewayID    string    `json:"gateway_id,omitempty"`
+	GatewayType  string    `json:"gateway_type,omitempty"` // "openvpn" or "wireguard"
 	ConnectedAt  time.Time `json:"connected_at,omitempty"`
 	LocalIP      string    `json:"local_ip,omitempty"`
 	RemoteIP     string    `json:"remote_ip,omitempty"`
@@ -50,6 +51,7 @@ type Gateway struct {
 	Description string `json:"description,omitempty"`
 	Location    string `json:"location,omitempty"`
 	Status      string `json:"status"`
+	GatewayType string `json:"gatewayType"` // "openvpn" or "wireguard"
 }
 
 // NewVPNManager creates a new VPN manager.
@@ -68,10 +70,10 @@ func (v *VPNManager) Connect(ctx context.Context, gatewayName string) error {
 	// Check if already connected to this specific gateway
 	if gatewayName != "" {
 		if conn, exists := multiState.Connections[gatewayName]; exists && conn.Connected {
-			if v.isProcessRunning(conn.PID) {
+			if v.isConnectionActive(conn) {
 				return fmt.Errorf("already connected to %s. Run 'gatekey disconnect %s' first", gatewayName, gatewayName)
 			}
-			// Process died, clean up stale connection
+			// Connection died, clean up stale connection
 			delete(multiState.Connections, gatewayName)
 		}
 	}
@@ -122,11 +124,22 @@ func (v *VPNManager) Connect(ctx context.Context, gatewayName string) error {
 
 	// Check if already connected to this gateway (by name match after selection)
 	if conn, exists := multiState.Connections[selectedGateway.Name]; exists && conn.Connected {
-		if v.isProcessRunning(conn.PID) {
+		if v.isConnectionActive(conn) {
 			return fmt.Errorf("already connected to %s", selectedGateway.Name)
 		}
 	}
 
+	// Branch based on gateway type
+	gatewayType := selectedGateway.GatewayType
+	if gatewayType == "" {
+		gatewayType = "openvpn" // Default to OpenVPN for backwards compatibility
+	}
+
+	if gatewayType == "wireguard" {
+		return v.connectWireGuard(ctx, selectedGateway, multiState)
+	}
+
+	// OpenVPN connection (default)
 	fmt.Printf("Connecting to %s...\n", selectedGateway.Name)
 
 	// Find an available tun interface number
@@ -150,6 +163,7 @@ func (v *VPNManager) Connect(ctx context.Context, gatewayName string) error {
 		Connected:    true,
 		Gateway:      selectedGateway.Name,
 		GatewayID:    selectedGateway.ID,
+		GatewayType:  "openvpn",
 		ConnectedAt:  time.Now(),
 		PID:          pid,
 		TunInterface: tunInterface,
@@ -212,10 +226,18 @@ func (v *VPNManager) findAvailableTunNumber(multiState *MultiConnectionState) in
 // cleanupStaleConnections removes connections whose processes have died.
 func (v *VPNManager) cleanupStaleConnections(multiState *MultiConnectionState) {
 	for name, conn := range multiState.Connections {
-		if conn.Connected && !v.isProcessRunning(conn.PID) {
-			// Process died, clean up
+		if conn.Connected && !v.isConnectionActive(conn) {
+			// Connection died, clean up
 			if conn.TunInterface != "" {
-				exec.Command("sudo", "ip", "link", "delete", conn.TunInterface).Run()
+				if conn.GatewayType == "wireguard" {
+					// WireGuard cleanup
+					v.stopWireGuard(conn.TunInterface)
+					configPath := fmt.Sprintf("/etc/wireguard/%s.conf", conn.TunInterface)
+					exec.Command("sudo", "rm", "-f", configPath).Run()
+				} else {
+					// OpenVPN cleanup
+					exec.Command("sudo", "ip", "link", "delete", conn.TunInterface).Run()
+				}
 			}
 			delete(multiState.Connections, name)
 		}
@@ -306,6 +328,13 @@ func (v *VPNManager) disconnectAll(multiState *MultiConnectionState) error {
 
 // disconnectSingle disconnects from a single gateway.
 func (v *VPNManager) disconnectSingle(conn *ConnectionState, gatewayName string) {
+	// Handle WireGuard disconnect
+	if conn.GatewayType == "wireguard" {
+		v.disconnectWireGuard(conn, gatewayName)
+		return
+	}
+
+	// OpenVPN disconnect
 	// Kill the OpenVPN process
 	if conn.PID > 0 {
 		proc, err := os.FindProcess(conn.PID)
@@ -700,7 +729,7 @@ func (v *VPNManager) Status(jsonOutput bool) error {
 	// Count active connections
 	activeCount := 0
 	for _, conn := range multiState.Connections {
-		if conn.Connected && v.isProcessRunning(conn.PID) {
+		if conn.Connected && v.isConnectionActive(conn) {
 			activeCount++
 		}
 	}
@@ -720,8 +749,8 @@ func (v *VPNManager) Status(jsonOutput bool) error {
 	if jsonOutput {
 		connections := make([]*ConnectionState, 0)
 		for _, conn := range multiState.Connections {
-			if conn.Connected && v.isProcessRunning(conn.PID) {
-				v.updateStateFromLogForGateway(conn)
+			if conn.Connected && v.isConnectionActive(conn) {
+				v.updateConnectionState(conn)
 				connections = append(connections, conn)
 			}
 		}
@@ -735,7 +764,7 @@ func (v *VPNManager) Status(jsonOutput bool) error {
 	if activeCount == 1 {
 		// Single connection - show detailed view
 		for _, conn := range multiState.Connections {
-			if conn.Connected && v.isProcessRunning(conn.PID) {
+			if conn.Connected && v.isConnectionActive(conn) {
 				v.showSingleConnectionStatus(conn)
 				break
 			}
@@ -744,23 +773,29 @@ func (v *VPNManager) Status(jsonOutput bool) error {
 		// Multiple connections - show summary
 		fmt.Printf("Status: Connected to %d gateways\n\n", activeCount)
 		for name, conn := range multiState.Connections {
-			if conn.Connected && v.isProcessRunning(conn.PID) {
-				v.updateStateFromLogForGateway(conn)
-				tunnelStatus := v.checkTunnelStatusForGateway(name)
+			if conn.Connected && v.isConnectionActive(conn) {
+				v.updateConnectionState(conn)
+				tunnelStatus := v.getConnectionStatus(conn)
 				statusStr := "Connected"
 				if tunnelStatus == "connecting" {
 					statusStr = "Connecting"
 				} else if tunnelStatus == "failed" {
 					statusStr = "Failed"
 				}
-				fmt.Printf("  %s:\n", name)
+				vpnType := conn.GatewayType
+				if vpnType == "" {
+					vpnType = "openvpn"
+				}
+				fmt.Printf("  %s (%s):\n", name, vpnType)
 				fmt.Printf("    Status:    %s\n", statusStr)
 				fmt.Printf("    Interface: %s\n", conn.TunInterface)
 				if conn.LocalIP != "" {
 					fmt.Printf("    Local IP:  %s\n", conn.LocalIP)
 				}
 				fmt.Printf("    Duration:  %s\n", time.Since(conn.ConnectedAt).Round(time.Second))
-				fmt.Printf("    PID:       %d\n", conn.PID)
+				if vpnType == "openvpn" && conn.PID > 0 {
+					fmt.Printf("    PID:       %d\n", conn.PID)
+				}
 				fmt.Println()
 			}
 		}
@@ -769,10 +804,32 @@ func (v *VPNManager) Status(jsonOutput bool) error {
 	return nil
 }
 
+// updateConnectionState updates connection state based on VPN type.
+func (v *VPNManager) updateConnectionState(conn *ConnectionState) {
+	if conn.GatewayType == "wireguard" {
+		v.updateStateFromWireGuard(conn)
+	} else {
+		v.updateStateFromLogForGateway(conn)
+	}
+}
+
+// getConnectionStatus returns the connection status based on VPN type.
+func (v *VPNManager) getConnectionStatus(conn *ConnectionState) string {
+	if conn.GatewayType == "wireguard" {
+		return v.checkWireGuardStatus(conn.TunInterface)
+	}
+	return v.checkTunnelStatusForGateway(conn.Gateway)
+}
+
 // showSingleConnectionStatus shows detailed status for a single connection.
 func (v *VPNManager) showSingleConnectionStatus(conn *ConnectionState) {
-	v.updateStateFromLogForGateway(conn)
-	tunnelStatus := v.checkTunnelStatusForGateway(conn.Gateway)
+	v.updateConnectionState(conn)
+	tunnelStatus := v.getConnectionStatus(conn)
+
+	vpnType := conn.GatewayType
+	if vpnType == "" {
+		vpnType = "openvpn"
+	}
 
 	switch tunnelStatus {
 	case "connected":
@@ -780,22 +837,29 @@ func (v *VPNManager) showSingleConnectionStatus(conn *ConnectionState) {
 	case "connecting":
 		fmt.Println("Status: Connecting (tunnel not yet established)")
 		fmt.Printf("Gateway:      %s\n", conn.Gateway)
+		fmt.Printf("Type:         %s\n", vpnType)
 		fmt.Printf("Interface:    %s\n", conn.TunInterface)
-		fmt.Printf("PID:          %d\n", conn.PID)
-		logPath := v.config.GatewayLogPath(conn.Gateway)
-		fmt.Printf("\nCheck logs: sudo tail -f %s\n", logPath)
+		if vpnType == "openvpn" && conn.PID > 0 {
+			fmt.Printf("PID:          %d\n", conn.PID)
+			logPath := v.config.GatewayLogPath(conn.Gateway)
+			fmt.Printf("\nCheck logs: sudo tail -f %s\n", logPath)
+		}
 		return
 	case "failed":
 		fmt.Println("Status: Connection Failed")
 		fmt.Printf("Gateway:      %s\n", conn.Gateway)
+		fmt.Printf("Type:         %s\n", vpnType)
 		fmt.Printf("Interface:    %s\n", conn.TunInterface)
-		fmt.Printf("PID:          %d\n", conn.PID)
-		logPath := v.config.GatewayLogPath(conn.Gateway)
-		fmt.Printf("\nCheck logs: sudo cat %s | tail -20\n", logPath)
+		if vpnType == "openvpn" && conn.PID > 0 {
+			fmt.Printf("PID:          %d\n", conn.PID)
+			logPath := v.config.GatewayLogPath(conn.Gateway)
+			fmt.Printf("\nCheck logs: sudo cat %s | tail -20\n", logPath)
+		}
 		return
 	}
 
 	fmt.Printf("Gateway:      %s\n", conn.Gateway)
+	fmt.Printf("Type:         %s\n", vpnType)
 	fmt.Printf("Interface:    %s\n", conn.TunInterface)
 	fmt.Printf("Connected at: %s\n", conn.ConnectedAt.Format(time.RFC3339))
 	fmt.Printf("Duration:     %s\n", time.Since(conn.ConnectedAt).Round(time.Second))
@@ -805,7 +869,12 @@ func (v *VPNManager) showSingleConnectionStatus(conn *ConnectionState) {
 	if conn.RemoteIP != "" {
 		fmt.Printf("Remote IP:    %s\n", conn.RemoteIP)
 	}
-	fmt.Printf("PID:          %d\n", conn.PID)
+	if vpnType == "openvpn" && conn.PID > 0 {
+		fmt.Printf("PID:          %d\n", conn.PID)
+	}
+	if conn.BytesIn > 0 || conn.BytesOut > 0 {
+		fmt.Printf("Transfer:     ↓ %s  ↑ %s\n", formatBytes(conn.BytesIn), formatBytes(conn.BytesOut))
+	}
 
 	routes := v.getRoutesFromGatewayConfig(conn.Gateway)
 	if len(routes) > 0 {
@@ -970,6 +1039,20 @@ func netmaskToCIDR(netmask string) string {
 	return fmt.Sprintf("%d", bits)
 }
 
+// formatBytes formats bytes into human readable format.
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
 // ListGateways lists available gateways.
 func (v *VPNManager) ListGateways(ctx context.Context) error {
 	authHeader, err := v.auth.GetAuthHeader()
@@ -994,7 +1077,11 @@ func (v *VPNManager) ListGateways(ctx context.Context) error {
 		if gw.Status != "online" {
 			statusIcon = "✗"
 		}
-		fmt.Printf("%s %s\n", statusIcon, gw.Name)
+		gwType := gw.GatewayType
+		if gwType == "" {
+			gwType = "openvpn"
+		}
+		fmt.Printf("%s %s [%s]\n", statusIcon, gw.Name, gwType)
 		if gw.Description != "" {
 			fmt.Printf("  Description: %s\n", gw.Description)
 		}
@@ -1237,6 +1324,22 @@ func (v *VPNManager) isProcessRunning(pid int) bool {
 	return strings.Contains(string(data), "openvpn")
 }
 
+// isConnectionActive checks if a VPN connection is still active.
+// For OpenVPN, it checks if the process is running.
+// For WireGuard, it checks if the interface exists.
+func (v *VPNManager) isConnectionActive(conn *ConnectionState) bool {
+	if conn == nil || !conn.Connected {
+		return false
+	}
+
+	if conn.GatewayType == "wireguard" {
+		return v.isWireGuardInterfaceUp(conn.TunInterface)
+	}
+
+	// OpenVPN - check process
+	return v.isProcessRunning(conn.PID)
+}
+
 // checkTunnelStatus checks if the OpenVPN tunnel is actually established.
 // Returns "connected", "connecting", or "failed".
 func (v *VPNManager) checkTunnelStatus() string {
@@ -1392,6 +1495,7 @@ type MeshHub struct {
 	PublicEndpoint string `json:"public_endpoint"`
 	Status         string `json:"status"`
 	SpokeCount     int    `json:"spoke_count"`
+	HubType        string `json:"hubType"` // "openvpn" or "wireguard"
 }
 
 // ListMeshHubs lists available mesh hubs.
@@ -1418,7 +1522,11 @@ func (v *VPNManager) ListMeshHubs(ctx context.Context) error {
 		if hub.Status != "online" {
 			statusIcon = "✗"
 		}
-		fmt.Printf("%s %s\n", statusIcon, hub.Name)
+		hubType := hub.HubType
+		if hubType == "" {
+			hubType = "openvpn"
+		}
+		fmt.Printf("%s %s [%s]\n", statusIcon, hub.Name, hubType)
 		if hub.Description != "" {
 			fmt.Printf("  Description: %s\n", hub.Description)
 		}
@@ -1480,10 +1588,10 @@ func (v *VPNManager) ConnectMesh(ctx context.Context, hubName string) error {
 	meshKey := "mesh:" + hubName
 	if hubName != "" {
 		if conn, exists := multiState.Connections[meshKey]; exists && conn.Connected {
-			if v.isProcessRunning(conn.PID) {
+			if v.isConnectionActive(conn) {
 				return fmt.Errorf("already connected to mesh hub %s. Run 'gatekey disconnect %s' first", hubName, meshKey)
 			}
-			// Process died, clean up stale connection
+			// Connection died, clean up stale connection
 			delete(multiState.Connections, meshKey)
 		}
 	}
@@ -1532,7 +1640,7 @@ func (v *VPNManager) ConnectMesh(ctx context.Context, hubName string) error {
 
 	// Check if already connected to this hub (by name match after selection)
 	if conn, exists := multiState.Connections[meshKey]; exists && conn.Connected {
-		if v.isProcessRunning(conn.PID) {
+		if v.isConnectionActive(conn) {
 			return fmt.Errorf("already connected to mesh hub %s", selectedHub.Name)
 		}
 	}
@@ -1542,6 +1650,17 @@ func (v *VPNManager) ConnectMesh(ctx context.Context, hubName string) error {
 		return fmt.Errorf("mesh hub '%s' is not online (status: %s)", selectedHub.Name, selectedHub.Status)
 	}
 
+	// Branch based on hub type
+	hubType := selectedHub.HubType
+	if hubType == "" {
+		hubType = "openvpn" // Default to OpenVPN for backwards compatibility
+	}
+
+	if hubType == "wireguard" {
+		return v.connectWireGuardMesh(ctx, selectedHub, multiState, meshKey, authHeader)
+	}
+
+	// OpenVPN mesh connection (default)
 	fmt.Printf("Connecting to mesh hub %s...\n", selectedHub.Name)
 
 	// Find an available tun interface number
@@ -1565,6 +1684,7 @@ func (v *VPNManager) ConnectMesh(ctx context.Context, hubName string) error {
 		Connected:    true,
 		Gateway:      meshKey,
 		GatewayID:    selectedHub.ID,
+		GatewayType:  "openvpn",
 		ConnectedAt:  time.Now(),
 		PID:          pid,
 		TunInterface: tunInterface,
@@ -1636,7 +1756,11 @@ func (v *VPNManager) promptMeshHubSelection(hubs []MeshHub) error {
 	fmt.Println("Multiple mesh hubs available. Please specify one:")
 	fmt.Println()
 	for i, hub := range hubs {
-		fmt.Printf("  %d. %s", i+1, hub.Name)
+		hubType := hub.HubType
+		if hubType == "" {
+			hubType = "openvpn"
+		}
+		fmt.Printf("  %d. %s [%s]", i+1, hub.Name, hubType)
 		if hub.Description != "" {
 			fmt.Printf(" - %s", hub.Description)
 		}
@@ -1645,4 +1769,431 @@ func (v *VPNManager) promptMeshHubSelection(hubs []MeshHub) error {
 	fmt.Println()
 	fmt.Println("Run: gatekey mesh connect <hub-name>")
 	return nil
+}
+
+// connectWireGuard connects to a WireGuard gateway.
+func (v *VPNManager) connectWireGuard(ctx context.Context, gateway *Gateway, multiState *MultiConnectionState) error {
+	authHeader, err := v.auth.GetAuthHeader()
+	if err != nil {
+		return fmt.Errorf("authentication required: %w", err)
+	}
+
+	fmt.Printf("Connecting to WireGuard gateway %s...\n", gateway.Name)
+
+	// Find an available wg interface number
+	wgNum := v.findAvailableWgNumber(multiState)
+	wgInterface := fmt.Sprintf("wg%d", wgNum)
+
+	// Download WireGuard configuration
+	configPath, err := v.downloadWireGuardConfig(ctx, authHeader, gateway.ID, gateway.Name)
+	if err != nil {
+		return fmt.Errorf("failed to download WireGuard configuration: %w", err)
+	}
+
+	// Start WireGuard
+	if err := v.startWireGuard(configPath, gateway.Name, wgInterface); err != nil {
+		return fmt.Errorf("failed to start WireGuard: %w", err)
+	}
+
+	// Save connection state (WireGuard doesn't have a PID like OpenVPN daemon)
+	conn := &ConnectionState{
+		Connected:    true,
+		Gateway:      gateway.Name,
+		GatewayID:    gateway.ID,
+		GatewayType:  "wireguard",
+		ConnectedAt:  time.Now(),
+		PID:          0, // WireGuard interfaces don't have a single PID
+		TunInterface: wgInterface,
+	}
+	multiState.Connections[gateway.Name] = conn
+
+	if err := v.saveMultiState(multiState); err != nil {
+		// Bring down the interface if we can't save state
+		v.stopWireGuard(wgInterface)
+		return fmt.Errorf("failed to save connection state: %w", err)
+	}
+
+	// Update state with IP info from the interface
+	v.updateStateFromWireGuard(conn)
+
+	fmt.Printf("Connected to %s (Interface: %s)\n", gateway.Name, wgInterface)
+	fmt.Println("WireGuard VPN connection established. Use 'gatekey status' to check connection.")
+	return nil
+}
+
+// downloadWireGuardConfig downloads the WireGuard config for a gateway.
+func (v *VPNManager) downloadWireGuardConfig(ctx context.Context, authHeader, gatewayID, gatewayName string) (string, error) {
+	configPath := v.config.WireGuardConfigPath(gatewayName)
+	client := &http.Client{Timeout: 60 * time.Second}
+
+	// Step 1: Generate config and get download URL
+	reqURL := fmt.Sprintf("%s/api/v1/wireguard/configs/generate", v.config.ServerURL)
+	reqBody := fmt.Sprintf(`{"gateway_id": "%s"}`, gatewayID)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, strings.NewReader(reqBody))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", authHeader)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	var configResp struct {
+		ID          string `json:"id"`
+		DownloadURL string `json:"downloadUrl"`
+		FileName    string `json:"fileName"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&configResp); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// Step 2: Download the actual config file
+	downloadURL := fmt.Sprintf("%s%s", v.config.ServerURL, configResp.DownloadURL)
+	downloadReq, err := http.NewRequestWithContext(ctx, "GET", downloadURL, nil)
+	if err != nil {
+		return "", err
+	}
+	downloadReq.Header.Set("Authorization", authHeader)
+
+	downloadResp, err := client.Do(downloadReq)
+	if err != nil {
+		return "", err
+	}
+	defer downloadResp.Body.Close()
+
+	if downloadResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(downloadResp.Body)
+		return "", fmt.Errorf("download failed with %d: %s", downloadResp.StatusCode, string(body))
+	}
+
+	configData, err := io.ReadAll(downloadResp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read config: %w", err)
+	}
+
+	if err := os.WriteFile(configPath, configData, 0600); err != nil {
+		return "", fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return configPath, nil
+}
+
+// startWireGuard starts a WireGuard interface using wg-quick.
+func (v *VPNManager) startWireGuard(configPath, gatewayName, wgInterface string) error {
+	wgQuickPath, err := exec.LookPath(v.config.WireGuardBinary)
+	if err != nil {
+		return fmt.Errorf("wg-quick not found. Please install WireGuard tools and ensure wg-quick is in your PATH")
+	}
+
+	// wg-quick uses the config file name as the interface name
+	// We need to rename/copy the config to match our desired interface name
+	wgConfigDir := "/etc/wireguard"
+	targetConfig := fmt.Sprintf("%s/%s.conf", wgConfigDir, wgInterface)
+
+	// Check if we need sudo
+	needsSudo := os.Geteuid() != 0
+
+	// Copy config to /etc/wireguard with the interface name
+	if needsSudo {
+		fmt.Println("WireGuard requires root privileges. You may be prompted for your password.")
+		// Create directory if it doesn't exist
+		exec.Command("sudo", "mkdir", "-p", wgConfigDir).Run()
+		// Copy config file
+		if err := exec.Command("sudo", "cp", configPath, targetConfig).Run(); err != nil {
+			return fmt.Errorf("failed to copy config to %s: %w", wgConfigDir, err)
+		}
+		exec.Command("sudo", "chmod", "600", targetConfig).Run()
+	} else {
+		os.MkdirAll(wgConfigDir, 0700)
+		input, err := os.ReadFile(configPath)
+		if err != nil {
+			return fmt.Errorf("failed to read config: %w", err)
+		}
+		if err := os.WriteFile(targetConfig, input, 0600); err != nil {
+			return fmt.Errorf("failed to write config to %s: %w", wgConfigDir, err)
+		}
+	}
+
+	// Run wg-quick up
+	var cmd *exec.Cmd
+	if needsSudo {
+		cmd = exec.Command("sudo", wgQuickPath, "up", wgInterface)
+	} else {
+		cmd = exec.Command(wgQuickPath, "up", wgInterface)
+	}
+
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("wg-quick up failed: %w", err)
+	}
+
+	return nil
+}
+
+// stopWireGuard stops a WireGuard interface using wg-quick.
+func (v *VPNManager) stopWireGuard(wgInterface string) error {
+	wgQuickPath, err := exec.LookPath(v.config.WireGuardBinary)
+	if err != nil {
+		return fmt.Errorf("wg-quick not found")
+	}
+
+	needsSudo := os.Geteuid() != 0
+
+	var cmd *exec.Cmd
+	if needsSudo {
+		cmd = exec.Command("sudo", wgQuickPath, "down", wgInterface)
+	} else {
+		cmd = exec.Command(wgQuickPath, "down", wgInterface)
+	}
+
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
+}
+
+// isWireGuardInterfaceUp checks if a WireGuard interface exists and is up.
+func (v *VPNManager) isWireGuardInterfaceUp(wgInterface string) bool {
+	// Check if the interface exists in /sys/class/net
+	_, err := os.Stat(fmt.Sprintf("/sys/class/net/%s", wgInterface))
+	return err == nil
+}
+
+// updateStateFromWireGuard updates connection state from WireGuard interface info.
+func (v *VPNManager) updateStateFromWireGuard(conn *ConnectionState) {
+	if conn.TunInterface == "" {
+		return
+	}
+
+	// Get interface IP using ip command
+	out, err := exec.Command("ip", "-4", "addr", "show", conn.TunInterface).Output()
+	if err != nil {
+		return
+	}
+
+	// Parse output for inet line
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "inet ") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				// IP is in CIDR format like 10.0.0.2/24
+				ip := strings.Split(parts[1], "/")[0]
+				conn.LocalIP = ip
+			}
+		}
+	}
+
+	// Get transfer stats from wg show
+	out, err = exec.Command("sudo", "wg", "show", conn.TunInterface, "transfer").Output()
+	if err != nil {
+		return
+	}
+
+	// Parse transfer stats (format: "pubkey\trx\ttx\n")
+	lines = strings.Split(strings.TrimSpace(string(out)), "\n")
+	var totalRx, totalTx int64
+	for _, line := range lines {
+		parts := strings.Fields(line)
+		if len(parts) >= 3 {
+			rx, _ := strconv.ParseInt(parts[1], 10, 64)
+			tx, _ := strconv.ParseInt(parts[2], 10, 64)
+			totalRx += rx
+			totalTx += tx
+		}
+	}
+	conn.BytesIn = totalRx
+	conn.BytesOut = totalTx
+}
+
+// findAvailableWgNumber finds the next available WireGuard interface number.
+func (v *VPNManager) findAvailableWgNumber(multiState *MultiConnectionState) int {
+	used := make(map[int]bool)
+
+	// Mark wg numbers used by active connections
+	for _, conn := range multiState.Connections {
+		if conn.Connected && conn.TunInterface != "" && conn.GatewayType == "wireguard" {
+			var num int
+			if _, err := fmt.Sscanf(conn.TunInterface, "wg%d", &num); err == nil {
+				used[num] = true
+			}
+		}
+	}
+
+	// Also check what wg interfaces actually exist on the system
+	entries, err := os.ReadDir("/sys/class/net")
+	if err == nil {
+		for _, entry := range entries {
+			name := entry.Name()
+			if strings.HasPrefix(name, "wg") {
+				var num int
+				if _, err := fmt.Sscanf(name, "wg%d", &num); err == nil {
+					used[num] = true
+				}
+			}
+		}
+	}
+
+	// Find the first available number
+	for i := 0; i < 100; i++ {
+		if !used[i] {
+			return i
+		}
+	}
+	return 0 // Fallback
+}
+
+// disconnectWireGuard disconnects a WireGuard connection.
+func (v *VPNManager) disconnectWireGuard(conn *ConnectionState, gatewayName string) {
+	if conn.TunInterface != "" {
+		if err := v.stopWireGuard(conn.TunInterface); err != nil {
+			// Try to force remove the interface
+			exec.Command("sudo", "ip", "link", "delete", conn.TunInterface).Run()
+		}
+
+		// Clean up config file from /etc/wireguard
+		configPath := fmt.Sprintf("/etc/wireguard/%s.conf", conn.TunInterface)
+		exec.Command("sudo", "rm", "-f", configPath).Run()
+	}
+
+	// Clean up gateway-specific files
+	os.Remove(v.config.WireGuardConfigPath(gatewayName))
+}
+
+// checkWireGuardStatus returns the status of a WireGuard connection.
+func (v *VPNManager) checkWireGuardStatus(wgInterface string) string {
+	if !v.isWireGuardInterfaceUp(wgInterface) {
+		return "failed"
+	}
+
+	// Check if we have a handshake with peer (indicates active connection)
+	out, err := exec.Command("sudo", "wg", "show", wgInterface, "latest-handshakes").Output()
+	if err != nil {
+		return "connecting"
+	}
+
+	// Parse handshake times - if any peer has a recent handshake, we're connected
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	for _, line := range lines {
+		parts := strings.Fields(line)
+		if len(parts) >= 2 {
+			timestamp, err := strconv.ParseInt(parts[1], 10, 64)
+			if err != nil {
+				continue
+			}
+			// If handshake within last 3 minutes, consider connected
+			if timestamp > 0 && time.Now().Unix()-timestamp < 180 {
+				return "connected"
+			}
+		}
+	}
+
+	return "connecting"
+}
+
+// connectWireGuardMesh connects to a WireGuard mesh hub.
+func (v *VPNManager) connectWireGuardMesh(ctx context.Context, hub *MeshHub, multiState *MultiConnectionState, meshKey, authHeader string) error {
+	fmt.Printf("Connecting to WireGuard mesh hub %s...\n", hub.Name)
+
+	// Find an available wg interface number
+	wgNum := v.findAvailableWgNumber(multiState)
+	wgInterface := fmt.Sprintf("wg%d", wgNum)
+
+	// Download WireGuard mesh configuration
+	configPath, err := v.downloadWireGuardMeshConfig(ctx, authHeader, hub.ID, hub.Name)
+	if err != nil {
+		return fmt.Errorf("failed to download WireGuard mesh configuration: %w", err)
+	}
+
+	// Start WireGuard
+	if err := v.startWireGuard(configPath, meshKey, wgInterface); err != nil {
+		return fmt.Errorf("failed to start WireGuard: %w", err)
+	}
+
+	// Save connection state
+	conn := &ConnectionState{
+		Connected:    true,
+		Gateway:      meshKey,
+		GatewayID:    hub.ID,
+		GatewayType:  "wireguard",
+		ConnectedAt:  time.Now(),
+		PID:          0, // WireGuard interfaces don't have a single PID
+		TunInterface: wgInterface,
+	}
+	multiState.Connections[meshKey] = conn
+
+	if err := v.saveMultiState(multiState); err != nil {
+		// Bring down the interface if we can't save state
+		v.stopWireGuard(wgInterface)
+		return fmt.Errorf("failed to save connection state: %w", err)
+	}
+
+	// Update state with IP info from the interface
+	v.updateStateFromWireGuard(conn)
+
+	fmt.Printf("Connected to mesh hub %s (Interface: %s)\n", hub.Name, wgInterface)
+	fmt.Println("WireGuard mesh VPN connection established. Use 'gatekey status' to check connection.")
+	return nil
+}
+
+// downloadWireGuardMeshConfig downloads the WireGuard mesh config for a hub.
+func (v *VPNManager) downloadWireGuardMeshConfig(ctx context.Context, authHeader, hubID, hubName string) (string, error) {
+	configPath := v.config.WireGuardConfigPath("mesh-" + hubName)
+	client := &http.Client{Timeout: 60 * time.Second}
+
+	// Generate WireGuard mesh config
+	reqURL := fmt.Sprintf("%s/api/v1/mesh/wireguard/generate-config", v.config.ServerURL)
+	reqBody := fmt.Sprintf(`{"hubid": "%s"}`, hubID)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, strings.NewReader(reqBody))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", authHeader)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	var configResp struct {
+		HubName string `json:"hubname"`
+		Config  string `json:"config"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&configResp); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// Write config to file
+	if err := os.MkdirAll(filepath.Dir(configPath), 0700); err != nil {
+		return "", fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	if err := os.WriteFile(configPath, []byte(configResp.Config), 0600); err != nil {
+		return "", fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return configPath, nil
 }

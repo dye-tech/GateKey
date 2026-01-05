@@ -9,7 +9,7 @@ import {
   getMeshSpokeGroups, assignMeshSpokeGroup, removeMeshSpokeGroup,
   getUsers, getLocalUsers, getGroups, getNetworks, Network,
   MeshHub, MeshHubWithToken, MeshSpoke, MeshSpokeWithToken,
-  CreateMeshHubRequest, CreateMeshSpokeRequest, CryptoProfile, RotateTokenResponse
+  CreateMeshHubRequest, CreateMeshSpokeRequest, CryptoProfile, RotateTokenResponse, GatewayType
 } from '../api/client'
 import ActionDropdown from '../components/ActionDropdown'
 
@@ -194,7 +194,7 @@ export default function AdminMesh() {
         return 'bg-green-600 text-white'
       case 'offline':
       case 'disconnected':
-        return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
+        return 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
       case 'error':
         return 'bg-red-600 text-white'
       default:
@@ -275,6 +275,7 @@ export default function AdminMesh() {
                 <thead className="bg-theme-tertiary">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Hub</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Type</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Endpoint</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Connections</th>
@@ -292,13 +293,27 @@ export default function AdminMesh() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          hub.gatewayType === 'wireguard'
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-blue-600 text-white'
+                        }`}>
+                          {hub.gatewayType === 'wireguard' ? 'WireGuard' : 'OpenVPN'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(hub.status)}`}>
                           {hub.status.charAt(0).toUpperCase() + hub.status.slice(1)}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-tertiary">
                         <div>{hub.publicEndpoint}</div>
-                        <div className="text-xs">{hub.vpnProtocol.toUpperCase()}:{hub.vpnPort}</div>
+                        <div className="text-xs">
+                          {hub.gatewayType === 'wireguard'
+                            ? `UDP:${hub.wgListenPort || 51820}`
+                            : `${hub.vpnProtocol.toUpperCase()}:${hub.vpnPort}`
+                          }
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-tertiary">
                         <div>{hub.connectedSpokes} spokes</div>
@@ -382,6 +397,7 @@ export default function AdminMesh() {
                     <thead className="bg-theme-tertiary">
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Spoke</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Type</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Status</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Networks</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Tunnel IP</th>
@@ -400,6 +416,15 @@ export default function AdminMesh() {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                              spoke.gatewayType === 'wireguard'
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-blue-600 text-white'
+                            }`}>
+                              {spoke.gatewayType === 'wireguard' ? 'WireGuard' : 'OpenVPN'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(spoke.status)}`}>
                               {spoke.status.charAt(0).toUpperCase() + spoke.status.slice(1)}
                             </span>
@@ -408,7 +433,7 @@ export default function AdminMesh() {
                             {spoke.localNetworks.length > 0 ? (
                               <div className="flex flex-wrap gap-1">
                                 {spoke.localNetworks.map((net, i) => (
-                                  <span key={i} className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-theme-secondary rounded text-xs">{net}</span>
+                                  <span key={i} className="px-2 py-0.5 bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 rounded text-xs font-medium">{net}</span>
                                 ))}
                               </div>
                             ) : (
@@ -588,12 +613,14 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
   const [form, setForm] = useState<CreateMeshHubRequest>({
     name: '',
     description: '',
+    gatewayType: 'openvpn' as GatewayType,
     publicEndpoint: '',
     vpnPort: 1194,
     vpnProtocol: 'udp',
     vpnSubnet: '172.30.0.0/16',
     cryptoProfile: 'fips' as CryptoProfile,
     tlsAuthEnabled: true,
+    wgListenPort: 51820,
     fullTunnelMode: false,
     pushDns: false,
     dnsServers: [],
@@ -651,6 +678,36 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             </div>
 
             <div>
+              <label className="block text-sm font-medium text-theme-secondary mb-2">Gateway Type</label>
+              <div className="flex space-x-4">
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="radio"
+                    name="gatewayType"
+                    value="openvpn"
+                    checked={form.gatewayType === 'openvpn'}
+                    onChange={() => setForm({ ...form, gatewayType: 'openvpn' })}
+                    className="mr-2"
+                  />
+                  <span className="text-sm text-theme-primary">OpenVPN</span>
+                  <span className="ml-1 text-xs text-theme-tertiary">(FIPS compliant)</span>
+                </label>
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="radio"
+                    name="gatewayType"
+                    value="wireguard"
+                    checked={form.gatewayType === 'wireguard'}
+                    onChange={() => setForm({ ...form, gatewayType: 'wireguard' })}
+                    className="mr-2"
+                  />
+                  <span className="text-sm text-theme-primary">WireGuard</span>
+                  <span className="ml-1 text-xs text-theme-tertiary">(faster, not FIPS)</span>
+                </label>
+              </div>
+            </div>
+
+            <div>
               <label className="block text-sm font-medium text-theme-secondary">Public Endpoint</label>
               <input
                 type="text"
@@ -663,65 +720,98 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
               <p className="text-xs text-theme-tertiary mt-1">The public hostname or IP where spokes will connect</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-theme-secondary">VPN Port</label>
-                <input
-                  type="number"
-                  value={form.vpnPort}
-                  onChange={(e) => setForm({ ...form, vpnPort: parseInt(e.target.value) })}
-                  className="input"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-theme-secondary">Protocol</label>
-                <select
-                  value={form.vpnProtocol}
-                  onChange={(e) => setForm({ ...form, vpnProtocol: e.target.value })}
-                  className="input"
-                >
-                  <option value="udp">UDP</option>
-                  <option value="tcp">TCP</option>
-                </select>
-              </div>
-            </div>
+            {/* OpenVPN-specific fields */}
+            {form.gatewayType === 'openvpn' && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-theme-secondary">VPN Port</label>
+                    <input
+                      type="number"
+                      value={form.vpnPort}
+                      onChange={(e) => setForm({ ...form, vpnPort: parseInt(e.target.value) })}
+                      className="input"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-theme-secondary">Protocol</label>
+                    <select
+                      value={form.vpnProtocol}
+                      onChange={(e) => setForm({ ...form, vpnProtocol: e.target.value })}
+                      className="input"
+                    >
+                      <option value="udp">UDP</option>
+                      <option value="tcp">TCP</option>
+                    </select>
+                  </div>
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium text-theme-secondary">VPN Subnet</label>
-              <input
-                type="text"
-                value={form.vpnSubnet}
-                onChange={(e) => setForm({ ...form, vpnSubnet: e.target.value })}
-                className="input"
-                placeholder="172.30.0.0/16"
-              />
-            </div>
+                <div>
+                  <label className="block text-sm font-medium text-theme-secondary">VPN Subnet</label>
+                  <input
+                    type="text"
+                    value={form.vpnSubnet}
+                    onChange={(e) => setForm({ ...form, vpnSubnet: e.target.value })}
+                    className="input"
+                    placeholder="172.30.0.0/16"
+                  />
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium text-theme-secondary">Crypto Profile</label>
-              <select
-                value={form.cryptoProfile}
-                onChange={(e) => setForm({ ...form, cryptoProfile: e.target.value as CryptoProfile })}
-                className="input"
-              >
-                <option value="fips">FIPS (AES-256-GCM, AES-128-GCM)</option>
-                <option value="modern">Modern (AES-256-GCM, ChaCha20)</option>
-                <option value="compatible">Compatible (includes CBC ciphers)</option>
-              </select>
-            </div>
+                <div>
+                  <label className="block text-sm font-medium text-theme-secondary">Crypto Profile</label>
+                  <select
+                    value={form.cryptoProfile}
+                    onChange={(e) => setForm({ ...form, cryptoProfile: e.target.value as CryptoProfile })}
+                    className="input"
+                  >
+                    <option value="fips">FIPS (AES-256-GCM, AES-128-GCM)</option>
+                    <option value="modern">Modern (AES-256-GCM, ChaCha20)</option>
+                    <option value="compatible">Compatible (includes CBC ciphers)</option>
+                  </select>
+                </div>
 
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="tlsAuth"
-                checked={form.tlsAuthEnabled}
-                onChange={(e) => setForm({ ...form, tlsAuthEnabled: e.target.checked })}
-                className="rounded border-theme text-primary-600 focus:ring-primary-500"
-              />
-              <label htmlFor="tlsAuth" className="ml-2 text-sm text-theme-secondary">
-                Enable TLS-Auth (additional HMAC layer)
-              </label>
-            </div>
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="tlsAuth"
+                    checked={form.tlsAuthEnabled}
+                    onChange={(e) => setForm({ ...form, tlsAuthEnabled: e.target.checked })}
+                    className="rounded border-theme text-primary-600 focus:ring-primary-500"
+                  />
+                  <label htmlFor="tlsAuth" className="ml-2 text-sm text-theme-secondary">
+                    Enable TLS-Auth (additional HMAC layer)
+                  </label>
+                </div>
+              </>
+            )}
+
+            {/* WireGuard-specific fields */}
+            {form.gatewayType === 'wireguard' && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-theme-secondary">WireGuard Port</label>
+                    <input
+                      type="number"
+                      value={form.wgListenPort}
+                      onChange={(e) => setForm({ ...form, wgListenPort: parseInt(e.target.value) })}
+                      className="input"
+                    />
+                    <p className="text-xs text-theme-tertiary mt-1">UDP only</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-theme-secondary">VPN Subnet</label>
+                    <input
+                      type="text"
+                      value={form.vpnSubnet}
+                      onChange={(e) => setForm({ ...form, vpnSubnet: e.target.value })}
+                      className="input"
+                      placeholder="172.30.0.0/16"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="flex items-center">
               <input
@@ -786,12 +876,12 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                 {form.dnsServers && form.dnsServers.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
                     {form.dnsServers.map((dns, idx) => (
-                      <span key={idx} className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-theme-secondary rounded text-sm flex items-center">
+                      <span key={idx} className="px-2 py-1 bg-teal-100 dark:bg-teal-900/40 text-teal-800 dark:text-teal-200 rounded text-sm flex items-center font-medium">
                         {dns}
                         <button
                           type="button"
                           onClick={() => setForm({ ...form, dnsServers: form.dnsServers?.filter((_, i) => i !== idx) })}
-                          className="ml-1 text-theme-muted hover:text-red-600"
+                          className="ml-1 text-teal-600 dark:text-teal-400 hover:text-red-600"
                         >
                           ×
                         </button>
@@ -918,9 +1008,9 @@ function AddSpokeModal({ hubId, onClose, onSuccess }: { hubId: string; onClose: 
               {form.localNetworks.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   {form.localNetworks.map((net) => (
-                    <span key={net} className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-theme-secondary rounded text-sm flex items-center">
+                    <span key={net} className="px-2 py-1 bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 rounded text-sm flex items-center font-medium">
                       {net}
-                      <button type="button" onClick={() => removeNetwork(net)} className="ml-1 text-theme-muted hover:text-red-600">×</button>
+                      <button type="button" onClick={() => removeNetwork(net)} className="ml-1 text-sky-500 hover:text-red-600">×</button>
                     </span>
                   ))}
                 </div>
@@ -995,14 +1085,14 @@ function TokenModal({ type, name, token, controlPlaneUrl, onClose }: { type: 'hu
             <h2 className="ml-3 text-lg font-semibold text-theme-primary">{type === 'hub' ? 'Hub' : 'Spoke'} Created</h2>
           </div>
 
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4">
+          <div className="bg-slate-100 dark:bg-slate-800 border-l-4 border-l-indigo-500 dark:border-l-indigo-400 rounded-lg p-4 mb-4">
             <div className="flex">
-              <svg className="h-5 w-5 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="h-5 w-5 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">Save this token!</h3>
-                <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1">
+                <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100">Save this token!</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
                   This token will only be shown once. You'll need it to set up the {type}.
                 </p>
               </div>
@@ -1020,7 +1110,7 @@ function TokenModal({ type, name, token, controlPlaneUrl, onClose }: { type: 'hu
                 {type === 'hub' ? 'API Token' : 'Spoke Token'}
               </label>
               <div className="flex items-center space-x-2">
-                <code className="flex-1 p-2 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono break-all text-theme-primary">{token}</code>
+                <code className="flex-1 p-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-sm font-mono break-all text-slate-800 dark:text-slate-200">{token}</code>
                 <button onClick={copyToClipboard} className="btn btn-secondary">
                   {copied ? 'Copied!' : 'Copy'}
                 </button>
@@ -1030,7 +1120,7 @@ function TokenModal({ type, name, token, controlPlaneUrl, onClose }: { type: 'hu
             {controlPlaneUrl && (
               <div>
                 <label className="block text-sm font-medium text-theme-secondary">Control Plane URL</label>
-                <code className="block p-2 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono text-theme-primary">{controlPlaneUrl}</code>
+                <code className="block p-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-sm font-mono text-slate-800 dark:text-slate-200">{controlPlaneUrl}</code>
               </div>
             )}
 
@@ -1102,17 +1192,17 @@ function InstallScriptModal({ type, name, script, onClose }: { type: 'hub' | 'sp
             </button>
           </div>
 
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+          <div className="bg-slate-100 dark:bg-slate-800 border-l-4 border-l-teal-500 dark:border-l-teal-400 rounded-lg p-4 mb-4">
             <div className="flex items-start">
-              <svg className="h-5 w-5 text-blue-500 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="h-5 w-5 text-teal-600 dark:text-teal-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-gray-800 dark:text-blue-300">Installation Instructions</h3>
-                <p className="text-sm text-gray-700 dark:text-blue-400 mt-1">
+                <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100">Installation Instructions</h3>
+                <p className="text-sm text-slate-700 dark:text-slate-300 mt-1">
                   Run this script on your {type === 'hub' ? 'hub server' : 'spoke server'} with root privileges:
                 </p>
-                <code className="block mt-2 text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-theme-secondary">
+                <code className="block mt-2 text-sm bg-slate-200 dark:bg-slate-700 px-2 py-1 rounded text-slate-800 dark:text-slate-200 font-mono">
                   sudo bash install-{type}.sh
                 </code>
               </div>
@@ -1902,8 +1992,8 @@ function EditHubModal({ hub, onClose, onSuccess }: { hub: MeshHub; onClose: () =
             <div><label className="block text-sm font-medium text-theme-secondary">VPN Subnet</label><input type="text" value={form.vpnSubnet} onChange={(e) => setForm({ ...form, vpnSubnet: e.target.value })} className="input" /></div>
             <div><label className="block text-sm font-medium text-theme-secondary">Crypto Profile</label><select value={form.cryptoProfile} onChange={(e) => setForm({ ...form, cryptoProfile: e.target.value as CryptoProfile })} className="input"><option value="modern">Modern</option><option value="fips">FIPS</option><option value="compatible">Compatible</option></select></div>
             <div className="space-y-2"><label className="flex items-center"><input type="checkbox" checked={form.tlsAuthEnabled} onChange={(e) => setForm({ ...form, tlsAuthEnabled: e.target.checked })} className="mr-2" /><span className="text-sm">TLS-Auth</span></label><label className="flex items-center"><input type="checkbox" checked={form.fullTunnelMode} onChange={(e) => setForm({ ...form, fullTunnelMode: e.target.checked })} className="mr-2" /><span className="text-sm">Full Tunnel</span></label><label className="flex items-center"><input type="checkbox" checked={form.pushDns} onChange={(e) => setForm({ ...form, pushDns: e.target.checked })} className="mr-2" /><span className="text-sm">Push DNS</span></label></div>
-            {form.pushDns && <div><label className="block text-sm font-medium text-theme-secondary">DNS Servers</label><div className="flex space-x-2"><input type="text" value={dnsInput} onChange={(e) => setDnsInput(e.target.value)} className="input flex-1" placeholder="1.1.1.1" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (dnsInput) { setForm({ ...form, dnsServers: [...form.dnsServers, dnsInput] }); setDnsInput('') } } }} /><button type="button" onClick={() => { if (dnsInput) { setForm({ ...form, dnsServers: [...form.dnsServers, dnsInput] }); setDnsInput('') } }} className="btn btn-secondary">Add</button></div>{form.dnsServers.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.dnsServers.map((d) => <span key={d} className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm text-theme-primary">{d}<button type="button" onClick={() => setForm({ ...form, dnsServers: form.dnsServers.filter(x => x !== d) })} className="ml-1 text-red-600">×</button></span>)}</div>}</div>}
-            <div><label className="block text-sm font-medium text-theme-secondary">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="192.168.1.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((n) => <span key={n} className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm text-theme-primary">{n}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(x => x !== n) })} className="ml-1 text-red-600">×</button></span>)}</div>}</div>
+            {form.pushDns && <div><label className="block text-sm font-medium text-theme-secondary">DNS Servers</label><div className="flex space-x-2"><input type="text" value={dnsInput} onChange={(e) => setDnsInput(e.target.value)} className="input flex-1" placeholder="1.1.1.1" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (dnsInput) { setForm({ ...form, dnsServers: [...form.dnsServers, dnsInput] }); setDnsInput('') } } }} /><button type="button" onClick={() => { if (dnsInput) { setForm({ ...form, dnsServers: [...form.dnsServers, dnsInput] }); setDnsInput('') } }} className="btn btn-secondary">Add</button></div>{form.dnsServers.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.dnsServers.map((d) => <span key={d} className="px-2 py-1 bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 rounded text-sm font-medium">{d}<button type="button" onClick={() => setForm({ ...form, dnsServers: form.dnsServers.filter(x => x !== d) })} className="ml-1 text-teal-500 hover:text-red-600">×</button></span>)}</div>}</div>}
+            <div><label className="block text-sm font-medium text-theme-secondary">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="192.168.1.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((n) => <span key={n} className="px-2 py-1 bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 rounded text-sm font-medium">{n}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(x => x !== n) })} className="ml-1 text-sky-500 hover:text-red-600">×</button></span>)}</div>}</div>
             <div className="flex items-center"><input type="checkbox" id="editHubSessionEnabled" checked={form.sessionEnabled ?? true} onChange={(e) => setForm({ ...form, sessionEnabled: e.target.checked })} className="rounded border-theme text-primary-600 focus:ring-primary-500" /><label htmlFor="editHubSessionEnabled" className="ml-2 text-sm text-theme-secondary">Enable Remote Sessions</label></div>
             <p className="text-xs text-theme-tertiary -mt-2">Allow administrators to run commands on this hub via the Remote Sessions page.</p>
             <div className="flex justify-end space-x-3 pt-4"><button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button><button type="submit" disabled={loading} className="btn btn-primary">{loading ? 'Saving...' : 'Save'}</button></div>
@@ -1935,7 +2025,7 @@ function EditSpokeModal({ spoke, onClose, onSuccess }: { spoke: MeshSpoke; onClo
           <form onSubmit={handleSubmit} className="space-y-4">
             <div><label className="block text-sm font-medium text-theme-secondary">Name</label><input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input" required /></div>
             <div><label className="block text-sm font-medium text-theme-secondary">Description</label><input type="text" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input" /></div>
-            <div><label className="block text-sm font-medium text-theme-secondary">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="e.g., 10.0.0.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div><p className="text-xs text-theme-tertiary mt-1">Networks behind this spoke routable via hub</p>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((net) => <span key={net} className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-theme-secondary rounded text-sm flex items-center">{net}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(n => n !== net) })} className="ml-1 text-theme-muted hover:text-red-600">×</button></span>)}</div>}</div>
+            <div><label className="block text-sm font-medium text-theme-secondary">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="e.g., 10.0.0.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div><p className="text-xs text-theme-tertiary mt-1">Networks behind this spoke routable via hub</p>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((net) => <span key={net} className="px-2 py-1 bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 rounded text-sm flex items-center font-medium">{net}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(n => n !== net) })} className="ml-1 text-sky-500 hover:text-red-600">×</button></span>)}</div>}</div>
             <div className="flex items-center"><input type="checkbox" id="editSpokeSessionEnabled" checked={form.sessionEnabled ?? true} onChange={(e) => setForm({ ...form, sessionEnabled: e.target.checked })} className="rounded border-theme text-primary-600 focus:ring-primary-500" /><label htmlFor="editSpokeSessionEnabled" className="ml-2 text-sm text-theme-secondary">Enable Remote Sessions</label></div>
             <p className="text-xs text-theme-tertiary -mt-2">Allow administrators to run commands on this spoke via the Remote Sessions page.</p>
             <div className="flex justify-end space-x-3 pt-4"><button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button><button type="submit" disabled={loading} className="btn btn-primary">{loading ? 'Saving...' : 'Save'}</button></div>
@@ -1967,8 +2057,8 @@ function RotatedTokenModal({ type, name, token, installScript, onClose }: { type
     <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
       <div className="bg-theme-card rounded-lg shadow-xl max-w-2xl w-full mx-4 p-6">
         <div className="text-center mb-4">
-          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 dark:bg-yellow-900/30 mb-4">
-            <svg className="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-indigo-100 dark:bg-indigo-900/30 mb-4">
+            <svg className="h-6 w-6 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
             </svg>
           </div>
@@ -1976,14 +2066,14 @@ function RotatedTokenModal({ type, name, token, installScript, onClose }: { type
           <p className="text-theme-secondary mt-1">{type === 'hub' ? 'Hub' : 'Spoke'}: {name}</p>
         </div>
 
-        <div className="instruction-box mb-4">
+        <div className="bg-slate-100 dark:bg-slate-800 border-l-4 border-l-indigo-500 dark:border-l-indigo-400 rounded-lg p-4 mb-4">
           <div className="flex">
-            <svg className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
             <div>
-              <h3 className="text-sm font-medium text-theme-primary">Save this token!</h3>
-              <p className="text-sm text-theme-secondary mt-1">
+              <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100">Save this token!</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
                 The old token is now invalid. This new token will only be shown once.
               </p>
             </div>

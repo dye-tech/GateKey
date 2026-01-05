@@ -20,6 +20,7 @@ import (
 
 	"github.com/gatekey-project/gatekey/internal/db"
 	"github.com/gatekey-project/gatekey/internal/pki"
+	"github.com/gatekey-project/gatekey/internal/wireguard"
 )
 
 // ==================== Admin Hub Management ====================
@@ -51,12 +52,15 @@ func (s *Server) handleListMeshHubs(c *gin.Context) {
 			"id":               hub.ID,
 			"name":             hub.Name,
 			"description":      hub.Description,
+			"gatewayType":      hub.GatewayType,
 			"publicEndpoint":   hub.PublicEndpoint,
 			"vpnPort":          hub.VPNPort,
 			"vpnProtocol":      hub.VPNProtocol,
 			"vpnSubnet":        hub.VPNSubnet,
 			"cryptoProfile":    hub.CryptoProfile,
 			"tlsAuthEnabled":   hub.TLSAuthEnabled,
+			"wgPublicKey":      hub.WGPublicKey,
+			"wgListenPort":     hub.WGListenPort,
 			"fullTunnelMode":   hub.FullTunnelMode,
 			"pushDns":          hub.PushDNS,
 			"dnsServers":       hub.DNSServers,
@@ -88,11 +92,31 @@ func (s *Server) handleCreateMeshHub(c *gin.Context) {
 		VPNSubnet      string `json:"vpnSubnet"`
 		CryptoProfile  string `json:"cryptoProfile"`
 		TLSAuthEnabled bool   `json:"tlsAuthEnabled"`
+		GatewayType    string `json:"gatewayType"`    // "openvpn" or "wireguard", default "openvpn"
+		WGListenPort   int    `json:"wgListenPort"`   // WireGuard listen port, default 51820
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Default gateway type to openvpn if not specified
+	gatewayType := req.GatewayType
+	if gatewayType == "" {
+		gatewayType = db.MeshGatewayTypeOpenVPN
+	}
+
+	// Validate gateway type
+	if gatewayType != db.MeshGatewayTypeOpenVPN && gatewayType != db.MeshGatewayTypeWireGuard {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid gateway type, must be 'openvpn' or 'wireguard'"})
+		return
+	}
+
+	// Default WireGuard listen port
+	wgListenPort := req.WGListenPort
+	if wgListenPort == 0 {
+		wgListenPort = 51820
 	}
 
 	// Generate API token for hub
@@ -124,9 +148,23 @@ func (s *Server) handleCreateMeshHub(c *gin.Context) {
 		VPNSubnet:       req.VPNSubnet,
 		CryptoProfile:   req.CryptoProfile,
 		TLSAuthEnabled:  req.TLSAuthEnabled,
+		GatewayType:     gatewayType,
+		WGListenPort:    wgListenPort,
 		APIToken:        apiToken,
 		ControlPlaneURL: controlPlaneURL,
 		Status:          db.MeshHubStatusPending,
+	}
+
+	// Generate WireGuard keypair if type is wireguard
+	if gatewayType == db.MeshGatewayTypeWireGuard {
+		keyPair, err := wireguard.GenerateKeyPair()
+		if err != nil {
+			s.logger.Error("Failed to generate WireGuard keypair", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate WireGuard keypair"})
+			return
+		}
+		hub.WGPrivateKey = keyPair.PrivateKey
+		hub.WGPublicKey = keyPair.PublicKey
 	}
 
 	if err := s.meshStore.CreateHub(ctx, hub); err != nil {
@@ -145,12 +183,15 @@ func (s *Server) handleCreateMeshHub(c *gin.Context) {
 			"id":              hub.ID,
 			"name":            hub.Name,
 			"description":     hub.Description,
+			"gatewayType":     hub.GatewayType,
 			"publicEndpoint":  hub.PublicEndpoint,
 			"vpnPort":         hub.VPNPort,
 			"vpnProtocol":     hub.VPNProtocol,
 			"vpnSubnet":       hub.VPNSubnet,
 			"cryptoProfile":   hub.CryptoProfile,
 			"tlsAuthEnabled":  hub.TLSAuthEnabled,
+			"wgPublicKey":     hub.WGPublicKey,
+			"wgListenPort":    hub.WGListenPort,
 			"apiToken":        apiToken, // Only shown once at creation
 			"controlPlaneUrl": controlPlaneURL,
 			"status":          hub.Status,
@@ -179,12 +220,15 @@ func (s *Server) handleGetMeshHub(c *gin.Context) {
 			"id":               hub.ID,
 			"name":             hub.Name,
 			"description":      hub.Description,
+			"gatewayType":      hub.GatewayType,
 			"publicEndpoint":   hub.PublicEndpoint,
 			"vpnPort":          hub.VPNPort,
 			"vpnProtocol":      hub.VPNProtocol,
 			"vpnSubnet":        hub.VPNSubnet,
 			"cryptoProfile":    hub.CryptoProfile,
 			"tlsAuthEnabled":   hub.TLSAuthEnabled,
+			"wgPublicKey":      hub.WGPublicKey,
+			"wgListenPort":     hub.WGListenPort,
 			"fullTunnelMode":   hub.FullTunnelMode,
 			"pushDns":          hub.PushDNS,
 			"dnsServers":       hub.DNSServers,
@@ -219,6 +263,8 @@ func (s *Server) handleUpdateMeshHub(c *gin.Context) {
 		PushDNS        *bool    `json:"pushDns"`
 		DNSServers     []string `json:"dnsServers"`
 		LocalNetworks  []string `json:"localNetworks"`
+		GatewayType    string   `json:"gatewayType"`    // Cannot be changed after creation
+		WGListenPort   int      `json:"wgListenPort"`   // WireGuard listen port (only for wireguard type)
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -235,6 +281,12 @@ func (s *Server) handleUpdateMeshHub(c *gin.Context) {
 		}
 		s.logger.Error("Failed to get mesh hub", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get mesh hub"})
+		return
+	}
+
+	// Prevent changing gateway_type after creation
+	if req.GatewayType != "" && req.GatewayType != hub.GatewayType {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "gateway type cannot be changed after creation"})
 		return
 	}
 
@@ -276,6 +328,10 @@ func (s *Server) handleUpdateMeshHub(c *gin.Context) {
 	// LocalNetworks can be updated to an empty array, so always set it if provided
 	if req.LocalNetworks != nil {
 		hub.LocalNetworks = req.LocalNetworks
+	}
+	// WireGuard listen port can only be updated for wireguard hubs
+	if req.WGListenPort > 0 && hub.GatewayType == db.MeshGatewayTypeWireGuard {
+		hub.WGListenPort = req.WGListenPort
 	}
 
 	if err := s.meshStore.UpdateHub(ctx, hub); err != nil {
@@ -595,7 +651,9 @@ func (s *Server) handleListMeshSpokes(c *gin.Context) {
 			"hubId":          gw.HubID,
 			"name":           gw.Name,
 			"description":    gw.Description,
+			"gatewayType":    gw.GatewayType,
 			"localNetworks":  gw.LocalNetworks,
+			"wgPublicKey":    gw.WGPublicKey,
 			"fullTunnelMode": gw.FullTunnelMode,
 			"pushDns":        gw.PushDNS,
 			"dnsServers":     gw.DNSServers,
@@ -632,8 +690,8 @@ func (s *Server) handleCreateMeshSpoke(c *gin.Context) {
 		return
 	}
 
-	// Verify hub exists
-	_, err := s.meshStore.GetHub(ctx, hubID)
+	// Get hub to inherit gateway_type
+	hub, err := s.meshStore.GetHub(ctx, hubID)
 	if err != nil {
 		if err == db.ErrMeshHubNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "hub not found"})
@@ -658,7 +716,29 @@ func (s *Server) handleCreateMeshSpoke(c *gin.Context) {
 		Description:   req.Description,
 		LocalNetworks: req.LocalNetworks,
 		Token:         token,
+		GatewayType:   hub.GatewayType, // Inherit from hub
 		Status:        db.MeshSpokeStatusPending,
+	}
+
+	// Generate WireGuard keypair + PSK if hub type is wireguard
+	if hub.GatewayType == db.MeshGatewayTypeWireGuard {
+		keyPair, err := wireguard.GenerateKeyPair()
+		if err != nil {
+			s.logger.Error("Failed to generate WireGuard keypair for spoke", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate WireGuard keypair"})
+			return
+		}
+		gw.WGPrivateKey = keyPair.PrivateKey
+		gw.WGPublicKey = keyPair.PublicKey
+
+		// Generate preshared key for additional security
+		psk, err := wireguard.GeneratePresharedKey()
+		if err != nil {
+			s.logger.Error("Failed to generate WireGuard preshared key", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate preshared key"})
+			return
+		}
+		gw.WGPresharedKey = psk
 	}
 
 	if err := s.meshStore.CreateMeshSpoke(ctx, gw); err != nil {
@@ -677,7 +757,9 @@ func (s *Server) handleCreateMeshSpoke(c *gin.Context) {
 			"hubId":         gw.HubID,
 			"name":          gw.Name,
 			"description":   gw.Description,
+			"gatewayType":   gw.GatewayType,
 			"localNetworks": gw.LocalNetworks,
+			"wgPublicKey":   gw.WGPublicKey,
 			"token":         token, // Only shown once at creation
 			"status":        gw.Status,
 		},
@@ -706,7 +788,9 @@ func (s *Server) handleGetMeshSpoke(c *gin.Context) {
 			"hubId":          gw.HubID,
 			"name":           gw.Name,
 			"description":    gw.Description,
+			"gatewayType":    gw.GatewayType,
 			"localNetworks":  gw.LocalNetworks,
+			"wgPublicKey":    gw.WGPublicKey,
 			"fullTunnelMode": gw.FullTunnelMode,
 			"pushDns":        gw.PushDNS,
 			"dnsServers":     gw.DNSServers,

@@ -35,11 +35,20 @@ const (
 	MeshSpokeStatusError        = "error"
 )
 
+// Mesh gateway type constants
+const (
+	MeshGatewayTypeOpenVPN   = "openvpn"
+	MeshGatewayTypeWireGuard = "wireguard"
+)
+
 // MeshHub represents a standalone hub server that accepts mesh gateway connections
 type MeshHub struct {
 	ID          string
 	Name        string
 	Description string
+
+	// Gateway type (openvpn or wireguard)
+	GatewayType string // "openvpn" or "wireguard"
 
 	// Endpoint configuration
 	PublicEndpoint string // hostname:port for gateways to connect to
@@ -50,17 +59,22 @@ type MeshHub struct {
 	// Local networks directly accessible from the hub (pushed to all clients)
 	LocalNetworks []string
 
-	// Crypto configuration
+	// Crypto configuration (OpenVPN)
 	CryptoProfile  string
 	TLSAuthEnabled bool
 	TLSAuthKey     string
+
+	// WireGuard configuration
+	WGPrivateKey string // WireGuard private key (when gateway_type=wireguard)
+	WGPublicKey  string // WireGuard public key (when gateway_type=wireguard)
+	WGListenPort int    // WireGuard listen port (default 51820)
 
 	// VPN client configuration
 	FullTunnelMode bool     // Route all client traffic through hub
 	PushDNS        bool     // Push DNS servers to clients
 	DNSServers     []string // DNS server IPs to push
 
-	// PKI - Hub's own CA for mesh
+	// PKI - Hub's own CA for mesh (OpenVPN)
 	CACert     string
 	CAKey      string
 	ServerCert string
@@ -92,6 +106,9 @@ type MeshSpoke struct {
 	Name        string
 	Description string
 
+	// Gateway type (inherited from hub)
+	GatewayType string // "openvpn" or "wireguard"
+
 	// Networks behind this gateway
 	LocalNetworks []string // Array of CIDRs
 
@@ -103,9 +120,14 @@ type MeshSpoke struct {
 	// Assigned tunnel IP
 	TunnelIP string
 
-	// Client certificates for connecting to hub
+	// Client certificates for connecting to hub (OpenVPN)
 	ClientCert string
 	ClientKey  string
+
+	// WireGuard keys (when gateway_type=wireguard)
+	WGPrivateKey   string // Spoke's private key
+	WGPublicKey    string // Spoke's public key
+	WGPresharedKey string // Optional PSK for extra security
 
 	// Authentication
 	Token string
@@ -162,8 +184,15 @@ func GenerateMeshToken() (string, error) {
 // CreateHub creates a new mesh hub
 func (s *MeshStore) CreateHub(ctx context.Context, hub *MeshHub) error {
 	// Default values
+	if hub.GatewayType == "" {
+		hub.GatewayType = MeshGatewayTypeOpenVPN
+	}
 	if hub.VPNPort == 0 {
-		hub.VPNPort = 1194
+		if hub.GatewayType == MeshGatewayTypeWireGuard {
+			hub.VPNPort = 51820
+		} else {
+			hub.VPNPort = 1194
+		}
 	}
 	if hub.VPNProtocol == "" {
 		hub.VPNProtocol = "udp"
@@ -177,21 +206,27 @@ func (s *MeshStore) CreateHub(ctx context.Context, hub *MeshHub) error {
 	if hub.Status == "" {
 		hub.Status = MeshHubStatusPending
 	}
+	if hub.WGListenPort == 0 {
+		hub.WGListenPort = 51820
+	}
 
 	_, err := s.db.Pool.Exec(ctx, `
 		INSERT INTO mesh_hubs (
 			name, description, public_endpoint, vpn_port, vpn_protocol, vpn_subnet,
-			crypto_profile, tls_auth_enabled, tls_auth_key,
+			gateway_type, crypto_profile, tls_auth_enabled, tls_auth_key,
+			wg_private_key, wg_public_key, wg_listen_port,
 			ca_cert, ca_key, server_cert, server_key, dh_params,
 			api_token, control_plane_url, status, status_message
 		) VALUES (
 			$1, $2, $3, $4, $5, $6::cidr,
-			$7, $8, $9,
-			$10, $11, $12, $13, $14,
-			$15, $16, $17, $18
+			$7, $8, $9, $10,
+			$11, $12, $13,
+			$14, $15, $16, $17, $18,
+			$19, $20, $21, $22
 		)
 	`, hub.Name, hub.Description, hub.PublicEndpoint, hub.VPNPort, hub.VPNProtocol, hub.VPNSubnet,
-		hub.CryptoProfile, hub.TLSAuthEnabled, hub.TLSAuthKey,
+		hub.GatewayType, hub.CryptoProfile, hub.TLSAuthEnabled, hub.TLSAuthKey,
+		hub.WGPrivateKey, hub.WGPublicKey, hub.WGListenPort,
 		hub.CACert, hub.CAKey, hub.ServerCert, hub.ServerKey, hub.DHParams,
 		hub.APIToken, hub.ControlPlaneURL, hub.Status, hub.StatusMessage)
 
@@ -205,11 +240,14 @@ func (s *MeshStore) CreateHub(ctx context.Context, hub *MeshHub) error {
 func (s *MeshStore) GetHub(ctx context.Context, id string) (*MeshHub, error) {
 	var hub MeshHub
 	var vpnSubnet *string
+	var wgListenPort *int
 	err := s.db.Pool.QueryRow(ctx, `
 		SELECT id, name, description,
+			COALESCE(gateway_type, 'openvpn'),
 			public_endpoint, vpn_port, vpn_protocol, vpn_subnet::text,
 			COALESCE(local_networks, '{}'),
 			crypto_profile, tls_auth_enabled, COALESCE(tls_auth_key, ''),
+			COALESCE(wg_private_key, ''), COALESCE(wg_public_key, ''), wg_listen_port,
 			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
 			COALESCE(ca_cert, ''), COALESCE(ca_key, ''), COALESCE(server_cert, ''), COALESCE(server_key, ''), COALESCE(dh_params, ''),
 			api_token, control_plane_url,
@@ -219,9 +257,11 @@ func (s *MeshStore) GetHub(ctx context.Context, id string) (*MeshHub, error) {
 		FROM mesh_hubs WHERE id = $1
 	`, id).Scan(
 		&hub.ID, &hub.Name, &hub.Description,
+		&hub.GatewayType,
 		&hub.PublicEndpoint, &hub.VPNPort, &hub.VPNProtocol, &vpnSubnet,
 		&hub.LocalNetworks,
 		&hub.CryptoProfile, &hub.TLSAuthEnabled, &hub.TLSAuthKey,
+		&hub.WGPrivateKey, &hub.WGPublicKey, &wgListenPort,
 		&hub.FullTunnelMode, &hub.PushDNS, &hub.DNSServers,
 		&hub.CACert, &hub.CAKey, &hub.ServerCert, &hub.ServerKey, &hub.DHParams,
 		&hub.APIToken, &hub.ControlPlaneURL,
@@ -239,6 +279,11 @@ func (s *MeshStore) GetHub(ctx context.Context, id string) (*MeshHub, error) {
 	if vpnSubnet != nil {
 		hub.VPNSubnet = *vpnSubnet
 	}
+	if wgListenPort != nil {
+		hub.WGListenPort = *wgListenPort
+	} else {
+		hub.WGListenPort = 51820
+	}
 	return &hub, nil
 }
 
@@ -246,11 +291,14 @@ func (s *MeshStore) GetHub(ctx context.Context, id string) (*MeshHub, error) {
 func (s *MeshStore) GetHubByToken(ctx context.Context, token string) (*MeshHub, error) {
 	var hub MeshHub
 	var vpnSubnet *string
+	var wgListenPort *int
 	err := s.db.Pool.QueryRow(ctx, `
 		SELECT id, name, description,
+			COALESCE(gateway_type, 'openvpn'),
 			public_endpoint, vpn_port, vpn_protocol, vpn_subnet::text,
 			COALESCE(local_networks, '{}'),
 			crypto_profile, tls_auth_enabled, COALESCE(tls_auth_key, ''),
+			COALESCE(wg_private_key, ''), COALESCE(wg_public_key, ''), wg_listen_port,
 			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
 			COALESCE(ca_cert, ''), COALESCE(ca_key, ''), COALESCE(server_cert, ''), COALESCE(server_key, ''), COALESCE(dh_params, ''),
 			api_token, control_plane_url,
@@ -260,9 +308,11 @@ func (s *MeshStore) GetHubByToken(ctx context.Context, token string) (*MeshHub, 
 		FROM mesh_hubs WHERE api_token = $1
 	`, token).Scan(
 		&hub.ID, &hub.Name, &hub.Description,
+		&hub.GatewayType,
 		&hub.PublicEndpoint, &hub.VPNPort, &hub.VPNProtocol, &vpnSubnet,
 		&hub.LocalNetworks,
 		&hub.CryptoProfile, &hub.TLSAuthEnabled, &hub.TLSAuthKey,
+		&hub.WGPrivateKey, &hub.WGPublicKey, &wgListenPort,
 		&hub.FullTunnelMode, &hub.PushDNS, &hub.DNSServers,
 		&hub.CACert, &hub.CAKey, &hub.ServerCert, &hub.ServerKey, &hub.DHParams,
 		&hub.APIToken, &hub.ControlPlaneURL,
@@ -279,6 +329,11 @@ func (s *MeshStore) GetHubByToken(ctx context.Context, token string) (*MeshHub, 
 	}
 	if vpnSubnet != nil {
 		hub.VPNSubnet = *vpnSubnet
+	}
+	if wgListenPort != nil {
+		hub.WGListenPort = *wgListenPort
+	} else {
+		hub.WGListenPort = 51820
 	}
 	return &hub, nil
 }
@@ -288,11 +343,14 @@ func (s *MeshStore) GetHubByName(name string) (*MeshHub, error) {
 	ctx := context.Background()
 	var hub MeshHub
 	var vpnSubnet *string
+	var wgListenPort *int
 	err := s.db.Pool.QueryRow(ctx, `
 		SELECT id, name, description,
+			COALESCE(gateway_type, 'openvpn'),
 			public_endpoint, vpn_port, vpn_protocol, vpn_subnet::text,
 			COALESCE(local_networks, '{}'),
 			crypto_profile, tls_auth_enabled, COALESCE(tls_auth_key, ''),
+			COALESCE(wg_private_key, ''), COALESCE(wg_public_key, ''), wg_listen_port,
 			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
 			COALESCE(ca_cert, ''), COALESCE(ca_key, ''), COALESCE(server_cert, ''), COALESCE(server_key, ''), COALESCE(dh_params, ''),
 			api_token, control_plane_url,
@@ -302,9 +360,11 @@ func (s *MeshStore) GetHubByName(name string) (*MeshHub, error) {
 		FROM mesh_hubs WHERE name = $1
 	`, name).Scan(
 		&hub.ID, &hub.Name, &hub.Description,
+		&hub.GatewayType,
 		&hub.PublicEndpoint, &hub.VPNPort, &hub.VPNProtocol, &vpnSubnet,
 		&hub.LocalNetworks,
 		&hub.CryptoProfile, &hub.TLSAuthEnabled, &hub.TLSAuthKey,
+		&hub.WGPrivateKey, &hub.WGPublicKey, &wgListenPort,
 		&hub.FullTunnelMode, &hub.PushDNS, &hub.DNSServers,
 		&hub.CACert, &hub.CAKey, &hub.ServerCert, &hub.ServerKey, &hub.DHParams,
 		&hub.APIToken, &hub.ControlPlaneURL,
@@ -322,6 +382,11 @@ func (s *MeshStore) GetHubByName(name string) (*MeshHub, error) {
 	if vpnSubnet != nil {
 		hub.VPNSubnet = *vpnSubnet
 	}
+	if wgListenPort != nil {
+		hub.WGListenPort = *wgListenPort
+	} else {
+		hub.WGListenPort = 51820
+	}
 	return &hub, nil
 }
 
@@ -329,8 +394,10 @@ func (s *MeshStore) GetHubByName(name string) (*MeshHub, error) {
 func (s *MeshStore) ListHubs(ctx context.Context) ([]*MeshHub, error) {
 	rows, err := s.db.Pool.Query(ctx, `
 		SELECT id, name, description,
+			COALESCE(gateway_type, 'openvpn'),
 			public_endpoint, vpn_port, vpn_protocol, vpn_subnet::text,
 			crypto_profile, tls_auth_enabled,
+			COALESCE(wg_public_key, ''), wg_listen_port,
 			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
 			status, COALESCE(status_message, ''), last_heartbeat, connected_gateways, connected_clients,
 			created_at, updated_at
@@ -346,10 +413,13 @@ func (s *MeshStore) ListHubs(ctx context.Context) ([]*MeshHub, error) {
 	for rows.Next() {
 		var hub MeshHub
 		var vpnSubnet *string
+		var wgListenPort *int
 		if err := rows.Scan(
 			&hub.ID, &hub.Name, &hub.Description,
+			&hub.GatewayType,
 			&hub.PublicEndpoint, &hub.VPNPort, &hub.VPNProtocol, &vpnSubnet,
 			&hub.CryptoProfile, &hub.TLSAuthEnabled,
+			&hub.WGPublicKey, &wgListenPort,
 			&hub.FullTunnelMode, &hub.PushDNS, &hub.DNSServers,
 			&hub.Status, &hub.StatusMessage, &hub.LastHeartbeat, &hub.ConnectedSpokes, &hub.ConnectedClients,
 			&hub.CreatedAt, &hub.UpdatedAt,
@@ -359,23 +429,31 @@ func (s *MeshStore) ListHubs(ctx context.Context) ([]*MeshHub, error) {
 		if vpnSubnet != nil {
 			hub.VPNSubnet = *vpnSubnet
 		}
+		if wgListenPort != nil {
+			hub.WGListenPort = *wgListenPort
+		} else {
+			hub.WGListenPort = 51820
+		}
 		hubs = append(hubs, &hub)
 	}
 	return hubs, rows.Err()
 }
 
 // UpdateHub updates a mesh hub
+// Note: gateway_type cannot be changed after creation
 func (s *MeshStore) UpdateHub(ctx context.Context, hub *MeshHub) error {
 	result, err := s.db.Pool.Exec(ctx, `
 		UPDATE mesh_hubs SET
 			name = $2, description = $3,
 			public_endpoint = $4, vpn_port = $5, vpn_protocol = $6, vpn_subnet = $7::cidr,
 			crypto_profile = $8, tls_auth_enabled = $9, local_networks = $10,
-			full_tunnel_mode = $11, push_dns = $12, dns_servers = $13
+			wg_listen_port = $11,
+			full_tunnel_mode = $12, push_dns = $13, dns_servers = $14
 		WHERE id = $1
 	`, hub.ID, hub.Name, hub.Description,
 		hub.PublicEndpoint, hub.VPNPort, hub.VPNProtocol, hub.VPNSubnet,
 		hub.CryptoProfile, hub.TLSAuthEnabled, hub.LocalNetworks,
+		hub.WGListenPort,
 		hub.FullTunnelMode, hub.PushDNS, hub.DNSServers)
 
 	if err != nil {
@@ -390,7 +468,7 @@ func (s *MeshStore) UpdateHub(ctx context.Context, hub *MeshHub) error {
 	return nil
 }
 
-// UpdateHubPKI updates the PKI certificates for a hub
+// UpdateHubPKI updates the PKI certificates for a hub (OpenVPN)
 func (s *MeshStore) UpdateHubPKI(ctx context.Context, hubID string, caCert, caKey, serverCert, serverKey, dhParams, tlsAuthKey string) error {
 	_, err := s.db.Pool.Exec(ctx, `
 		UPDATE mesh_hubs SET
@@ -398,6 +476,17 @@ func (s *MeshStore) UpdateHubPKI(ctx context.Context, hubID string, caCert, caKe
 			updated_at = NOW()
 		WHERE id = $1
 	`, hubID, caCert, caKey, serverCert, serverKey, dhParams, tlsAuthKey)
+	return err
+}
+
+// UpdateHubWireGuardKeys updates the WireGuard keys for a hub
+func (s *MeshStore) UpdateHubWireGuardKeys(ctx context.Context, hubID string, privateKey, publicKey string) error {
+	_, err := s.db.Pool.Exec(ctx, `
+		UPDATE mesh_hubs SET
+			wg_private_key = $2, wg_public_key = $3,
+			updated_at = NOW()
+		WHERE id = $1
+	`, hubID, privateKey, publicKey)
 	return err
 }
 
@@ -466,19 +555,31 @@ func (s *MeshStore) CreateMeshSpoke(ctx context.Context, gw *MeshSpoke) error {
 	if gw.Status == "" {
 		gw.Status = MeshSpokeStatusPending
 	}
+	if gw.GatewayType == "" {
+		gw.GatewayType = MeshGatewayTypeOpenVPN
+	}
 
 	_, err := s.db.Pool.Exec(ctx, `
 		INSERT INTO mesh_gateways (
 			hub_id, name, description, local_networks,
-			client_cert, client_key, token,
+			gateway_type,
+			client_cert, client_key,
+			wg_private_key, wg_public_key, wg_preshared_key,
+			token,
 			status, status_message
 		) VALUES (
 			$1, $2, $3, $4,
-			$5, $6, $7,
-			$8, $9
+			$5,
+			$6, $7,
+			$8, $9, $10,
+			$11,
+			$12, $13
 		)
 	`, gw.HubID, gw.Name, gw.Description, gw.LocalNetworks,
-		gw.ClientCert, gw.ClientKey, gw.Token,
+		gw.GatewayType,
+		gw.ClientCert, gw.ClientKey,
+		gw.WGPrivateKey, gw.WGPublicKey, gw.WGPresharedKey,
+		gw.Token,
 		gw.Status, gw.StatusMessage)
 
 	if err != nil && strings.Contains(err.Error(), "duplicate key") {
@@ -493,16 +594,22 @@ func (s *MeshStore) GetMeshSpoke(ctx context.Context, id string) (*MeshSpoke, er
 	var tunnelIP, remoteIP *string
 	err := s.db.Pool.QueryRow(ctx, `
 		SELECT id, hub_id, name, description, local_networks,
+			COALESCE(gateway_type, 'openvpn'),
 			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
-			host(tunnel_ip), COALESCE(client_cert, ''), COALESCE(client_key, ''), token,
+			host(tunnel_ip), COALESCE(client_cert, ''), COALESCE(client_key, ''),
+			COALESCE(wg_private_key, ''), COALESCE(wg_public_key, ''), COALESCE(wg_preshared_key, ''),
+			token,
 			status, COALESCE(status_message, ''), last_seen, bytes_sent, bytes_received,
 			host(remote_ip),
 			created_at, updated_at
 		FROM mesh_gateways WHERE id = $1
 	`, id).Scan(
 		&gw.ID, &gw.HubID, &gw.Name, &gw.Description, &gw.LocalNetworks,
+		&gw.GatewayType,
 		&gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers,
-		&tunnelIP, &gw.ClientCert, &gw.ClientKey, &gw.Token,
+		&tunnelIP, &gw.ClientCert, &gw.ClientKey,
+		&gw.WGPrivateKey, &gw.WGPublicKey, &gw.WGPresharedKey,
+		&gw.Token,
 		&gw.Status, &gw.StatusMessage, &gw.LastSeen, &gw.BytesSent, &gw.BytesReceived,
 		&remoteIP,
 		&gw.CreatedAt, &gw.UpdatedAt,
@@ -529,16 +636,22 @@ func (s *MeshStore) GetMeshSpokeByToken(ctx context.Context, token string) (*Mes
 	var tunnelIP, remoteIP *string
 	err := s.db.Pool.QueryRow(ctx, `
 		SELECT id, hub_id, name, description, local_networks,
+			COALESCE(gateway_type, 'openvpn'),
 			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
-			host(tunnel_ip), COALESCE(client_cert, ''), COALESCE(client_key, ''), token,
+			host(tunnel_ip), COALESCE(client_cert, ''), COALESCE(client_key, ''),
+			COALESCE(wg_private_key, ''), COALESCE(wg_public_key, ''), COALESCE(wg_preshared_key, ''),
+			token,
 			status, COALESCE(status_message, ''), last_seen, bytes_sent, bytes_received,
 			host(remote_ip),
 			created_at, updated_at
 		FROM mesh_gateways WHERE token = $1
 	`, token).Scan(
 		&gw.ID, &gw.HubID, &gw.Name, &gw.Description, &gw.LocalNetworks,
+		&gw.GatewayType,
 		&gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers,
-		&tunnelIP, &gw.ClientCert, &gw.ClientKey, &gw.Token,
+		&tunnelIP, &gw.ClientCert, &gw.ClientKey,
+		&gw.WGPrivateKey, &gw.WGPublicKey, &gw.WGPresharedKey,
+		&gw.Token,
 		&gw.Status, &gw.StatusMessage, &gw.LastSeen, &gw.BytesSent, &gw.BytesReceived,
 		&remoteIP,
 		&gw.CreatedAt, &gw.UpdatedAt,
@@ -566,16 +679,22 @@ func (s *MeshStore) GetMeshSpokeByName(name string) (*MeshSpoke, error) {
 	var tunnelIP, remoteIP *string
 	err := s.db.Pool.QueryRow(ctx, `
 		SELECT id, hub_id, name, description, local_networks,
+			COALESCE(gateway_type, 'openvpn'),
 			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
-			host(tunnel_ip), COALESCE(client_cert, ''), COALESCE(client_key, ''), token,
+			host(tunnel_ip), COALESCE(client_cert, ''), COALESCE(client_key, ''),
+			COALESCE(wg_private_key, ''), COALESCE(wg_public_key, ''), COALESCE(wg_preshared_key, ''),
+			token,
 			status, COALESCE(status_message, ''), last_seen, bytes_sent, bytes_received,
 			host(remote_ip),
 			created_at, updated_at
 		FROM mesh_gateways WHERE name = $1
 	`, name).Scan(
 		&gw.ID, &gw.HubID, &gw.Name, &gw.Description, &gw.LocalNetworks,
+		&gw.GatewayType,
 		&gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers,
-		&tunnelIP, &gw.ClientCert, &gw.ClientKey, &gw.Token,
+		&tunnelIP, &gw.ClientCert, &gw.ClientKey,
+		&gw.WGPrivateKey, &gw.WGPublicKey, &gw.WGPresharedKey,
+		&gw.Token,
 		&gw.Status, &gw.StatusMessage, &gw.LastSeen, &gw.BytesSent, &gw.BytesReceived,
 		&remoteIP,
 		&gw.CreatedAt, &gw.UpdatedAt,
@@ -600,8 +719,10 @@ func (s *MeshStore) GetMeshSpokeByName(name string) (*MeshSpoke, error) {
 func (s *MeshStore) ListMeshSpokesByHub(ctx context.Context, hubID string) ([]*MeshSpoke, error) {
 	rows, err := s.db.Pool.Query(ctx, `
 		SELECT id, hub_id, name, description, local_networks,
+			COALESCE(gateway_type, 'openvpn'),
 			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
-			host(tunnel_ip), status, COALESCE(status_message, ''), last_seen,
+			host(tunnel_ip), COALESCE(wg_public_key, ''),
+			status, COALESCE(status_message, ''), last_seen,
 			bytes_sent, bytes_received, host(remote_ip),
 			created_at, updated_at
 		FROM mesh_gateways
@@ -619,8 +740,10 @@ func (s *MeshStore) ListMeshSpokesByHub(ctx context.Context, hubID string) ([]*M
 		var tunnelIP, remoteIP *string
 		if err := rows.Scan(
 			&gw.ID, &gw.HubID, &gw.Name, &gw.Description, &gw.LocalNetworks,
+			&gw.GatewayType,
 			&gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers,
-			&tunnelIP, &gw.Status, &gw.StatusMessage, &gw.LastSeen,
+			&tunnelIP, &gw.WGPublicKey,
+			&gw.Status, &gw.StatusMessage, &gw.LastSeen,
 			&gw.BytesSent, &gw.BytesReceived, &remoteIP,
 			&gw.CreatedAt, &gw.UpdatedAt,
 		); err != nil {
@@ -659,7 +782,7 @@ func (s *MeshStore) UpdateMeshSpoke(ctx context.Context, gw *MeshSpoke) error {
 	return nil
 }
 
-// UpdateMeshSpokePKI updates the client certificates for a mesh gateway
+// UpdateMeshSpokePKI updates the client certificates for a mesh gateway (OpenVPN)
 func (s *MeshStore) UpdateMeshSpokePKI(ctx context.Context, gwID, clientCert, clientKey, tunnelIP string) error {
 	_, err := s.db.Pool.Exec(ctx, `
 		UPDATE mesh_gateways SET
@@ -667,6 +790,18 @@ func (s *MeshStore) UpdateMeshSpokePKI(ctx context.Context, gwID, clientCert, cl
 			updated_at = NOW()
 		WHERE id = $1
 	`, gwID, clientCert, clientKey, tunnelIP)
+	return err
+}
+
+// UpdateMeshSpokeWireGuardKeys updates the WireGuard keys for a spoke
+func (s *MeshStore) UpdateMeshSpokeWireGuardKeys(ctx context.Context, gwID, privateKey, publicKey, presharedKey, tunnelIP string) error {
+	_, err := s.db.Pool.Exec(ctx, `
+		UPDATE mesh_gateways SET
+			wg_private_key = $2, wg_public_key = $3, wg_preshared_key = $4,
+			tunnel_ip = NULLIF($5, '')::inet,
+			updated_at = NOW()
+		WHERE id = $1
+	`, gwID, privateKey, publicKey, presharedKey, tunnelIP)
 	return err
 }
 
@@ -825,8 +960,10 @@ func (s *MeshStore) UserHasHubAccess(ctx context.Context, userID, hubID string, 
 func (s *MeshStore) GetHubsForUser(ctx context.Context, userID string, groups []string) ([]*MeshHub, error) {
 	rows, err := s.db.Pool.Query(ctx, `
 		SELECT DISTINCT h.id, h.name, h.description,
+			COALESCE(h.gateway_type, 'openvpn'),
 			h.public_endpoint, h.vpn_port, h.vpn_protocol, h.vpn_subnet::text,
 			h.crypto_profile, h.tls_auth_enabled,
+			COALESCE(h.wg_public_key, ''), h.wg_listen_port,
 			h.status, COALESCE(h.status_message, ''), h.last_heartbeat, h.connected_gateways, h.connected_clients,
 			h.created_at, h.updated_at
 		FROM mesh_hubs h
@@ -846,10 +983,13 @@ func (s *MeshStore) GetHubsForUser(ctx context.Context, userID string, groups []
 	for rows.Next() {
 		var hub MeshHub
 		var vpnSubnet *string
+		var wgListenPort *int
 		if err := rows.Scan(
 			&hub.ID, &hub.Name, &hub.Description,
+			&hub.GatewayType,
 			&hub.PublicEndpoint, &hub.VPNPort, &hub.VPNProtocol, &vpnSubnet,
 			&hub.CryptoProfile, &hub.TLSAuthEnabled,
+			&hub.WGPublicKey, &wgListenPort,
 			&hub.Status, &hub.StatusMessage, &hub.LastHeartbeat, &hub.ConnectedSpokes, &hub.ConnectedClients,
 			&hub.CreatedAt, &hub.UpdatedAt,
 		); err != nil {
@@ -857,6 +997,11 @@ func (s *MeshStore) GetHubsForUser(ctx context.Context, userID string, groups []
 		}
 		if vpnSubnet != nil {
 			hub.VPNSubnet = *vpnSubnet
+		}
+		if wgListenPort != nil {
+			hub.WGListenPort = *wgListenPort
+		} else {
+			hub.WGListenPort = 51820
 		}
 		hubs = append(hubs, &hub)
 	}
@@ -1165,4 +1310,124 @@ func (s *MeshStore) GetUserMeshAccessRulesDetailedByEmail(ctx context.Context, h
 	}
 
 	return s.GetUserMeshAccessRulesDetailed(ctx, hubID, userID, groups)
+}
+
+// ==================== WireGuard Mesh Support Methods ====================
+
+// SetHubWireGuardKeys sets the WireGuard keys for a hub (alias for UpdateHubWireGuardKeys)
+func (s *MeshStore) SetHubWireGuardKeys(ctx context.Context, hubID, privateKey, publicKey string) error {
+	return s.UpdateHubWireGuardKeys(ctx, hubID, privateKey, publicKey)
+}
+
+// UpdateHubHeartbeat updates the hub's last heartbeat timestamp and public IP
+func (s *MeshStore) UpdateHubHeartbeat(ctx context.Context, hubID, publicIP string) error {
+	_, err := s.db.Pool.Exec(ctx, `
+		UPDATE mesh_hubs SET
+			last_heartbeat = NOW(),
+			status = 'online'
+		WHERE id = $1
+	`, hubID)
+	return err
+}
+
+// UpdateHubConnectedCounts updates the connected spoke and client counts for a hub
+func (s *MeshStore) UpdateHubConnectedCounts(ctx context.Context, hubID string, spokeCount, clientCount int) error {
+	_, err := s.db.Pool.Exec(ctx, `
+		UPDATE mesh_hubs SET
+			connected_gateways = $2,
+			connected_clients = $3
+		WHERE id = $1
+	`, hubID, spokeCount, clientCount)
+	return err
+}
+
+// GetMeshSpokeByWGPublicKey finds a spoke by its WireGuard public key within a hub
+func (s *MeshStore) GetMeshSpokeByWGPublicKey(ctx context.Context, hubID, publicKey string) (*MeshSpoke, error) {
+	var gw MeshSpoke
+	var remoteIP *string
+	var tunnelIP *string
+	var lastSeen *time.Time
+	err := s.db.Pool.QueryRow(ctx, `
+		SELECT id, hub_id, name, COALESCE(description, ''),
+			gateway_type,
+			api_token, COALESCE(local_networks, '{}'),
+			COALESCE(wg_private_key, ''), COALESCE(wg_public_key, ''), COALESCE(wg_preshared_key, ''),
+			status, COALESCE(status_message, ''), last_seen, remote_ip::text, tunnel_ip,
+			bytes_sent, bytes_received,
+			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
+			created_at, updated_at
+		FROM mesh_gateways
+		WHERE hub_id = $1 AND wg_public_key = $2
+	`, hubID, publicKey).Scan(
+		&gw.ID, &gw.HubID, &gw.Name, &gw.Description,
+		&gw.GatewayType,
+		&gw.Token, &gw.LocalNetworks,
+		&gw.WGPrivateKey, &gw.WGPublicKey, &gw.WGPresharedKey,
+		&gw.Status, &gw.StatusMessage, &lastSeen, &remoteIP, &tunnelIP,
+		&gw.BytesSent, &gw.BytesReceived,
+		&gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers,
+		&gw.CreatedAt, &gw.UpdatedAt,
+	)
+	if err != nil {
+		if err.Error() == "no rows in result set" {
+			return nil, ErrMeshSpokeNotFound
+		}
+		return nil, err
+	}
+	gw.LastSeen = lastSeen
+	if remoteIP != nil {
+		gw.RemoteIP = *remoteIP
+	}
+	if tunnelIP != nil {
+		gw.TunnelIP = *tunnelIP
+	}
+	return &gw, nil
+}
+
+// UpdateMeshSpokeStats updates the statistics for a mesh spoke (WireGuard-specific)
+func (s *MeshStore) UpdateMeshSpokeStats(ctx context.Context, spokeID, status, endpoint string, bytesSent, bytesReceived int64, lastHandshake *time.Time) error {
+	_, err := s.db.Pool.Exec(ctx, `
+		UPDATE mesh_gateways SET
+			status = $2,
+			remote_ip = NULLIF($3, '')::inet,
+			bytes_sent = $4,
+			bytes_received = $5,
+			last_seen = COALESCE($6, last_seen)
+		WHERE id = $1
+	`, spokeID, status, endpoint, bytesSent, bytesReceived, lastHandshake)
+	return err
+}
+
+// SetSpokeWireGuardKeys sets the WireGuard keys for a spoke
+func (s *MeshStore) SetSpokeWireGuardKeys(ctx context.Context, spokeID, privateKey, publicKey, presharedKey string) error {
+	_, err := s.db.Pool.Exec(ctx, `
+		UPDATE mesh_gateways SET
+			wg_private_key = $2,
+			wg_public_key = $3,
+			wg_preshared_key = $4
+		WHERE id = $1
+	`, spokeID, privateKey, publicKey, presharedKey)
+	return err
+}
+
+// UpdateMeshSpokeTunnelIP updates the tunnel IP for a spoke
+func (s *MeshStore) UpdateMeshSpokeTunnelIP(ctx context.Context, spokeID, tunnelIP string) error {
+	_, err := s.db.Pool.Exec(ctx, `
+		UPDATE mesh_gateways SET
+			tunnel_ip = $2
+		WHERE id = $1
+	`, spokeID, tunnelIP)
+	return err
+}
+
+// UpdateMeshSpokeHeartbeat updates the spoke's last seen timestamp and public IP
+func (s *MeshStore) UpdateMeshSpokeHeartbeat(ctx context.Context, spokeID, publicIP string) error {
+	_, err := s.db.Pool.Exec(ctx, `
+		UPDATE mesh_gateways SET
+			last_seen = NOW(),
+			status = 'online',
+			remote_ip = NULLIF($2, '')::inet
+		WHERE id = $1
+	`, spokeID, publicIP)
+	return err
 }

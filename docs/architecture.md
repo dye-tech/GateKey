@@ -126,6 +126,47 @@ The mesh spoke connects remote sites to the mesh hub:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### WireGuard Gateway Agent (`gatekey-wireguard-gateway`)
+
+The WireGuard gateway agent provides an alternative to OpenVPN gateways:
+
+- **WireGuard Interface Management**: Creates and manages wg0 interface
+- **Peer Synchronization**: Syncs authorized peers from control plane
+- **Firewall Management**: Per-peer nftables rules with zero-trust
+- **Connection Reporting**: Reports peer handshakes and traffic stats
+- **Health Monitoring**: Sends heartbeats to control plane
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                  WIREGUARD GATEWAY NODE                          │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────┐  ┌──────────────────────────────────────┐ │
+│  │   WireGuard      │  │    GateKey WireGuard Gateway Agent   │ │
+│  │   Interface      │◄─┤      (gatekey-wireguard-gateway)     │ │
+│  │   (wg0)          │  └────────────────┬─────────────────────┘ │
+│  └────────┬─────────┘                   │                       │
+│           │                              │                       │
+│           │ Peer Management              │ API Calls             │
+│           │ (wg set/show)                │ (heartbeat, sync)     │
+│           │                              │                       │
+│  ┌────────┴──────────────────────────────┴──────────────────┐   │
+│  │              Firewall Manager (nftables)                  │   │
+│  │         Per-peer rules, default DENY policy               │   │
+│  └───────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### WireGuard vs OpenVPN Gateway
+
+| Feature | OpenVPN Gateway | WireGuard Gateway |
+|---------|-----------------|-------------------|
+| Binary | `gatekey-gateway` | `gatekey-wireguard-gateway` |
+| Protocol | UDP or TCP | UDP only |
+| Port | 1194 (default) | 51820 (default) |
+| Client Auth | X.509 Certificates | Public Key |
+| Config Format | `.ovpn` | `.conf` |
+| Cryptography | Configurable | Fixed (Curve25519, ChaCha20) |
+
 ## Data Flow
 
 ### User Authentication Flow
