@@ -25,12 +25,16 @@ type Config struct {
 	Logger     *zap.Logger
 }
 
+// TriggerSyncHandler is a callback function for triggering immediate peer sync
+type TriggerSyncHandler func(ctx context.Context) error
+
 // Server is the agent API server
 type Server struct {
-	config *Config
-	router *gin.Engine
-	server *http.Server
-	logger *zap.Logger
+	config            *Config
+	router            *gin.Engine
+	server            *http.Server
+	logger            *zap.Logger
+	triggerSyncHandler TriggerSyncHandler
 }
 
 // ToolRequest is the request to execute a network tool
@@ -78,8 +82,14 @@ func NewServer(cfg *Config) *Server {
 	router.GET("/health", s.handleHealth)
 	router.GET("/status", s.handleStatus)
 	router.POST("/api/v1/tools/execute", s.handleExecuteTool)
+	router.POST("/api/v1/trigger-sync", s.handleTriggerSync)
 
 	return s
+}
+
+// SetTriggerSyncHandler sets the callback for immediate peer sync
+func (s *Server) SetTriggerSyncHandler(handler TriggerSyncHandler) {
+	s.triggerSyncHandler = handler
 }
 
 // Start starts the agent API server
@@ -118,6 +128,39 @@ func (s *Server) handleStatus(c *gin.Context) {
 		NodeName: s.config.NodeName,
 		Version:  "1.0.0",
 	})
+}
+
+// handleTriggerSync triggers an immediate peer sync (used by control plane after config generation)
+func (s *Server) handleTriggerSync(c *gin.Context) {
+	var req struct {
+		Token string `json:"token" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
+		return
+	}
+
+	// Verify token
+	if req.Token != s.config.APIToken {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+
+	if s.triggerSyncHandler == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "Trigger sync not supported by this agent"})
+		return
+	}
+
+	s.logger.Info("Trigger sync requested by control plane")
+
+	ctx := c.Request.Context()
+	if err := s.triggerSyncHandler(ctx); err != nil {
+		s.logger.Error("Trigger sync failed", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Sync failed: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "sync triggered"})
 }
 
 func (s *Server) handleExecuteTool(c *gin.Context) {
@@ -257,4 +300,38 @@ func (c *Client) GetStatus(agentURL string) (*StatusResponse, error) {
 	}
 
 	return &result, nil
+}
+
+// TriggerSync triggers an immediate peer sync on a remote gateway
+func (c *Client) TriggerSync(agentURL, token string) error {
+	reqBody := struct {
+		Token string `json:"token"`
+	}{
+		Token: token,
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	resp, err := c.httpClient.Post(agentURL+"/api/v1/trigger-sync", "application/json",
+		bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var errResp struct {
+			Error string `json:"error"`
+		}
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		if errResp.Error != "" {
+			return fmt.Errorf("%s", errResp.Error)
+		}
+		return fmt.Errorf("agent returned status %d", resp.StatusCode)
+	}
+
+	return nil
 }

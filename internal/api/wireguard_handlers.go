@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
+	"github.com/gatekey-project/gatekey/internal/agent"
 	"github.com/gatekey-project/gatekey/internal/db"
 	"github.com/gatekey-project/gatekey/internal/wireguard"
 )
@@ -245,6 +246,10 @@ func (s *Server) handleGenerateWireGuardConfig(c *gin.Context) {
 		zap.String("user_email", user.Email),
 		zap.String("gateway_id", gateway.ID),
 		zap.String("assigned_ip", assignedIP))
+
+	// Trigger immediate peer sync on the gateway so client can connect immediately
+	// This is done async to not delay the response to the client
+	go s.triggerGatewayPeerSync(gateway)
 
 	c.JSON(http.StatusOK, gin.H{
 		"id":          configID,
@@ -859,4 +864,44 @@ func (s *Server) handleWireGuardGatewayPeerStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+// triggerGatewayPeerSync triggers an immediate peer sync on the WireGuard gateway.
+// This is called asynchronously after generating a config so the client can connect immediately
+// without waiting for the gateway's next poll interval (default 10 seconds).
+func (s *Server) triggerGatewayPeerSync(gateway *db.Gateway) {
+	// Construct gateway agent URL from hostname or public IP
+	var gatewayHost string
+	if gateway.Hostname != "" {
+		gatewayHost = gateway.Hostname
+	} else if gateway.PublicIP != "" {
+		gatewayHost = gateway.PublicIP
+	} else {
+		s.logger.Warn("Cannot trigger peer sync: gateway has no hostname or public IP",
+			zap.String("gateway_id", gateway.ID),
+			zap.String("gateway_name", gateway.Name))
+		return
+	}
+
+	// Agent API runs on port 9444 by default
+	agentURL := fmt.Sprintf("http://%s:9444", gatewayHost)
+
+	s.logger.Debug("Triggering immediate peer sync on gateway",
+		zap.String("gateway_id", gateway.ID),
+		zap.String("gateway_name", gateway.Name),
+		zap.String("agent_url", agentURL))
+
+	client := agent.NewClient()
+	if err := client.TriggerSync(agentURL, gateway.Token); err != nil {
+		// Log warning but don't fail - the gateway will pick up the peer on next regular sync
+		s.logger.Warn("Failed to trigger immediate peer sync on gateway (will sync on next interval)",
+			zap.String("gateway_id", gateway.ID),
+			zap.String("gateway_name", gateway.Name),
+			zap.Error(err))
+		return
+	}
+
+	s.logger.Info("Triggered immediate peer sync on gateway",
+		zap.String("gateway_id", gateway.ID),
+		zap.String("gateway_name", gateway.Name))
 }
