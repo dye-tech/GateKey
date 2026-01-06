@@ -1,3 +1,5 @@
+version: "2"
+
 # GolangCI-Lint configuration
 # https://golangci-lint.run/usage/configuration/
 
