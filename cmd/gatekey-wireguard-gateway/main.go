@@ -496,6 +496,8 @@ func sendHeartbeat(cfg *GatewayConfig) {
 		logger.Warn("Heartbeat returned error",
 			zap.Int("status", resp.StatusCode),
 			zap.String("body", string(respBody)))
+	} else {
+		logger.Debug("Heartbeat sent successfully", zap.Int("peer_count", len(activePeers)))
 	}
 }
 
@@ -503,6 +505,9 @@ func sendHeartbeat(cfg *GatewayConfig) {
 func peerSyncLoop(ctx context.Context, cfg *GatewayConfig) {
 	ticker := time.NewTicker(cfg.PeerSyncInterval)
 	defer ticker.Stop()
+
+	// Perform initial sync immediately
+	syncPeers(ctx, cfg)
 
 	for {
 		select {
@@ -615,6 +620,8 @@ func syncPeers(ctx context.Context, cfg *GatewayConfig) {
 				zap.String("user_id", peer.UserID))
 		}
 	}
+
+	logger.Debug("Peer sync completed", zap.Int("authorized_peers", len(authorizedPeers)), zap.Int("active_peers", len(activePeers)))
 }
 
 // statsSyncLoop periodically reports peer statistics to the control plane.

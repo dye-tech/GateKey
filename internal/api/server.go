@@ -581,12 +581,12 @@ func (s *Server) setupRoutes() {
 		v1.POST("/mesh-configs/:id/revoke", s.handleRevokeMeshConfig)
 
 		// User WireGuard config management
-		wgConfigs := v1.Group("/wireguard")
+		wgConfigs := v1.Group("/wireguard/configs")
 		{
-			wgConfigs.POST("/configs/generate", s.handleGenerateWireGuardConfig)
-			wgConfigs.GET("/configs", s.handleListUserWireGuardConfigs)
-			wgConfigs.GET("/configs/:id/download", s.handleDownloadWireGuardConfig)
-			wgConfigs.POST("/configs/:id/revoke", s.handleRevokeWireGuardConfig)
+			wgConfigs.POST("/generate", s.handleGenerateWireGuardConfig)
+			wgConfigs.GET("", s.handleListUserWireGuardConfigs)
+			wgConfigs.GET("/download/:id", s.handleDownloadWireGuardConfig)
+			wgConfigs.POST("/:id/revoke", s.handleRevokeWireGuardConfig)
 		}
 	}
 
@@ -613,6 +613,9 @@ func (s *Server) setupRoutes() {
 	s.router.GET("/scripts/install-client.sh", s.handleClientInstallScript)
 	s.router.GET("/scripts/install-hub.sh", s.handleHubInstallScript)
 	s.router.GET("/scripts/install-mesh-spoke.sh", s.handleMeshSpokeGenericInstallScript)
+	s.router.GET("/scripts/install-wireguard-gateway.sh", s.handleWireGuardGatewayInstallScript)
+	s.router.GET("/scripts/install-wireguard-hub.sh", s.handleWireGuardHubInstallScript)
+	s.router.GET("/scripts/install-wireguard-mesh-spoke.sh", s.handleWireGuardMeshSpokeInstallScript)
 	s.router.GET("/install.sh", s.handleInstallScript) // Alias for easy curl install
 
 	// Downloads endpoints

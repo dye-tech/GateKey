@@ -2255,6 +2255,7 @@ func (s *Server) handleListUserMeshHubs(c *gin.Context) {
 			"publicEndpoint":  hub.PublicEndpoint,
 			"vpnPort":         hub.VPNPort,
 			"vpnProtocol":     hub.VPNProtocol,
+			"hubType":         hub.GatewayType,
 			"status":          hub.Status,
 			"connectedspokes": hub.ConnectedSpokes,
 		})
