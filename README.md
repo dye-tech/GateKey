@@ -55,7 +55,9 @@ This section is for employees who need to connect to your company's VPN.
 
 ## Prerequisites
 
-You need OpenVPN installed on your machine:
+You need a VPN client installed on your machine. GateKey supports both OpenVPN and WireGuard:
+
+### OpenVPN Client
 
 | Platform | Installation |
 |----------|--------------|
@@ -63,6 +65,17 @@ You need OpenVPN installed on your machine:
 | Ubuntu/Debian | `sudo apt install openvpn` |
 | Fedora | `sudo dnf install openvpn` |
 | Windows | [Download OpenVPN Connect](https://openvpn.net/client/) |
+
+### WireGuard Client (Alternative)
+
+| Platform | Installation |
+|----------|--------------|
+| macOS | [WireGuard App Store](https://apps.apple.com/us/app/wireguard/id1451685025) |
+| Ubuntu/Debian | `sudo apt install wireguard-tools` |
+| Fedora | `sudo dnf install wireguard-tools` |
+| Windows | [Download WireGuard](https://www.wireguard.com/install/) |
+| iOS | [WireGuard App Store](https://apps.apple.com/us/app/wireguard/id1441195209) |
+| Android | [WireGuard Play Store](https://play.google.com/store/apps/details?id=com.wireguard.android) |
 
 ## Install the Client
 
@@ -560,10 +573,13 @@ Use the admin UI or API to:
 |--------|-------------|-------------|
 | `gatekey` | VPN client CLI | End users |
 | `gatekey-server` | Control plane server | Administrators |
-| `gatekey-gateway` | Gateway agent (runs with OpenVPN) | Gateway servers |
+| `gatekey-gateway` | OpenVPN gateway agent | Gateway servers |
+| `gatekey-wireguard-gateway` | WireGuard gateway agent | Gateway servers |
 | `gatekey-admin` | Admin CLI for policy management | Administrators |
-| `gatekey-hub` | Multi-gateway hub coordinator | Large deployments |
-| `gatekey-mesh-gateway` | Mesh networking gateway | Mesh deployments |
+| `gatekey-hub` | OpenVPN mesh hub | Mesh deployments |
+| `gatekey-mesh-gateway` | OpenVPN mesh spoke | Mesh deployments |
+| `gatekey-wireguard-hub` | WireGuard mesh hub | Mesh deployments |
+| `gatekey-wireguard-mesh-gateway` | WireGuard mesh spoke | Mesh deployments |
 
 ## Docker Images
 
@@ -571,8 +587,21 @@ Use the admin UI or API to:
 |-------|-------------|
 | [`dyetech/gatekey-server`](https://hub.docker.com/r/dyetech/gatekey-server) | Control plane (API + embedded CA) |
 | [`dyetech/gatekey-web`](https://hub.docker.com/r/dyetech/gatekey-web) | Web UI (nginx + React) |
+| [`dyetech/gatekey-wireguard-gateway`](https://hub.docker.com/r/dyetech/gatekey-wireguard-gateway) | WireGuard gateway agent |
+| [`dyetech/gatekey-wireguard-hub`](https://hub.docker.com/r/dyetech/gatekey-wireguard-hub) | WireGuard mesh hub |
+| [`dyetech/gatekey-wireguard-mesh-gateway`](https://hub.docker.com/r/dyetech/gatekey-wireguard-mesh-gateway) | WireGuard mesh spoke |
 
 ---
+
+# Documentation
+
+| Document | Description |
+|----------|-------------|
+| [docs/api.md](docs/api.md) | REST API reference |
+| [docs/wireguard.md](docs/wireguard.md) | WireGuard VPN setup and configuration |
+| [docs/mesh-networking.md](docs/mesh-networking.md) | Hub-and-spoke mesh networking |
+| [docs/security.md](docs/security.md) | Security model and best practices |
+| [docs/architecture.md](docs/architecture.md) | System architecture overview |
 
 # API Reference
 
@@ -597,11 +626,13 @@ See [docs/api.md](docs/api.md) for full API documentation.
 
 - **Zero Trust**: No network access without authentication
 - **Short-Lived Certificates**: Auto-expire after 24 hours (configurable)
-- **Per-Identity Firewall**: Each user gets their own firewall rules
+- **Per-Identity Firewall**: Each user gets their own firewall rules (nftables)
+- **Dual Protocol Support**: OpenVPN and WireGuard gateways with same security model
 - **API Key Authentication**: Programmatic access for CLI and automation
 - **FIPS Compliance**: Built with FIPS-validated crypto (when enabled)
 - **Audit Logging**: All access is logged
 - **Login Monitoring**: Track all authentication events with IP, location, and status
+- **Geo-Fencing**: IP-based access restrictions using whitelist model
 
 ---
 
