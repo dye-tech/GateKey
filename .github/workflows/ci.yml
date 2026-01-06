@@ -70,7 +70,7 @@ jobs:
           DATABASE_URL: postgres://test:test@localhost:5432/gatekey_test?sslmode=disable
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: ./coverage.out
           flags: unittests
