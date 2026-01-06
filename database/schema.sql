@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 09V13CKn7smEKO92sUzSc5mi5HTBMEgJ3g6L7iiRC1pGqWuXvbpKA58HFxeJ735
+\restrict hM5dRcRHYU8GVOKCPCaPncwDgMmMzJRwoJ1fYMSmw1vIbQgaXte5AFv9Wy0ydWC
 
 -- Dumped from database version 16.10
 -- Dumped by pg_dump version 16.10
@@ -1665,6 +1665,14 @@ ALTER TABLE ONLY public.wireguard_configs
 
 
 --
+-- Name: wireguard_peers wireguard_peers_gateway_public_key_unique; Type: CONSTRAINT; Schema: public; Owner: gatekey
+--
+
+ALTER TABLE ONLY public.wireguard_peers
+    ADD CONSTRAINT wireguard_peers_gateway_public_key_unique UNIQUE (gateway_id, public_key);
+
+
+--
 -- Name: wireguard_peers wireguard_peers_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
 --
 
@@ -2933,5 +2941,5 @@ ALTER TABLE ONLY public.wireguard_peers
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 09V13CKn7smEKO92sUzSc5mi5HTBMEgJ3g6L7iiRC1pGqWuXvbpKA58HFxeJ735
+\unrestrict hM5dRcRHYU8GVOKCPCaPncwDgMmMzJRwoJ1fYMSmw1vIbQgaXte5AFv9Wy0ydWC
 
