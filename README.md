@@ -24,7 +24,23 @@
 
 ---
 
-GateKey is a zero-trust VPN solution that wraps OpenVPN. Users authenticate via their company's identity provider (Okta, Azure AD, etc.) and get short-lived VPN credentials automatically. No passwords to remember, no certificates to manage.
+## What is GateKey?
+
+GateKey is a **zero-trust VPN solution** that wraps OpenVPN and WireGuard. Users authenticate via their company's identity provider (Okta, Azure AD, Google Workspace, etc.) and get short-lived VPN credentials automatically.
+
+**No passwords to remember. No certificates to manage. Just SSO and connect.**
+
+### Key Features
+
+- **Dual Protocol Support** - OpenVPN and WireGuard gateways with the same zero-trust model
+- **SSO Authentication** - Integrate with Okta, Azure AD, Google, or any OIDC/SAML provider
+- **Short-Lived Credentials** - VPN certificates auto-expire (24 hours default), no manual rotation
+- **Per-User Firewall Rules** - Each user gets individualized network access based on their role
+- **Multi-Gateway** - Connect to multiple VPN gateways simultaneously
+- **Mesh Networking** - Hub-and-spoke topology for site-to-site connectivity
+- **Mobile Support** - Android and iOS apps with WireGuard integration
+
+---
 
 ## Table of Contents
 
@@ -199,18 +215,20 @@ This section is for IT administrators setting up GateKey infrastructure.
 │  └─────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
                               │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      GATEKEY GATEWAY                            │
-│  ┌──────────────────┐  ┌──────────────────┐                    │
-│  │  OpenVPN Server  │◄─┤  Gateway Agent   │                    │
-│  │    (Stock)       │  │  (Hook Handler)  │                    │
-│  └──────────────────┘  └──────────────────┘                    │
-│                              │                                  │
-│  ┌───────────────────────────┴──────────────────────────────┐  │
-│  │           Per-Identity Firewall Rules (nftables)          │  │
-│  └───────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
+              ┌───────────────┴───────────────┐
+              ▼                               ▼
+┌──────────────────────────────┐  ┌──────────────────────────────┐
+│     OPENVPN GATEWAY          │  │     WIREGUARD GATEWAY        │
+│  ┌────────────┐ ┌─────────┐  │  │  ┌────────────┐ ┌─────────┐  │
+│  │  OpenVPN   │◄┤ Gateway │  │  │  │ WireGuard  │◄┤ Gateway │  │
+│  │  Server    │ │  Agent  │  │  │  │  Server    │ │  Agent  │  │
+│  └────────────┘ └─────────┘  │  │  └────────────┘ └─────────┘  │
+│         │                    │  │         │                    │
+│  ┌──────┴──────────────────┐ │  │  ┌──────┴──────────────────┐ │
+│  │  nftables Firewall      │ │  │  │  nftables Firewall      │ │
+│  │  (Per-Identity Rules)   │ │  │  │  (Per-Identity Rules)   │ │
+│  └─────────────────────────┘ │  │  └─────────────────────────┘ │
+└──────────────────────────────┘  └──────────────────────────────┘
 ```
 
 ## Server Setup
@@ -382,13 +400,19 @@ cd ..
 
 ## Gateway Setup
 
-The Gateway runs alongside OpenVPN and handles certificate validation and per-user firewall rules.
+GateKey supports both OpenVPN and WireGuard gateways. Choose based on your requirements:
+
+| Protocol | Best For | Performance | Compatibility |
+|----------|----------|-------------|---------------|
+| **OpenVPN** | Maximum compatibility, complex firewall rules | Good | All platforms |
+| **WireGuard** | Performance, mobile devices, modern deployments | Excellent | Linux, macOS, Windows, iOS, Android |
 
 ### Prerequisites
 
 - Linux server with root access
-- OpenVPN 2.5+
 - nftables (for firewall rules)
+- **OpenVPN Gateway**: OpenVPN 2.5+
+- **WireGuard Gateway**: WireGuard kernel module or wireguard-go
 
 ### Option 1: Install Script (Recommended)
 
@@ -447,6 +471,55 @@ sudo systemctl start gatekey-gateway
 cd GateKey
 make build-gateway
 sudo cp bin/gatekey-gateway /usr/local/bin/
+```
+
+### WireGuard Gateway Setup
+
+For WireGuard gateways, use the WireGuard-specific agent:
+
+```bash
+# Download WireGuard gateway binary
+curl -LO https://vpn.yourcompany.com/downloads/gatekey-wireguard-gateway-linux-amd64
+chmod +x gatekey-wireguard-gateway-linux-amd64
+sudo mv gatekey-wireguard-gateway-linux-amd64 /usr/local/bin/gatekey-wireguard-gateway
+
+# Create config
+sudo mkdir -p /etc/gatekey
+sudo cat > /etc/gatekey/wireguard-gateway.yaml << EOF
+server_url: https://vpn.yourcompany.com
+gateway_token: your-gateway-registration-token
+interface_name: wg0
+listen_port: 51820
+EOF
+
+# Create systemd service
+sudo cat > /etc/systemd/system/gatekey-wireguard-gateway.service << EOF
+[Unit]
+Description=GateKey WireGuard Gateway Agent
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/gatekey-wireguard-gateway --config /etc/gatekey/wireguard-gateway.yaml
+Restart=always
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Start service
+sudo systemctl daemon-reload
+sudo systemctl enable gatekey-wireguard-gateway
+sudo systemctl start gatekey-wireguard-gateway
+```
+
+Or build from source:
+
+```bash
+cd GateKey
+make build-wireguard-gateway
+sudo cp bin/gatekey-wireguard-gateway /usr/local/bin/
 ```
 
 ---
@@ -542,8 +615,8 @@ Use the admin UI or API to:
 
 # How It Works
 
-1. **`gatekey login`** - Opens your browser to authenticate with your company's SSO
-2. **`gatekey connect`** - Downloads a short-lived VPN config (valid ~24 hours) and connects using OpenVPN
+1. **`gatekey login`** - Opens your browser to authenticate with your company's SSO (Okta, Azure AD, etc.)
+2. **`gatekey connect`** - Downloads a short-lived VPN config (valid ~24 hours) and connects via OpenVPN or WireGuard
 3. Your firewall rules are automatically applied based on your role/group membership
 4. Configs auto-refresh, so you never deal with expired certificates
 
@@ -558,7 +631,9 @@ Use the admin UI or API to:
 │       │         │    │                  │    │  └───────────┘  │
 │       ▼         │    │  ┌────────────┐  │    │       ▲         │
 │  ┌───────────┐  │    │  │  OpenVPN   │  │    │       │         │
-│  │  OpenVPN  │──┼────┼─►│  Gateway   │──┼────┼───────┘         │
+│  │  OpenVPN  │──┼────┼─►│     or     │──┼────┼───────┘         │
+│  │    or     │  │    │  │ WireGuard  │  │    │                 │
+│  │ WireGuard │  │    │  │  Gateway   │  │    │                 │
 │  └───────────┘  │    │  └────────────┘  │    │                 │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
 ```
