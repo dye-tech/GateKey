@@ -3037,6 +3037,7 @@ func (s *Server) handleListUserGateways(c *gin.Context) {
 			"publicIp":    gw.PublicIP,
 			"vpnPort":     gw.VPNPort,
 			"vpnProtocol": gw.VPNProtocol,
+			"gatewayType": gw.GatewayType,
 			"isActive":    isActive,
 		}
 		if gw.LastHeartbeat != nil {
@@ -4429,6 +4430,90 @@ func (s *Server) handleMeshSpokeGenericInstallScript(c *gin.Context) {
 	c.String(http.StatusOK, string(script))
 }
 
+func (s *Server) handleWireGuardGatewayInstallScript(c *gin.Context) {
+	// Serve the WireGuard gateway installer script from file
+	scriptPaths := []string{
+		"/app/scripts/install-wireguard-gateway.sh",
+		"scripts/install-wireguard-gateway.sh",
+		"../scripts/install-wireguard-gateway.sh",
+	}
+
+	var script []byte
+	var err error
+	for _, path := range scriptPaths {
+		script, err = os.ReadFile(path)
+		if err == nil {
+			break
+		}
+	}
+
+	if err != nil {
+		s.logger.Error("Failed to read WireGuard gateway install script", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "WireGuard gateway install script not found"})
+		return
+	}
+
+	c.Header("Content-Type", "text/x-shellscript")
+	c.Header("Content-Disposition", "attachment; filename=install-wireguard-gateway.sh")
+	c.String(http.StatusOK, string(script))
+}
+
+func (s *Server) handleWireGuardHubInstallScript(c *gin.Context) {
+	// Serve the WireGuard hub installer script from file
+	scriptPaths := []string{
+		"/app/scripts/install-wireguard-hub.sh",
+		"scripts/install-wireguard-hub.sh",
+		"../scripts/install-wireguard-hub.sh",
+	}
+
+	var script []byte
+	var err error
+	for _, path := range scriptPaths {
+		script, err = os.ReadFile(path)
+		if err == nil {
+			break
+		}
+	}
+
+	if err != nil {
+		s.logger.Error("Failed to read WireGuard hub install script", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "WireGuard hub install script not found"})
+		return
+	}
+
+	c.Header("Content-Type", "text/x-shellscript")
+	c.Header("Content-Disposition", "attachment; filename=install-wireguard-hub.sh")
+	c.String(http.StatusOK, string(script))
+}
+
+func (s *Server) handleWireGuardMeshSpokeInstallScript(c *gin.Context) {
+	// Serve the WireGuard mesh spoke installer script from file
+	scriptPaths := []string{
+		"/app/scripts/install-wireguard-mesh-spoke.sh",
+		"scripts/install-wireguard-mesh-spoke.sh",
+		"../scripts/install-wireguard-mesh-spoke.sh",
+	}
+
+	var script []byte
+	var err error
+	for _, path := range scriptPaths {
+		script, err = os.ReadFile(path)
+		if err == nil {
+			break
+		}
+	}
+
+	if err != nil {
+		s.logger.Error("Failed to read WireGuard mesh spoke install script", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "WireGuard mesh spoke install script not found"})
+		return
+	}
+
+	c.Header("Content-Type", "text/x-shellscript")
+	c.Header("Content-Disposition", "attachment; filename=install-wireguard-mesh-spoke.sh")
+	c.String(http.StatusOK, string(script))
+}
+
 func (s *Server) handleDownloadBinary(c *gin.Context) {
 	filename := c.Param("filename")
 
@@ -4461,6 +4546,15 @@ func (s *Server) handleDownloadBinary(c *gin.Context) {
 		"gatekey-mesh-spoke-linux-arm64":  true,
 		"gatekey-mesh-spoke-darwin-amd64": true,
 		"gatekey-mesh-spoke-darwin-arm64": true,
+		// WireGuard gateway binaries
+		"gatekey-wireguard-gateway-linux-amd64": true,
+		"gatekey-wireguard-gateway-linux-arm64": true,
+		// WireGuard hub binaries
+		"gatekey-wireguard-hub-linux-amd64": true,
+		"gatekey-wireguard-hub-linux-arm64": true,
+		// WireGuard mesh gateway binaries
+		"gatekey-wireguard-mesh-gateway-linux-amd64": true,
+		"gatekey-wireguard-mesh-gateway-linux-arm64": true,
 	}
 
 	if !allowedBinaries[filename] {
@@ -4809,6 +4903,7 @@ func (s *Server) handleGetUserGateways(c *gin.Context) {
 			"public_ip":      g.PublicIP,
 			"vpn_port":       g.VPNPort,
 			"vpn_protocol":   g.VPNProtocol,
+			"gateway_type":   g.GatewayType,
 			"is_active":      g.IsActive,
 			"last_heartbeat": g.LastHeartbeat,
 		})

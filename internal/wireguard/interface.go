@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -109,11 +110,47 @@ func (m *InterfaceManager) createInterface(ctx context.Context) error {
 		}
 	}
 
+	// Try kernel module first
 	cmd = exec.CommandContext(ctx, "ip", "link", "add", m.name, "type", "wireguard")
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("ip link add failed: %s: %w", string(output), err)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil
 	}
-	return nil
+
+	// If kernel module not available, try wireguard-go
+	outputStr := string(output)
+	if strings.Contains(outputStr, "Operation not supported") || strings.Contains(outputStr, "not supported") {
+		m.logger.Info("Kernel WireGuard not available, trying wireguard-go userspace implementation")
+
+		// Check if wireguard-go is available
+		wgGoPath, err := exec.LookPath("wireguard-go")
+		if err != nil {
+			return fmt.Errorf("kernel WireGuard not supported and wireguard-go not found in PATH: %w", err)
+		}
+
+		// Start wireguard-go in background mode (default behavior - it forks)
+		wgGoCmd := exec.CommandContext(ctx, wgGoPath, m.name)
+		if wgOutput, err := wgGoCmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("wireguard-go failed: %s: %w", string(wgOutput), err)
+		}
+
+		// Wait for the interface to be created
+		for i := 0; i < 30; i++ {
+			cmd := exec.CommandContext(ctx, "ip", "link", "show", m.name)
+			if cmd.Run() == nil {
+				m.logger.Info("WireGuard interface created via wireguard-go", zap.String("interface", m.name))
+				return nil
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(100 * time.Millisecond):
+			}
+		}
+		return fmt.Errorf("wireguard-go started but interface %s not created", m.name)
+	}
+
+	return fmt.Errorf("ip link add failed: %s: %w", outputStr, err)
 }
 
 // setPrivateKey sets the WireGuard private key.

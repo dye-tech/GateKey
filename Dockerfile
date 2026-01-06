@@ -48,6 +48,21 @@ RUN mkdir -p /mesh-gateway-binaries && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /mesh-gateway-binaries/gatekey-mesh-gateway-linux-amd64 ./cmd/gatekey-mesh-gateway && \
     CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o /mesh-gateway-binaries/gatekey-mesh-gateway-linux-arm64 ./cmd/gatekey-mesh-gateway
 
+# Build WireGuard gateway binaries for multiple platforms
+RUN mkdir -p /wireguard-gateway-binaries && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /wireguard-gateway-binaries/gatekey-wireguard-gateway-linux-amd64 ./cmd/gatekey-wireguard-gateway && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o /wireguard-gateway-binaries/gatekey-wireguard-gateway-linux-arm64 ./cmd/gatekey-wireguard-gateway
+
+# Build WireGuard hub binaries for multiple platforms
+RUN mkdir -p /wireguard-hub-binaries && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /wireguard-hub-binaries/gatekey-wireguard-hub-linux-amd64 ./cmd/gatekey-wireguard-hub && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o /wireguard-hub-binaries/gatekey-wireguard-hub-linux-arm64 ./cmd/gatekey-wireguard-hub
+
+# Build WireGuard mesh gateway binaries for multiple platforms
+RUN mkdir -p /wireguard-mesh-gateway-binaries && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /wireguard-mesh-gateway-binaries/gatekey-wireguard-mesh-gateway-linux-amd64 ./cmd/gatekey-wireguard-mesh-gateway && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o /wireguard-mesh-gateway-binaries/gatekey-wireguard-mesh-gateway-linux-arm64 ./cmd/gatekey-wireguard-mesh-gateway
+
 # Runtime stage
 FROM alpine:3.23
 
@@ -72,12 +87,15 @@ RUN apk upgrade --no-cache && \
 # Copy server binary
 COPY --from=builder /gatekey-server /usr/local/bin/gatekey-server
 
-# Copy gateway, client, admin, hub, and mesh binaries for download
+# Copy gateway, client, admin, hub, mesh, and wireguard binaries for download
 COPY --from=builder /gateway-binaries /app/bin
 COPY --from=builder /client-binaries /app/bin
 COPY --from=builder /admin-binaries /app/bin
 COPY --from=builder /hub-binaries /app/bin
 COPY --from=builder /mesh-gateway-binaries /app/bin
+COPY --from=builder /wireguard-gateway-binaries /app/bin
+COPY --from=builder /wireguard-hub-binaries /app/bin
+COPY --from=builder /wireguard-mesh-gateway-binaries /app/bin
 
 # Copy frontend assets
 COPY web/dist /app/web/dist
