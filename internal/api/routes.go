@@ -3162,7 +3162,7 @@ func (s *Server) handleRegisterGateway(c *gin.Context) {
 	// Register a new gateway (admin only)
 	var req struct {
 		Name           string   `json:"name" binding:"required"`
-		GatewayType    string   `json:"gateway_type"`     // "openvpn" or "wireguard" (default: openvpn)
+		GatewayType    string   `json:"gateway_type"` // "openvpn" or "wireguard" (default: openvpn)
 		Hostname       string   `json:"hostname"`
 		PublicIP       string   `json:"public_ip"`
 		VPNPort        int      `json:"vpn_port"`

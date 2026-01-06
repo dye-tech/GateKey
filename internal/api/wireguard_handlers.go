@@ -196,17 +196,17 @@ func (s *Server) handleGenerateWireGuardConfig(c *gin.Context) {
 
 	// Generate the config
 	configReq := wireguard.ClientConfigRequest{
-		GatewayName:        gateway.Name,
-		GatewayEndpoint:    endpoint,
-		GatewayPublicKey:   gateway.WGPublicKey,
-		ClientPrivateKey:   clientKeyPair.PrivateKey,
-		ClientAddress:      assignedIP,
-		AllowedIPs:         allowedIPs,
-		DNS:                dnsServers,
-		PresharedKey:       presharedKey,
+		GatewayName:         gateway.Name,
+		GatewayEndpoint:     endpoint,
+		GatewayPublicKey:    gateway.WGPublicKey,
+		ClientPrivateKey:    clientKeyPair.PrivateKey,
+		ClientAddress:       assignedIP,
+		AllowedIPs:          allowedIPs,
+		DNS:                 dnsServers,
+		PresharedKey:        presharedKey,
 		PersistentKeepalive: 25,
-		ExpiresAt:          expiresAt,
-		UserEmail:          user.Email,
+		ExpiresAt:           expiresAt,
+		UserEmail:           user.Email,
 	}
 
 	generatedConfig, err := wireguard.GenerateClientConfig(configReq)
@@ -278,15 +278,15 @@ func (s *Server) handleListUserWireGuardConfigs(c *gin.Context) {
 	}
 
 	type configResponse struct {
-		ID          string     `json:"id"`
-		GatewayName string     `json:"gateway_name"`
-		FileName    string     `json:"file_name"`
-		AssignedIP  string     `json:"assigned_ip"`
-		ExpiresAt   time.Time  `json:"expires_at"`
-		CreatedAt   time.Time  `json:"created_at"`
+		ID           string     `json:"id"`
+		GatewayName  string     `json:"gateway_name"`
+		FileName     string     `json:"file_name"`
+		AssignedIP   string     `json:"assigned_ip"`
+		ExpiresAt    time.Time  `json:"expires_at"`
+		CreatedAt    time.Time  `json:"created_at"`
 		DownloadedAt *time.Time `json:"downloaded_at,omitempty"`
-		RevokedAt   *time.Time `json:"revoked_at,omitempty"`
-		Status      string     `json:"status"`
+		RevokedAt    *time.Time `json:"revoked_at,omitempty"`
+		Status       string     `json:"status"`
 	}
 
 	response := make([]configResponse, 0, len(configs))
@@ -695,10 +695,10 @@ func (s *Server) handleWireGuardGatewayProvision(c *gin.Context) {
 // handleWireGuardGatewayHeartbeat handles WireGuard gateway heartbeat
 func (s *Server) handleWireGuardGatewayHeartbeat(c *gin.Context) {
 	var req struct {
-		Token      string `json:"token" binding:"required"`
-		PeerCount  int    `json:"peer_count"`
-		Version    string `json:"version"`
-		Uptime     int64  `json:"uptime"`
+		Token     string `json:"token" binding:"required"`
+		PeerCount int    `json:"peer_count"`
+		Version   string `json:"version"`
+		Uptime    int64  `json:"uptime"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -725,8 +725,8 @@ func (s *Server) handleWireGuardGatewayHeartbeat(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status":   "ok",
-		"time":     time.Now().UTC().Format(time.RFC3339),
+		"status": "ok",
+		"time":   time.Now().UTC().Format(time.RFC3339),
 	})
 }
 

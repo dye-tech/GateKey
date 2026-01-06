@@ -76,17 +76,17 @@ func main() {
 
 // GatewayConfig holds WireGuard gateway agent configuration.
 type GatewayConfig struct {
-	Name                string        `mapstructure:"name"`
-	ControlPlaneURL     string        `mapstructure:"control_plane_url"`
-	Token               string        `mapstructure:"token"`
-	HeartbeatInterval   time.Duration `mapstructure:"heartbeat_interval"`
-	PeerSyncInterval    time.Duration `mapstructure:"peer_sync_interval"`
-	StatsSyncInterval   time.Duration `mapstructure:"stats_sync_interval"`
-	LogLevel            string        `mapstructure:"log_level"`
-	InterfaceName       string        `mapstructure:"interface_name"`
-	AgentListenAddr     string        `mapstructure:"agent_listen_addr"`
-	AgentEnabled        bool          `mapstructure:"agent_enabled"`
-	SessionEnabled      bool          `mapstructure:"session_enabled"`
+	Name              string        `mapstructure:"name"`
+	ControlPlaneURL   string        `mapstructure:"control_plane_url"`
+	Token             string        `mapstructure:"token"`
+	HeartbeatInterval time.Duration `mapstructure:"heartbeat_interval"`
+	PeerSyncInterval  time.Duration `mapstructure:"peer_sync_interval"`
+	StatsSyncInterval time.Duration `mapstructure:"stats_sync_interval"`
+	LogLevel          string        `mapstructure:"log_level"`
+	InterfaceName     string        `mapstructure:"interface_name"`
+	AgentListenAddr   string        `mapstructure:"agent_listen_addr"`
+	AgentEnabled      bool          `mapstructure:"agent_enabled"`
+	SessionEnabled    bool          `mapstructure:"session_enabled"`
 }
 
 // ProvisionResponse is the response from the control plane provision endpoint.

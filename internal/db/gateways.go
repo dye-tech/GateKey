@@ -20,7 +20,7 @@ var (
 type Gateway struct {
 	ID             string
 	Name           string
-	GatewayType    string   // "openvpn" or "wireguard"
+	GatewayType    string // "openvpn" or "wireguard"
 	Hostname       string
 	PublicIP       string
 	VPNPort        int
@@ -34,15 +34,15 @@ type Gateway struct {
 	DNSServers     []string // DNS server IPs to push to clients
 	ConfigVersion  string   // Hash of config settings - changes trigger gateway reprovision
 	// WireGuard-specific fields
-	WGPrivateKey string // WireGuard private key (WireGuard only)
-	WGPublicKey  string // WireGuard public key (WireGuard only)
-	WGListenPort int    // WireGuard listen port (default 51820) (WireGuard only)
-	Token        string
-	PublicKey    string
-	IsActive     bool
-	LastHeartbeat  *time.Time
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	WGPrivateKey  string // WireGuard private key (WireGuard only)
+	WGPublicKey   string // WireGuard public key (WireGuard only)
+	WGListenPort  int    // WireGuard listen port (default 51820) (WireGuard only)
+	Token         string
+	PublicKey     string
+	IsActive      bool
+	LastHeartbeat *time.Time
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // Default VPN subnet if not specified
