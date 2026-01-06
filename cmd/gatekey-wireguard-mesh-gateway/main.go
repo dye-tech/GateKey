@@ -95,20 +95,20 @@ type GatewayConfig struct {
 
 // ProvisionResponse from control plane
 type ProvisionResponse struct {
-	SpokeID        string   `json:"spoke_id"`
-	SpokeName      string   `json:"spoke_name"`
-	PrivateKey     string   `json:"private_key"`
-	PublicKey      string   `json:"public_key"`
-	PresharedKey   string   `json:"preshared_key,omitempty"`
-	TunnelIP       string   `json:"tunnel_ip"`       // Spoke's assigned IP address
-	HubEndpoint    string   `json:"hub_endpoint"`    // Hub's public endpoint (host:port)
-	HubPublicKey   string   `json:"hub_public_key"`  // Hub's WireGuard public key
-	HubAllowedIPs  []string `json:"hub_allowed_ips"` // Networks to route through hub
-	LocalNetworks  []string `json:"local_networks"`  // Spoke's advertised local networks
-	FullTunnel     bool     `json:"full_tunnel"`     // Route all traffic through hub
-	DNSServers     []string `json:"dns_servers"`     // DNS servers to use
-	ConfigVersion  string   `json:"config_version"`
-	PersistentKA   int      `json:"persistent_keepalive"` // Keepalive interval (default 25s)
+	SpokeID       string   `json:"spoke_id"`
+	SpokeName     string   `json:"spoke_name"`
+	PrivateKey    string   `json:"private_key"`
+	PublicKey     string   `json:"public_key"`
+	PresharedKey  string   `json:"preshared_key,omitempty"`
+	TunnelIP      string   `json:"tunnel_ip"`       // Spoke's assigned IP address
+	HubEndpoint   string   `json:"hub_endpoint"`    // Hub's public endpoint (host:port)
+	HubPublicKey  string   `json:"hub_public_key"`  // Hub's WireGuard public key
+	HubAllowedIPs []string `json:"hub_allowed_ips"` // Networks to route through hub
+	LocalNetworks []string `json:"local_networks"`  // Spoke's advertised local networks
+	FullTunnel    bool     `json:"full_tunnel"`     // Route all traffic through hub
+	DNSServers    []string `json:"dns_servers"`     // DNS servers to use
+	ConfigVersion string   `json:"config_version"`
+	PersistentKA  int      `json:"persistent_keepalive"` // Keepalive interval (default 25s)
 }
 
 // Global state

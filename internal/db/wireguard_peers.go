@@ -14,19 +14,19 @@ var (
 
 // WireGuardPeer represents an active WireGuard peer connection
 type WireGuardPeer struct {
-	ID            string
-	GatewayID     string
-	ConfigID      string
-	UserID        string
-	UserType      string // "sso" or "local"
-	PublicKey     string
-	AssignedIP    string
-	AllowedIPs    []string
-	Endpoint      string
-	LastHandshake *time.Time
-	BytesSent     int64
-	BytesReceived int64
-	ConnectedAt   time.Time
+	ID             string
+	GatewayID      string
+	ConfigID       string
+	UserID         string
+	UserType       string // "sso" or "local"
+	PublicKey      string
+	AssignedIP     string
+	AllowedIPs     []string
+	Endpoint       string
+	LastHandshake  *time.Time
+	BytesSent      int64
+	BytesReceived  int64
+	ConnectedAt    time.Time
 	DisconnectedAt *time.Time
 }
 
