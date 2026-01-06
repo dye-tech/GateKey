@@ -247,6 +247,12 @@ func runAgent(cmd *cobra.Command, args []string) error {
 			NodeName:   nodeName,
 			Logger:     logger,
 		})
+		// Register trigger-sync handler for immediate peer sync from control plane
+		agentServer.SetTriggerSyncHandler(func(ctx context.Context) error {
+			logger.Info("Immediate peer sync triggered by control plane")
+			syncPeers(ctx, cfg)
+			return nil
+		})
 		go func() {
 			logger.Info("Starting agent API server",
 				zap.String("addr", cfg.AgentListenAddr))
