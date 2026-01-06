@@ -11,7 +11,7 @@ import (
 // ClientConfigRequest contains parameters for generating a client config.
 type ClientConfigRequest struct {
 	GatewayName         string
-	GatewayEndpoint     string   // hostname:port or ip:port
+	GatewayEndpoint     string // hostname:port or ip:port
 	GatewayPublicKey    string
 	ClientPrivateKey    string
 	ClientAddress       string   // e.g., "10.0.0.2/32"

@@ -93,9 +93,7 @@ func (s *Server) handleWireGuardMeshHubProvision(c *gin.Context) {
 		if spoke.TunnelIP != "" {
 			allowedIPs = append(allowedIPs, spoke.TunnelIP+"/32")
 		}
-		for _, network := range spoke.LocalNetworks {
-			allowedIPs = append(allowedIPs, network)
-		}
+		allowedIPs = append(allowedIPs, spoke.LocalNetworks...)
 
 		peers = append(peers, peerInfo{
 			ID:           spoke.ID,
@@ -237,9 +235,7 @@ func (s *Server) handleWireGuardMeshHubSyncPeers(c *gin.Context) {
 		if spoke.TunnelIP != "" {
 			allowedIPs = append(allowedIPs, spoke.TunnelIP+"/32")
 		}
-		for _, network := range spoke.LocalNetworks {
-			allowedIPs = append(allowedIPs, network)
-		}
+		allowedIPs = append(allowedIPs, spoke.LocalNetworks...)
 
 		peers = append(peers, peerInfo{
 			ID:           spoke.ID,
@@ -506,14 +502,14 @@ func (s *Server) handleWireGuardMeshSpokeProvision(c *gin.Context) {
 		"tunnel_ip":      spoke.TunnelIP,
 		"interface_name": "wg0",
 		"hub": gin.H{
-			"id":         hub.ID,
-			"name":       hub.Name,
-			"public_key": hub.WGPublicKey,
-			"endpoint":   hubEndpoint,
+			"id":          hub.ID,
+			"name":        hub.Name,
+			"public_key":  hub.WGPublicKey,
+			"endpoint":    hubEndpoint,
 			"allowed_ips": allowedIPs,
 		},
-		"dns_servers":           dnsServers,
-		"persistent_keepalive":  25,
+		"dns_servers":          dnsServers,
+		"persistent_keepalive": 25,
 	})
 }
 

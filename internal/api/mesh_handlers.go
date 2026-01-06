@@ -92,8 +92,8 @@ func (s *Server) handleCreateMeshHub(c *gin.Context) {
 		VPNSubnet      string `json:"vpnSubnet"`
 		CryptoProfile  string `json:"cryptoProfile"`
 		TLSAuthEnabled bool   `json:"tlsAuthEnabled"`
-		GatewayType    string `json:"gatewayType"`    // "openvpn" or "wireguard", default "openvpn"
-		WGListenPort   int    `json:"wgListenPort"`   // WireGuard listen port, default 51820
+		GatewayType    string `json:"gatewayType"`  // "openvpn" or "wireguard", default "openvpn"
+		WGListenPort   int    `json:"wgListenPort"` // WireGuard listen port, default 51820
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -263,8 +263,8 @@ func (s *Server) handleUpdateMeshHub(c *gin.Context) {
 		PushDNS        *bool    `json:"pushDns"`
 		DNSServers     []string `json:"dnsServers"`
 		LocalNetworks  []string `json:"localNetworks"`
-		GatewayType    string   `json:"gatewayType"`    // Cannot be changed after creation
-		WGListenPort   int      `json:"wgListenPort"`   // WireGuard listen port (only for wireguard type)
+		GatewayType    string   `json:"gatewayType"`  // Cannot be changed after creation
+		WGListenPort   int      `json:"wgListenPort"` // WireGuard listen port (only for wireguard type)
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {

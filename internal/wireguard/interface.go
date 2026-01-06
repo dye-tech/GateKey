@@ -62,25 +62,25 @@ func (m *InterfaceManager) Setup(ctx context.Context, config InterfaceConfig) er
 	// 2. Set the private key
 	if err := m.setPrivateKey(ctx); err != nil {
 		// Cleanup on failure
-		m.Teardown(ctx)
+		_ = m.Teardown(ctx)
 		return fmt.Errorf("failed to set private key: %w", err)
 	}
 
 	// 3. Set listen port
 	if err := m.setListenPort(ctx); err != nil {
-		m.Teardown(ctx)
+		_ = m.Teardown(ctx)
 		return fmt.Errorf("failed to set listen port: %w", err)
 	}
 
 	// 4. Set address
 	if err := m.setAddress(ctx); err != nil {
-		m.Teardown(ctx)
+		_ = m.Teardown(ctx)
 		return fmt.Errorf("failed to set address: %w", err)
 	}
 
 	// 5. Bring up the interface
 	if err := m.bringUp(ctx); err != nil {
-		m.Teardown(ctx)
+		_ = m.Teardown(ctx)
 		return fmt.Errorf("failed to bring up interface: %w", err)
 	}
 

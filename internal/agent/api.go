@@ -30,10 +30,10 @@ type TriggerSyncHandler func(ctx context.Context) error
 
 // Server is the agent API server
 type Server struct {
-	config            *Config
-	router            *gin.Engine
-	server            *http.Server
-	logger            *zap.Logger
+	config             *Config
+	router             *gin.Engine
+	server             *http.Server
+	logger             *zap.Logger
 	triggerSyncHandler TriggerSyncHandler
 }
 
