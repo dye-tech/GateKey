@@ -122,6 +122,99 @@ detect_os() {
     fi
 }
 
+# Install wireguard-tools from source (wg command)
+install_wireguard_tools() {
+    echo -e "${YELLOW}Installing wireguard-tools from source...${NC}"
+
+    # Install build dependencies
+    if command -v apt-get &> /dev/null; then
+        apt-get install -y build-essential libmnl-dev pkg-config
+    elif command -v dnf &> /dev/null; then
+        dnf install -y gcc make libmnl-devel
+    elif command -v yum &> /dev/null; then
+        yum install -y gcc make libmnl-devel
+    fi
+
+    TEMP_DIR=$(mktemp -d)
+    cd "$TEMP_DIR"
+
+    # Clone and build wireguard-tools
+    git clone https://git.zx2c4.com/wireguard-tools 2>/dev/null || git clone https://github.com/WireGuard/wireguard-tools.git
+    cd wireguard-tools/src
+    make
+    make install
+
+    cd /
+    rm -rf "$TEMP_DIR"
+
+    # Verify installation
+    if command -v wg &> /dev/null; then
+        echo -e "${GREEN}wireguard-tools (wg command) installed successfully${NC}"
+    else
+        echo -e "${RED}Failed to install wireguard-tools${NC}"
+        exit 1
+    fi
+}
+
+# Install wireguard-go (userspace WireGuard implementation)
+install_wireguard_go() {
+    echo -e "${YELLOW}Installing wireguard-go userspace implementation...${NC}"
+
+    # Detect architecture
+    ARCH=$(uname -m)
+    case $ARCH in
+        x86_64)
+            GO_ARCH="amd64"
+            ;;
+        aarch64|arm64)
+            GO_ARCH="arm64"
+            ;;
+        *)
+            echo -e "${RED}Unsupported architecture for wireguard-go: $ARCH${NC}"
+            exit 1
+            ;;
+    esac
+
+    # Download pre-built wireguard-go binary from control plane or build from source
+    WG_GO_URL="${GATEKEY_SERVER}/downloads/wireguard-go-linux-${GO_ARCH}"
+
+    if curl -sSL -o /usr/local/bin/wireguard-go "$WG_GO_URL" 2>/dev/null && [ -s /usr/local/bin/wireguard-go ]; then
+        chmod +x /usr/local/bin/wireguard-go
+        echo -e "${GREEN}wireguard-go installed from server${NC}"
+    else
+        # Fallback: try to install Go and build from source
+        echo -e "${YELLOW}Downloading wireguard-go failed, attempting to build from source...${NC}"
+
+        # Check if Go is installed
+        if ! command -v go &> /dev/null; then
+            echo -e "${YELLOW}Installing Go...${NC}"
+            GO_VERSION="1.21.5"
+            curl -sSL "https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz" | tar -C /usr/local -xzf -
+            export PATH=$PATH:/usr/local/go/bin
+        fi
+
+        # Clone and build wireguard-go
+        TEMP_DIR=$(mktemp -d)
+        cd "$TEMP_DIR"
+        git clone https://git.zx2c4.com/wireguard-go 2>/dev/null || git clone https://github.com/WireGuard/wireguard-go.git
+        cd wireguard-go
+        make
+        cp wireguard-go /usr/local/bin/
+        chmod +x /usr/local/bin/wireguard-go
+        cd /
+        rm -rf "$TEMP_DIR"
+        echo -e "${GREEN}wireguard-go built and installed${NC}"
+    fi
+
+    # Verify installation
+    if /usr/local/bin/wireguard-go --version 2>/dev/null || [ -x /usr/local/bin/wireguard-go ]; then
+        echo -e "${GREEN}wireguard-go ready${NC}"
+    else
+        echo -e "${RED}Failed to install wireguard-go${NC}"
+        exit 1
+    fi
+}
+
 # Install dependencies
 install_dependencies() {
     echo -e "${YELLOW}Installing dependencies...${NC}"
@@ -143,13 +236,30 @@ install_dependencies() {
         amzn)
             # Amazon Linux 2 and Amazon Linux 2023
             if command -v dnf &> /dev/null; then
-                # Amazon Linux 2023
+                # Amazon Linux 2023 - kernel has WireGuard built-in
                 dnf install -y wireguard-tools jq iproute nftables
                 dnf install -y --allowerasing curl
             else
                 # Amazon Linux 2
                 amazon-linux-extras install -y epel 2>/dev/null || true
-                yum install -y wireguard-tools curl jq iproute nftables
+                yum install -y curl jq iproute nftables git
+
+                # Check if kernel supports WireGuard
+                if modprobe wireguard 2>/dev/null; then
+                    echo -e "${GREEN}WireGuard kernel module available${NC}"
+                    yum install -y wireguard-tools 2>/dev/null || install_wireguard_tools
+                else
+                    echo -e "${YELLOW}WireGuard kernel module not available, installing wireguard-go (userspace)...${NC}"
+
+                    # Install wireguard-tools (for wg command) - try package first, build from source if needed
+                    if ! yum install -y wireguard-tools 2>/dev/null; then
+                        echo -e "${YELLOW}wireguard-tools package not available, building from source...${NC}"
+                        install_wireguard_tools
+                    fi
+
+                    # Install wireguard-go from source or binary
+                    install_wireguard_go
+                fi
             fi
             ;;
         opensuse*|sles|suse)

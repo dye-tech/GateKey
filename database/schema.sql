@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict x58zyexhDGZISbH7R6h0NgfUNCOrV3FX4dvedVKcypGitdQ3GaCdCi2ZkXF9g0I
+\restrict 09V13CKn7smEKO92sUzSc5mi5HTBMEgJ3g6L7iiRC1pGqWuXvbpKA58HFxeJ735
 
 -- Dumped from database version 16.10
 -- Dumped by pg_dump version 16.10
@@ -377,7 +377,12 @@ CREATE TABLE public.gateways (
     full_tunnel_mode boolean DEFAULT false NOT NULL,
     push_dns boolean DEFAULT false NOT NULL,
     dns_servers text[] DEFAULT '{}'::text[] NOT NULL,
-    CONSTRAINT chk_gateway_address CHECK (((hostname IS NOT NULL) OR (public_ip IS NOT NULL)))
+    gateway_type character varying(20) DEFAULT 'openvpn'::character varying NOT NULL,
+    wg_private_key text,
+    wg_public_key text,
+    wg_listen_port integer DEFAULT 51820,
+    CONSTRAINT chk_gateway_address CHECK (((hostname IS NOT NULL) OR (public_ip IS NOT NULL))),
+    CONSTRAINT valid_gateway_type CHECK (((gateway_type)::text = ANY ((ARRAY['openvpn'::character varying, 'wireguard'::character varying])::text[])))
 );
 
 
@@ -643,7 +648,12 @@ CREATE TABLE public.mesh_gateways (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     full_tunnel_mode boolean DEFAULT false NOT NULL,
     push_dns boolean DEFAULT false NOT NULL,
-    dns_servers text[] DEFAULT '{}'::text[] NOT NULL
+    dns_servers text[] DEFAULT '{}'::text[] NOT NULL,
+    gateway_type character varying(20) DEFAULT 'openvpn'::character varying NOT NULL,
+    wg_private_key text,
+    wg_public_key text,
+    wg_preshared_key text,
+    CONSTRAINT valid_mesh_spoke_gateway_type CHECK (((gateway_type)::text = ANY ((ARRAY['openvpn'::character varying, 'wireguard'::character varying])::text[])))
 );
 
 
@@ -745,7 +755,12 @@ CREATE TABLE public.mesh_hubs (
     local_networks text[] DEFAULT '{}'::text[] NOT NULL,
     full_tunnel_mode boolean DEFAULT false NOT NULL,
     push_dns boolean DEFAULT false NOT NULL,
-    dns_servers text[] DEFAULT '{}'::text[] NOT NULL
+    dns_servers text[] DEFAULT '{}'::text[] NOT NULL,
+    gateway_type character varying(20) DEFAULT 'openvpn'::character varying NOT NULL,
+    wg_private_key text,
+    wg_public_key text,
+    wg_listen_port integer DEFAULT 51820,
+    CONSTRAINT valid_mesh_hub_gateway_type CHECK (((gateway_type)::text = ANY ((ARRAY['openvpn'::character varying, 'wireguard'::character varying])::text[])))
 );
 
 
@@ -1069,6 +1084,57 @@ CREATE TABLE public.users (
 
 
 ALTER TABLE public.users OWNER TO gatekey;
+
+--
+-- Name: wireguard_configs; Type: TABLE; Schema: public; Owner: gatekey
+--
+
+CREATE TABLE public.wireguard_configs (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    user_id character varying(255) NOT NULL,
+    gateway_id uuid NOT NULL,
+    gateway_name character varying(255) NOT NULL,
+    file_name character varying(255) NOT NULL,
+    config_data bytea NOT NULL,
+    client_private_key text NOT NULL,
+    client_public_key text NOT NULL,
+    assigned_ip cidr NOT NULL,
+    preshared_key text,
+    expires_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    downloaded_at timestamp with time zone,
+    revoked_at timestamp with time zone,
+    revocation_reason text
+);
+
+
+ALTER TABLE public.wireguard_configs OWNER TO gatekey;
+
+--
+-- Name: wireguard_peers; Type: TABLE; Schema: public; Owner: gatekey
+--
+
+CREATE TABLE public.wireguard_peers (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    gateway_id uuid NOT NULL,
+    config_id uuid NOT NULL,
+    public_key text NOT NULL,
+    allowed_ips text[] NOT NULL,
+    last_handshake timestamp with time zone,
+    bytes_received bigint DEFAULT 0,
+    bytes_sent bigint DEFAULT 0,
+    endpoint text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    disconnected_at timestamp with time zone,
+    user_id character varying(255) NOT NULL,
+    user_type character varying(10) DEFAULT 'sso'::character varying,
+    assigned_ip cidr,
+    connected_at timestamp with time zone DEFAULT now()
+);
+
+
+ALTER TABLE public.wireguard_peers OWNER TO gatekey;
 
 --
 -- Name: access_rules access_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
@@ -1591,6 +1657,22 @@ ALTER TABLE ONLY public.users
 
 
 --
+-- Name: wireguard_configs wireguard_configs_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+--
+
+ALTER TABLE ONLY public.wireguard_configs
+    ADD CONSTRAINT wireguard_configs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: wireguard_peers wireguard_peers_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+--
+
+ALTER TABLE ONLY public.wireguard_peers
+    ADD CONSTRAINT wireguard_peers_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: idx_access_rules_network; Type: INDEX; Schema: public; Owner: gatekey
 --
 
@@ -1815,6 +1897,13 @@ CREATE INDEX idx_gateways_name ON public.gateways USING btree (name);
 
 
 --
+-- Name: idx_gateways_type; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_gateways_type ON public.gateways USING btree (gateway_type);
+
+
+--
 -- Name: idx_generated_configs_active; Type: INDEX; Schema: public; Owner: gatekey
 --
 
@@ -2004,6 +2093,13 @@ CREATE INDEX idx_mesh_connections_user_id ON public.mesh_connections USING btree
 
 
 --
+-- Name: idx_mesh_gateways_gateway_type; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_mesh_gateways_gateway_type ON public.mesh_gateways USING btree (gateway_type);
+
+
+--
 -- Name: idx_mesh_gateways_hub_id; Type: INDEX; Schema: public; Owner: gatekey
 --
 
@@ -2071,6 +2167,13 @@ CREATE INDEX idx_mesh_hub_networks_hub ON public.mesh_hub_networks USING btree (
 --
 
 CREATE INDEX idx_mesh_hub_networks_network ON public.mesh_hub_networks USING btree (network_id);
+
+
+--
+-- Name: idx_mesh_hubs_gateway_type; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_mesh_hubs_gateway_type ON public.mesh_hubs USING btree (gateway_type);
 
 
 --
@@ -2288,6 +2391,76 @@ CREATE INDEX idx_users_groups ON public.users USING gin (groups);
 --
 
 CREATE INDEX idx_users_provider ON public.users USING btree (provider);
+
+
+--
+-- Name: idx_wg_peers_user_id; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_wg_peers_user_id ON public.wireguard_peers USING btree (user_id);
+
+
+--
+-- Name: idx_wireguard_configs_expires; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_wireguard_configs_expires ON public.wireguard_configs USING btree (expires_at);
+
+
+--
+-- Name: idx_wireguard_configs_gateway; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_wireguard_configs_gateway ON public.wireguard_configs USING btree (gateway_id);
+
+
+--
+-- Name: idx_wireguard_configs_public_key; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_wireguard_configs_public_key ON public.wireguard_configs USING btree (client_public_key);
+
+
+--
+-- Name: idx_wireguard_configs_revoked; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_wireguard_configs_revoked ON public.wireguard_configs USING btree (revoked_at);
+
+
+--
+-- Name: idx_wireguard_configs_user; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_wireguard_configs_user ON public.wireguard_configs USING btree (user_id);
+
+
+--
+-- Name: idx_wireguard_peers_config; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_wireguard_peers_config ON public.wireguard_peers USING btree (config_id);
+
+
+--
+-- Name: idx_wireguard_peers_gateway; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_wireguard_peers_gateway ON public.wireguard_peers USING btree (gateway_id);
+
+
+--
+-- Name: idx_wireguard_peers_public_key; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_wireguard_peers_public_key ON public.wireguard_peers USING btree (public_key);
+
+
+--
+-- Name: idx_wireguard_peers_removed; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_wireguard_peers_removed ON public.wireguard_peers USING btree (disconnected_at);
 
 
 --
@@ -2733,8 +2906,32 @@ ALTER TABLE ONLY public.user_proxy_applications
 
 
 --
+-- Name: wireguard_configs wireguard_configs_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+--
+
+ALTER TABLE ONLY public.wireguard_configs
+    ADD CONSTRAINT wireguard_configs_gateway_id_fkey FOREIGN KEY (gateway_id) REFERENCES public.gateways(id) ON DELETE CASCADE;
+
+
+--
+-- Name: wireguard_peers wireguard_peers_config_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+--
+
+ALTER TABLE ONLY public.wireguard_peers
+    ADD CONSTRAINT wireguard_peers_config_id_fkey FOREIGN KEY (config_id) REFERENCES public.wireguard_configs(id) ON DELETE CASCADE;
+
+
+--
+-- Name: wireguard_peers wireguard_peers_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+--
+
+ALTER TABLE ONLY public.wireguard_peers
+    ADD CONSTRAINT wireguard_peers_gateway_id_fkey FOREIGN KEY (gateway_id) REFERENCES public.gateways(id) ON DELETE CASCADE;
+
+
+--
 -- PostgreSQL database dump complete
 --
 
-\unrestrict x58zyexhDGZISbH7R6h0NgfUNCOrV3FX4dvedVKcypGitdQ3GaCdCi2ZkXF9g0I
+\unrestrict 09V13CKn7smEKO92sUzSc5mi5HTBMEgJ3g6L7iiRC1pGqWuXvbpKA58HFxeJ735
 

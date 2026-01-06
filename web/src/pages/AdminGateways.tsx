@@ -487,8 +487,8 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
               </button>
             </div>
             <p className="mt-1 text-xs text-theme-tertiary">
-              {gatewayType === 'openvpn' && 'OpenVPN provides wide client compatibility with TCP/UDP options.'}
-              {gatewayType === 'wireguard' && 'WireGuard is a modern, high-performance VPN protocol (UDP only).'}
+              {gatewayType === 'openvpn' && 'OpenVPN provides wide client compatibility with TCP/UDP options (FIPS compliant).'}
+              {gatewayType === 'wireguard' && 'WireGuard is a modern, high-performance VPN protocol (faster, not FIPS compliant).'}
             </p>
           </div>
 
@@ -575,6 +575,20 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
                 {cryptoProfile === 'fips' && 'FIPS mode uses only FIPS 140-3 validated cryptographic algorithms (AES-GCM).'}
                 {cryptoProfile === 'compatible' && 'Compatible mode supports older OpenVPN 2.3.x clients with CBC fallback.'}
                 {cryptoProfile === 'modern' && 'Modern mode uses the latest secure ciphers including CHACHA20-POLY1305.'}
+              </p>
+            </div>
+          )}
+
+          {gatewayType === 'wireguard' && (
+            <div>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">
+                Crypto Profile
+              </label>
+              <div className="w-full px-3 py-2 bg-theme-tertiary border border-theme rounded-lg text-theme-secondary">
+                ChaCha20-Poly1305 (WireGuard Default)
+              </div>
+              <p className="mt-1 text-xs text-theme-tertiary">
+                WireGuard uses a fixed cryptographic protocol with ChaCha20-Poly1305 for symmetric encryption, Curve25519 for key exchange, and BLAKE2s for hashing.
               </p>
             </div>
           )}
@@ -952,6 +966,8 @@ function EditGatewayModal({ gateway, onClose, onSuccess }: EditGatewayModalProps
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const isWireGuard = gateway.gatewayType === 'wireguard'
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitting(true)
@@ -1042,7 +1058,7 @@ function EditGatewayModal({ gateway, onClose, onSuccess }: EditGatewayModalProps
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className={isWireGuard ? '' : 'grid grid-cols-2 gap-4'}>
             <div>
               <label className="block text-sm font-medium text-theme-secondary mb-1">
                 VPN Port
@@ -1053,42 +1069,63 @@ function EditGatewayModal({ gateway, onClose, onSuccess }: EditGatewayModalProps
                 onChange={(e) => setVpnPort(e.target.value)}
                 className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
+              {isWireGuard && (
+                <p className="mt-1 text-xs text-theme-tertiary">
+                  WireGuard uses UDP only. Default port is 51820.
+                </p>
+              )}
             </div>
 
+            {!isWireGuard && (
+              <div>
+                <label className="block text-sm font-medium text-theme-secondary mb-1">
+                  Protocol
+                </label>
+                <select
+                  value={vpnProtocol}
+                  onChange={(e) => setVpnProtocol(e.target.value)}
+                  className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                >
+                  <option value="udp">UDP</option>
+                  <option value="tcp">TCP</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {isWireGuard ? (
             <div>
               <label className="block text-sm font-medium text-theme-secondary mb-1">
-                Protocol
+                Crypto Profile
+              </label>
+              <div className="w-full px-3 py-2 bg-theme-tertiary border border-theme rounded-lg text-theme-secondary">
+                ChaCha20-Poly1305 (WireGuard Default)
+              </div>
+              <p className="mt-1 text-xs text-theme-tertiary">
+                WireGuard uses a fixed cryptographic protocol with ChaCha20-Poly1305 for symmetric encryption, Curve25519 for key exchange, and BLAKE2s for hashing.
+              </p>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">
+                Crypto Profile
               </label>
               <select
-                value={vpnProtocol}
-                onChange={(e) => setVpnProtocol(e.target.value)}
+                value={cryptoProfile}
+                onChange={(e) => setCryptoProfile(e.target.value as CryptoProfile)}
                 className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
-                <option value="udp">UDP</option>
-                <option value="tcp">TCP</option>
+                <option value="modern">Modern (Recommended) - AES-256-GCM, CHACHA20-POLY1305</option>
+                <option value="fips">FIPS 140-3 Compliant - AES-256-GCM, AES-128-GCM</option>
+                <option value="compatible">Compatible - AES-256-GCM, AES-128-GCM, AES-256-CBC, AES-128-CBC</option>
               </select>
+              <p className="mt-1 text-xs text-theme-tertiary">
+                {cryptoProfile === 'fips' && 'FIPS mode uses only FIPS 140-3 validated cryptographic algorithms (AES-GCM).'}
+                {cryptoProfile === 'compatible' && 'Compatible mode supports older OpenVPN 2.3.x clients with CBC fallback.'}
+                {cryptoProfile === 'modern' && 'Modern mode uses the latest secure ciphers including CHACHA20-POLY1305.'}
+              </p>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-theme-secondary mb-1">
-              Crypto Profile
-            </label>
-            <select
-              value={cryptoProfile}
-              onChange={(e) => setCryptoProfile(e.target.value as CryptoProfile)}
-              className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option value="modern">Modern (Recommended) - AES-256-GCM, CHACHA20-POLY1305</option>
-              <option value="fips">FIPS 140-3 Compliant - AES-256-GCM, AES-128-GCM</option>
-              <option value="compatible">Compatible - AES-256-GCM, AES-128-GCM, AES-256-CBC, AES-128-CBC</option>
-            </select>
-            <p className="mt-1 text-xs text-theme-tertiary">
-              {cryptoProfile === 'fips' && 'FIPS mode uses only FIPS 140-3 validated cryptographic algorithms (AES-GCM).'}
-              {cryptoProfile === 'compatible' && 'Compatible mode supports older OpenVPN 2.3.x clients with CBC fallback.'}
-              {cryptoProfile === 'modern' && 'Modern mode uses the latest secure ciphers including CHACHA20-POLY1305.'}
-            </p>
-          </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-theme-secondary mb-1">
@@ -1106,21 +1143,25 @@ function EditGatewayModal({ gateway, onClose, onSuccess }: EditGatewayModalProps
             </p>
           </div>
 
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="editTlsAuthEnabled"
-              checked={tlsAuthEnabled}
-              onChange={(e) => setTlsAuthEnabled(e.target.checked)}
-              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-theme rounded"
-            />
-            <label htmlFor="editTlsAuthEnabled" className="ml-2 block text-sm text-theme-secondary">
-              Enable TLS Authentication
-            </label>
-          </div>
-          <p className="text-xs text-theme-tertiary -mt-2">
-            TLS-Auth provides additional security. Disable for simpler direct IP connections.
-          </p>
+          {!isWireGuard && (
+            <>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="editTlsAuthEnabled"
+                  checked={tlsAuthEnabled}
+                  onChange={(e) => setTlsAuthEnabled(e.target.checked)}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-theme rounded"
+                />
+                <label htmlFor="editTlsAuthEnabled" className="ml-2 block text-sm text-theme-secondary">
+                  Enable TLS Authentication
+                </label>
+              </div>
+              <p className="text-xs text-theme-tertiary -mt-2">
+                TLS-Auth provides additional security. Disable for simpler direct IP connections.
+              </p>
+            </>
+          )}
 
           <div className="flex items-center">
             <input
