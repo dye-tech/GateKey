@@ -1,4 +1,6 @@
-# GolangCI-Lint configuration
+version: "2"
+
+# GolangCI-Lint v2 configuration
 # https://golangci-lint.run/usage/configuration/
 
 run:
@@ -6,11 +8,16 @@ run:
   modules-download-mode: readonly
   allow-parallel-runners: true
 
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
 linters:
+  default: none
   enable:
     # Default linters
     - errcheck
-    - gosimple
     - govet
     - ineffassign
     - staticcheck
@@ -21,8 +28,6 @@ linters:
     - dogsled
     - errorlint
     - exhaustive
-    - gofmt
-    - goimports
     - goprintffuncname
     - gosec
     - misspell
@@ -30,159 +35,145 @@ linters:
     - nolintlint
     - rowserrcheck
     - sqlclosecheck
-    - stylecheck
     - tparallel
     - unconvert
     - whitespace
 
-  disable:
-    - dupl
-    - funlen
-    - gochecknoinits
-    - gocognit
-    - goconst
-    - gocritic
-    - gocyclo
-    - godot
-    - godox
-    - lll
-    - mnd
-    - noctx
-    - prealloc
-    - predeclared
-    - revive
-    - unparam
-    - wsl
+  settings:
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+      exclude-functions:
+        - io.Copy
+        - io.ReadAll
+        - (io.Closer).Close
+        - (*os/exec.Cmd).Run
+        - (*os/exec.Cmd).Start
+        - (net.Conn).Close
+        - (*net/http.Response.Body).Close
+        - encoding/json.Marshal
+        - encoding/json.Unmarshal
+        - (*encoding/json.Encoder).Encode
+        - (*encoding/json.Decoder).Decode
+        - fmt.Fprintf
+        - fmt.Printf
+        - fmt.Sscanf
+        - (net.Listener).Close
+        - (*net/http.Server).Shutdown
+        - (*go.uber.org/zap.Logger).Sync
+        - os.Remove
+        - os.RemoveAll
+        - os.MkdirAll
+        - crypto/rand.Read
+        - (database/sql.DB).Exec
+        - (github.com/jackc/pgx/v5/pgxpool.Pool).Exec
 
-linters-settings:
-  errcheck:
-    check-type-assertions: false
-    check-blank: false
-    exclude-functions:
-      - io.Copy
-      - io.ReadAll
-      - (io.Closer).Close
-      - (*os/exec.Cmd).Run
-      - (*os/exec.Cmd).Start
-      - (net.Conn).Close
-      - (*net/http.Response.Body).Close
-      - encoding/json.Marshal
-      - encoding/json.Unmarshal
-      - (*encoding/json.Encoder).Encode
-      - (*encoding/json.Decoder).Decode
-      - fmt.Fprintf
-      - fmt.Printf
-      - fmt.Sscanf
-      - (net.Listener).Close
-      - (*net/http.Server).Shutdown
-      - (*go.uber.org/zap.Logger).Sync
-      - os.Remove
-      - os.RemoveAll
-      - os.MkdirAll
-      - crypto/rand.Read
-      - (database/sql.DB).Exec
-      - (github.com/jackc/pgx/v5/pgxpool.Pool).Exec
+    errorlint:
+      errorf: true
+      asserts: false
+      comparison: false
 
-  errorlint:
-    errorf: true
-    asserts: false
-    comparison: false
+    exhaustive:
+      default-signifies-exhaustive: true
 
-  exhaustive:
-    default-signifies-exhaustive: true
+    gosec:
+      excludes:
+        - G101
+        - G104
+        - G107
+        - G115
+        - G204
+        - G301
+        - G304
+        - G306
+        - G402
 
-  gosec:
-    excludes:
-      - G101
-      - G104
-      - G107
-      - G115
-      - G204
-      - G304
-      - G306
-      - G402
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+        - shadow
 
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment
-      - shadow
+    misspell:
+      locale: US
 
-  misspell:
-    locale: US
+    nakedret:
+      max-func-lines: 50
 
-  nakedret:
-    max-func-lines: 50
+    nolintlint:
+      require-explanation: false
+      require-specific: true
 
-  nolintlint:
-    require-explanation: false
-    require-specific: true
+    staticcheck:
+      checks:
+        - all
+        - -SA5011
+        - -SA9003
+        - -ST1020
+        - -ST1022
+        - -QF1001
+        - -QF1003
 
-  staticcheck:
-    checks:
-      - all
-      - -SA5011
-      - -SA9003
+  exclusions:
+    generated: lax
+    rules:
+      # Exclude some linters from running on tests files
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+
+      # Exclude some linters from running on generated files
+      - path: generated
+        linters:
+          - errcheck
+          - gosec
+
+      # Exclude known issues in third-party code
+      - path: vendor/
+        linters:
+          - errcheck
+          - gosec
+
+      # Allow more flexibility in cmd packages
+      - path: cmd/
+        linters:
+          - errcheck
+          - unused
+
+      # Allow more flexibility in client code
+      - path: internal/client/
+        linters:
+          - errcheck
+          - unused
+
+      # Allow more flexibility in firewall code
+      - path: internal/firewall/
+        linters:
+          - errcheck
+
+      # Allow more flexibility in openvpn config generation
+      - path: internal/openvpn/
+        linters:
+          - unused
+
+      # errcheck: Allow not checking Close/Write/Sync
+      - text: "Error return value of .*.Close"
+        linters:
+          - errcheck
+      - text: "Error return value of .*.Write"
+        linters:
+          - errcheck
+      - text: "Error return value of .*.Sync"
+        linters:
+          - errcheck
 
 issues:
-  exclude-rules:
-    # Exclude some linters from running on tests files
-    - path: _test\.go
-      linters:
-        - errcheck
-        - gosec
-
-    # Exclude some linters from running on generated files
-    - path: generated
-      linters:
-        - errcheck
-        - gosec
-        - stylecheck
-
-    # Exclude known issues in third-party code
-    - path: vendor/
-      linters:
-        - errcheck
-        - gosec
-
-    # Allow more flexibility in cmd packages
-    - path: cmd/
-      linters:
-        - errcheck
-        - unused
-
-    # Allow more flexibility in client code
-    - path: internal/client/
-      linters:
-        - errcheck
-        - unused
-
-    # Allow more flexibility in firewall code
-    - path: internal/firewall/
-      linters:
-        - errcheck
-
-    # Allow more flexibility in openvpn config generation
-    - path: internal/openvpn/
-      linters:
-        - unused
-
-    # errcheck: Allow not checking Close/Write/Sync
-    - text: "Error return value of .*.Close"
-      linters:
-        - errcheck
-    - text: "Error return value of .*.Write"
-      linters:
-        - errcheck
-    - text: "Error return value of .*.Sync"
-      linters:
-        - errcheck
-
   max-issues-per-linter: 0
   max-same-issues: 0
 
 severity:
-  default-severity: warning
+  default: warning
   rules:
     - linters:
         - gosec
