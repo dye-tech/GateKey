@@ -1,6 +1,4 @@
-version: "2"
-
-# GolangCI-Lint configuration (v2 format)
+# GolangCI-Lint configuration
 # https://golangci-lint.run/usage/configuration/
 
 run:
@@ -56,143 +54,135 @@ linters:
     - unparam
     - wsl
 
-  settings:
-    errcheck:
-      check-type-assertions: false
-      check-blank: false
-      exclude-functions:
-        - io.Copy
-        - io.ReadAll
-        - (io.Closer).Close
-        - (*os/exec.Cmd).Run
-        - (*os/exec.Cmd).Start
-        - (net.Conn).Close
-        - (*net/http.Response.Body).Close
-        - encoding/json.Marshal
-        - encoding/json.Unmarshal
-        - (*encoding/json.Encoder).Encode
-        - (*encoding/json.Decoder).Decode
-        - fmt.Fprintf
-        - fmt.Printf
-        - fmt.Sscanf
-        - (net.Listener).Close
-        - (*net/http.Server).Shutdown
-        - (*go.uber.org/zap.Logger).Sync
-        - os.Remove
-        - os.RemoveAll
-        - os.MkdirAll
-        - crypto/rand.Read
-        - (database/sql.DB).Exec
-        - (github.com/jackc/pgx/v5/pgxpool.Pool).Exec
+linters-settings:
+  errcheck:
+    check-type-assertions: false
+    check-blank: false
+    exclude-functions:
+      - io.Copy
+      - io.ReadAll
+      - (io.Closer).Close
+      - (*os/exec.Cmd).Run
+      - (*os/exec.Cmd).Start
+      - (net.Conn).Close
+      - (*net/http.Response.Body).Close
+      - encoding/json.Marshal
+      - encoding/json.Unmarshal
+      - (*encoding/json.Encoder).Encode
+      - (*encoding/json.Decoder).Decode
+      - fmt.Fprintf
+      - fmt.Printf
+      - fmt.Sscanf
+      - (net.Listener).Close
+      - (*net/http.Server).Shutdown
+      - (*go.uber.org/zap.Logger).Sync
+      - os.Remove
+      - os.RemoveAll
+      - os.MkdirAll
+      - crypto/rand.Read
+      - (database/sql.DB).Exec
+      - (github.com/jackc/pgx/v5/pgxpool.Pool).Exec
 
-    errorlint:
-      errorf: true
-      asserts: false
-      comparison: false
+  errorlint:
+    errorf: true
+    asserts: false
+    comparison: false
 
-    exhaustive:
-      default-signifies-exhaustive: true
+  exhaustive:
+    default-signifies-exhaustive: true
 
-    gofmt:
-      simplify: true
+  gosec:
+    excludes:
+      - G101
+      - G104
+      - G107
+      - G115
+      - G204
+      - G304
+      - G306
+      - G402
 
-    goimports:
-      local-prefixes: github.com/gatekey-project/gatekey
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment
+      - shadow
 
-    gosec:
-      excludes:
-        - G101
-        - G104
-        - G107
-        - G115
-        - G204
-        - G304
-        - G306
-        - G402
+  misspell:
+    locale: US
 
-    govet:
-      enable-all: true
-      disable:
-        - fieldalignment
-        - shadow
+  nakedret:
+    max-func-lines: 50
 
-    misspell:
-      locale: US
+  nolintlint:
+    require-explanation: false
+    require-specific: true
 
-    nakedret:
-      max-func-lines: 50
-
-    nolintlint:
-      require-explanation: false
-      require-specific: true
-
-    staticcheck:
-      checks:
-        - all
-        - -SA5011
-        - -SA9003
-
-    stylecheck:
-      checks:
-        - all
-        - -ST1000
-        - -ST1003
-
-  exclusions:
-    rules:
-      # Exclude some linters from running on tests files
-      - path: _test\.go
-        linters:
-          - errcheck
-          - gosec
-
-      # Exclude some linters from running on generated files
-      - path: generated
-        linters:
-          - all
-
-      # Exclude known issues in third-party code
-      - path: vendor/
-        linters:
-          - all
-
-      # Allow more flexibility in cmd packages
-      - path: cmd/
-        linters:
-          - errcheck
-          - unused
-
-      # Allow more flexibility in client code
-      - path: internal/client/
-        linters:
-          - errcheck
-          - unused
-
-      # Allow more flexibility in firewall code
-      - path: internal/firewall/
-        linters:
-          - errcheck
-
-      # Allow more flexibility in openvpn config generation
-      - path: internal/openvpn/
-        linters:
-          - unused
-
-      # errcheck: Allow not checking Close/Write/Sync
-      - path: '(.+)\.go$'
-        text: "Error return value of .*.Close"
-      - path: '(.+)\.go$'
-        text: "Error return value of .*.Write"
-      - path: '(.+)\.go$'
-        text: "Error return value of .*.Sync"
+  staticcheck:
+    checks:
+      - all
+      - -SA5011
+      - -SA9003
 
 issues:
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gosec
+
+    # Exclude some linters from running on generated files
+    - path: generated
+      linters:
+        - errcheck
+        - gosec
+        - stylecheck
+
+    # Exclude known issues in third-party code
+    - path: vendor/
+      linters:
+        - errcheck
+        - gosec
+
+    # Allow more flexibility in cmd packages
+    - path: cmd/
+      linters:
+        - errcheck
+        - unused
+
+    # Allow more flexibility in client code
+    - path: internal/client/
+      linters:
+        - errcheck
+        - unused
+
+    # Allow more flexibility in firewall code
+    - path: internal/firewall/
+      linters:
+        - errcheck
+
+    # Allow more flexibility in openvpn config generation
+    - path: internal/openvpn/
+      linters:
+        - unused
+
+    # errcheck: Allow not checking Close/Write/Sync
+    - text: "Error return value of .*.Close"
+      linters:
+        - errcheck
+    - text: "Error return value of .*.Write"
+      linters:
+        - errcheck
+    - text: "Error return value of .*.Sync"
+      linters:
+        - errcheck
+
   max-issues-per-linter: 0
   max-same-issues: 0
-  new: false
 
 severity:
-  default: warning
+  default-severity: warning
   rules:
     - linters:
         - gosec
