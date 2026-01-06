@@ -1,6 +1,6 @@
 version: "2"
 
-# GolangCI-Lint configuration
+# GolangCI-Lint configuration (v2 format)
 # https://golangci-lint.run/usage/configuration/
 
 run:
@@ -38,161 +38,161 @@ linters:
     - whitespace
 
   disable:
-    - dupl          # Duplicate code - too strict, database queries often similar
-    - funlen        # Function length - too strict
-    - gochecknoinits # Init functions - sometimes needed
-    - gocognit      # Cognitive complexity - too strict
-    - goconst       # Constants - too strict for status strings
-    - gocritic      # Too opinionated
-    - gocyclo       # Cyclomatic complexity - too strict
-    - godot         # Comment periods - too pedantic
-    - godox         # TODO/FIXME comments - we use these intentionally
-    - lll           # Line length - handled by gofmt
-    - mnd           # Magic numbers (was gomnd) - too strict for configs
-    - noctx         # Context in HTTP - sometimes impractical
-    - prealloc      # Slice preallocation - premature optimization
-    - predeclared   # Predeclared identifiers - too strict
-    - revive        # Too opinionated with many rules
-    - unparam       # Unused params - sometimes needed for interface compliance
-    - wsl           # Whitespace linter - too opinionated
+    - dupl
+    - funlen
+    - gochecknoinits
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - godox
+    - lll
+    - mnd
+    - noctx
+    - prealloc
+    - predeclared
+    - revive
+    - unparam
+    - wsl
 
-linters-settings:
-  errcheck:
-    check-type-assertions: false
-    check-blank: false
-    exclude-functions:
-      - io.Copy
-      - io.ReadAll
-      - (io.Closer).Close
-      - (*os/exec.Cmd).Run
-      - (*os/exec.Cmd).Start
-      - (net.Conn).Close
-      - (*net/http.Response.Body).Close
-      - encoding/json.Marshal
-      - encoding/json.Unmarshal
-      - (*encoding/json.Encoder).Encode
-      - (*encoding/json.Decoder).Decode
-      - fmt.Fprintf
-      - fmt.Printf
-      - fmt.Sscanf
-      - (net.Listener).Close
-      - (*net/http.Server).Shutdown
-      - (*go.uber.org/zap.Logger).Sync
-      - os.Remove
-      - os.RemoveAll
-      - os.MkdirAll
-      - crypto/rand.Read
-      - (database/sql.DB).Exec
-      - (github.com/jackc/pgx/v5/pgxpool.Pool).Exec
+  settings:
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+      exclude-functions:
+        - io.Copy
+        - io.ReadAll
+        - (io.Closer).Close
+        - (*os/exec.Cmd).Run
+        - (*os/exec.Cmd).Start
+        - (net.Conn).Close
+        - (*net/http.Response.Body).Close
+        - encoding/json.Marshal
+        - encoding/json.Unmarshal
+        - (*encoding/json.Encoder).Encode
+        - (*encoding/json.Decoder).Decode
+        - fmt.Fprintf
+        - fmt.Printf
+        - fmt.Sscanf
+        - (net.Listener).Close
+        - (*net/http.Server).Shutdown
+        - (*go.uber.org/zap.Logger).Sync
+        - os.Remove
+        - os.RemoveAll
+        - os.MkdirAll
+        - crypto/rand.Read
+        - (database/sql.DB).Exec
+        - (github.com/jackc/pgx/v5/pgxpool.Pool).Exec
 
-  errorlint:
-    errorf: true
-    asserts: false
-    comparison: false
+    errorlint:
+      errorf: true
+      asserts: false
+      comparison: false
 
-  exhaustive:
-    default-signifies-exhaustive: true
+    exhaustive:
+      default-signifies-exhaustive: true
 
-  gofmt:
-    simplify: true
+    gofmt:
+      simplify: true
 
-  goimports:
-    local-prefixes: github.com/gatekey-project/gatekey
+    goimports:
+      local-prefixes: github.com/gatekey-project/gatekey
 
-  gosec:
-    excludes:
-      - G101  # Hardcoded credentials - false positives for const names
-      - G104  # Audit errors not checked - we handle this with errcheck
-      - G107  # HTTP request with variable URL - necessary for API calls
-      - G115  # Integer overflow - context-dependent, not always an issue
-      - G204  # Subprocess with variable - necessary for exec
-      - G304  # File path provided as taint input - necessary for config files
-      - G306  # Poor file permissions - we intentionally set specific permissions
-      - G402  # TLS InsecureSkipVerify - needed for internal services
+    gosec:
+      excludes:
+        - G101
+        - G104
+        - G107
+        - G115
+        - G204
+        - G304
+        - G306
+        - G402
 
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment  # Too strict for this project
-      - shadow          # Variable shadowing - common Go pattern
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+        - shadow
 
-  misspell:
-    locale: US
+    misspell:
+      locale: US
 
-  nakedret:
-    max-func-lines: 50
+    nakedret:
+      max-func-lines: 50
 
-  nolintlint:
-    require-explanation: false
-    require-specific: true
+    nolintlint:
+      require-explanation: false
+      require-specific: true
 
-  staticcheck:
-    checks:
-      - all
-      - -SA5011  # Possible nil pointer - too many false positives
-      - -SA9003  # Empty branch - sometimes intentional
+    staticcheck:
+      checks:
+        - all
+        - -SA5011
+        - -SA9003
 
-  stylecheck:
-    checks:
-      - all
-      - -ST1000  # Package comments - not always needed
-      - -ST1003  # Underscores in names - sometimes needed for consistency
+    stylecheck:
+      checks:
+        - all
+        - -ST1000
+        - -ST1003
+
+  exclusions:
+    rules:
+      # Exclude some linters from running on tests files
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+
+      # Exclude some linters from running on generated files
+      - path: generated
+        linters:
+          - all
+
+      # Exclude known issues in third-party code
+      - path: vendor/
+        linters:
+          - all
+
+      # Allow more flexibility in cmd packages
+      - path: cmd/
+        linters:
+          - errcheck
+          - unused
+
+      # Allow more flexibility in client code
+      - path: internal/client/
+        linters:
+          - errcheck
+          - unused
+
+      # Allow more flexibility in firewall code
+      - path: internal/firewall/
+        linters:
+          - errcheck
+
+      # Allow more flexibility in openvpn config generation
+      - path: internal/openvpn/
+        linters:
+          - unused
+
+      # errcheck: Allow not checking Close/Write/Sync
+      - path: '(.+)\.go$'
+        text: "Error return value of .*.Close"
+      - path: '(.+)\.go$'
+        text: "Error return value of .*.Write"
+      - path: '(.+)\.go$'
+        text: "Error return value of .*.Sync"
 
 issues:
-  exclude-rules:
-    # Exclude some linters from running on tests files
-    - path: _test\.go
-      linters:
-        - errcheck
-        - gosec
-
-    # Exclude some linters from running on generated files
-    - path: generated
-      linters:
-        - all
-
-    # Exclude known issues in third-party code
-    - path: vendor/
-      linters:
-        - all
-
-    # Allow more flexibility in cmd packages
-    - path: cmd/
-      linters:
-        - errcheck
-        - unused
-
-    # Allow more flexibility in client code (work in progress)
-    - path: internal/client/
-      linters:
-        - errcheck
-        - unused
-
-    # Allow more flexibility in firewall code (system calls)
-    - path: internal/firewall/
-      linters:
-        - errcheck
-
-    # Allow more flexibility in openvpn config generation
-    - path: internal/openvpn/
-      linters:
-        - unused
-
-  # Exclude specific patterns
-  exclude:
-    # errcheck: Allow not checking Close
-    - "Error return value of .*.Close"
-    # errcheck: Allow not checking Write
-    - "Error return value of .*.Write"
-    # errcheck: Allow not checking Sync
-    - "Error return value of .*.Sync"
-
   max-issues-per-linter: 0
   max-same-issues: 0
   new: false
 
 severity:
-  default-severity: warning
+  default: warning
   rules:
     - linters:
         - gosec
