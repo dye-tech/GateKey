@@ -345,7 +345,7 @@ export default function AdminTopology() {
                                       <span className="font-semibold text-slate-800 dark:text-slate-100">{spoke.name}</span>
                                       <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${
                                         isConnected
-                                          ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
+                                          ? 'bg-slate-700 text-slate-200'
                                           : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
                                       }`}>
                                         {spoke.status}
@@ -380,7 +380,7 @@ export default function AdminTopology() {
                                           {spoke.localNetworks.slice(0, 3).map((net, i) => (
                                             <span
                                               key={i}
-                                              className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-xs font-mono rounded-md"
+                                              className="px-2 py-0.5 bg-slate-700 text-slate-200 text-xs font-mono rounded-md"
                                             >
                                               {net}
                                             </span>
@@ -498,7 +498,7 @@ export default function AdminTopology() {
                                 <label className="text-xs text-slate-500 dark:text-slate-400">Hub Local Networks</label>
                                 <div className="flex flex-wrap gap-1 mt-1">
                                   {(selectedNode.data as TopologyMeshHub).localNetworks.map((net, i) => (
-                                    <span key={i} className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-xs font-mono rounded-md">{net}</span>
+                                    <span key={i} className="px-2 py-0.5 bg-slate-700 text-slate-200 text-xs font-mono rounded-md">{net}</span>
                                   ))}
                                 </div>
                               </div>
@@ -556,7 +556,7 @@ export default function AdminTopology() {
                                 <label className="text-xs text-slate-500 dark:text-slate-400">Advertised Routes</label>
                                 <div className="flex flex-wrap gap-1 mt-1">
                                   {(selectedNode.data as TopologyMeshSpoke).localNetworks.map((net, i) => (
-                                    <span key={i} className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-mono rounded-md">{net}</span>
+                                    <span key={i} className="px-2 py-0.5 bg-slate-700 text-slate-200 text-xs font-mono rounded-md">{net}</span>
                                   ))}
                                 </div>
                               </div>

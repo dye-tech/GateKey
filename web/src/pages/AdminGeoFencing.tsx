@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   getGeoFenceSettings,
   updateGeoFenceSettings,
@@ -23,6 +23,7 @@ import {
   Group,
 } from '../api/client'
 import ActionDropdown from '../components/ActionDropdown'
+import { searchCountries, CountryIpData } from '../data/countryIpRanges'
 
 type TabType = 'settings' | 'rules' | 'global' | 'assignments'
 
@@ -54,6 +55,7 @@ export default function AdminGeoFencing() {
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null)
   const [userRules, setUserRules] = useState<GeoFenceRule[]>([])
   const [groupRules, setGroupRules] = useState<GeoFenceRule[]>([])
+  const [viewingCidrs, setViewingCidrs] = useState<GeoFenceRule | null>(null)
 
   useEffect(() => {
     loadAll()
@@ -103,19 +105,30 @@ export default function AdminGeoFencing() {
 
   async function handleSaveRule(data: { name: string; description: string; ipRange: string; isActive?: boolean }) {
     try {
+      // Normalize CIDRs - trim whitespace and join with comma
+      const cidrs = data.ipRange.split(',').map(c => c.trim()).filter(c => c)
+      const normalizedIpRange = cidrs.join(', ')
+
       if (editingRule) {
         await updateGeoFenceRule(editingRule.id, {
           name: data.name,
           description: data.description,
-          ipRange: data.ipRange,
+          ipRange: normalizedIpRange,
           isActive: data.isActive ?? true,
         })
       } else {
-        await createGeoFenceRule(data)
+        // Store all CIDRs in a single rule
+        await createGeoFenceRule({
+          name: data.name,
+          description: data.description,
+          ipRange: normalizedIpRange,
+        })
       }
       setShowRuleModal(false)
       setEditingRule(null)
       await loadAll()
+      setSuccess('Rule saved successfully')
+      setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       setError('Failed to save rule')
     }
@@ -133,12 +146,16 @@ export default function AdminGeoFencing() {
     }
   }
 
-  async function handleAddGlobalRule(ruleId: string) {
+  async function handleAddGlobalRule(ruleIds: string[]) {
     try {
-      await addGlobalGeoRule(ruleId)
+      for (const ruleId of ruleIds) {
+        await addGlobalGeoRule(ruleId)
+      }
       setShowAssignGlobalModal(false)
       const globalData = await getGlobalGeoRules()
       setGlobalRules(globalData)
+      setSuccess(`${ruleIds.length} rule${ruleIds.length > 1 ? 's' : ''} added to global rules`)
+      setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       setError('Failed to add global rule')
     }
@@ -425,7 +442,27 @@ export default function AdminGeoFencing() {
                           <div className="text-sm text-theme-tertiary">{rule.description}</div>
                         )}
                       </td>
-                      <td className="px-6 py-4 font-mono text-theme-secondary">{rule.ipRange}</td>
+                      <td className="px-6 py-4">
+                        {rule.ipRange.includes(',') ? (
+                          <div className="flex flex-wrap gap-1 items-center">
+                            {rule.ipRange.split(',').slice(0, 5).map((cidr, idx) => (
+                              <span key={idx} className="inline-block px-2 py-0.5 bg-slate-700 text-slate-200 font-mono text-xs rounded">
+                                {cidr.trim()}
+                              </span>
+                            ))}
+                            {rule.ipRange.split(',').length > 5 && (
+                              <button
+                                onClick={() => setViewingCidrs(rule)}
+                                className="inline-block px-2 py-0.5 bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 text-xs rounded border border-primary-200 dark:border-primary-700 hover:bg-primary-100 dark:hover:bg-primary-900/50 cursor-pointer"
+                              >
+                                +{rule.ipRange.split(',').length - 5} more
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="font-mono text-slate-600 dark:text-gray-300">{rule.ipRange}</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           rule.isActive
@@ -485,13 +522,31 @@ export default function AdminGeoFencing() {
               <div className="space-y-2">
                 {globalRules.map((rule) => (
                   <div key={rule.id} className="flex items-center justify-between p-3 bg-theme-secondary rounded-lg">
-                    <div>
+                    <div className="flex-1 min-w-0 mr-4">
                       <div className="font-medium text-theme-primary">{rule.name}</div>
-                      <div className="text-sm text-theme-tertiary font-mono">{rule.ipRange}</div>
+                      {rule.ipRange.includes(',') ? (
+                        <div className="flex flex-wrap gap-1 mt-1 items-center">
+                          {rule.ipRange.split(',').slice(0, 4).map((cidr, idx) => (
+                            <span key={idx} className="inline-block px-2 py-0.5 bg-slate-700 text-slate-200 font-mono text-xs rounded">
+                              {cidr.trim()}
+                            </span>
+                          ))}
+                          {rule.ipRange.split(',').length > 4 && (
+                            <button
+                              onClick={() => setViewingCidrs(rule)}
+                              className="inline-block px-2 py-0.5 bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 text-xs rounded border border-primary-200 dark:border-primary-700 hover:bg-primary-100 dark:hover:bg-primary-900/50 cursor-pointer"
+                            >
+                              +{rule.ipRange.split(',').length - 4} more
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-slate-600 dark:text-gray-300 font-mono">{rule.ipRange}</div>
+                      )}
                     </div>
                     <button
                       onClick={() => handleRemoveGlobalRule(rule.id)}
-                      className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                      className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 flex-shrink-0"
                     >
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -609,11 +664,52 @@ export default function AdminGeoFencing() {
           onClose={() => { setShowGroupRulesModal(false); setSelectedGroup(null); }}
         />
       )}
+
+      {/* View All CIDRs Modal */}
+      {viewingCidrs && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="modal-content p-6 w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-theme-primary">{viewingCidrs.name}</h2>
+                <p className="text-sm text-theme-tertiary">
+                  {viewingCidrs.ipRange.split(',').length} IP ranges
+                </p>
+              </div>
+              <button
+                onClick={() => setViewingCidrs(null)}
+                className="text-theme-tertiary hover:text-theme-primary"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 border border-theme rounded-lg p-3">
+              <div className="flex flex-wrap gap-2">
+                {viewingCidrs.ipRange.split(',').map((cidr, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-block px-2 py-1 bg-slate-700 text-slate-200 font-mono text-sm rounded"
+                  >
+                    {cidr.trim()}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-end mt-4">
+              <button onClick={() => setViewingCidrs(null)} className="btn btn-secondary">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-// Rule creation/edit modal
+// Rule creation/edit modal with country selector
 function RuleModal({ rule, onSave, onClose }: {
   rule: GeoFenceRule | null
   onSave: (data: { name: string; description: string; ipRange: string; isActive?: boolean }) => void
@@ -625,22 +721,82 @@ function RuleModal({ rule, onSave, onClose }: {
   const [isActive, setIsActive] = useState(rule?.isActive ?? true)
   const [error, setError] = useState<string | null>(null)
 
+  // Country selector state
+  const [inputMode, setInputMode] = useState<'manual' | 'country'>('manual')
+  const [selectedCountries, setSelectedCountries] = useState<CountryIpData[]>([])
+  const [countrySearch, setCountrySearch] = useState('')
+  const [showCountryDropdown, setShowCountryDropdown] = useState(false)
+  const countryDropdownRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  // Filter countries based on search
+  const filteredCountries = useMemo(() => {
+    const results = searchCountries(countrySearch)
+    // Exclude already selected countries
+    return results.filter(c => !selectedCountries.some(s => s.code === c.code))
+  }, [countrySearch, selectedCountries])
+
+  // Handle clicking outside to close dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (countryDropdownRef.current && !countryDropdownRef.current.contains(event.target as Node)) {
+        setShowCountryDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Update ipRange when countries are selected
+  useEffect(() => {
+    if (inputMode === 'country' && selectedCountries.length > 0) {
+      // Combine all CIDRs from selected countries
+      const allCidrs = selectedCountries.flatMap(c => c.cidrs)
+      setIpRange(allCidrs.join(', '))
+      // Auto-generate name from countries if name is empty
+      if (!name || selectedCountries.length > 1) {
+        setName(selectedCountries.map(c => c.name).join(', '))
+      }
+    }
+  }, [selectedCountries, inputMode])
+
+  function handleAddCountry(country: CountryIpData) {
+    setSelectedCountries(prev => [...prev, country])
+    setCountrySearch('')
+    setShowCountryDropdown(false)
+    searchInputRef.current?.focus()
+  }
+
+  function handleRemoveCountry(countryCode: string) {
+    setSelectedCountries(prev => prev.filter(c => c.code !== countryCode))
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
-    // Basic CIDR validation
+    // Validate CIDR(s)
+    const cidrs = ipRange.split(',').map(c => c.trim()).filter(c => c)
     const cidrRegex = /^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/
-    if (!cidrRegex.test(ipRange)) {
-      setError('Invalid CIDR format. Example: 192.168.0.0/24')
+
+    for (const cidr of cidrs) {
+      if (!cidrRegex.test(cidr)) {
+        setError(`Invalid CIDR format: ${cidr}. Example: 192.168.0.0/24`)
+        return
+      }
+    }
+
+    if (cidrs.length === 0) {
+      setError('At least one CIDR is required')
       return
     }
 
-    onSave({ name, description, ipRange, isActive })
+    // Pass all CIDRs - the parent handler will create multiple rules if needed
+    onSave({ name, description, ipRange: ipRange, isActive })
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="modal-content p-6 w-full max-w-md">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="modal-content p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-bold text-theme-primary mb-4">
           {rule ? 'Edit IP Rule' : 'Add IP Rule'}
         </h2>
@@ -649,6 +805,126 @@ function RuleModal({ rule, onSave, onClose }: {
           {error && (
             <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-lg text-sm">
               {error}
+            </div>
+          )}
+
+          {/* Input Mode Toggle - only show for new rules */}
+          {!rule && (
+            <div className="flex gap-2 p-1 bg-theme-secondary rounded-lg">
+              <button
+                type="button"
+                onClick={() => { setInputMode('manual'); setSelectedCountries([]); }}
+                className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                  inputMode === 'manual'
+                    ? 'bg-primary-600 text-white'
+                    : 'text-theme-secondary hover:text-theme-primary'
+                }`}
+              >
+                Manual CIDR
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputMode('country')}
+                className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                  inputMode === 'country'
+                    ? 'bg-primary-600 text-white'
+                    : 'text-theme-secondary hover:text-theme-primary'
+                }`}
+              >
+                Select Countries
+              </button>
+            </div>
+          )}
+
+          {/* Country Selector */}
+          {inputMode === 'country' && !rule && (
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-theme-primary">
+                Select Countries
+              </label>
+
+              {/* Selected Countries */}
+              {selectedCountries.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {selectedCountries.map(country => (
+                    <span
+                      key={country.code}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full text-sm"
+                    >
+                      <span className="text-lg">{country.flag}</span>
+                      <span>{country.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCountry(country.code)}
+                        className="ml-1 hover:text-primary-900 dark:hover:text-primary-100"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Country Search Dropdown */}
+              <div className="relative" ref={countryDropdownRef}>
+                <div className="relative">
+                  <svg
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-tertiary"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={countrySearch}
+                    onChange={(e) => {
+                      setCountrySearch(e.target.value)
+                      setShowCountryDropdown(true)
+                    }}
+                    onFocus={() => setShowCountryDropdown(true)}
+                    className="input w-full pl-9"
+                    placeholder="Search countries..."
+                  />
+                </div>
+
+                {showCountryDropdown && (
+                  <div className="absolute z-10 w-full mt-1 bg-theme-primary border border-theme rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {filteredCountries.length === 0 ? (
+                      <div className="p-3 text-theme-tertiary text-sm">
+                        {countrySearch ? 'No countries found' : 'Start typing to search...'}
+                      </div>
+                    ) : (
+                      filteredCountries.slice(0, 50).map(country => (
+                        <button
+                          key={country.code}
+                          type="button"
+                          onClick={() => handleAddCountry(country)}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-theme-secondary text-left transition-colors"
+                        >
+                          <span className="text-xl">{country.flag}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-theme-primary truncate">{country.name}</div>
+                            <div className="text-xs text-theme-tertiary">{country.cidrs.length} IP ranges</div>
+                          </div>
+                          <span className="text-xs text-theme-tertiary">{country.code}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {selectedCountries.length > 0 && (
+                <p className="text-xs text-theme-tertiary">
+                  {selectedCountries.length} countr{selectedCountries.length === 1 ? 'y' : 'ies'} selected.
+                  Will create rule with representative IP ranges.
+                </p>
+              )}
             </div>
           )}
 
@@ -665,17 +941,25 @@ function RuleModal({ rule, onSave, onClose }: {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-theme-primary mb-1">IP Range (CIDR)</label>
+            <label className="block text-sm font-medium text-theme-primary mb-1">
+              IP Range (CIDR)
+              {inputMode === 'country' && !rule && (
+                <span className="text-theme-tertiary font-normal ml-2">Auto-filled from selected countries</span>
+              )}
+            </label>
             <input
               type="text"
               value={ipRange}
               onChange={(e) => { setIpRange(e.target.value); setError(null); }}
-              className="input w-full font-mono"
+              className="input w-full font-mono text-sm"
               placeholder="e.g., 192.168.0.0/24"
               required
+              readOnly={inputMode === 'country' && !rule}
             />
             <p className="text-xs text-theme-tertiary mt-1">
-              Enter an IP range in CIDR notation
+              {inputMode === 'country' && !rule
+                ? 'IP ranges are automatically populated from selected countries'
+                : 'Enter an IP range in CIDR notation'}
             </p>
           </div>
 
@@ -725,9 +1009,33 @@ function RuleModal({ rule, onSave, onClose }: {
 function AssignRuleModal({ title, rules, onAssign, onClose }: {
   title: string
   rules: GeoFenceRule[]
-  onAssign: (ruleId: string) => void
+  onAssign: (ruleIds: string[]) => void
   onClose: () => void
 }) {
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const filteredRules = rules.filter(rule =>
+    rule.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    rule.ipRange.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  function toggleRule(ruleId: string) {
+    setSelectedIds(prev =>
+      prev.includes(ruleId)
+        ? prev.filter(id => id !== ruleId)
+        : [...prev, ruleId]
+    )
+  }
+
+  function selectAll() {
+    setSelectedIds(filteredRules.map(r => r.id))
+  }
+
+  function deselectAll() {
+    setSelectedIds([])
+  }
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="modal-content p-6 w-full max-w-md">
@@ -741,22 +1049,80 @@ function AssignRuleModal({ title, rules, onAssign, onClose }: {
             </p>
           </div>
         ) : (
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {rules.map((rule) => (
-              <button
-                key={rule.id}
-                onClick={() => onAssign(rule.id)}
-                className="w-full text-left p-3 bg-theme-secondary hover:bg-theme-tertiary rounded-lg transition-colors"
-              >
-                <div className="font-medium text-theme-primary">{rule.name}</div>
-                <div className="text-sm text-theme-tertiary font-mono">{rule.ipRange}</div>
-              </button>
-            ))}
-          </div>
+          <>
+            {/* Search */}
+            <div className="mb-3">
+              <input
+                type="text"
+                placeholder="Search rules..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="input w-full"
+              />
+            </div>
+
+            {/* Select all / Deselect all */}
+            <div className="flex items-center justify-between mb-2 text-sm">
+              <span className="text-theme-tertiary">
+                {selectedIds.length} of {filteredRules.length} selected
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={selectAll}
+                  className="text-primary-600 hover:text-primary-700 dark:text-primary-400"
+                >
+                  Select all
+                </button>
+                <span className="text-theme-tertiary">|</span>
+                <button
+                  type="button"
+                  onClick={deselectAll}
+                  className="text-theme-tertiary hover:text-theme-primary"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            {/* Rules list with checkboxes */}
+            <div className="space-y-2 max-h-64 overflow-y-auto border border-theme rounded-lg p-2">
+              {filteredRules.map((rule) => (
+                <label
+                  key={rule.id}
+                  className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                    selectedIds.includes(rule.id)
+                      ? 'bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800'
+                      : 'bg-theme-secondary hover:bg-theme-tertiary border border-transparent'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(rule.id)}
+                    onChange={() => toggleRule(rule.id)}
+                    className="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-theme-primary">{rule.name}</div>
+                    <div className="text-sm text-theme-tertiary font-mono truncate">{rule.ipRange}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </>
         )}
 
-        <div className="flex justify-end mt-4">
-          <button onClick={onClose} className="btn btn-secondary">Close</button>
+        <div className="flex justify-end gap-2 mt-4">
+          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
+          {rules.length > 0 && (
+            <button
+              onClick={() => onAssign(selectedIds)}
+              disabled={selectedIds.length === 0}
+              className="btn btn-primary"
+            >
+              Add {selectedIds.length > 0 ? `${selectedIds.length} Rule${selectedIds.length > 1 ? 's' : ''}` : 'Rules'}
+            </button>
+          )}
         </div>
       </div>
     </div>
