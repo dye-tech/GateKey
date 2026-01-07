@@ -198,17 +198,29 @@ func (s *Server) handleOIDCLogin(c *gin.Context) {
 
 	// Check for CLI state (to redirect back to CLI after auth)
 	cliState := c.Query("cli_state")
+	cliCallback := c.Query("callback") // Direct callback URL from mobile apps
 	var cliCallbackURL string
 	if cliState != "" {
 		s.logger.Info("OIDC login with CLI state", zap.String("cli_state", cliState))
-		// Look up the CLI callback URL from database (peek without deleting)
-		// The state will be deleted later in handleCLIComplete when the flow finishes
-		callbackURL, err := s.stateStore.PeekCLICallback(c.Request.Context(), cliState)
-		if err != nil {
-			s.logger.Warn("CLI callback URL not found", zap.String("cli_state", cliState), zap.Error(err))
+		// First check if callback URL was provided directly (mobile app flow)
+		if cliCallback != "" {
+			// Store the callback URL with the provided state
+			if err := s.stateStore.SaveCLICallback(c.Request.Context(), cliState, cliCallback); err != nil {
+				s.logger.Error("Failed to save CLI callback for mobile flow", zap.Error(err))
+			} else {
+				cliCallbackURL = cliCallback
+				s.logger.Info("Stored CLI callback URL for mobile flow", zap.String("callback_url", cliCallbackURL))
+			}
 		} else {
-			cliCallbackURL = callbackURL
-			s.logger.Info("Found CLI callback URL", zap.String("callback_url", cliCallbackURL))
+			// Look up the CLI callback URL from database (peek without deleting)
+			// The state will be deleted later in handleCLIComplete when the flow finishes
+			callbackURL, err := s.stateStore.PeekCLICallback(c.Request.Context(), cliState)
+			if err != nil {
+				s.logger.Warn("CLI callback URL not found", zap.String("cli_state", cliState), zap.Error(err))
+			} else {
+				cliCallbackURL = callbackURL
+				s.logger.Info("Found CLI callback URL", zap.String("callback_url", cliCallbackURL))
+			}
 		}
 	}
 
@@ -479,17 +491,29 @@ func (s *Server) handleSAMLLogin(c *gin.Context) {
 
 	// Check for CLI state (to redirect back to CLI after auth)
 	cliState := c.Query("cli_state")
+	cliCallback := c.Query("callback") // Direct callback URL from mobile apps
 	var cliCallbackURL string
 	if cliState != "" {
 		s.logger.Info("SAML login with CLI state", zap.String("cli_state", cliState))
-		// Look up the CLI callback URL from database (peek without deleting)
-		// The state will be deleted later in handleCLIComplete when the flow finishes
-		callbackURL, err := s.stateStore.PeekCLICallback(c.Request.Context(), cliState)
-		if err != nil {
-			s.logger.Warn("CLI callback URL not found", zap.String("cli_state", cliState), zap.Error(err))
+		// First check if callback URL was provided directly (mobile app flow)
+		if cliCallback != "" {
+			// Store the callback URL with the provided state
+			if err := s.stateStore.SaveCLICallback(c.Request.Context(), cliState, cliCallback); err != nil {
+				s.logger.Error("Failed to save CLI callback for mobile flow", zap.Error(err))
+			} else {
+				cliCallbackURL = cliCallback
+				s.logger.Info("Stored CLI callback URL for mobile flow", zap.String("callback_url", cliCallbackURL))
+			}
 		} else {
-			cliCallbackURL = callbackURL
-			s.logger.Info("Found CLI callback URL", zap.String("callback_url", cliCallbackURL))
+			// Look up the CLI callback URL from database (peek without deleting)
+			// The state will be deleted later in handleCLIComplete when the flow finishes
+			callbackURL, err := s.stateStore.PeekCLICallback(c.Request.Context(), cliState)
+			if err != nil {
+				s.logger.Warn("CLI callback URL not found", zap.String("cli_state", cliState), zap.Error(err))
+			} else {
+				cliCallbackURL = callbackURL
+				s.logger.Info("Found CLI callback URL", zap.String("callback_url", cliCallbackURL))
+			}
 		}
 	}
 
@@ -531,27 +555,120 @@ func (s *Server) handleSAMLLogin(c *gin.Context) {
 	c.Redirect(http.StatusFound, redirectURL.String())
 }
 
+// handleSAMLACSOptions handles CORS preflight for the SAML ACS endpoint
+// Some test IdPs (like dummyidp.com) may send AJAX-style requests that trigger CORS
+func (s *Server) handleSAMLACSOptions(c *gin.Context) {
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Access-Control-Allow-Methods", "POST, OPTIONS")
+	c.Header("Access-Control-Allow-Headers", "Content-Type, Origin")
+	c.Header("Access-Control-Max-Age", "86400")
+	c.Status(http.StatusNoContent)
+}
+
 func (s *Server) handleSAMLACS(c *gin.Context) {
-	// Get provider from relay state
+	// Add CORS headers for the actual POST request as well
+	c.Header("Access-Control-Allow-Origin", "*")
+
+	// Get SAML response first - required for both SP-initiated and IDP-initiated flows
+	samlResponse := c.PostForm("SAMLResponse")
+	if samlResponse == "" {
+		s.logger.Error("No SAMLResponse in request")
+		c.Redirect(http.StatusFound, "/login?error=no_response")
+		return
+	}
+
+	// Get RelayState (may be empty for IDP-initiated flows)
 	relayState := c.PostForm("RelayState")
 	if relayState == "" {
 		relayState = c.Query("RelayState")
 	}
 
-	// Validate relay state from database
-	stateData, err := s.stateStore.GetState(c.Request.Context(), relayState)
-	if err != nil {
-		s.logger.Error("Invalid or expired relay state", zap.Error(err))
-		c.Redirect(http.StatusFound, "/login?error=invalid_state")
-		return
+	// Debug: log received data
+	s.logger.Info("SAML ACS received",
+		zap.String("relay_state", relayState),
+		zap.Int("relay_state_len", len(relayState)),
+		zap.Bool("from_form", c.PostForm("RelayState") != ""),
+		zap.Bool("has_saml_response", true))
+
+	var providerConfig *db.SAMLProvider
+	var cliCallbackURL string
+	var cliState string
+
+	// Try to get provider from relay state (SP-initiated flow)
+	if relayState != "" {
+		stateData, err := s.stateStore.GetState(c.Request.Context(), relayState)
+		if err == nil {
+			// SP-initiated: we have valid state
+			providerConfig, err = s.providerStore.GetSAMLProvider(c.Request.Context(), stateData.Provider)
+			if err != nil {
+				s.logger.Error("Failed to get SAML provider from state", zap.Error(err))
+				c.Redirect(http.StatusFound, "/login?error=provider_not_found")
+				return
+			}
+			cliCallbackURL = stateData.CLICallbackURL
+			cliState = stateData.RelayState
+			s.logger.Info("SP-initiated SAML flow", zap.String("provider", providerConfig.Name))
+		} else {
+			s.logger.Info("RelayState not found in database, trying IDP-initiated flow",
+				zap.String("relay_state", relayState))
+		}
 	}
 
-	// Get provider config from database
-	providerConfig, err := s.providerStore.GetSAMLProvider(c.Request.Context(), stateData.Provider)
-	if err != nil {
-		s.logger.Error("Failed to get SAML provider", zap.Error(err))
-		c.Redirect(http.StatusFound, "/login?error=provider_not_found")
-		return
+	// If we don't have a provider yet, try IDP-initiated flow
+	// We need to decode the SAML response and extract the Issuer to find the provider
+	if providerConfig == nil {
+		s.logger.Info("Attempting IDP-initiated SAML flow")
+
+		// Decode the SAML response to extract the Issuer
+		decodedResponse, err := base64.StdEncoding.DecodeString(samlResponse)
+		if err != nil {
+			s.logger.Error("Failed to decode SAML response", zap.Error(err))
+			c.Redirect(http.StatusFound, "/login?error=invalid_response")
+			return
+		}
+
+		// Parse XML to extract Issuer
+		issuer := extractSAMLIssuer(string(decodedResponse))
+		if issuer == "" {
+			s.logger.Error("Could not extract Issuer from SAML response")
+			c.Redirect(http.StatusFound, "/login?error=invalid_response")
+			return
+		}
+		s.logger.Info("IDP-initiated: extracted Issuer", zap.String("issuer", issuer))
+
+		// Find provider by matching the Issuer with IdP metadata EntityID
+		providers, err := s.providerStore.GetSAMLProviders(c.Request.Context())
+		if err != nil {
+			s.logger.Error("Failed to get SAML providers", zap.Error(err))
+			c.Redirect(http.StatusFound, "/login?error=provider_not_found")
+			return
+		}
+
+		for _, p := range providers {
+			if !p.Enabled {
+				continue
+			}
+			// Try to match by checking if the issuer matches what we expect from metadata
+			idpMetadataURL, err := url.Parse(p.IDPMetadataURL)
+			if err != nil {
+				continue
+			}
+			metadata, err := samlsp.FetchMetadata(c.Request.Context(), http.DefaultClient, *idpMetadataURL)
+			if err != nil {
+				continue
+			}
+			if metadata.EntityID == issuer {
+				providerConfig = p
+				s.logger.Info("IDP-initiated: matched provider", zap.String("provider", p.Name))
+				break
+			}
+		}
+
+		if providerConfig == nil {
+			s.logger.Error("No matching SAML provider found for Issuer", zap.String("issuer", issuer))
+			c.Redirect(http.StatusFound, "/login?error=provider_not_found")
+			return
+		}
 	}
 
 	// Fetch IdP metadata
@@ -583,14 +700,6 @@ func (s *Server) handleSAMLACS(c *gin.Context) {
 		AcsURL:            *acsURL,
 		IDPMetadata:       idpMetadata,
 		AllowIDPInitiated: true,
-	}
-
-	// Get SAML response
-	samlResponse := c.PostForm("SAMLResponse")
-	if samlResponse == "" {
-		s.logger.Error("No SAMLResponse in request")
-		c.Redirect(http.StatusFound, "/login?error=no_response")
-		return
 	}
 
 	// Parse and validate the assertion
@@ -657,7 +766,7 @@ func (s *Server) handleSAMLACS(c *gin.Context) {
 	}
 
 	if email == "" {
-		email = username + "@" + stateData.Provider
+		email = username + "@" + providerConfig.Name
 	}
 
 	if name == "" {
@@ -674,7 +783,7 @@ func (s *Server) handleSAMLACS(c *gin.Context) {
 	token := base64.URLEncoding.EncodeToString(tokenBytes)
 
 	// Create session
-	userID := "saml:" + stateData.Provider + ":" + nameID
+	userID := "saml:" + providerConfig.Name + ":" + nameID
 	expiresAt := time.Now().Add(s.config.Auth.Session.Validity)
 	ipAddress := getRealClientIP(c)
 	userAgent := c.GetHeader("User-Agent")
@@ -697,31 +806,87 @@ func (s *Server) handleSAMLACS(c *gin.Context) {
 	)
 
 	s.logger.Info("SAML login successful",
-		zap.String("provider", stateData.Provider),
+		zap.String("provider", providerConfig.Name),
 		zap.String("user", username),
 		zap.String("email", email),
 	)
 
 	// Log the successful login
-	s.logUserLogin(c.Request.Context(), userID, email, name, "saml", stateData.Provider, ipAddress, userAgent, token, true, "")
+	s.logUserLogin(c.Request.Context(), userID, email, name, "saml", providerConfig.Name, ipAddress, userAgent, token, true, "")
 
 	// Check if this is a CLI login flow
-	if stateData.CLICallbackURL != "" {
-		s.logger.Info("SAML callback with CLI callback URL", zap.String("callback_url", stateData.CLICallbackURL))
+	if cliCallbackURL != "" {
+		s.logger.Info("SAML callback with CLI callback URL", zap.String("callback_url", cliCallbackURL))
 		// Redirect to CLI callback with token using HTML page (Chrome blocks 302 to custom schemes)
-		redirectURL := stateData.CLICallbackURL + "?token=" + token + "&email=" + url.QueryEscape(email) + "&name=" + url.QueryEscape(name) + "&expires_in=86400"
+		redirectURL := cliCallbackURL + "?token=" + token + "&email=" + url.QueryEscape(email) + "&name=" + url.QueryEscape(name) + "&expires_in=86400"
 		s.logger.Info("Redirecting to CLI", zap.String("redirect_url", redirectURL))
 		renderCLIRedirectPage(c, redirectURL)
 		return
-	} else if stateData.RelayState != "" {
+	} else if cliState != "" {
 		// CLI flow without direct callback - redirect to login page with state
-		s.logger.Info("SAML callback with CLI state", zap.String("cli_state", stateData.RelayState))
-		c.Redirect(http.StatusFound, "/login?cli=true&state="+url.QueryEscape(stateData.RelayState))
+		s.logger.Info("SAML callback with CLI state", zap.String("cli_state", cliState))
+		c.Redirect(http.StatusFound, "/login?cli=true&state="+url.QueryEscape(cliState))
 		return
 	}
 
 	// Redirect to dashboard for normal web login
 	c.Redirect(http.StatusFound, "/")
+}
+
+// extractSAMLIssuer extracts the Issuer element from a SAML response XML
+func extractSAMLIssuer(samlXML string) string {
+	// Parse namespaced SAML XML to extract Issuer
+	// The Issuer can be in the Response or Assertion element
+	type issuerElement struct {
+		Value string `xml:",chardata"`
+	}
+	type assertionElement struct {
+		Issuer issuerElement `xml:"urn:oasis:names:tc:SAML:2.0:assertion Issuer"`
+	}
+	type responseElement struct {
+		XMLName   xml.Name           `xml:"urn:oasis:names:tc:SAML:2.0:protocol Response"`
+		Issuer    issuerElement      `xml:"urn:oasis:names:tc:SAML:2.0:assertion Issuer"`
+		Assertion []assertionElement `xml:"urn:oasis:names:tc:SAML:2.0:assertion Assertion"`
+	}
+
+	var resp responseElement
+	if err := xml.Unmarshal([]byte(samlXML), &resp); err != nil {
+		// Try without namespace for compatibility
+		type simpleAssertion struct {
+			Issuer issuerElement `xml:"Issuer"`
+		}
+		type simpleResponse struct {
+			Issuer    issuerElement     `xml:"Issuer"`
+			Assertion []simpleAssertion `xml:"Assertion"`
+		}
+		var simpleResp simpleResponse
+		if err := xml.Unmarshal([]byte(samlXML), &simpleResp); err != nil {
+			return ""
+		}
+		if simpleResp.Issuer.Value != "" {
+			return strings.TrimSpace(simpleResp.Issuer.Value)
+		}
+		for _, a := range simpleResp.Assertion {
+			if a.Issuer.Value != "" {
+				return strings.TrimSpace(a.Issuer.Value)
+			}
+		}
+		return ""
+	}
+
+	// Try Response-level Issuer first
+	if resp.Issuer.Value != "" {
+		return strings.TrimSpace(resp.Issuer.Value)
+	}
+
+	// Fall back to Assertion-level Issuer
+	for _, assertion := range resp.Assertion {
+		if assertion.Issuer.Value != "" {
+			return strings.TrimSpace(assertion.Issuer.Value)
+		}
+	}
+
+	return ""
 }
 
 func (s *Server) handleSAMLMetadata(c *gin.Context) {

@@ -81,6 +81,7 @@ Configuration:
 		newTroubleshootCmd(),
 		newTopologyCmd(),
 		newSessionCmd(),
+		newProviderCmd(),
 		newVersionCmd(),
 	)
 
@@ -2217,6 +2218,442 @@ func startInteractiveSession(agentID string) error {
 	}
 
 	return nil
+}
+
+// === Provider Command ===
+
+func newProviderCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "provider",
+		Short: "Manage authentication providers (OIDC and SAML)",
+	}
+
+	cmd.AddCommand(newOIDCProviderCmd(), newSAMLProviderCmd())
+	return cmd
+}
+
+func newOIDCProviderCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "oidc",
+		Short: "Manage OIDC providers",
+	}
+
+	// List OIDC providers
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all OIDC providers",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			providers, err := client.ListOIDCProviders(ctx)
+			if err != nil {
+				return err
+			}
+			return outputResult(providers, []string{"Name", "Display Name", "Issuer", "Client ID", "Enabled"}, func(item interface{}) []string {
+				p := item.(adminclient.OIDCProvider)
+				enabled := "No"
+				if p.Enabled {
+					enabled = "Yes"
+				}
+				return []string{p.Name, p.DisplayName, p.Issuer, p.ClientID, enabled}
+			})
+		},
+	}
+
+	// Get OIDC provider
+	getCmd := &cobra.Command{
+		Use:   "get NAME",
+		Short: "Get OIDC provider details",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			provider, err := client.GetOIDCProvider(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			return outputSingle(provider)
+		},
+	}
+
+	// Create OIDC provider
+	createCmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a new OIDC provider",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name, _ := cmd.Flags().GetString("name")
+			displayName, _ := cmd.Flags().GetString("display-name")
+			issuer, _ := cmd.Flags().GetString("issuer")
+			clientID, _ := cmd.Flags().GetString("client-id")
+			clientSecret, _ := cmd.Flags().GetString("client-secret")
+			redirectURL, _ := cmd.Flags().GetString("redirect-url")
+			scopes, _ := cmd.Flags().GetStringSlice("scopes")
+			adminGroup, _ := cmd.Flags().GetString("admin-group")
+			enabled, _ := cmd.Flags().GetBool("enabled")
+
+			// Claim mappings
+			claimEmail, _ := cmd.Flags().GetString("claim-email")
+			claimName, _ := cmd.Flags().GetString("claim-name")
+			claimGivenName, _ := cmd.Flags().GetString("claim-given-name")
+			claimFamilyName, _ := cmd.Flags().GetString("claim-family-name")
+			claimGroups, _ := cmd.Flags().GetString("claim-groups")
+
+			if name == "" || issuer == "" || clientID == "" || clientSecret == "" {
+				return fmt.Errorf("--name, --issuer, --client-id, and --client-secret are required")
+			}
+
+			if displayName == "" {
+				displayName = name
+			}
+
+			if len(scopes) == 0 {
+				scopes = []string{"openid", "profile", "email"}
+			}
+
+			req := map[string]interface{}{
+				"name":          name,
+				"display_name":  displayName,
+				"issuer":        issuer,
+				"client_id":     clientID,
+				"client_secret": clientSecret,
+				"redirect_url":  redirectURL,
+				"scopes":        scopes,
+				"admin_group":   adminGroup,
+				"enabled":       enabled,
+				"claim_mappings": map[string]string{
+					"email":       claimEmail,
+					"name":        claimName,
+					"given_name":  claimGivenName,
+					"family_name": claimFamilyName,
+					"groups":      claimGroups,
+				},
+			}
+
+			ctx := context.Background()
+			provider, err := client.CreateOIDCProvider(ctx, req)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("OIDC provider created: %s\n", provider.Name)
+			return nil
+		},
+	}
+	createCmd.Flags().String("name", "", "Provider name (required)")
+	createCmd.Flags().String("display-name", "", "Display name")
+	createCmd.Flags().String("issuer", "", "OIDC issuer URL (required)")
+	createCmd.Flags().String("client-id", "", "Client ID (required)")
+	createCmd.Flags().String("client-secret", "", "Client secret (required)")
+	createCmd.Flags().String("redirect-url", "", "Redirect URL")
+	createCmd.Flags().StringSlice("scopes", []string{"openid", "profile", "email"}, "OAuth scopes")
+	createCmd.Flags().String("admin-group", "", "Admin group name")
+	createCmd.Flags().Bool("enabled", true, "Enable provider")
+	createCmd.Flags().String("claim-email", "email", "Email claim name")
+	createCmd.Flags().String("claim-name", "name", "Name claim name")
+	createCmd.Flags().String("claim-given-name", "given_name", "Given name claim name")
+	createCmd.Flags().String("claim-family-name", "family_name", "Family name claim name")
+	createCmd.Flags().String("claim-groups", "groups", "Groups claim name")
+
+	// Update OIDC provider
+	updateCmd := &cobra.Command{
+		Use:   "update NAME",
+		Short: "Update an OIDC provider",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			req := make(map[string]interface{})
+
+			if displayName, _ := cmd.Flags().GetString("display-name"); displayName != "" {
+				req["display_name"] = displayName
+			}
+			if issuer, _ := cmd.Flags().GetString("issuer"); issuer != "" {
+				req["issuer"] = issuer
+			}
+			if clientID, _ := cmd.Flags().GetString("client-id"); clientID != "" {
+				req["client_id"] = clientID
+			}
+			if clientSecret, _ := cmd.Flags().GetString("client-secret"); clientSecret != "" {
+				req["client_secret"] = clientSecret
+			}
+			if redirectURL, _ := cmd.Flags().GetString("redirect-url"); redirectURL != "" {
+				req["redirect_url"] = redirectURL
+			}
+			if scopes, _ := cmd.Flags().GetStringSlice("scopes"); len(scopes) > 0 {
+				req["scopes"] = scopes
+			}
+			if adminGroup, _ := cmd.Flags().GetString("admin-group"); cmd.Flags().Changed("admin-group") {
+				req["admin_group"] = adminGroup
+			}
+			if cmd.Flags().Changed("enabled") {
+				enabled, _ := cmd.Flags().GetBool("enabled")
+				req["enabled"] = enabled
+			}
+
+			// Check if any claim mapping flags were changed
+			claimMappings := make(map[string]string)
+			if cmd.Flags().Changed("claim-email") {
+				claimEmail, _ := cmd.Flags().GetString("claim-email")
+				claimMappings["email"] = claimEmail
+			}
+			if cmd.Flags().Changed("claim-name") {
+				claimName, _ := cmd.Flags().GetString("claim-name")
+				claimMappings["name"] = claimName
+			}
+			if cmd.Flags().Changed("claim-given-name") {
+				claimGivenName, _ := cmd.Flags().GetString("claim-given-name")
+				claimMappings["given_name"] = claimGivenName
+			}
+			if cmd.Flags().Changed("claim-family-name") {
+				claimFamilyName, _ := cmd.Flags().GetString("claim-family-name")
+				claimMappings["family_name"] = claimFamilyName
+			}
+			if cmd.Flags().Changed("claim-groups") {
+				claimGroups, _ := cmd.Flags().GetString("claim-groups")
+				claimMappings["groups"] = claimGroups
+			}
+			if len(claimMappings) > 0 {
+				req["claim_mappings"] = claimMappings
+			}
+
+			ctx := context.Background()
+			provider, err := client.UpdateOIDCProvider(ctx, args[0], req)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("OIDC provider updated: %s\n", provider.Name)
+			return nil
+		},
+	}
+	updateCmd.Flags().String("display-name", "", "Display name")
+	updateCmd.Flags().String("issuer", "", "OIDC issuer URL")
+	updateCmd.Flags().String("client-id", "", "Client ID")
+	updateCmd.Flags().String("client-secret", "", "Client secret")
+	updateCmd.Flags().String("redirect-url", "", "Redirect URL")
+	updateCmd.Flags().StringSlice("scopes", nil, "OAuth scopes")
+	updateCmd.Flags().String("admin-group", "", "Admin group name")
+	updateCmd.Flags().Bool("enabled", true, "Enable provider")
+	updateCmd.Flags().String("claim-email", "", "Email claim name")
+	updateCmd.Flags().String("claim-name", "", "Name claim name")
+	updateCmd.Flags().String("claim-given-name", "", "Given name claim name")
+	updateCmd.Flags().String("claim-family-name", "", "Family name claim name")
+	updateCmd.Flags().String("claim-groups", "", "Groups claim name")
+
+	// Delete OIDC provider
+	deleteCmd := &cobra.Command{
+		Use:   "delete NAME",
+		Short: "Delete an OIDC provider",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			if err := client.DeleteOIDCProvider(ctx, args[0]); err != nil {
+				return err
+			}
+			fmt.Println("OIDC provider deleted")
+			return nil
+		},
+	}
+
+	cmd.AddCommand(listCmd, getCmd, createCmd, updateCmd, deleteCmd)
+	return cmd
+}
+
+func newSAMLProviderCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "saml",
+		Short: "Manage SAML providers",
+	}
+
+	// List SAML providers
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all SAML providers",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			providers, err := client.ListSAMLProviders(ctx)
+			if err != nil {
+				return err
+			}
+			return outputResult(providers, []string{"Name", "Display Name", "Entity ID", "IDP Metadata URL", "Enabled"}, func(item interface{}) []string {
+				p := item.(adminclient.SAMLProvider)
+				enabled := "No"
+				if p.Enabled {
+					enabled = "Yes"
+				}
+				return []string{p.Name, p.DisplayName, p.EntityID, p.IDPMetadataURL, enabled}
+			})
+		},
+	}
+
+	// Get SAML provider
+	getCmd := &cobra.Command{
+		Use:   "get NAME",
+		Short: "Get SAML provider details",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			provider, err := client.GetSAMLProvider(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			return outputSingle(provider)
+		},
+	}
+
+	// Create SAML provider
+	createCmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a new SAML provider",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name, _ := cmd.Flags().GetString("name")
+			displayName, _ := cmd.Flags().GetString("display-name")
+			idpMetadataURL, _ := cmd.Flags().GetString("idp-metadata-url")
+			entityID, _ := cmd.Flags().GetString("entity-id")
+			acsURL, _ := cmd.Flags().GetString("acs-url")
+			adminGroup, _ := cmd.Flags().GetString("admin-group")
+			enabled, _ := cmd.Flags().GetBool("enabled")
+
+			// Attribute mappings
+			attrEmail, _ := cmd.Flags().GetString("attr-email")
+			attrName, _ := cmd.Flags().GetString("attr-name")
+			attrGivenName, _ := cmd.Flags().GetString("attr-given-name")
+			attrFamilyName, _ := cmd.Flags().GetString("attr-family-name")
+			attrGroups, _ := cmd.Flags().GetString("attr-groups")
+
+			if name == "" || idpMetadataURL == "" || entityID == "" {
+				return fmt.Errorf("--name, --idp-metadata-url, and --entity-id are required")
+			}
+
+			if displayName == "" {
+				displayName = name
+			}
+
+			req := map[string]interface{}{
+				"name":             name,
+				"display_name":     displayName,
+				"idp_metadata_url": idpMetadataURL,
+				"entity_id":        entityID,
+				"acs_url":          acsURL,
+				"admin_group":      adminGroup,
+				"enabled":          enabled,
+				"attribute_mappings": map[string]string{
+					"email":       attrEmail,
+					"name":        attrName,
+					"given_name":  attrGivenName,
+					"family_name": attrFamilyName,
+					"groups":      attrGroups,
+				},
+			}
+
+			ctx := context.Background()
+			provider, err := client.CreateSAMLProvider(ctx, req)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("SAML provider created: %s\n", provider.Name)
+			return nil
+		},
+	}
+	createCmd.Flags().String("name", "", "Provider name (required)")
+	createCmd.Flags().String("display-name", "", "Display name")
+	createCmd.Flags().String("idp-metadata-url", "", "IDP Metadata URL (required)")
+	createCmd.Flags().String("entity-id", "", "Entity ID (required)")
+	createCmd.Flags().String("acs-url", "", "Assertion Consumer Service URL")
+	createCmd.Flags().String("admin-group", "", "Admin group name")
+	createCmd.Flags().Bool("enabled", true, "Enable provider")
+	createCmd.Flags().String("attr-email", "email", "Email attribute name")
+	createCmd.Flags().String("attr-name", "displayName", "Name attribute name")
+	createCmd.Flags().String("attr-given-name", "givenName", "Given name attribute name")
+	createCmd.Flags().String("attr-family-name", "sn", "Family name attribute name")
+	createCmd.Flags().String("attr-groups", "groups", "Groups attribute name")
+
+	// Update SAML provider
+	updateCmd := &cobra.Command{
+		Use:   "update NAME",
+		Short: "Update a SAML provider",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			req := make(map[string]interface{})
+
+			if displayName, _ := cmd.Flags().GetString("display-name"); displayName != "" {
+				req["display_name"] = displayName
+			}
+			if idpMetadataURL, _ := cmd.Flags().GetString("idp-metadata-url"); idpMetadataURL != "" {
+				req["idp_metadata_url"] = idpMetadataURL
+			}
+			if entityID, _ := cmd.Flags().GetString("entity-id"); entityID != "" {
+				req["entity_id"] = entityID
+			}
+			if acsURL, _ := cmd.Flags().GetString("acs-url"); acsURL != "" {
+				req["acs_url"] = acsURL
+			}
+			if adminGroup, _ := cmd.Flags().GetString("admin-group"); cmd.Flags().Changed("admin-group") {
+				req["admin_group"] = adminGroup
+			}
+			if cmd.Flags().Changed("enabled") {
+				enabled, _ := cmd.Flags().GetBool("enabled")
+				req["enabled"] = enabled
+			}
+
+			// Check if any attribute mapping flags were changed
+			attrMappings := make(map[string]string)
+			if cmd.Flags().Changed("attr-email") {
+				attrEmail, _ := cmd.Flags().GetString("attr-email")
+				attrMappings["email"] = attrEmail
+			}
+			if cmd.Flags().Changed("attr-name") {
+				attrName, _ := cmd.Flags().GetString("attr-name")
+				attrMappings["name"] = attrName
+			}
+			if cmd.Flags().Changed("attr-given-name") {
+				attrGivenName, _ := cmd.Flags().GetString("attr-given-name")
+				attrMappings["given_name"] = attrGivenName
+			}
+			if cmd.Flags().Changed("attr-family-name") {
+				attrFamilyName, _ := cmd.Flags().GetString("attr-family-name")
+				attrMappings["family_name"] = attrFamilyName
+			}
+			if cmd.Flags().Changed("attr-groups") {
+				attrGroups, _ := cmd.Flags().GetString("attr-groups")
+				attrMappings["groups"] = attrGroups
+			}
+			if len(attrMappings) > 0 {
+				req["attribute_mappings"] = attrMappings
+			}
+
+			ctx := context.Background()
+			provider, err := client.UpdateSAMLProvider(ctx, args[0], req)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("SAML provider updated: %s\n", provider.Name)
+			return nil
+		},
+	}
+	updateCmd.Flags().String("display-name", "", "Display name")
+	updateCmd.Flags().String("idp-metadata-url", "", "IDP Metadata URL")
+	updateCmd.Flags().String("entity-id", "", "Entity ID")
+	updateCmd.Flags().String("acs-url", "", "Assertion Consumer Service URL")
+	updateCmd.Flags().String("admin-group", "", "Admin group name")
+	updateCmd.Flags().Bool("enabled", true, "Enable provider")
+	updateCmd.Flags().String("attr-email", "", "Email attribute name")
+	updateCmd.Flags().String("attr-name", "", "Name attribute name")
+	updateCmd.Flags().String("attr-given-name", "", "Given name attribute name")
+	updateCmd.Flags().String("attr-family-name", "", "Family name attribute name")
+	updateCmd.Flags().String("attr-groups", "", "Groups attribute name")
+
+	// Delete SAML provider
+	deleteCmd := &cobra.Command{
+		Use:   "delete NAME",
+		Short: "Delete a SAML provider",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			if err := client.DeleteSAMLProvider(ctx, args[0]); err != nil {
+				return err
+			}
+			fmt.Println("SAML provider deleted")
+			return nil
+		},
+	}
+
+	cmd.AddCommand(listCmd, getCmd, createCmd, updateCmd, deleteCmd)
+	return cmd
 }
 
 // === Version Command ===

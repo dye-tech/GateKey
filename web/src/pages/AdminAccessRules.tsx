@@ -171,7 +171,7 @@ export default function AdminAccessRules() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full bg-blue-600 text-white">
+                    <span className="px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full bg-indigo-600 text-white">
                       {RULE_TYPE_LABELS[rule.ruleType]}
                     </span>
                   </td>
@@ -684,7 +684,7 @@ function AssignmentModal({ rule, onClose, onUpdate }: AssignmentModalProps) {
                             )}
                           </div>
                           {userInfo.provider && (
-                            <span className="ml-2 px-2 py-0.5 text-xs bg-blue-600 text-white rounded">
+                            <span className="ml-2 px-2 py-0.5 text-xs bg-indigo-600 text-white rounded">
                               {userInfo.provider}
                             </span>
                           )}

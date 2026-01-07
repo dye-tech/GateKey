@@ -217,9 +217,9 @@ export default function AdminRemoteSessions() {
                       <tr key={agent.id} className="hover:bg-theme-tertiary">
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                            agent.nodeType === 'hub' ? 'bg-blue-600 text-white' :
-                            agent.nodeType === 'gateway' ? 'bg-green-600 text-white' :
-                            'bg-purple-600 text-white'
+                            agent.nodeType === 'hub' ? 'bg-indigo-600 text-white' :
+                            agent.nodeType === 'gateway' ? 'bg-emerald-600 text-white' :
+                            'bg-violet-600 text-white'
                           }`}>
                             {agent.nodeType}
                           </span>

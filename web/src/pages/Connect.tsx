@@ -278,8 +278,8 @@ export default function Connect() {
                           <p className="font-medium text-theme-primary">{gateway.name}</p>
                           <span className={`px-1.5 py-0.5 text-xs font-medium rounded ${
                             gateway.gatewayType === 'wireguard'
-                              ? 'bg-purple-600 text-white'
-                              : 'bg-blue-600 text-white'
+                              ? 'bg-violet-600 text-white'
+                              : 'bg-emerald-600 text-white'
                           }`}>
                             {gateway.gatewayType === 'wireguard' ? 'WG' : 'OVPN'}
                           </span>
@@ -437,8 +437,8 @@ export default function Connect() {
                             <p className="font-medium text-theme-primary">{selectedGateway.name}</p>
                             <span className={`px-1.5 py-0.5 text-xs font-medium rounded ${
                               selectedGateway.gatewayType === 'wireguard'
-                                ? 'bg-purple-600 text-white'
-                                : 'bg-blue-600 text-white'
+                                ? 'bg-violet-600 text-white'
+                                : 'bg-emerald-600 text-white'
                             }`}>
                               {selectedGateway.gatewayType === 'wireguard' ? 'WG' : 'OVPN'}
                             </span>

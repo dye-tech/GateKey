@@ -162,7 +162,7 @@ export default function AdminConfigs() {
             }`}
           >
             Gateway Configs
-            <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300">
+            <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
               {gatewayTotal}
             </span>
           </button>
@@ -175,7 +175,7 @@ export default function AdminConfigs() {
             }`}
           >
             Mesh Configs
-            <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300">
+            <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300">
               {meshTotal}
             </span>
           </button>
@@ -274,7 +274,7 @@ export default function AdminConfigs() {
                               )}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-600 text-white">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-600 text-white">
                                 {config.gatewayName}
                               </span>
                             </td>

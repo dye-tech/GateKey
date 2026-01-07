@@ -65,16 +65,35 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	router.Use(gin.Recovery())
 	router.Use(zapLogger(logger))
 
-	// Configure CORS
+	// Configure CORS with exception for SAML ACS endpoint
+	// SAML ACS receives cross-origin POSTs from IdPs and has its own cryptographic security
+	// (signature validation, issuer verification) so it doesn't need CORS protection
 	if len(cfg.Server.CORSOrigins) > 0 {
-		router.Use(cors.New(cors.Config{
+		corsMiddleware := cors.New(cors.Config{
 			AllowOrigins:     cfg.Server.CORSOrigins,
 			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 			AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 			ExposeHeaders:    []string{"Content-Length"},
 			AllowCredentials: true,
 			MaxAge:           12 * time.Hour,
-		}))
+		})
+		router.Use(func(c *gin.Context) {
+			// Skip CORS for SAML ACS endpoint - it has its own security model
+			if c.Request.URL.Path == "/api/v1/auth/saml/acs" {
+				// Set permissive CORS headers for SAML ACS
+				c.Header("Access-Control-Allow-Origin", "*")
+				c.Header("Access-Control-Allow-Methods", "POST, OPTIONS")
+				c.Header("Access-Control-Allow-Headers", "Content-Type, Origin")
+				if c.Request.Method == "OPTIONS" {
+					c.AbortWithStatus(204)
+					return
+				}
+				c.Next()
+				return
+			}
+			// Apply normal CORS for all other endpoints
+			corsMiddleware(c)
+		})
 	}
 
 	// Configure trusted proxies
@@ -224,6 +243,7 @@ func (s *Server) setupRoutes() {
 			// SAML
 			auth.GET("/saml/login", s.handleSAMLLogin)
 			auth.POST("/saml/acs", s.handleSAMLACS)
+			auth.OPTIONS("/saml/acs", s.handleSAMLACSOptions) // CORS preflight for IdP POST
 			auth.GET("/saml/metadata", s.handleSAMLMetadata)
 
 			// CLI authentication (browser-based flow for CLI client)

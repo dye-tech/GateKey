@@ -128,7 +128,7 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="mt-2 flex items-center text-xs">
-              <span className="text-blue-600 dark:text-green-400">{adminStats.gateways.online} online</span>
+              <span className="text-emerald-600 dark:text-emerald-400">{adminStats.gateways.online} online</span>
               {adminStats.gateways.offline > 0 && (
                 <span className="text-red-600 dark:text-red-400 ml-2">{adminStats.gateways.offline} offline</span>
               )}
@@ -141,7 +141,7 @@ export default function Dashboard() {
                 <p className="text-sm text-theme-tertiary">Networks</p>
                 <p className="text-2xl font-bold text-theme-primary">{adminStats.networks}</p>
               </div>
-              <div className="p-2 bg-blue-500 rounded-lg">
+              <div className="p-2 bg-emerald-500 rounded-lg">
                 <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
                 </svg>
@@ -262,7 +262,7 @@ export default function Dashboard() {
         {/* Help */}
         <Link to="/help" className="card hover:shadow-lg transition-shadow cursor-pointer">
           <div className="flex items-center space-x-4">
-            <div className="p-3 bg-blue-600 rounded-lg">
+            <div className="p-3 bg-indigo-600 rounded-lg">
               <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>

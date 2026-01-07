@@ -202,8 +202,8 @@ export default function MyConfigs() {
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                             config.type === 'gateway'
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-purple-600 text-white'
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-violet-600 text-white'
                           }`}>
                             {config.type === 'gateway' ? 'Gateway' : 'Mesh Hub'}
                           </span>
@@ -225,7 +225,7 @@ export default function MyConfigs() {
                             Active
                           </span>
                           {config.downloaded && (
-                            <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-600 text-white">
+                            <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-600 text-white">
                               Downloaded
                             </span>
                           )}
@@ -273,8 +273,8 @@ export default function MyConfigs() {
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                             config.type === 'gateway'
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-purple-600 text-white'
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-violet-600 text-white'
                           }`}>
                             {config.type === 'gateway' ? 'Gateway' : 'Mesh Hub'}
                           </span>

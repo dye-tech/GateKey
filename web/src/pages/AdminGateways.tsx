@@ -176,8 +176,8 @@ export default function AdminGateways() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                       gateway.gatewayType === 'wireguard'
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-blue-600 text-white'
+                        ? 'bg-violet-600 text-white'
+                        : 'bg-emerald-600 text-white'
                     }`}>
                       {gateway.gatewayType === 'wireguard' ? 'WireGuard' : 'OpenVPN'}
                     </span>
@@ -196,9 +196,9 @@ export default function AdminGateways() {
                     {gateway.gatewayType === 'openvpn' && (
                       <div className="text-xs">
                         <span className={`px-1.5 py-0.5 rounded ${
-                          gateway.cryptoProfile === 'fips' ? 'bg-purple-600 text-white' :
-                          gateway.cryptoProfile === 'compatible' ? 'bg-yellow-500 text-white' :
-                          'bg-blue-600 text-white'
+                          gateway.cryptoProfile === 'fips' ? 'bg-violet-600 text-white' :
+                          gateway.cryptoProfile === 'compatible' ? 'bg-amber-500 text-white' :
+                          'bg-emerald-600 text-white'
                         }`}>
                           {gateway.cryptoProfile === 'fips' ? 'FIPS' :
                            gateway.cryptoProfile === 'compatible' ? 'Compatible' : 'Modern'}
@@ -457,7 +457,7 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
                 onClick={() => setGatewayType('openvpn')}
                 className={`flex-1 px-4 py-2 rounded-lg border font-medium text-sm transition-colors ${
                   gatewayType === 'openvpn'
-                    ? 'bg-blue-600 text-white border-blue-600'
+                    ? 'bg-emerald-600 text-white border-emerald-600'
                     : 'bg-theme-card text-theme-secondary border-theme hover:bg-theme-tertiary'
                 }`}
               >

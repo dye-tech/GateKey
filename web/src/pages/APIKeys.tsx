@@ -307,7 +307,7 @@ export default function APIKeys() {
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span className="font-medium text-theme-primary">{key.name}</span>
                           {key.isAdminProvisioned && (
-                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-600 text-white">
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-600 text-white">
                               Admin Created
                             </span>
                           )}
