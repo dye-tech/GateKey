@@ -162,7 +162,7 @@ export default function AdminConfigs() {
             }`}
           >
             Gateway Configs
-            <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
+            <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-slate-700 text-slate-200">
               {gatewayTotal}
             </span>
           </button>
@@ -175,7 +175,7 @@ export default function AdminConfigs() {
             }`}
           >
             Mesh Configs
-            <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300">
+            <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-slate-700 text-slate-200">
               {meshTotal}
             </span>
           </button>

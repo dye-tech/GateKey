@@ -6257,10 +6257,17 @@ func (s *Server) handleCreateGeoFenceRule(c *gin.Context) {
 		return
 	}
 
-	// Validate CIDR format
-	if _, _, err := net.ParseCIDR(req.IPRange); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid CIDR format for ipRange"})
-		return
+	// Validate CIDR format(s) - supports multiple comma-separated CIDRs
+	cidrs := strings.Split(req.IPRange, ",")
+	for _, cidr := range cidrs {
+		cidr = strings.TrimSpace(cidr)
+		if cidr == "" {
+			continue
+		}
+		if _, _, err := net.ParseCIDR(cidr); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid CIDR format: %s", cidr)})
+			return
+		}
 	}
 
 	ctx := c.Request.Context()
@@ -6310,10 +6317,17 @@ func (s *Server) handleUpdateGeoFenceRule(c *gin.Context) {
 		return
 	}
 
-	// Validate CIDR format
-	if _, _, err := net.ParseCIDR(req.IPRange); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid CIDR format for ipRange"})
-		return
+	// Validate CIDR format(s) - supports multiple comma-separated CIDRs
+	cidrs := strings.Split(req.IPRange, ",")
+	for _, cidr := range cidrs {
+		cidr = strings.TrimSpace(cidr)
+		if cidr == "" {
+			continue
+		}
+		if _, _, err := net.ParseCIDR(cidr); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid CIDR format: %s", cidr)})
+			return
+		}
 	}
 
 	ctx := c.Request.Context()
