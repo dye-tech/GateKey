@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -298,12 +299,20 @@ func (s *GeoFenceStore) IsIPAllowed(ctx context.Context, clientIP, userID string
 		if !rule.IsActive {
 			continue
 		}
-		_, ipNet, err := net.ParseCIDR(rule.IPRange)
-		if err != nil {
-			continue
-		}
-		if ipNet.Contains(ip) {
-			return true, nil
+		// Support multiple comma-separated CIDRs per rule
+		cidrs := strings.Split(rule.IPRange, ",")
+		for _, cidr := range cidrs {
+			cidr = strings.TrimSpace(cidr)
+			if cidr == "" {
+				continue
+			}
+			_, ipNet, err := net.ParseCIDR(cidr)
+			if err != nil {
+				continue
+			}
+			if ipNet.Contains(ip) {
+				return true, nil
+			}
 		}
 	}
 
