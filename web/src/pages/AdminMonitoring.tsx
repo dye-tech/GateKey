@@ -348,7 +348,7 @@ export default function AdminMonitoring() {
                       <div className="text-xs text-theme-tertiary uppercase tracking-wider">Unique Users</div>
                       <div className="text-2xl font-bold text-theme-primary">{uniqueUsers}</div>
                     </div>
-                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                    <div className="p-2 bg-indigo-100 dark:bg-blue-900/30 rounded-lg">
                       <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                       </svg>
@@ -362,7 +362,7 @@ export default function AdminMonitoring() {
                       <div className="text-xs text-theme-tertiary uppercase tracking-wider">Gateways Online</div>
                       <div className="text-2xl font-bold text-theme-primary">{onlineGateways}/{gateways.length}</div>
                     </div>
-                    <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                    <div className="p-2 bg-blue-100 dark:bg-green-900/30 rounded-lg">
                       <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
                       </svg>
@@ -390,7 +390,7 @@ export default function AdminMonitoring() {
                       <div className="text-xs text-theme-tertiary uppercase tracking-wider">Bandwidth In</div>
                       <div className="text-2xl font-bold text-green-600">{formatBytes(totalBandwidthIn)}</div>
                     </div>
-                    <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                    <div className="p-2 bg-blue-100 dark:bg-green-900/30 rounded-lg">
                       <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                       </svg>
@@ -404,7 +404,7 @@ export default function AdminMonitoring() {
                       <div className="text-xs text-theme-tertiary uppercase tracking-wider">Bandwidth Out</div>
                       <div className="text-2xl font-bold text-blue-600">{formatBytes(totalBandwidthOut)}</div>
                     </div>
-                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                    <div className="p-2 bg-indigo-100 dark:bg-blue-900/30 rounded-lg">
                       <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
                       </svg>

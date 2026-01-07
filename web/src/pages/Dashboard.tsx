@@ -128,7 +128,7 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="mt-2 flex items-center text-xs">
-              <span className="text-green-600 dark:text-green-400">{adminStats.gateways.online} online</span>
+              <span className="text-blue-600 dark:text-green-400">{adminStats.gateways.online} online</span>
               {adminStats.gateways.offline > 0 && (
                 <span className="text-red-600 dark:text-red-400 ml-2">{adminStats.gateways.offline} offline</span>
               )}
