@@ -126,11 +126,12 @@ type SyncPeersResponse struct {
 
 // ActivePeer tracks an active spoke connection locally
 type ActivePeer struct {
-	ID         string
-	Name       string
-	PublicKey  string
-	AllowedIPs []string
-	TunnelIP   string
+	ID           string
+	Name         string
+	PublicKey    string
+	PresharedKey string
+	AllowedIPs   []string
+	TunnelIP     string
 }
 
 // Global state
@@ -397,11 +398,12 @@ func provision(ctx context.Context, cfg *HubConfig) error {
 	// Store initial peers (spokes)
 	for _, peer := range provResp.Peers {
 		activePeers[peer.PublicKey] = &ActivePeer{
-			ID:         peer.ID,
-			Name:       peer.Name,
-			PublicKey:  peer.PublicKey,
-			AllowedIPs: peer.AllowedIPs,
-			TunnelIP:   peer.TunnelIP,
+			ID:           peer.ID,
+			Name:         peer.Name,
+			PublicKey:    peer.PublicKey,
+			PresharedKey: peer.PresharedKey,
+			AllowedIPs:   peer.AllowedIPs,
+			TunnelIP:     peer.TunnelIP,
 		}
 	}
 
@@ -436,8 +438,9 @@ func setupInterface(ctx context.Context, cfg *HubConfig) error {
 	// Add initial peers (spokes)
 	for _, peer := range activePeers {
 		peerConfig := wireguard.PeerConfig{
-			PublicKey:  peer.PublicKey,
-			AllowedIPs: peer.AllowedIPs,
+			PublicKey:    peer.PublicKey,
+			PresharedKey: peer.PresharedKey,
+			AllowedIPs:   peer.AllowedIPs,
 		}
 		if err := interfaceMgr.AddPeer(ctx, peerConfig); err != nil {
 			logger.Warn("Failed to add initial peer",
@@ -608,11 +611,12 @@ func syncPeers(ctx context.Context, cfg *HubConfig) {
 			}
 
 			activePeers[pubKey] = &ActivePeer{
-				ID:         peerInfo.ID,
-				Name:       peerInfo.Name,
-				PublicKey:  peerInfo.PublicKey,
-				AllowedIPs: peerInfo.AllowedIPs,
-				TunnelIP:   peerInfo.TunnelIP,
+				ID:           peerInfo.ID,
+				Name:         peerInfo.Name,
+				PublicKey:    peerInfo.PublicKey,
+				PresharedKey: peerInfo.PresharedKey,
+				AllowedIPs:   peerInfo.AllowedIPs,
+				TunnelIP:     peerInfo.TunnelIP,
 			}
 
 			logger.Info("Added new spoke peer",

@@ -97,6 +97,7 @@ type ProvisionResponse struct {
 	HubEndpoint    string   `json:"hubEndpoint"`
 	HubVPNPort     int      `json:"hubVpnPort"`
 	HubVPNProtocol string   `json:"hubVpnProtocol"`
+	HubVPNSubnet   string   `json:"hubVpnSubnet"` // VPN subnet for NAT setup
 	CACert         string   `json:"caCert"`
 	ClientCert     string   `json:"clientCert"`
 	ClientKey      string   `json:"clientKey"`
@@ -107,6 +108,9 @@ type ProvisionResponse struct {
 	CryptoProfile  string   `json:"cryptoProfile"`
 	ConfigVersion  string   `json:"configVersion"`
 }
+
+// Global state for NAT configuration
+var hubVPNSubnet string
 
 func loadConfig() (*GatewayConfig, error) {
 	v := viper.New()
@@ -214,6 +218,11 @@ func runGateway(cmd *cobra.Command, args []string) error {
 		if err := startOpenVPN(); err != nil {
 			logger.Warn("Failed to start OpenVPN", zap.Error(err))
 		}
+	}
+
+	// Setup NAT for VPN traffic to reach local networks
+	if err := setupNAT(ctx); err != nil {
+		logger.Warn("Failed to setup NAT", zap.Error(err))
 	}
 
 	// Start remote session client (connects outbound to control plane)
@@ -477,10 +486,14 @@ func doProvision(ctx context.Context, cfg *GatewayConfig) error {
 		logger.Info("Gateway name saved from provisioning", zap.String("name", provResp.GatewayName))
 	}
 
+	// Store hub VPN subnet for NAT setup
+	hubVPNSubnet = provResp.HubVPNSubnet
+
 	logger.Info("Gateway provisioned successfully",
 		zap.String("name", provResp.GatewayName),
 		zap.String("hub_endpoint", hubEndpoint),
 		zap.String("tunnel_ip", provResp.TunnelIP),
+		zap.String("hub_vpn_subnet", hubVPNSubnet),
 		zap.String("config_version", currentConfigVer),
 	)
 
@@ -677,4 +690,100 @@ func isOpenVPN25OrNewer() bool {
 	}
 
 	return false
+}
+
+// setupNAT configures NAT/masquerade for VPN traffic to reach local networks
+// Traffic from the VPN subnet (e.g., 172.30.0.0/16) going to local networks needs to be NAT'd
+// so that replies can find their way back through the spoke.
+func setupNAT(ctx context.Context) error {
+	if hubVPNSubnet == "" {
+		logger.Warn("Hub VPN subnet not set, skipping NAT setup")
+		return nil
+	}
+
+	// Get the default route interface for masquerading
+	outIface := getDefaultRouteInterface()
+	if outIface == "" {
+		outIface = "eth0" // Fallback
+	}
+
+	logger.Info("Setting up NAT for VPN traffic",
+		zap.String("vpn_subnet", hubVPNSubnet),
+		zap.String("out_interface", outIface))
+
+	// Try nftables first
+	if err := setupNftablesNAT(ctx, hubVPNSubnet, outIface); err != nil {
+		logger.Debug("nftables NAT setup failed, trying iptables", zap.Error(err))
+		// Fallback to iptables
+		if err := setupIptablesNAT(ctx, hubVPNSubnet, outIface); err != nil {
+			logger.Warn("Failed to setup NAT rule",
+				zap.String("subnet", hubVPNSubnet),
+				zap.Error(err))
+			return err
+		}
+	}
+
+	return nil
+}
+
+func setupNftablesNAT(ctx context.Context, vpnSubnet, outIface string) error {
+	// Ensure the nat table exists
+	cmd := exec.CommandContext(ctx, "nft", "add", "table", "ip", "nat")
+	cmd.Run() // Ignore error if table exists
+
+	// Ensure the postrouting chain exists
+	cmd = exec.CommandContext(ctx, "nft", "add", "chain", "ip", "nat", "postrouting",
+		"{", "type", "nat", "hook", "postrouting", "priority", "100;", "}")
+	cmd.Run() // Ignore error if chain exists
+
+	// Add masquerade rule for VPN subnet
+	cmd = exec.CommandContext(ctx, "nft", "add", "rule", "ip", "nat", "postrouting",
+		"ip", "saddr", vpnSubnet, "oifname", outIface, "masquerade")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("nftables NAT rule failed: %s: %w", string(output), err)
+	}
+
+	logger.Info("Added nftables NAT rule",
+		zap.String("subnet", vpnSubnet),
+		zap.String("interface", outIface))
+	return nil
+}
+
+func setupIptablesNAT(ctx context.Context, vpnSubnet, outIface string) error {
+	// Check if rule already exists
+	checkCmd := exec.CommandContext(ctx, "iptables", "-t", "nat", "-C", "POSTROUTING",
+		"-s", vpnSubnet, "-o", outIface, "-j", "MASQUERADE")
+	if checkCmd.Run() == nil {
+		// Rule already exists
+		return nil
+	}
+
+	// Add iptables masquerade rule
+	cmd := exec.CommandContext(ctx, "iptables", "-t", "nat", "-A", "POSTROUTING",
+		"-s", vpnSubnet, "-o", outIface, "-j", "MASQUERADE")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("iptables NAT rule failed: %s: %w", string(output), err)
+	}
+
+	logger.Info("Added iptables NAT rule",
+		zap.String("subnet", vpnSubnet),
+		zap.String("interface", outIface))
+	return nil
+}
+
+func getDefaultRouteInterface() string {
+	cmd := exec.Command("ip", "route", "show", "default")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	// Parse "default via X.X.X.X dev ethX ..."
+	fields := strings.Fields(string(output))
+	for i, field := range fields {
+		if field == "dev" && i+1 < len(fields) {
+			return fields[i+1]
+		}
+	}
+	return ""
 }

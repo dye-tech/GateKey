@@ -721,7 +721,7 @@ func (s *MeshStore) ListMeshSpokesByHub(ctx context.Context, hubID string) ([]*M
 		SELECT id, hub_id, name, description, local_networks,
 			COALESCE(gateway_type, 'openvpn'),
 			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
-			host(tunnel_ip), COALESCE(wg_public_key, ''),
+			host(tunnel_ip), COALESCE(wg_public_key, ''), COALESCE(wg_preshared_key, ''),
 			status, COALESCE(status_message, ''), last_seen,
 			bytes_sent, bytes_received, host(remote_ip),
 			created_at, updated_at
@@ -742,7 +742,7 @@ func (s *MeshStore) ListMeshSpokesByHub(ctx context.Context, hubID string) ([]*M
 			&gw.ID, &gw.HubID, &gw.Name, &gw.Description, &gw.LocalNetworks,
 			&gw.GatewayType,
 			&gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers,
-			&tunnelIP, &gw.WGPublicKey,
+			&tunnelIP, &gw.WGPublicKey, &gw.WGPresharedKey,
 			&gw.Status, &gw.StatusMessage, &gw.LastSeen,
 			&gw.BytesSent, &gw.BytesReceived, &remoteIP,
 			&gw.CreatedAt, &gw.UpdatedAt,
@@ -1430,4 +1430,167 @@ func (s *MeshStore) UpdateMeshSpokeHeartbeat(ctx context.Context, spokeID, publi
 		WHERE id = $1
 	`, spokeID, publicIP)
 	return err
+}
+
+// ==================== WireGuard Mesh Client Peers ====================
+
+// WGMeshPeer represents a WireGuard client peer connected to a mesh hub
+type WGMeshPeer struct {
+	ID           string
+	HubID        string
+	ConfigID     string
+	UserID       string
+	Email        string
+	PublicKey    string
+	PresharedKey string
+	AssignedIP   string
+	AllowedIPs   []string
+	ExpiresAt    time.Time
+	CreatedAt    time.Time
+	LastSeen     *time.Time
+	IsRevoked    bool
+	RevokedAt    *time.Time
+}
+
+// AddWGMeshPeer adds a WireGuard mesh peer (mobile/desktop client)
+func (s *MeshStore) AddWGMeshPeer(ctx context.Context, peer *WGMeshPeer) error {
+	_, err := s.db.Pool.Exec(ctx, `
+		INSERT INTO wg_mesh_peers (id, hub_id, config_id, user_id, email, public_key, preshared_key, assigned_ip, allowed_ips, expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8::inet, $9, $10)
+		ON CONFLICT (hub_id, public_key) DO UPDATE SET
+			config_id = EXCLUDED.config_id,
+			user_id = EXCLUDED.user_id,
+			email = EXCLUDED.email,
+			preshared_key = EXCLUDED.preshared_key,
+			assigned_ip = EXCLUDED.assigned_ip,
+			allowed_ips = EXCLUDED.allowed_ips,
+			expires_at = EXCLUDED.expires_at,
+			is_revoked = FALSE,
+			revoked_at = NULL
+	`, peer.ID, peer.HubID, peer.ConfigID, peer.UserID, peer.Email, peer.PublicKey, peer.PresharedKey, peer.AssignedIP, peer.AllowedIPs, peer.ExpiresAt)
+	return err
+}
+
+// GetWGMeshPeer retrieves a WireGuard mesh peer by ID
+func (s *MeshStore) GetWGMeshPeer(ctx context.Context, id string) (*WGMeshPeer, error) {
+	var peer WGMeshPeer
+	err := s.db.Pool.QueryRow(ctx, `
+		SELECT id, hub_id, COALESCE(config_id::text, ''), user_id, COALESCE(email, ''),
+		       public_key, COALESCE(preshared_key, ''), host(assigned_ip), allowed_ips,
+		       expires_at, created_at, last_seen, is_revoked, revoked_at
+		FROM wg_mesh_peers
+		WHERE id = $1
+	`, id).Scan(&peer.ID, &peer.HubID, &peer.ConfigID, &peer.UserID, &peer.Email,
+		&peer.PublicKey, &peer.PresharedKey, &peer.AssignedIP, &peer.AllowedIPs,
+		&peer.ExpiresAt, &peer.CreatedAt, &peer.LastSeen, &peer.IsRevoked, &peer.RevokedAt)
+	if err == pgx.ErrNoRows {
+		return nil, errors.New("wg mesh peer not found")
+	}
+	return &peer, err
+}
+
+// GetWGMeshPeerByPublicKey retrieves a WireGuard mesh peer by public key
+func (s *MeshStore) GetWGMeshPeerByPublicKey(ctx context.Context, hubID, publicKey string) (*WGMeshPeer, error) {
+	var peer WGMeshPeer
+	err := s.db.Pool.QueryRow(ctx, `
+		SELECT id, hub_id, COALESCE(config_id::text, ''), user_id, COALESCE(email, ''),
+		       public_key, COALESCE(preshared_key, ''), host(assigned_ip), allowed_ips,
+		       expires_at, created_at, last_seen, is_revoked, revoked_at
+		FROM wg_mesh_peers
+		WHERE hub_id = $1 AND public_key = $2
+	`, hubID, publicKey).Scan(&peer.ID, &peer.HubID, &peer.ConfigID, &peer.UserID, &peer.Email,
+		&peer.PublicKey, &peer.PresharedKey, &peer.AssignedIP, &peer.AllowedIPs,
+		&peer.ExpiresAt, &peer.CreatedAt, &peer.LastSeen, &peer.IsRevoked, &peer.RevokedAt)
+	if err == pgx.ErrNoRows {
+		return nil, errors.New("wg mesh peer not found")
+	}
+	return &peer, err
+}
+
+// ListActiveWGMeshPeers returns all active (non-expired, non-revoked) WireGuard mesh peers for a hub
+func (s *MeshStore) ListActiveWGMeshPeers(ctx context.Context, hubID string) ([]*WGMeshPeer, error) {
+	rows, err := s.db.Pool.Query(ctx, `
+		SELECT id, hub_id, COALESCE(config_id::text, ''), user_id, COALESCE(email, ''),
+		       public_key, COALESCE(preshared_key, ''), host(assigned_ip), allowed_ips,
+		       expires_at, created_at, last_seen, is_revoked, revoked_at
+		FROM wg_mesh_peers
+		WHERE hub_id = $1 AND is_revoked = FALSE AND expires_at > NOW()
+		ORDER BY created_at DESC
+	`, hubID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var peers []*WGMeshPeer
+	for rows.Next() {
+		var peer WGMeshPeer
+		if err := rows.Scan(&peer.ID, &peer.HubID, &peer.ConfigID, &peer.UserID, &peer.Email,
+			&peer.PublicKey, &peer.PresharedKey, &peer.AssignedIP, &peer.AllowedIPs,
+			&peer.ExpiresAt, &peer.CreatedAt, &peer.LastSeen, &peer.IsRevoked, &peer.RevokedAt); err != nil {
+			return nil, err
+		}
+		peers = append(peers, &peer)
+	}
+	return peers, rows.Err()
+}
+
+// GetHubAllocatedIPs returns all IPs currently allocated to peers (spokes + mobile clients) for a hub
+func (s *MeshStore) GetHubAllocatedIPs(ctx context.Context, hubID string) ([]string, error) {
+	rows, err := s.db.Pool.Query(ctx, `
+		SELECT ip FROM (
+			-- IPs allocated to spokes
+			SELECT host(tunnel_ip) as ip FROM mesh_gateways
+			WHERE hub_id = $1 AND tunnel_ip IS NOT NULL
+			UNION
+			-- IPs allocated to WireGuard mobile clients
+			SELECT host(assigned_ip) as ip FROM wg_mesh_peers
+			WHERE hub_id = $1 AND assigned_ip IS NOT NULL AND is_revoked = FALSE AND expires_at > NOW()
+		) combined
+		WHERE ip IS NOT NULL
+	`, hubID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ips []string
+	for rows.Next() {
+		var ip string
+		if err := rows.Scan(&ip); err != nil {
+			return nil, err
+		}
+		ips = append(ips, ip)
+	}
+	return ips, rows.Err()
+}
+
+// UpdateWGMeshPeerLastSeen updates the last seen timestamp for a peer
+func (s *MeshStore) UpdateWGMeshPeerLastSeen(ctx context.Context, hubID, publicKey string) error {
+	_, err := s.db.Pool.Exec(ctx, `
+		UPDATE wg_mesh_peers SET last_seen = NOW()
+		WHERE hub_id = $1 AND public_key = $2
+	`, hubID, publicKey)
+	return err
+}
+
+// RevokeWGMeshPeer revokes a WireGuard mesh peer
+func (s *MeshStore) RevokeWGMeshPeer(ctx context.Context, id string) error {
+	_, err := s.db.Pool.Exec(ctx, `
+		UPDATE wg_mesh_peers SET is_revoked = TRUE, revoked_at = NOW()
+		WHERE id = $1
+	`, id)
+	return err
+}
+
+// CleanupExpiredWGMeshPeers removes expired WireGuard mesh peers
+func (s *MeshStore) CleanupExpiredWGMeshPeers(ctx context.Context, olderThan time.Duration) (int64, error) {
+	cutoff := time.Now().Add(-olderThan)
+	result, err := s.db.Pool.Exec(ctx, `
+		DELETE FROM wg_mesh_peers WHERE expires_at < $1
+	`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

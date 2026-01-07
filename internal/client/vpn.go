@@ -48,9 +48,11 @@ type Gateway struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Hostname    string `json:"hostname"`
+	PublicIP    string `json:"publicIp"`
 	Description string `json:"description,omitempty"`
 	Location    string `json:"location,omitempty"`
 	Status      string `json:"status"`
+	IsActive    bool   `json:"isActive"`
 	GatewayType string `json:"gatewayType"` // "openvpn" or "wireguard"
 }
 
@@ -1074,8 +1076,10 @@ func (v *VPNManager) ListGateways(ctx context.Context) error {
 	fmt.Println("-------------------")
 	for _, gw := range gateways {
 		statusIcon := "✓"
-		if gw.Status != "online" {
+		statusText := "online"
+		if !gw.IsActive {
 			statusIcon = "✗"
+			statusText = "offline"
 		}
 		gwType := gw.GatewayType
 		if gwType == "" {
@@ -1088,8 +1092,10 @@ func (v *VPNManager) ListGateways(ctx context.Context) error {
 		if gw.Location != "" {
 			fmt.Printf("  Location:    %s\n", gw.Location)
 		}
-		fmt.Printf("  Hostname:    %s\n", gw.Hostname)
-		fmt.Printf("  Status:      %s\n", gw.Status)
+		if gw.PublicIP != "" {
+			fmt.Printf("  Public IP:   %s\n", gw.PublicIP)
+		}
+		fmt.Printf("  Status:      %s\n", statusText)
 		fmt.Println()
 	}
 

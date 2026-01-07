@@ -160,10 +160,17 @@ func (s *Server) handleGenerateWireGuardConfig(c *gin.Context) {
 			return
 		}
 
-		// Build allowed IPs from CIDR-type rules
+		// Build allowed IPs from CIDR and IP-type rules
 		for _, rule := range rules {
-			if rule.RuleType == db.AccessRuleTypeCIDR && rule.Value != "" {
+			if rule.Value == "" {
+				continue
+			}
+			switch rule.RuleType {
+			case db.AccessRuleTypeCIDR:
 				allowedIPs = append(allowedIPs, rule.Value)
+			case db.AccessRuleTypeIP:
+				// Convert single IP to /32 CIDR for WireGuard
+				allowedIPs = append(allowedIPs, rule.Value+"/32")
 			}
 		}
 
@@ -253,10 +260,11 @@ func (s *Server) handleGenerateWireGuardConfig(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"id":          configID,
-		"file_name":   fileName,
+		"fileName":    fileName,
 		"gateway":     gateway.Name,
-		"expires_at":  expiresAt,
-		"assigned_ip": assignedIP,
+		"expiresAt":   expiresAt.Format(time.RFC3339),
+		"assignedIp":  assignedIP,
+		"downloadUrl": "/api/v1/wireguard/configs/download/" + configID,
 	})
 }
 
