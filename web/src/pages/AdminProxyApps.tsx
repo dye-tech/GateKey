@@ -665,7 +665,7 @@ function AssignAccessModal({ app, onClose }: AssignAccessModalProps) {
                             )}
                           </div>
                           {userInfo.provider && (
-                            <span className="ml-2 px-2 py-0.5 text-xs bg-blue-600 text-white rounded">
+                            <span className="ml-2 px-2 py-0.5 text-xs bg-indigo-600 text-white rounded">
                               {userInfo.provider}
                             </span>
                           )}

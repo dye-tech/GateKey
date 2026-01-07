@@ -309,7 +309,7 @@ function SSOUsersTab({ users, onViewUser }: SSOUsersTabProps) {
                 </div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
-                <span className="px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full bg-blue-600 text-white">
+                <span className="px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full bg-indigo-600 text-white">
                   {user.provider}
                 </span>
               </td>
@@ -987,7 +987,7 @@ function UserDetailsModal({ user, onClose }: UserDetailsModalProps) {
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium">{cfg.gatewayName}</span>
-                            <span className="px-1.5 py-0.5 text-xs rounded bg-blue-600 text-white">Gateway</span>
+                            <span className="px-1.5 py-0.5 text-xs rounded bg-emerald-600 text-white">Gateway</span>
                             {cfg.isRevoked ? (
                               <span className="px-1.5 py-0.5 text-xs rounded bg-red-600 text-white">Revoked</span>
                             ) : isExpired(cfg.expiresAt) ? (
@@ -1232,7 +1232,7 @@ function GroupDetailsModal({ groupName, onClose }: GroupDetailsModalProps) {
                       <p className="text-sm font-medium text-theme-primary">{member.name || member.email}</p>
                       {member.name && <p className="text-xs text-theme-tertiary">{member.email}</p>}
                     </div>
-                    <span className="ml-auto px-2 py-0.5 text-xs bg-blue-600 text-white rounded">
+                    <span className="ml-auto px-2 py-0.5 text-xs bg-indigo-600 text-white rounded">
                       {member.provider}
                     </span>
                   </div>
@@ -1826,7 +1826,7 @@ function LocalGroupDetailsModal({ group, ssoUsers, localUsers, onClose, onUpdate
                       <div className="flex items-center gap-2">
                         <span className={`px-2 py-0.5 text-xs rounded ${
                           member.memberType === 'sso'
-                            ? 'bg-blue-600 text-white'
+                            ? 'bg-indigo-600 text-white'
                             : 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
                         }`}>
                           {member.memberType === 'sso' ? 'SSO' : 'Local'}

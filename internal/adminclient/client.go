@@ -881,3 +881,115 @@ func (c *Client) GetWebSocketURL() (string, error) {
 
 	return u.String(), nil
 }
+
+// === Provider Operations ===
+
+// ClaimMappings defines how OIDC claims map to GateKey user fields
+type ClaimMappings struct {
+	Email      string `json:"email"`
+	Name       string `json:"name"`
+	GivenName  string `json:"given_name"`
+	FamilyName string `json:"family_name"`
+	Groups     string `json:"groups"`
+}
+
+// AttributeMappings defines how SAML attributes map to GateKey user fields
+type AttributeMappings struct {
+	Email      string `json:"email"`
+	Name       string `json:"name"`
+	GivenName  string `json:"given_name"`
+	FamilyName string `json:"family_name"`
+	Groups     string `json:"groups"`
+}
+
+// OIDCProvider represents an OIDC provider configuration
+type OIDCProvider struct {
+	ID            string         `json:"id"`
+	Name          string         `json:"name"`
+	DisplayName   string         `json:"display_name"`
+	Issuer        string         `json:"issuer"`
+	ClientID      string         `json:"client_id"`
+	ClientSecret  string         `json:"client_secret,omitempty"`
+	RedirectURL   string         `json:"redirect_url"`
+	Scopes        []string       `json:"scopes"`
+	AdminGroup    string         `json:"admin_group,omitempty"`
+	ClaimMappings *ClaimMappings `json:"claim_mappings,omitempty"`
+	Enabled       bool           `json:"enabled"`
+}
+
+// SAMLProvider represents a SAML provider configuration
+type SAMLProvider struct {
+	ID                string             `json:"id"`
+	Name              string             `json:"name"`
+	DisplayName       string             `json:"display_name"`
+	IDPMetadataURL    string             `json:"idp_metadata_url"`
+	EntityID          string             `json:"entity_id"`
+	ACSURL            string             `json:"acs_url"`
+	AdminGroup        string             `json:"admin_group,omitempty"`
+	AttributeMappings *AttributeMappings `json:"attribute_mappings,omitempty"`
+	Enabled           bool               `json:"enabled"`
+}
+
+// OIDC Provider Operations
+
+func (c *Client) ListOIDCProviders(ctx context.Context) ([]OIDCProvider, error) {
+	var result struct {
+		Providers []OIDCProvider `json:"providers"`
+	}
+	err := c.doJSON(ctx, http.MethodGet, "/api/v1/admin/providers/oidc", nil, &result)
+	return result.Providers, err
+}
+
+func (c *Client) GetOIDCProvider(ctx context.Context, name string) (*OIDCProvider, error) {
+	var provider OIDCProvider
+	err := c.doJSON(ctx, http.MethodGet, "/api/v1/admin/providers/oidc/"+url.PathEscape(name), nil, &provider)
+	return &provider, err
+}
+
+func (c *Client) CreateOIDCProvider(ctx context.Context, req interface{}) (*OIDCProvider, error) {
+	var provider OIDCProvider
+	err := c.doJSON(ctx, http.MethodPost, "/api/v1/admin/providers/oidc", req, &provider)
+	return &provider, err
+}
+
+func (c *Client) UpdateOIDCProvider(ctx context.Context, name string, req interface{}) (*OIDCProvider, error) {
+	var provider OIDCProvider
+	err := c.doJSON(ctx, http.MethodPut, "/api/v1/admin/providers/oidc/"+url.PathEscape(name), req, &provider)
+	return &provider, err
+}
+
+func (c *Client) DeleteOIDCProvider(ctx context.Context, name string) error {
+	return c.doJSON(ctx, http.MethodDelete, "/api/v1/admin/providers/oidc/"+url.PathEscape(name), nil, nil)
+}
+
+// SAML Provider Operations
+
+func (c *Client) ListSAMLProviders(ctx context.Context) ([]SAMLProvider, error) {
+	var result struct {
+		Providers []SAMLProvider `json:"providers"`
+	}
+	err := c.doJSON(ctx, http.MethodGet, "/api/v1/admin/providers/saml", nil, &result)
+	return result.Providers, err
+}
+
+func (c *Client) GetSAMLProvider(ctx context.Context, name string) (*SAMLProvider, error) {
+	var provider SAMLProvider
+	err := c.doJSON(ctx, http.MethodGet, "/api/v1/admin/providers/saml/"+url.PathEscape(name), nil, &provider)
+	return &provider, err
+}
+
+func (c *Client) CreateSAMLProvider(ctx context.Context, req interface{}) (*SAMLProvider, error) {
+	var provider SAMLProvider
+	err := c.doJSON(ctx, http.MethodPost, "/api/v1/admin/providers/saml", req, &provider)
+	return &provider, err
+}
+
+func (c *Client) UpdateSAMLProvider(ctx context.Context, name string, req interface{}) (*SAMLProvider, error) {
+	var provider SAMLProvider
+	err := c.doJSON(ctx, http.MethodPut, "/api/v1/admin/providers/saml/"+url.PathEscape(name), req, &provider)
+	return &provider, err
+}
+
+func (c *Client) DeleteSAMLProvider(ctx context.Context, name string) error {
+	return c.doJSON(ctx, http.MethodDelete, "/api/v1/admin/providers/saml/"+url.PathEscape(name), nil, nil)
+}
