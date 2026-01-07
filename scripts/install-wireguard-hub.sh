@@ -122,12 +122,43 @@ install_dependencies() {
             fi
             ;;
         amzn)
-            if command -v dnf &> /dev/null; then
-                dnf install -y wireguard-tools jq iproute nftables
-                dnf install -y --allowerasing curl
-            else
-                amazon-linux-extras install -y epel 2>/dev/null || true
-                yum install -y wireguard-tools curl jq iproute nftables
+            # Amazon Linux 2 requires special handling for wireguard-tools
+            echo "Installing epel-release"
+            amazon-linux-extras install -y epel 2>/dev/null || yum install -y epel-release 2>/dev/null || true
+            yum clean all && yum makecache
+
+            # Install base dependencies
+            yum install -y curl jq iproute nftables
+
+            # Try to install wireguard-tools from EPEL
+            if ! yum install -y wireguard-tools 2>/dev/null; then
+                echo "wireguard-tools not in EPEL, installing from source..."
+                # Install build dependencies
+                yum install -y make gcc git
+
+                # Download and compile wireguard-tools
+                cd /tmp
+                rm -rf wireguard-tools
+                git clone https://git.zx2c4.com/wireguard-tools
+                cd wireguard-tools/src
+                make
+                make install
+                cd /
+                rm -rf /tmp/wireguard-tools
+
+                # Create symlinks if needed
+                if [ ! -f /usr/bin/wg ]; then
+                    ln -sf /usr/local/bin/wg /usr/bin/wg 2>/dev/null || true
+                fi
+                if [ ! -f /usr/bin/wg-quick ]; then
+                    ln -sf /usr/local/bin/wg-quick /usr/bin/wg-quick 2>/dev/null || true
+                fi
+            fi
+
+            # Verify wg is available
+            if ! command -v wg &> /dev/null; then
+                echo -e "${RED}Failed to install wireguard-tools${NC}"
+                exit 1
             fi
             ;;
         opensuse*|sles|suse)
@@ -195,7 +226,7 @@ create_hub_config() {
 control_plane_url: "${CONTROL_PLANE_URL}"
 
 # Hub authentication token
-token: "${HUB_TOKEN}"
+api_token: "${HUB_TOKEN}"
 
 # Heartbeat interval
 heartbeat_interval: "30s"
@@ -291,7 +322,7 @@ Group=root
 NoNewPrivileges=false
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/log /etc/wireguard /etc/gatekey /run
+ReadWritePaths=/var/log /etc/wireguard /etc/gatekey /run /tmp
 
 [Install]
 WantedBy=multi-user.target

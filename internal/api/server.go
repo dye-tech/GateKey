@@ -574,6 +574,7 @@ func (s *Server) setupRoutes() {
 		// User mesh hub access
 		v1.GET("/mesh/hubs", s.handleListUserMeshHubs)
 		v1.POST("/mesh/generate-config", s.handleGenerateMeshClientConfig)
+		v1.POST("/mesh/wireguard/generate-config", s.handleGenerateWireGuardMeshClientConfig)
 
 		// User mesh config management
 		v1.GET("/mesh-configs", s.handleListUserMeshConfigs)

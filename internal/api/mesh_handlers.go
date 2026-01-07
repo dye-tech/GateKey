@@ -1882,6 +1882,7 @@ func (s *Server) handleMeshSpokeProvisionRequest(c *gin.Context) {
 		"hubEndpoint":    hub.PublicEndpoint,
 		"hubVpnPort":     hub.VPNPort,
 		"hubVpnProtocol": hub.VPNProtocol,
+		"hubVpnSubnet":   hub.VPNSubnet, // VPN subnet for NAT setup
 		"caCert":         fullCAChain,
 		"clientCert":     clientCert,
 		"clientKey":      clientKey,
@@ -2352,6 +2353,25 @@ func (s *Server) handleGenerateMeshClientConfig(c *gin.Context) {
 		s.logger.Warn("Failed to get user mesh access rules", zap.Error(err))
 		// Continue without routes - not a fatal error
 	}
+
+	// Get spoke local_networks for spokes the user has access to
+	// This eliminates the need to duplicate network assignments on the hub
+	spokeRoutes, err := s.meshStore.GetUserMeshRoutes(ctx, hub.ID, user.UserID, user.Groups)
+	if err != nil {
+		s.logger.Warn("Failed to get user mesh routes from spokes", zap.Error(err))
+	}
+	routes = append(routes, spokeRoutes...)
+
+	// Deduplicate routes
+	seen := make(map[string]bool)
+	uniqueRoutes := make([]string, 0, len(routes))
+	for _, route := range routes {
+		if route != "" && !seen[route] {
+			seen[route] = true
+			uniqueRoutes = append(uniqueRoutes, route)
+		}
+	}
+	routes = uniqueRoutes
 
 	// Build full CA chain (Mesh CA + Root CA) for proper TLS verification
 	// The hub's server cert is signed by Mesh CA, which is signed by Root CA

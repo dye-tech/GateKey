@@ -181,11 +181,6 @@ export default function AdminGateways() {
                     }`}>
                       {gateway.gatewayType === 'wireguard' ? 'WireGuard' : 'OpenVPN'}
                     </span>
-                    {gateway.gatewayType === 'wireguard' && gateway.wgPublicKey && (
-                      <div className="text-xs text-theme-tertiary mt-1 truncate max-w-24" title={gateway.wgPublicKey}>
-                        {gateway.wgPublicKey.substring(0, 12)}...
-                      </div>
-                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -738,7 +733,7 @@ function TokenModal({ gateway, onClose, onShowInstaller }: TokenModalProps) {
     <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
       <div className="bg-theme-card rounded-lg shadow-xl max-w-lg w-full mx-4 p-6">
         <div className="text-center mb-4">
-          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
+          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 dark:bg-green-900/30 mb-4">
             <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
@@ -855,9 +850,9 @@ function InstallerModal({ gateway, token, onClose }: InstallerModalProps) {
           )}
 
           {hasToken && (
-            <div className="bg-gray-50 dark:bg-gray-800 border-l-4 border-l-teal-500 dark:border-l-teal-400 rounded-lg p-4">
+            <div className="bg-gray-50 dark:bg-gray-800 border-l-4 border-l-slate-400 dark:border-l-slate-500 rounded-lg p-4">
               <div className="flex">
-                <svg className="h-5 w-5 text-teal-600 dark:text-teal-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-5 w-5 text-slate-600 dark:text-slate-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 <div>
