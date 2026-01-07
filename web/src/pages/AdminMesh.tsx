@@ -194,11 +194,11 @@ export default function AdminMesh() {
         return 'bg-green-600 text-white'
       case 'offline':
       case 'disconnected':
-        return 'bg-slate-200 dark:bg-gray-700 text-slate-700 dark:text-gray-300'
+        return 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
       case 'error':
         return 'bg-red-600 text-white'
       default:
-        return 'bg-yellow-500 text-white'
+        return 'bg-amber-500 text-white'
     }
   }
 
@@ -295,8 +295,8 @@ export default function AdminMesh() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                           hub.gatewayType === 'wireguard'
-                            ? 'bg-purple-600 text-white'
-                            : 'bg-blue-600 text-white'
+                            ? 'bg-violet-600 text-white'
+                            : 'bg-emerald-600 text-white'
                         }`}>
                           {hub.gatewayType === 'wireguard' ? 'WireGuard' : 'OpenVPN'}
                         </span>
@@ -421,8 +421,8 @@ export default function AdminMesh() {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                               spoke.gatewayType === 'wireguard'
-                                ? 'bg-purple-600 text-white'
-                                : 'bg-blue-600 text-white'
+                                ? 'bg-violet-600 text-white'
+                                : 'bg-emerald-600 text-white'
                             }`}>
                               {spoke.gatewayType === 'wireguard' ? 'WireGuard' : 'OpenVPN'}
                             </span>
@@ -436,7 +436,7 @@ export default function AdminMesh() {
                             {spoke.localNetworks.length > 0 ? (
                               <div className="flex flex-wrap gap-1">
                                 {spoke.localNetworks.map((net, i) => (
-                                  <span key={i} className="px-2 py-0.5 bg-slate-200 dark:bg-sky-900/40 text-slate-700 dark:text-sky-300 rounded text-xs font-medium">{net}</span>
+                                  <span key={i} className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded text-xs font-medium">{net}</span>
                                 ))}
                               </div>
                             ) : (
@@ -693,7 +693,7 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                   onClick={() => setForm({ ...form, gatewayType: 'openvpn' })}
                   className={`flex-1 px-4 py-2 rounded-lg border font-medium text-sm transition-colors ${
                     form.gatewayType === 'openvpn'
-                      ? 'bg-blue-600 text-white border-blue-600'
+                      ? 'bg-emerald-600 text-white border-emerald-600'
                       : 'bg-theme-card text-theme-secondary border-theme hover:bg-theme-tertiary'
                   }`}
                 >
@@ -902,12 +902,12 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                 {form.dnsServers && form.dnsServers.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
                     {form.dnsServers.map((dns, idx) => (
-                      <span key={idx} className="px-2 py-1 bg-slate-200 dark:bg-gray-700/40 text-slate-700 dark:text-gray-200 rounded text-sm flex items-center font-medium">
+                      <span key={idx} className="px-2 py-1 bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 rounded text-sm flex items-center font-medium">
                         {dns}
                         <button
                           type="button"
                           onClick={() => setForm({ ...form, dnsServers: form.dnsServers?.filter((_, i) => i !== idx) })}
-                          className="ml-1 text-gray-500 dark:text-slate-400 hover:text-red-600"
+                          className="ml-1 text-violet-500 hover:text-red-600"
                         >
                           ×
                         </button>
@@ -1068,9 +1068,9 @@ function AddSpokeModal({ hubId, hubGatewayType, onClose, onSuccess }: { hubId: s
               {form.localNetworks.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   {form.localNetworks.map((net) => (
-                    <span key={net} className="px-2 py-1 bg-slate-200 dark:bg-sky-900/40 text-slate-700 dark:text-sky-300 rounded text-sm flex items-center font-medium">
+                    <span key={net} className="px-2 py-1 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded text-sm flex items-center font-medium">
                       {net}
-                      <button type="button" onClick={() => removeNetwork(net)} className="ml-1 text-gray-500 hover:text-red-600">×</button>
+                      <button type="button" onClick={() => removeNetwork(net)} className="ml-1 text-emerald-500 hover:text-red-600">×</button>
                     </span>
                   ))}
                 </div>
@@ -1857,11 +1857,11 @@ function ManageSpokeAccessModal({ spoke, onClose }: { spoke: MeshSpoke; onClose:
 
           {/* Show spoke networks */}
           {spoke.localNetworks.length > 0 && (
-            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-              <div className="text-sm font-medium text-gray-800 dark:text-blue-300 mb-1">Networks accessible via this spoke:</div>
+            <div className="mb-4 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg">
+              <div className="text-sm font-medium text-emerald-800 dark:text-emerald-300 mb-1">Networks accessible via this spoke:</div>
               <div className="flex flex-wrap gap-2">
                 {spoke.localNetworks.map((net, i) => (
-                  <span key={i} className="px-2 py-1 bg-blue-600 text-white rounded text-sm font-mono">{net}</span>
+                  <span key={i} className="px-2 py-1 bg-emerald-600 text-white rounded text-sm font-mono">{net}</span>
                 ))}
               </div>
             </div>
@@ -2119,8 +2119,8 @@ function EditHubModal({ hub, onClose, onSuccess }: { hub: MeshHub; onClose: () =
               <label className="flex items-center"><input type="checkbox" checked={form.fullTunnelMode} onChange={(e) => setForm({ ...form, fullTunnelMode: e.target.checked })} className="mr-2" /><span className="text-sm">Full Tunnel</span></label>
               <label className="flex items-center"><input type="checkbox" checked={form.pushDns} onChange={(e) => setForm({ ...form, pushDns: e.target.checked })} className="mr-2" /><span className="text-sm">Push DNS</span></label>
             </div>
-            {form.pushDns && <div><label className="block text-sm font-medium text-theme-secondary">DNS Servers</label><div className="flex space-x-2"><input type="text" value={dnsInput} onChange={(e) => setDnsInput(e.target.value)} className="input flex-1" placeholder="1.1.1.1" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (dnsInput) { setForm({ ...form, dnsServers: [...form.dnsServers, dnsInput] }); setDnsInput('') } } }} /><button type="button" onClick={() => { if (dnsInput) { setForm({ ...form, dnsServers: [...form.dnsServers, dnsInput] }); setDnsInput('') } }} className="btn btn-secondary">Add</button></div>{form.dnsServers.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.dnsServers.map((d) => <span key={d} className="px-2 py-1 bg-slate-200 dark:bg-gray-700/40 text-slate-700 dark:text-gray-300 rounded text-sm font-medium">{d}<button type="button" onClick={() => setForm({ ...form, dnsServers: form.dnsServers.filter(x => x !== d) })} className="ml-1 text-gray-500 hover:text-red-600">×</button></span>)}</div>}</div>}
-            <div><label className="block text-sm font-medium text-theme-secondary">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="192.168.1.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((n) => <span key={n} className="px-2 py-1 bg-slate-200 dark:bg-sky-900/40 text-slate-700 dark:text-sky-300 rounded text-sm font-medium">{n}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(x => x !== n) })} className="ml-1 text-gray-500 hover:text-red-600">×</button></span>)}</div>}</div>
+            {form.pushDns && <div><label className="block text-sm font-medium text-theme-secondary">DNS Servers</label><div className="flex space-x-2"><input type="text" value={dnsInput} onChange={(e) => setDnsInput(e.target.value)} className="input flex-1" placeholder="1.1.1.1" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (dnsInput) { setForm({ ...form, dnsServers: [...form.dnsServers, dnsInput] }); setDnsInput('') } } }} /><button type="button" onClick={() => { if (dnsInput) { setForm({ ...form, dnsServers: [...form.dnsServers, dnsInput] }); setDnsInput('') } }} className="btn btn-secondary">Add</button></div>{form.dnsServers.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.dnsServers.map((d) => <span key={d} className="px-2 py-1 bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 rounded text-sm font-medium">{d}<button type="button" onClick={() => setForm({ ...form, dnsServers: form.dnsServers.filter(x => x !== d) })} className="ml-1 text-violet-500 hover:text-red-600">×</button></span>)}</div>}</div>}
+            <div><label className="block text-sm font-medium text-theme-secondary">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="192.168.1.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((n) => <span key={n} className="px-2 py-1 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded text-sm font-medium">{n}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(x => x !== n) })} className="ml-1 text-emerald-500 hover:text-red-600">×</button></span>)}</div>}</div>
             <div className="flex items-center"><input type="checkbox" id="editHubSessionEnabled" checked={form.sessionEnabled ?? true} onChange={(e) => setForm({ ...form, sessionEnabled: e.target.checked })} className="rounded border-theme text-primary-600 focus:ring-primary-500" /><label htmlFor="editHubSessionEnabled" className="ml-2 text-sm text-theme-secondary">Enable Remote Sessions</label></div>
             <p className="text-xs text-theme-tertiary -mt-2">Allow administrators to run commands on this hub via the Remote Sessions page.</p>
             <div className="flex justify-end space-x-3 pt-4"><button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button><button type="submit" disabled={loading} className="btn btn-primary">{loading ? 'Saving...' : 'Save'}</button></div>
@@ -2165,7 +2165,7 @@ function EditSpokeModal({ spoke, onClose, onSuccess }: { spoke: MeshSpoke; onClo
                 </p>
               </div>
             )}
-            <div><label className="block text-sm font-medium text-theme-secondary">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="e.g., 10.0.0.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div><p className="text-xs text-theme-tertiary mt-1">Networks behind this spoke routable via hub</p>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((net) => <span key={net} className="px-2 py-1 bg-slate-200 dark:bg-sky-900/40 text-slate-700 dark:text-sky-300 rounded text-sm flex items-center font-medium">{net}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(n => n !== net) })} className="ml-1 text-gray-500 hover:text-red-600">×</button></span>)}</div>}</div>
+            <div><label className="block text-sm font-medium text-theme-secondary">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="e.g., 10.0.0.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div><p className="text-xs text-theme-tertiary mt-1">Networks behind this spoke routable via hub</p>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((net) => <span key={net} className="px-2 py-1 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded text-sm flex items-center font-medium">{net}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(n => n !== net) })} className="ml-1 text-emerald-500 hover:text-red-600">×</button></span>)}</div>}</div>
             <div className="flex items-center"><input type="checkbox" id="editSpokeSessionEnabled" checked={form.sessionEnabled ?? true} onChange={(e) => setForm({ ...form, sessionEnabled: e.target.checked })} className="rounded border-theme text-primary-600 focus:ring-primary-500" /><label htmlFor="editSpokeSessionEnabled" className="ml-2 text-sm text-theme-secondary">Enable Remote Sessions</label></div>
             <p className="text-xs text-theme-tertiary -mt-2">Allow administrators to run commands on this spoke via the Remote Sessions page.</p>
             <div className="flex justify-end space-x-3 pt-4"><button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button><button type="submit" disabled={loading} className="btn btn-primary">{loading ? 'Saving...' : 'Save'}</button></div>

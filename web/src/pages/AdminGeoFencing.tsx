@@ -429,7 +429,7 @@ export default function AdminGeoFencing() {
                       <td className="px-6 py-4">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           rule.isActive
-                            ? 'bg-blue-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
+                            ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
                             : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
                         }`}>
                           {rule.isActive ? 'Active' : 'Inactive'}
@@ -471,7 +471,6 @@ export default function AdminGeoFencing() {
               <button
                 onClick={() => setShowAssignGlobalModal(true)}
                 className="btn btn-primary"
-                disabled={rules.filter(r => !globalRules.find(g => g.id === r.id)).length === 0}
               >
                 Add Rule
               </button>
@@ -641,7 +640,7 @@ function RuleModal({ rule, onSave, onClose }: {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+      <div className="modal-content p-6 w-full max-w-md">
         <h2 className="text-xl font-bold text-theme-primary mb-4">
           {rule ? 'Edit IP Rule' : 'Add IP Rule'}
         </h2>
@@ -731,11 +730,16 @@ function AssignRuleModal({ title, rules, onAssign, onClose }: {
 }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+      <div className="modal-content p-6 w-full max-w-md">
         <h2 className="text-xl font-bold text-theme-primary mb-4">{title}</h2>
 
         {rules.length === 0 ? (
-          <p className="text-theme-tertiary">No available rules to assign</p>
+          <div className="text-center py-4">
+            <p className="text-theme-tertiary mb-2">No available rules to assign</p>
+            <p className="text-sm text-theme-tertiary">
+              Create IP rules in the <strong>IP Rules</strong> tab first, then assign them here.
+            </p>
+          </div>
         ) : (
           <div className="space-y-2 max-h-64 overflow-y-auto">
             {rules.map((rule) => (
@@ -773,7 +777,7 @@ function ManageRulesModal({ title, assignedRules, allRules, onAdd, onRemove, onC
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-lg">
+      <div className="modal-content p-6 w-full max-w-lg">
         <h2 className="text-xl font-bold text-theme-primary mb-4">{title}</h2>
 
         <div className="mb-4">
@@ -788,12 +792,12 @@ function ManageRulesModal({ title, assignedRules, allRules, onAdd, onRemove, onC
                 Add Rule
               </button>
               {showAddDropdown && availableRules.length > 0 && (
-                <div className="absolute right-0 mt-1 w-64 bg-white dark:bg-gray-800 border border-theme rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
+                <div className="absolute right-0 mt-1 w-64 dropdown-menu max-h-48 overflow-y-auto">
                   {availableRules.map((rule) => (
                     <button
                       key={rule.id}
                       onClick={() => { onAdd(rule.id); setShowAddDropdown(false); }}
-                      className="w-full text-left p-3 hover:bg-theme-secondary"
+                      className="w-full text-left p-3 dropdown-item"
                     >
                       <div className="font-medium text-theme-primary">{rule.name}</div>
                       <div className="text-sm text-theme-tertiary font-mono">{rule.ipRange}</div>

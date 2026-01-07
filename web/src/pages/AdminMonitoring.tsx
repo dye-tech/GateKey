@@ -697,8 +697,8 @@ export default function AdminMonitoring() {
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap">
                               <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                                log.provider === 'oidc' ? 'bg-blue-600 text-white' :
-                                log.provider === 'saml' ? 'bg-purple-600 text-white' :
+                                log.provider === 'oidc' ? 'bg-indigo-600 text-white' :
+                                log.provider === 'saml' ? 'bg-violet-600 text-white' :
                                 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
                               }`}>
                                 {log.provider.toUpperCase()}

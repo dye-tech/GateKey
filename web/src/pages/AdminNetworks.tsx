@@ -595,7 +595,7 @@ function AccessRulesModal({ network, onClose }: AccessRulesModalProps) {
             {/* Global rules */}
             <div>
               <h3 className="text-sm font-medium text-theme-secondary mb-2 flex items-center">
-                <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-xs mr-2">Global</span>
+                <span className="bg-violet-600 text-white px-2 py-0.5 rounded text-xs mr-2">Global</span>
                 Rules applying to all networks ({globalRules.length})
               </h3>
               {globalRules.length > 0 ? (

@@ -2,6 +2,22 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { api, getCA, rotateCA, updateCA, CAInfo, listCAs, CAListItem, prepareCARotation, activateCA, revokeCA } from '../api/client'
 
+interface ClaimMappings {
+  email: string
+  name: string
+  given_name: string
+  family_name: string
+  groups: string
+}
+
+interface AttributeMappings {
+  email: string
+  name: string
+  given_name: string
+  family_name: string
+  groups: string
+}
+
 interface OIDCProvider {
   name: string
   display_name: string
@@ -11,6 +27,7 @@ interface OIDCProvider {
   redirect_url: string
   scopes: string[]
   admin_group?: string
+  claim_mappings?: ClaimMappings
   enabled: boolean
 }
 
@@ -21,7 +38,24 @@ interface SAMLProvider {
   entity_id: string
   acs_url: string
   admin_group?: string
+  attribute_mappings?: AttributeMappings
   enabled: boolean
+}
+
+const defaultClaimMappings: ClaimMappings = {
+  email: 'email',
+  name: 'name',
+  given_name: 'given_name',
+  family_name: 'family_name',
+  groups: 'groups'
+}
+
+const defaultAttributeMappings: AttributeMappings = {
+  email: 'email',
+  name: 'displayName',
+  given_name: 'givenName',
+  family_name: 'sn',
+  groups: 'groups'
 }
 
 type TabType = 'oidc' | 'saml' | 'general' | 'ca'
@@ -230,12 +264,19 @@ function OIDCTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
     redirect_url: '',
     scopes: ['openid', 'profile', 'email'],
     admin_group: '',
+    claim_mappings: { ...defaultClaimMappings },
     enabled: true
   })
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
   useEffect(() => {
     if (editing) {
-      setForm({ ...editing, client_secret: '' })
+      setForm({
+        ...editing,
+        client_secret: '',
+        claim_mappings: editing.claim_mappings || { ...defaultClaimMappings }
+      })
+      setShowAdvanced(false)
     } else {
       setForm({
         name: '',
@@ -246,8 +287,10 @@ function OIDCTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
         redirect_url: window.location.origin + '/api/v1/auth/oidc/callback',
         scopes: ['openid', 'profile', 'email'],
         admin_group: '',
+        claim_mappings: { ...defaultClaimMappings },
         enabled: true
       })
+      setShowAdvanced(false)
     }
   }, [editing, showForm])
 
@@ -357,6 +400,92 @@ function OIDCTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
             <p className="text-xs text-theme-tertiary mt-1">Users in this group will be granted admin access. Leave empty to disable.</p>
           </div>
 
+          {/* Advanced Settings - Claim Mappings */}
+          <div className="border border-theme rounded-lg">
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg"
+            >
+              <span className="font-medium text-theme-secondary">Advanced Settings</span>
+              <svg
+                className={`w-5 h-5 text-theme-tertiary transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showAdvanced && (
+              <div className="px-4 pb-4 space-y-4 border-t border-theme">
+                <div className="pt-4">
+                  <h4 className="text-sm font-medium text-theme-secondary mb-2">Claim Mappings</h4>
+                  <p className="text-xs text-theme-tertiary mb-3">Map OIDC claims from your IdP to GateKey user fields. Use the claim names as they appear in the ID token.</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-theme-tertiary mb-1">Email Claim</label>
+                      <input
+                        type="text"
+                        value={form.claim_mappings?.email || ''}
+                        onChange={(e) => setForm({ ...form, claim_mappings: { ...form.claim_mappings!, email: e.target.value } })}
+                        className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                        placeholder="email"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-theme-tertiary mb-1">Name Claim</label>
+                      <input
+                        type="text"
+                        value={form.claim_mappings?.name || ''}
+                        onChange={(e) => setForm({ ...form, claim_mappings: { ...form.claim_mappings!, name: e.target.value } })}
+                        className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                        placeholder="name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-theme-tertiary mb-1">Given Name Claim</label>
+                      <input
+                        type="text"
+                        value={form.claim_mappings?.given_name || ''}
+                        onChange={(e) => setForm({ ...form, claim_mappings: { ...form.claim_mappings!, given_name: e.target.value } })}
+                        className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                        placeholder="given_name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-theme-tertiary mb-1">Family Name Claim</label>
+                      <input
+                        type="text"
+                        value={form.claim_mappings?.family_name || ''}
+                        onChange={(e) => setForm({ ...form, claim_mappings: { ...form.claim_mappings!, family_name: e.target.value } })}
+                        className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                        placeholder="family_name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-theme-tertiary mb-1">Groups Claim</label>
+                      <input
+                        type="text"
+                        value={form.claim_mappings?.groups || ''}
+                        onChange={(e) => setForm({ ...form, claim_mappings: { ...form.claim_mappings!, groups: e.target.value } })}
+                        className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                        placeholder="groups"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, claim_mappings: { ...defaultClaimMappings } })}
+                    className="mt-3 text-xs text-primary-600 hover:text-primary-700"
+                  >
+                    Reset to defaults
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center">
             <input
               type="checkbox"
@@ -461,12 +590,18 @@ function SAMLTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
     entity_id: '',
     acs_url: '',
     admin_group: '',
+    attribute_mappings: { ...defaultAttributeMappings },
     enabled: true
   })
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
   useEffect(() => {
     if (editing) {
-      setForm(editing)
+      setForm({
+        ...editing,
+        attribute_mappings: editing.attribute_mappings || { ...defaultAttributeMappings }
+      })
+      setShowAdvanced(false)
     } else {
       setForm({
         name: '',
@@ -475,8 +610,10 @@ function SAMLTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
         entity_id: window.location.origin,
         acs_url: window.location.origin + '/api/v1/auth/saml/acs',
         admin_group: '',
+        attribute_mappings: { ...defaultAttributeMappings },
         enabled: true
       })
+      setShowAdvanced(false)
     }
   }, [editing, showForm])
 
@@ -560,6 +697,92 @@ function SAMLTab({ providers, showForm, editing, saving, onAdd, onEdit, onDelete
               placeholder="gatekey-admins"
             />
             <p className="text-xs text-theme-tertiary mt-1">Users in this group will be granted admin access. Leave empty to disable.</p>
+          </div>
+
+          {/* Advanced Settings - Attribute Mappings */}
+          <div className="border border-theme rounded-lg">
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg"
+            >
+              <span className="font-medium text-theme-secondary">Advanced Settings</span>
+              <svg
+                className={`w-5 h-5 text-theme-tertiary transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showAdvanced && (
+              <div className="px-4 pb-4 space-y-4 border-t border-theme">
+                <div className="pt-4">
+                  <h4 className="text-sm font-medium text-theme-secondary mb-2">Attribute Mappings</h4>
+                  <p className="text-xs text-theme-tertiary mb-3">Map SAML attributes from your IdP to GateKey user fields. Use the attribute names as they appear in the SAML assertion.</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-theme-tertiary mb-1">Email Attribute</label>
+                      <input
+                        type="text"
+                        value={form.attribute_mappings?.email || ''}
+                        onChange={(e) => setForm({ ...form, attribute_mappings: { ...form.attribute_mappings!, email: e.target.value } })}
+                        className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                        placeholder="email"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-theme-tertiary mb-1">Name Attribute</label>
+                      <input
+                        type="text"
+                        value={form.attribute_mappings?.name || ''}
+                        onChange={(e) => setForm({ ...form, attribute_mappings: { ...form.attribute_mappings!, name: e.target.value } })}
+                        className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                        placeholder="displayName"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-theme-tertiary mb-1">Given Name Attribute</label>
+                      <input
+                        type="text"
+                        value={form.attribute_mappings?.given_name || ''}
+                        onChange={(e) => setForm({ ...form, attribute_mappings: { ...form.attribute_mappings!, given_name: e.target.value } })}
+                        className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                        placeholder="givenName"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-theme-tertiary mb-1">Family Name Attribute</label>
+                      <input
+                        type="text"
+                        value={form.attribute_mappings?.family_name || ''}
+                        onChange={(e) => setForm({ ...form, attribute_mappings: { ...form.attribute_mappings!, family_name: e.target.value } })}
+                        className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                        placeholder="sn"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-theme-tertiary mb-1">Groups Attribute</label>
+                      <input
+                        type="text"
+                        value={form.attribute_mappings?.groups || ''}
+                        onChange={(e) => setForm({ ...form, attribute_mappings: { ...form.attribute_mappings!, groups: e.target.value } })}
+                        className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                        placeholder="groups"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, attribute_mappings: { ...defaultAttributeMappings } })}
+                    className="mt-3 text-xs text-primary-600 hover:text-primary-700"
+                  >
+                    Reset to defaults
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center">
