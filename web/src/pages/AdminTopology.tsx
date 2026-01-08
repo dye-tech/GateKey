@@ -386,7 +386,7 @@ export default function AdminTopology() {
                                             </span>
                                           ))}
                                           {spoke.localNetworks.length > 3 && (
-                                            <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-xs rounded-md">
+                                            <span className="px-2 py-0.5 bg-slate-600 text-slate-100 text-xs rounded-md">
                                               +{spoke.localNetworks.length - 3} more
                                             </span>
                                           )}

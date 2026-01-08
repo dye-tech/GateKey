@@ -501,6 +501,20 @@ func heartbeatLoop(ctx context.Context, cfg *HubConfig) {
 }
 
 func sendHeartbeat(cfg *HubConfig) {
+	// Count actually connected peers by checking recent handshake times
+	// WireGuard peers are considered connected if they had a handshake within the last 3 minutes
+	connectedPeerCount := 0
+	peerStats, err := getWireGuardPeerStats()
+	if err == nil {
+		handshakeTimeout := 3 * time.Minute
+		now := time.Now()
+		for _, stats := range peerStats {
+			if !stats.LastHandshake.IsZero() && now.Sub(stats.LastHandshake) < handshakeTimeout {
+				connectedPeerCount++
+			}
+		}
+	}
+
 	reqBody := struct {
 		Token            string `json:"token"`
 		PeerCount        int    `json:"peer_count"`
@@ -509,7 +523,7 @@ func sendHeartbeat(cfg *HubConfig) {
 		Uptime           int64  `json:"uptime"`
 	}{
 		Token:     cfg.APIToken,
-		PeerCount: len(activePeers),
+		PeerCount: connectedPeerCount,
 		Version:   "1.0.0",
 	}
 
@@ -763,11 +777,12 @@ func getWireGuardPeerStats() (map[string]*PeerStats, error) {
 			continue
 		}
 
+		// wg show dump format: pubkey, preshared_key, endpoint, allowed_ips, latest_handshake, rx, tx, keepalive
 		pubKey := fields[0]
-		endpoint := fields[3]
-		lastHandshake, _ := strconv.ParseInt(fields[5], 10, 64)
-		rxBytes, _ := strconv.ParseInt(fields[6], 10, 64)
-		txBytes, _ := strconv.ParseInt(fields[7], 10, 64)
+		endpoint := fields[2]
+		lastHandshake, _ := strconv.ParseInt(fields[4], 10, 64)
+		rxBytes, _ := strconv.ParseInt(fields[5], 10, 64)
+		txBytes, _ := strconv.ParseInt(fields[6], 10, 64)
 
 		var handshakeTime time.Time
 		if lastHandshake > 0 {
