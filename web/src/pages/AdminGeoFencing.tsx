@@ -453,7 +453,7 @@ export default function AdminGeoFencing() {
                             {rule.ipRange.split(',').length > 5 && (
                               <button
                                 onClick={() => setViewingCidrs(rule)}
-                                className="inline-block px-2 py-0.5 bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 text-xs rounded border border-primary-200 dark:border-primary-700 hover:bg-primary-100 dark:hover:bg-primary-900/50 cursor-pointer"
+                                className="inline-block px-2 py-0.5 bg-slate-600 hover:bg-slate-500 text-slate-100 text-xs rounded cursor-pointer"
                               >
                                 +{rule.ipRange.split(',').length - 5} more
                               </button>
@@ -466,8 +466,8 @@ export default function AdminGeoFencing() {
                       <td className="px-6 py-4">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           rule.isActive
-                            ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
-                            : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-slate-500 text-white'
                         }`}>
                           {rule.isActive ? 'Active' : 'Inactive'}
                         </span>
@@ -534,7 +534,7 @@ export default function AdminGeoFencing() {
                           {rule.ipRange.split(',').length > 4 && (
                             <button
                               onClick={() => setViewingCidrs(rule)}
-                              className="inline-block px-2 py-0.5 bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 text-xs rounded border border-primary-200 dark:border-primary-700 hover:bg-primary-100 dark:hover:bg-primary-900/50 cursor-pointer"
+                              className="inline-block px-2 py-0.5 bg-slate-600 hover:bg-slate-500 text-slate-100 text-xs rounded cursor-pointer"
                             >
                               +{rule.ipRange.split(',').length - 4} more
                             </button>
