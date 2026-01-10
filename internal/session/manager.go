@@ -106,7 +106,9 @@ type Manager struct {
 	pendingCommands map[string]chan OutputPayload // MsgID -> output channel (for sync commands)
 	mutex           sync.RWMutex
 	logger          *zap.Logger
-	upgrader        websocket.Upgrader
+	agentUpgrader   websocket.Upgrader // For agent connections (no origin check needed)
+	adminUpgrader   websocket.Upgrader // For admin connections (origin validated)
+	allowedOrigins  []string           // Allowed origins for admin WebSocket
 
 	// Token validation function
 	ValidateAgentToken func(nodeType, nodeID, token string) bool
@@ -114,24 +116,70 @@ type Manager struct {
 
 // NewManager creates a new session manager
 func NewManager(logger *zap.Logger) *Manager {
-	return &Manager{
-		agents:       make(map[string]*ConnectedAgent),
-		admins:       make(map[string]*AdminSession),
-		agentsByNode: make(map[string]string),
-		logger:       logger,
-		upgrader: websocket.Upgrader{
-			ReadBufferSize:  1024,
-			WriteBufferSize: 1024,
-			CheckOrigin: func(r *http.Request) bool {
-				return true // Allow all origins for now
-			},
+	m := &Manager{
+		agents:         make(map[string]*ConnectedAgent),
+		admins:         make(map[string]*AdminSession),
+		agentsByNode:   make(map[string]string),
+		logger:         logger,
+		allowedOrigins: []string{},
+	}
+
+	// Agent upgrader: agents connect server-to-server, no browser origin
+	m.agentUpgrader = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			// Agents don't send Origin header (not browser-based)
+			// If Origin is present, reject it - real agents won't have it
+			origin := r.Header.Get("Origin")
+			return origin == ""
 		},
 	}
+
+	// Admin upgrader: validate origin against allowed list
+	m.adminUpgrader = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin:     m.checkAdminOrigin,
+	}
+
+	return m
+}
+
+// SetAllowedOrigins configures the allowed origins for admin WebSocket connections
+func (m *Manager) SetAllowedOrigins(origins []string) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.allowedOrigins = origins
+}
+
+// checkAdminOrigin validates the origin header for admin WebSocket connections
+func (m *Manager) checkAdminOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		// No origin header - could be same-origin or non-browser client
+		return true
+	}
+
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	// Check against allowed origins
+	for _, allowed := range m.allowedOrigins {
+		if origin == allowed {
+			return true
+		}
+	}
+
+	m.logger.Warn("WebSocket connection rejected: origin not allowed",
+		zap.String("origin", origin),
+		zap.Strings("allowed", m.allowedOrigins))
+	return false
 }
 
 // HandleAgentConnection handles WebSocket connections from agents
 func (m *Manager) HandleAgentConnection(w http.ResponseWriter, r *http.Request) {
-	conn, err := m.upgrader.Upgrade(w, r, nil)
+	conn, err := m.agentUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		m.logger.Error("Failed to upgrade agent connection", zap.Error(err))
 		return
@@ -224,7 +272,7 @@ func (m *Manager) HandleAgentConnection(w http.ResponseWriter, r *http.Request) 
 
 // HandleAdminConnection handles WebSocket connections from admin UI
 func (m *Manager) HandleAdminConnection(w http.ResponseWriter, r *http.Request, userEmail string) {
-	conn, err := m.upgrader.Upgrade(w, r, nil)
+	conn, err := m.adminUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		m.logger.Error("Failed to upgrade admin connection", zap.Error(err))
 		return

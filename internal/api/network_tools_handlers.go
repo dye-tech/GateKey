@@ -278,17 +278,24 @@ func (s *Server) handleRemoteToolExecution(c *gin.Context, req NetworkToolReques
 	})
 }
 
-// buildToolCommand constructs a shell command for the given network tool request
+// buildToolCommand constructs a shell command for the given network tool request.
+// It validates all inputs to prevent command injection attacks.
 func buildToolCommand(req NetworkToolRequest) string {
+	// Validate target to prevent command injection
+	if !isValidTarget(req.Target) {
+		return ""
+	}
+
 	switch req.Tool {
 	case "ping":
-		count := "4"
+		count := 4
 		if countStr, ok := req.Options["count"]; ok {
 			if n, err := strconv.Atoi(countStr); err == nil && n > 0 && n <= 20 {
-				count = countStr
+				count = n
 			}
 		}
-		return fmt.Sprintf("ping -c %s %s", count, req.Target)
+		// Use validated integer and target
+		return fmt.Sprintf("ping -c %d %s", count, req.Target)
 
 	case "nslookup":
 		return fmt.Sprintf("nslookup %s", req.Target)
@@ -297,9 +304,10 @@ func buildToolCommand(req NetworkToolRequest) string {
 		return fmt.Sprintf("traceroute -m 20 %s", req.Target)
 
 	case "nc", "netcat":
-		if req.Port <= 0 {
+		if req.Port <= 0 || req.Port > 65535 {
 			return ""
 		}
+		// Port is validated as integer, target is validated above
 		return fmt.Sprintf("nc -zv -w 5 %s %d", req.Target, req.Port)
 
 	case "nmap":
@@ -307,11 +315,45 @@ func buildToolCommand(req NetworkToolRequest) string {
 		if ports == "" {
 			ports = "22,80,443"
 		}
+		// Validate ports to prevent injection
+		if !isValidPorts(ports) {
+			return ""
+		}
 		return fmt.Sprintf("nmap -sT -p %s %s", ports, req.Target)
 
 	default:
 		return ""
 	}
+}
+
+// isValidTarget validates a target host/IP to prevent command injection.
+// Returns false if the target contains shell metacharacters.
+func isValidTarget(target string) bool {
+	if target == "" || len(target) > 253 {
+		return false
+	}
+	// Block command injection characters
+	for _, c := range target {
+		switch c {
+		case ';', '&', '|', '`', '$', '\n', '\r', '(', ')', '{', '}', '[', ']', '<', '>', '!', '"', '\'', '\\', ' ':
+			return false
+		}
+	}
+	return true
+}
+
+// isValidPorts validates a port specification to prevent command injection.
+// Only allows digits, commas, and hyphens.
+func isValidPorts(ports string) bool {
+	if len(ports) > 100 {
+		return false
+	}
+	for _, c := range ports {
+		if !((c >= '0' && c <= '9') || c == ',' || c == '-') {
+			return false
+		}
+	}
+	return true
 }
 
 // handleListNetworkTools returns available network tools

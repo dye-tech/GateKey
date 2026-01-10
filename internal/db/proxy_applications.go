@@ -29,8 +29,11 @@ type ProxyApplication struct {
 	AllowedHeaders     []string          `json:"allowed_headers"`
 	WebsocketEnabled   bool              `json:"websocket_enabled"`
 	TimeoutSeconds     int               `json:"timeout_seconds"`
-	CreatedAt          time.Time         `json:"created_at"`
-	UpdatedAt          time.Time         `json:"updated_at"`
+	// TLS verification settings (per-app override)
+	SkipTLSVerify bool    `json:"skip_tls_verify"` // If true, skip TLS verification for this app (overrides global setting)
+	CustomCACert  *string `json:"custom_ca_cert"`  // Custom CA certificate PEM for this app (optional)
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 // ProxyAccessLog represents an access log entry for proxy requests

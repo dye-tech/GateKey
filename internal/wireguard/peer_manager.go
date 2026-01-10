@@ -2,6 +2,7 @@ package wireguard
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"net"
 	"os"
@@ -9,6 +10,49 @@ import (
 	"sync"
 	"time"
 )
+
+// secureWipeAndRemove securely overwrites a file's contents before removal.
+// This prevents recovery of sensitive data (like PSKs) from disk.
+func secureWipeAndRemove(path string) error {
+	f, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		// If we can't open it, just try to remove it
+		return os.Remove(path)
+	}
+
+	// Get file size
+	info, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return os.Remove(path)
+	}
+
+	size := info.Size()
+	if size > 0 {
+		// Overwrite with random data (more secure than zeros)
+		randomData := make([]byte, size)
+		if _, err := rand.Read(randomData); err != nil {
+			// Fall back to zeros if random fails
+			randomData = make([]byte, size)
+		}
+
+		if _, err := f.WriteAt(randomData, 0); err != nil {
+			f.Close()
+			return os.Remove(path)
+		}
+
+		// Sync to ensure data is written to disk
+		_ = f.Sync()
+
+		// Second pass with zeros for defense in depth
+		zeros := make([]byte, size)
+		_, _ = f.WriteAt(zeros, 0)
+		_ = f.Sync()
+	}
+
+	f.Close()
+	return os.Remove(path)
+}
 
 // Peer represents an authorized WireGuard peer.
 type Peer struct {
@@ -61,12 +105,20 @@ func (m *PeerManager) AddPeer(ctx context.Context, peer *Peer) error {
 
 	// Handle preshared key if present
 	if peer.PresharedKey != "" {
-		// Write PSK to temp file
+		// Write PSK to temp file with restrictive permissions
 		tmpFile, err := os.CreateTemp("", "wg-psk-*")
 		if err != nil {
 			return fmt.Errorf("failed to create temp file for PSK: %w", err)
 		}
-		defer os.Remove(tmpFile.Name())
+		tmpFileName := tmpFile.Name()
+		// Ensure secure cleanup: overwrite with random data before removal
+		defer secureWipeAndRemove(tmpFileName)
+
+		// Set restrictive permissions (owner read/write only)
+		if err := os.Chmod(tmpFileName, 0600); err != nil {
+			tmpFile.Close()
+			return fmt.Errorf("failed to set PSK file permissions: %w", err)
+		}
 
 		if _, err := tmpFile.WriteString(peer.PresharedKey); err != nil {
 			tmpFile.Close()
@@ -74,7 +126,7 @@ func (m *PeerManager) AddPeer(ctx context.Context, peer *Peer) error {
 		}
 		tmpFile.Close()
 
-		args = append(args, "preshared-key", tmpFile.Name())
+		args = append(args, "preshared-key", tmpFileName)
 	}
 
 	if output, err := m.executor.Output(ctx, "wg", args...); err != nil {
@@ -146,17 +198,27 @@ func (m *PeerManager) SyncPeers(ctx context.Context, authorizedPeers []*Peer) er
 					fmt.Printf("warning: failed to create temp file for PSK: %v\n", err)
 					continue
 				}
+				tmpFileName := tmpFile.Name()
+
+				// Set restrictive permissions (owner read/write only)
+				if err := os.Chmod(tmpFileName, 0600); err != nil {
+					tmpFile.Close()
+					secureWipeAndRemove(tmpFileName)
+					fmt.Printf("warning: failed to set PSK file permissions: %v\n", err)
+					continue
+				}
 
 				if _, err := tmpFile.WriteString(peer.PresharedKey); err != nil {
 					tmpFile.Close()
-					os.Remove(tmpFile.Name())
+					secureWipeAndRemove(tmpFileName)
 					fmt.Printf("warning: failed to write PSK: %v\n", err)
 					continue
 				}
 				tmpFile.Close()
 
-				args = append(args, "preshared-key", tmpFile.Name())
-				defer os.Remove(tmpFile.Name())
+				args = append(args, "preshared-key", tmpFileName)
+				// Ensure secure cleanup: overwrite with random data before removal
+				defer secureWipeAndRemove(tmpFileName)
 			}
 
 			if output, err := m.executor.Output(ctx, "wg", args...); err != nil {
