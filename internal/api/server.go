@@ -3,7 +3,11 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -48,6 +52,7 @@ type Server struct {
 	adminPassword   string             // Initial admin password (shown once at startup)
 	bgCancel        context.CancelFunc // Cancel function for background tasks
 	sessionMgr      *session.Manager   // Remote session manager
+	authRateLimiter *rateLimiter       // Rate limiter for auth endpoints
 }
 
 // NewServer creates a new API server instance.
@@ -101,9 +106,15 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 		_ = router.SetTrustedProxies(cfg.Server.TrustedProxies) // Ignore error, will use defaults
 	}
 
-	// Initialize database connection
+	// Initialize database connection with TLS configuration
 	ctx := context.Background()
-	database, err := db.New(ctx, cfg.Database.URL)
+	tlsCfg := &db.TLSConfig{
+		SSLMode:     cfg.Database.SSLMode,
+		SSLRootCert: cfg.Database.SSLRootCert,
+		SSLCert:     cfg.Database.SSLCert,
+		SSLKey:      cfg.Database.SSLKey,
+	}
+	database, err := db.NewWithTLS(ctx, cfg.Database.URL, tlsCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -210,6 +221,13 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	// Initialize session manager for remote sessions
 	srv.sessionMgr = session.NewManager(logger)
 	srv.sessionMgr.ValidateAgentToken = srv.validateAgentToken
+	// Configure allowed origins for admin WebSocket connections
+	if len(cfg.Server.CORSOrigins) > 0 {
+		srv.sessionMgr.SetAllowedOrigins(cfg.Server.CORSOrigins)
+	}
+
+	// Initialize rate limiter for auth endpoints (50 attempts per minute per IP)
+	srv.authRateLimiter = newRateLimiter(50, time.Minute)
 
 	// Setup routes
 	srv.setupRoutes()
@@ -233,6 +251,7 @@ func (s *Server) setupRoutes() {
 
 	// API v1 routes
 	v1 := s.router.Group("/api/v1")
+	v1.Use(s.csrfMiddleware())
 	{
 		// Authentication routes
 		auth := v1.Group("/auth")
@@ -253,9 +272,9 @@ func (s *Server) setupRoutes() {
 			auth.GET("/cli/callback", s.handleCLICallback)
 			auth.POST("/refresh", s.handleTokenRefresh)
 
-			// Local authentication (for initial setup)
-			auth.POST("/local/login", s.handleLocalLogin)
-			auth.POST("/local/change-password", s.handleChangePassword)
+			// Local authentication (for initial setup) - rate limited
+			auth.POST("/local/login", s.authRateLimitMiddleware(), s.handleLocalLogin)
+			auth.POST("/local/change-password", s.authRateLimitMiddleware(), s.handleChangePassword)
 
 			// Session management
 			auth.POST("/logout", s.handleLogout)
@@ -265,6 +284,7 @@ func (s *Server) setupRoutes() {
 
 		// Admin settings routes (requires admin auth)
 		settings := v1.Group("/admin/settings")
+		settings.Use(s.adminAuthMiddleware())
 		{
 			settings.GET("", s.handleGetSettings)
 			settings.PUT("", s.handleUpdateSettings)
@@ -308,6 +328,7 @@ func (s *Server) setupRoutes() {
 
 		// Policy routes (admin only)
 		policies := v1.Group("/policies")
+		policies.Use(s.adminAuthMiddleware())
 		{
 			policies.GET("", s.handleListPolicies)
 			policies.POST("", s.handleCreatePolicy)
@@ -397,184 +418,256 @@ func (s *Server) setupRoutes() {
 		// Server info for clients (includes FIPS requirements)
 		v1.GET("/server/info", s.handleGetServerInfo)
 
-		// Admin routes
+		// Admin routes (requires admin auth)
 		admin := v1.Group("/admin")
+		admin.Use(s.adminAuthMiddleware())
 		{
-			admin.GET("/gateways", s.handleListGateways)
-			admin.POST("/gateways", s.handleRegisterGateway)
-			admin.PUT("/gateways/:id", s.handleUpdateGateway)
-			admin.DELETE("/gateways/:id", s.handleDeleteGateway)
-			admin.POST("/gateways/:id/rotate-token", s.handleRotateGatewayToken)
-			admin.POST("/gateways/:id/reprovision", s.handleReprovisionGateway)
-			admin.GET("/gateways/:id/networks", s.handleGetGatewayNetworks)
-			admin.POST("/gateways/:id/networks", s.handleAssignGatewayNetwork)
-			admin.DELETE("/gateways/:id/networks/:networkId", s.handleRemoveGatewayNetwork)
-			admin.GET("/gateways/:id/users", s.handleGetGatewayUsers)
-			admin.POST("/gateways/:id/users", s.handleAssignGatewayUser)
-			admin.DELETE("/gateways/:id/users/:userId", s.handleRemoveGatewayUser)
-			admin.GET("/gateways/:id/groups", s.handleGetGatewayGroups)
-			admin.POST("/gateways/:id/groups", s.handleAssignGatewayGroup)
-			admin.DELETE("/gateways/:id/groups/:groupName", s.handleRemoveGatewayGroup)
-			admin.GET("/connections", s.handleListConnections)
-			admin.GET("/audit", s.handleGetAuditLogs)
+			// Gateway routes with scope enforcement
+			gatewaysRead := admin.Group("")
+			gatewaysRead.Use(s.requireAnyScope(ScopeGatewaysRead, ScopeGatewaysWrite, ScopeAdmin))
+			{
+				gatewaysRead.GET("/gateways", s.handleListGateways)
+				gatewaysRead.GET("/gateways/:id/networks", s.handleGetGatewayNetworks)
+				gatewaysRead.GET("/gateways/:id/users", s.handleGetGatewayUsers)
+				gatewaysRead.GET("/gateways/:id/groups", s.handleGetGatewayGroups)
+			}
+			gatewaysWrite := admin.Group("")
+			gatewaysWrite.Use(s.requireAnyScope(ScopeGatewaysWrite, ScopeAdmin))
+			{
+				gatewaysWrite.POST("/gateways", s.handleRegisterGateway)
+				gatewaysWrite.PUT("/gateways/:id", s.handleUpdateGateway)
+				gatewaysWrite.DELETE("/gateways/:id", s.handleDeleteGateway)
+				gatewaysWrite.POST("/gateways/:id/rotate-token", s.handleRotateGatewayToken)
+				gatewaysWrite.POST("/gateways/:id/reprovision", s.handleReprovisionGateway)
+				gatewaysWrite.POST("/gateways/:id/networks", s.handleAssignGatewayNetwork)
+				gatewaysWrite.DELETE("/gateways/:id/networks/:networkId", s.handleRemoveGatewayNetwork)
+				gatewaysWrite.POST("/gateways/:id/users", s.handleAssignGatewayUser)
+				gatewaysWrite.DELETE("/gateways/:id/users/:userId", s.handleRemoveGatewayUser)
+				gatewaysWrite.POST("/gateways/:id/groups", s.handleAssignGatewayGroup)
+				gatewaysWrite.DELETE("/gateways/:id/groups/:groupName", s.handleRemoveGatewayGroup)
+			}
+			// Monitoring routes (admin scope required)
+			monitorRead := admin.Group("")
+			monitorRead.Use(s.requireScope(ScopeAdmin))
+			{
+				monitorRead.GET("/connections", s.handleListConnections)
+				monitorRead.GET("/audit", s.handleGetAuditLogs)
+			}
 
-			// Network management
-			admin.GET("/networks", s.handleListNetworks)
-			admin.POST("/networks", s.handleCreateNetwork)
-			admin.GET("/networks/:id", s.handleGetNetwork)
-			admin.PUT("/networks/:id", s.handleUpdateNetwork)
-			admin.DELETE("/networks/:id", s.handleDeleteNetwork)
-			admin.GET("/networks/:id/gateways", s.handleGetNetworkGateways)
-			admin.GET("/networks/:id/access-rules", s.handleGetNetworkAccessRules)
+			// Network management with scope enforcement
+			configRead := admin.Group("")
+			configRead.Use(s.requireAnyScope(ScopeConfigRead, ScopeConfigWrite, ScopeAdmin))
+			{
+				configRead.GET("/networks", s.handleListNetworks)
+				configRead.GET("/networks/:id", s.handleGetNetwork)
+				configRead.GET("/networks/:id/gateways", s.handleGetNetworkGateways)
+				configRead.GET("/networks/:id/access-rules", s.handleGetNetworkAccessRules)
+				configRead.GET("/access-rules", s.handleListAccessRules)
+				configRead.GET("/access-rules/:id", s.handleGetAccessRule)
+			}
+			configWrite := admin.Group("")
+			configWrite.Use(s.requireAnyScope(ScopeConfigWrite, ScopeAdmin))
+			{
+				configWrite.POST("/networks", s.handleCreateNetwork)
+				configWrite.PUT("/networks/:id", s.handleUpdateNetwork)
+				configWrite.DELETE("/networks/:id", s.handleDeleteNetwork)
+				configWrite.POST("/access-rules", s.handleCreateAccessRule)
+				configWrite.PUT("/access-rules/:id", s.handleUpdateAccessRule)
+				configWrite.DELETE("/access-rules/:id", s.handleDeleteAccessRule)
+				configWrite.POST("/access-rules/:id/users", s.handleAssignRuleToUser)
+				configWrite.DELETE("/access-rules/:id/users/:userId", s.handleRemoveRuleFromUser)
+				configWrite.POST("/access-rules/:id/groups", s.handleAssignRuleToGroup)
+				configWrite.DELETE("/access-rules/:id/groups/:groupName", s.handleRemoveRuleFromGroup)
+				configWrite.POST("/configs/:id/revoke", s.handleAdminRevokeConfig)
+			}
 
-			// Access rules management
-			admin.GET("/access-rules", s.handleListAccessRules)
-			admin.POST("/access-rules", s.handleCreateAccessRule)
-			admin.GET("/access-rules/:id", s.handleGetAccessRule)
-			admin.PUT("/access-rules/:id", s.handleUpdateAccessRule)
-			admin.DELETE("/access-rules/:id", s.handleDeleteAccessRule)
-			admin.POST("/access-rules/:id/users", s.handleAssignRuleToUser)
-			admin.DELETE("/access-rules/:id/users/:userId", s.handleRemoveRuleFromUser)
-			admin.POST("/access-rules/:id/groups", s.handleAssignRuleToGroup)
-			admin.DELETE("/access-rules/:id/groups/:groupName", s.handleRemoveRuleFromGroup)
+			// User management with scope enforcement
+			usersRead := admin.Group("")
+			usersRead.Use(s.requireAnyScope(ScopeUsersRead, ScopeUsersWrite, ScopeAdmin))
+			{
+				usersRead.GET("/users", s.handleListUsers)
+				usersRead.GET("/users/:id", s.handleGetUser)
+				usersRead.GET("/users/:id/access-rules", s.handleGetUserAccessRules)
+				usersRead.GET("/users/:id/gateways", s.handleGetUserGateways)
+				usersRead.GET("/users/:id/configs", s.handleAdminListUserConfigs)
+				usersRead.GET("/users/:id/mesh-configs", s.handleAdminListUserMeshConfigs)
+				usersRead.GET("/groups", s.handleListGroups)
+				usersRead.GET("/groups/:name/members", s.handleGetGroupMembers)
+				usersRead.GET("/groups/:name/access-rules", s.handleGetGroupAccessRules)
+				usersRead.GET("/local-users", s.handleListLocalUsers)
+				usersRead.GET("/local-groups", s.handleListLocalGroups)
+				usersRead.GET("/local-groups/:id", s.handleGetLocalGroup)
+				usersRead.GET("/local-groups/:id/members", s.handleListLocalGroupMembers)
+			}
+			usersWrite := admin.Group("")
+			usersWrite.Use(s.requireAnyScope(ScopeUsersWrite, ScopeAdmin))
+			{
+				usersWrite.POST("/users/:id/gateways", s.handleAssignUserGateway)
+				usersWrite.DELETE("/users/:id/gateways/:gatewayId", s.handleRemoveUserGateway)
+				usersWrite.POST("/users/:id/revoke-configs", s.handleAdminRevokeUserConfigs)
+				usersWrite.POST("/local-users", s.handleCreateLocalUser)
+				usersWrite.DELETE("/local-users/:id", s.handleDeleteLocalUser)
+				usersWrite.POST("/local-groups", s.handleCreateLocalGroup)
+				usersWrite.PUT("/local-groups/:id", s.handleUpdateLocalGroup)
+				usersWrite.DELETE("/local-groups/:id", s.handleDeleteLocalGroup)
+				usersWrite.POST("/local-groups/:id/members", s.handleAddLocalGroupMember)
+				usersWrite.DELETE("/local-groups/:id/members/:userId/:memberType", s.handleRemoveLocalGroupMember)
+			}
 
-			// User management
-			admin.GET("/users", s.handleListUsers)
-			admin.GET("/users/:id", s.handleGetUser)
-			admin.GET("/users/:id/access-rules", s.handleGetUserAccessRules)
-			admin.GET("/users/:id/gateways", s.handleGetUserGateways)
-			admin.POST("/users/:id/gateways", s.handleAssignUserGateway)
-			admin.DELETE("/users/:id/gateways/:gatewayId", s.handleRemoveUserGateway)
-			admin.POST("/users/:id/revoke-configs", s.handleAdminRevokeUserConfigs)
-			admin.GET("/users/:id/configs", s.handleAdminListUserConfigs)
-			admin.GET("/users/:id/mesh-configs", s.handleAdminListUserMeshConfigs)
+			// Proxy application management with scope enforcement
+			proxyRead := admin.Group("")
+			proxyRead.Use(s.requireAnyScope(ScopeConfigRead, ScopeConfigWrite, ScopeAdmin))
+			{
+				proxyRead.GET("/proxy-apps", s.handleListProxyApps)
+				proxyRead.GET("/proxy-apps/:id", s.handleGetProxyApp)
+				proxyRead.GET("/proxy-apps/:id/users", s.handleGetProxyAppUsers)
+				proxyRead.GET("/proxy-apps/:id/groups", s.handleGetProxyAppGroups)
+				proxyRead.GET("/proxy-apps/:id/logs", s.handleGetProxyAppLogs)
+			}
+			proxyWrite := admin.Group("")
+			proxyWrite.Use(s.requireAnyScope(ScopeConfigWrite, ScopeAdmin))
+			{
+				proxyWrite.POST("/proxy-apps", s.handleCreateProxyApp)
+				proxyWrite.PUT("/proxy-apps/:id", s.handleUpdateProxyApp)
+				proxyWrite.DELETE("/proxy-apps/:id", s.handleDeleteProxyApp)
+				proxyWrite.POST("/proxy-apps/:id/users", s.handleAssignProxyAppToUser)
+				proxyWrite.DELETE("/proxy-apps/:id/users/:userId", s.handleRemoveProxyAppFromUser)
+				proxyWrite.POST("/proxy-apps/:id/groups", s.handleAssignProxyAppToGroup)
+				proxyWrite.DELETE("/proxy-apps/:id/groups/:groupName", s.handleRemoveProxyAppFromGroup)
+			}
 
-			// Config management (admin)
-			admin.POST("/configs/:id/revoke", s.handleAdminRevokeConfig)
-			admin.GET("/local-users", s.handleListLocalUsers)
-			admin.POST("/local-users", s.handleCreateLocalUser)
-			admin.DELETE("/local-users/:id", s.handleDeleteLocalUser)
+			// Login logs / monitoring (admin scope - sensitive data)
+			logsRead := admin.Group("")
+			logsRead.Use(s.requireScope(ScopeAdmin))
+			{
+				logsRead.GET("/login-logs", s.handleListLoginLogs)
+				logsRead.GET("/login-logs/stats", s.handleGetLoginLogStats)
+				logsRead.GET("/login-logs/retention", s.handleGetLoginLogRetention)
+			}
+			logsWrite := admin.Group("")
+			logsWrite.Use(s.requireScope(ScopeAdmin))
+			{
+				logsWrite.DELETE("/login-logs", s.handlePurgeLoginLogs)
+				logsWrite.PUT("/login-logs/retention", s.handleSetLoginLogRetention)
+			}
 
-			// Group management
-			admin.GET("/groups", s.handleListGroups)
-			admin.GET("/groups/:name/members", s.handleGetGroupMembers)
-			admin.GET("/groups/:name/access-rules", s.handleGetGroupAccessRules)
+			// Mesh Hub management with scope enforcement
+			meshRead := admin.Group("")
+			meshRead.Use(s.requireAnyScope(ScopeMeshRead, ScopeMeshWrite, ScopeAdmin))
+			{
+				meshRead.GET("/mesh/hubs", s.handleListMeshHubs)
+				meshRead.GET("/mesh/hubs/:id", s.handleGetMeshHub)
+				meshRead.GET("/mesh/hubs/:id/install-script", s.handleMeshHubInstallScript)
+				meshRead.GET("/mesh/hubs/:id/users", s.handleGetMeshHubUsers)
+				meshRead.GET("/mesh/hubs/:id/groups", s.handleGetMeshHubGroups)
+				meshRead.GET("/mesh/hubs/:id/networks", s.handleGetMeshHubNetworks)
+				meshRead.GET("/mesh/hubs/:id/spokes", s.handleListMeshSpokes)
+				meshRead.GET("/mesh/spokes/:id", s.handleGetMeshSpoke)
+				meshRead.GET("/mesh/spokes/:id/install-script", s.handleMeshSpokeInstallScript)
+				meshRead.GET("/mesh/spokes/:id/users", s.handleGetMeshSpokeUsers)
+				meshRead.GET("/mesh/spokes/:id/groups", s.handleGetMeshSpokeGroups)
+			}
+			meshWrite := admin.Group("")
+			meshWrite.Use(s.requireAnyScope(ScopeMeshWrite, ScopeAdmin))
+			{
+				meshWrite.POST("/mesh/hubs", s.handleCreateMeshHub)
+				meshWrite.PUT("/mesh/hubs/:id", s.handleUpdateMeshHub)
+				meshWrite.DELETE("/mesh/hubs/:id", s.handleDeleteMeshHub)
+				meshWrite.POST("/mesh/hubs/:id/rotate-token", s.handleRotateMeshHubToken)
+				meshWrite.POST("/mesh/hubs/:id/provision", s.handleProvisionMeshHub)
+				meshWrite.POST("/mesh/hubs/:id/users", s.handleAssignMeshHubUser)
+				meshWrite.DELETE("/mesh/hubs/:id/users/:userId", s.handleRemoveMeshHubUser)
+				meshWrite.POST("/mesh/hubs/:id/groups", s.handleAssignMeshHubGroup)
+				meshWrite.DELETE("/mesh/hubs/:id/groups/:groupName", s.handleRemoveMeshHubGroup)
+				meshWrite.POST("/mesh/hubs/:id/networks", s.handleAssignMeshHubNetwork)
+				meshWrite.DELETE("/mesh/hubs/:id/networks/:networkId", s.handleRemoveMeshHubNetwork)
+				meshWrite.POST("/mesh/hubs/:id/spokes", s.handleCreateMeshSpoke)
+				meshWrite.PUT("/mesh/spokes/:id", s.handleUpdateMeshSpoke)
+				meshWrite.DELETE("/mesh/spokes/:id", s.handleDeleteMeshSpoke)
+				meshWrite.POST("/mesh/spokes/:id/rotate-token", s.handleRotateMeshSpokeToken)
+				meshWrite.POST("/mesh/spokes/:id/provision", s.handleProvisionMeshSpoke)
+				meshWrite.POST("/mesh/spokes/:id/users", s.handleAssignMeshSpokeUser)
+				meshWrite.DELETE("/mesh/spokes/:id/users/:userId", s.handleRemoveMeshSpokeUser)
+				meshWrite.POST("/mesh/spokes/:id/groups", s.handleAssignMeshSpokeGroup)
+				meshWrite.DELETE("/mesh/spokes/:id/groups/:groupName", s.handleRemoveMeshSpokeGroup)
+			}
 
-			// Local group management
-			admin.GET("/local-groups", s.handleListLocalGroups)
-			admin.POST("/local-groups", s.handleCreateLocalGroup)
-			admin.GET("/local-groups/:id", s.handleGetLocalGroup)
-			admin.PUT("/local-groups/:id", s.handleUpdateLocalGroup)
-			admin.DELETE("/local-groups/:id", s.handleDeleteLocalGroup)
-			admin.GET("/local-groups/:id/members", s.handleListLocalGroupMembers)
-			admin.POST("/local-groups/:id/members", s.handleAddLocalGroupMember)
-			admin.DELETE("/local-groups/:id/members/:userId/:memberType", s.handleRemoveLocalGroupMember)
+			// Admin config management with scope enforcement
+			adminConfigRead := admin.Group("")
+			adminConfigRead.Use(s.requireAnyScope(ScopeConfigRead, ScopeConfigWrite, ScopeAdmin))
+			{
+				adminConfigRead.GET("/configs", s.handleAdminListAllConfigs)
+				adminConfigRead.GET("/mesh-configs", s.handleAdminListMeshConfigs)
+				adminConfigRead.GET("/wireguard/configs", s.handleAdminListWireGuardConfigs)
+				adminConfigRead.GET("/wireguard/peers", s.handleAdminListWireGuardPeers)
+			}
+			adminConfigWrite := admin.Group("")
+			adminConfigWrite.Use(s.requireAnyScope(ScopeConfigWrite, ScopeAdmin))
+			{
+				adminConfigWrite.POST("/mesh-configs/:id/revoke", s.handleAdminRevokeMeshConfig)
+				adminConfigWrite.POST("/users/:id/revoke-mesh-configs", s.handleAdminRevokeMeshUserConfigs)
+				adminConfigWrite.POST("/wireguard/configs/:id/revoke", s.handleAdminRevokeWireGuardConfig)
+			}
 
-			// Proxy application management
-			admin.GET("/proxy-apps", s.handleListProxyApps)
-			admin.POST("/proxy-apps", s.handleCreateProxyApp)
-			admin.GET("/proxy-apps/:id", s.handleGetProxyApp)
-			admin.PUT("/proxy-apps/:id", s.handleUpdateProxyApp)
-			admin.DELETE("/proxy-apps/:id", s.handleDeleteProxyApp)
-			admin.GET("/proxy-apps/:id/users", s.handleGetProxyAppUsers)
-			admin.POST("/proxy-apps/:id/users", s.handleAssignProxyAppToUser)
-			admin.DELETE("/proxy-apps/:id/users/:userId", s.handleRemoveProxyAppFromUser)
-			admin.GET("/proxy-apps/:id/groups", s.handleGetProxyAppGroups)
-			admin.POST("/proxy-apps/:id/groups", s.handleAssignProxyAppToGroup)
-			admin.DELETE("/proxy-apps/:id/groups/:groupName", s.handleRemoveProxyAppFromGroup)
-			admin.GET("/proxy-apps/:id/logs", s.handleGetProxyAppLogs)
+			// API key management (admin scope - sensitive auth operations)
+			apiKeyRoutes := admin.Group("")
+			apiKeyRoutes.Use(s.requireScope(ScopeAdmin))
+			{
+				apiKeyRoutes.GET("/api-keys", s.handleAdminListAPIKeys)
+				apiKeyRoutes.POST("/api-keys", s.handleAdminCreateAPIKey)
+				apiKeyRoutes.GET("/api-keys/:id", s.handleAdminGetAPIKey)
+				apiKeyRoutes.DELETE("/api-keys/:id", s.handleAdminRevokeAPIKey)
+				apiKeyRoutes.GET("/users/:id/api-keys", s.handleAdminListUserAPIKeys)
+				apiKeyRoutes.POST("/users/:id/api-keys", s.handleAdminCreateUserAPIKey)
+				apiKeyRoutes.DELETE("/users/:id/api-keys", s.handleAdminRevokeUserAPIKeys)
+				apiKeyRoutes.DELETE("/users/:id/api-keys/all", s.handleAdminDeleteUserAPIKeys)
+			}
 
-			// Login logs / monitoring
-			admin.GET("/login-logs", s.handleListLoginLogs)
-			admin.GET("/login-logs/stats", s.handleGetLoginLogStats)
-			admin.DELETE("/login-logs", s.handlePurgeLoginLogs)
-			admin.GET("/login-logs/retention", s.handleGetLoginLogRetention)
-			admin.PUT("/login-logs/retention", s.handleSetLoginLogRetention)
+			// Geo-fencing management with scope enforcement
+			geoRead := admin.Group("")
+			geoRead.Use(s.requireAnyScope(ScopeConfigRead, ScopeConfigWrite, ScopeAdmin))
+			{
+				geoRead.GET("/geo-fence/settings", s.handleGetGeoFenceSettings)
+				geoRead.GET("/geo-fence/rules", s.handleListGeoFenceRules)
+				geoRead.GET("/geo-fence/rules/:id", s.handleGetGeoFenceRule)
+				geoRead.GET("/geo-fence/global", s.handleListGlobalGeoRules)
+				geoRead.GET("/geo-fence/users/:userId/rules", s.handleListUserGeoRules)
+				geoRead.GET("/geo-fence/groups/:groupName/rules", s.handleListGroupGeoRules)
+			}
+			geoWrite := admin.Group("")
+			geoWrite.Use(s.requireAnyScope(ScopeConfigWrite, ScopeAdmin))
+			{
+				geoWrite.PUT("/geo-fence/settings", s.handleUpdateGeoFenceSettings)
+				geoWrite.POST("/geo-fence/rules", s.handleCreateGeoFenceRule)
+				geoWrite.PUT("/geo-fence/rules/:id", s.handleUpdateGeoFenceRule)
+				geoWrite.DELETE("/geo-fence/rules/:id", s.handleDeleteGeoFenceRule)
+				geoWrite.POST("/geo-fence/global", s.handleAddGlobalGeoRule)
+				geoWrite.DELETE("/geo-fence/global/:ruleId", s.handleRemoveGlobalGeoRule)
+				geoWrite.POST("/geo-fence/users/:userId/rules", s.handleAddUserGeoRule)
+				geoWrite.DELETE("/geo-fence/users/:userId/rules/:ruleId", s.handleRemoveUserGeoRule)
+				geoWrite.POST("/geo-fence/groups/:groupName/rules", s.handleAddGroupGeoRule)
+				geoWrite.DELETE("/geo-fence/groups/:groupName/rules/:ruleId", s.handleRemoveGroupGeoRule)
+			}
 
-			// Mesh Hub management
-			admin.GET("/mesh/hubs", s.handleListMeshHubs)
-			admin.POST("/mesh/hubs", s.handleCreateMeshHub)
-			admin.GET("/mesh/hubs/:id", s.handleGetMeshHub)
-			admin.PUT("/mesh/hubs/:id", s.handleUpdateMeshHub)
-			admin.DELETE("/mesh/hubs/:id", s.handleDeleteMeshHub)
-			admin.POST("/mesh/hubs/:id/rotate-token", s.handleRotateMeshHubToken)
-			admin.POST("/mesh/hubs/:id/provision", s.handleProvisionMeshHub)
-			admin.GET("/mesh/hubs/:id/install-script", s.handleMeshHubInstallScript)
-			admin.GET("/mesh/hubs/:id/users", s.handleGetMeshHubUsers)
-			admin.POST("/mesh/hubs/:id/users", s.handleAssignMeshHubUser)
-			admin.DELETE("/mesh/hubs/:id/users/:userId", s.handleRemoveMeshHubUser)
-			admin.GET("/mesh/hubs/:id/groups", s.handleGetMeshHubGroups)
-			admin.POST("/mesh/hubs/:id/groups", s.handleAssignMeshHubGroup)
-			admin.DELETE("/mesh/hubs/:id/groups/:groupName", s.handleRemoveMeshHubGroup)
-			admin.GET("/mesh/hubs/:id/networks", s.handleGetMeshHubNetworks)
-			admin.POST("/mesh/hubs/:id/networks", s.handleAssignMeshHubNetwork)
-			admin.DELETE("/mesh/hubs/:id/networks/:networkId", s.handleRemoveMeshHubNetwork)
+			// Topology and network tools (admin scope - powerful operations)
+			toolsRoutes := admin.Group("")
+			toolsRoutes.Use(s.requireScope(ScopeAdmin))
+			{
+				toolsRoutes.GET("/topology", s.handleGetTopology)
+				toolsRoutes.GET("/sessions/active", s.handleGetActiveSessions)
+				toolsRoutes.GET("/network-tools", s.handleListNetworkTools)
+				toolsRoutes.POST("/network-tools/execute", s.handleExecuteNetworkTool)
+				toolsRoutes.GET("/remote-session/agents", s.handleGetConnectedAgents)
+			}
 
-			// Mesh Spoke management
-			admin.GET("/mesh/hubs/:id/spokes", s.handleListMeshSpokes)
-			admin.POST("/mesh/hubs/:id/spokes", s.handleCreateMeshSpoke)
-			admin.GET("/mesh/spokes/:id", s.handleGetMeshSpoke)
-			admin.PUT("/mesh/spokes/:id", s.handleUpdateMeshSpoke)
-			admin.DELETE("/mesh/spokes/:id", s.handleDeleteMeshSpoke)
-			admin.POST("/mesh/spokes/:id/rotate-token", s.handleRotateMeshSpokeToken)
-			admin.POST("/mesh/spokes/:id/provision", s.handleProvisionMeshSpoke)
-			admin.GET("/mesh/spokes/:id/install-script", s.handleMeshSpokeInstallScript)
-			admin.GET("/mesh/spokes/:id/users", s.handleGetMeshSpokeUsers)
-			admin.POST("/mesh/spokes/:id/users", s.handleAssignMeshSpokeUser)
-			admin.DELETE("/mesh/spokes/:id/users/:userId", s.handleRemoveMeshSpokeUser)
-			admin.GET("/mesh/spokes/:id/groups", s.handleGetMeshSpokeGroups)
-			admin.POST("/mesh/spokes/:id/groups", s.handleAssignMeshSpokeGroup)
-			admin.DELETE("/mesh/spokes/:id/groups/:groupName", s.handleRemoveMeshSpokeGroup)
-
-			// Admin config management (gateway configs)
-			admin.GET("/configs", s.handleAdminListAllConfigs)
-
-			// Admin mesh config management
-			admin.GET("/mesh-configs", s.handleAdminListMeshConfigs)
-			admin.POST("/mesh-configs/:id/revoke", s.handleAdminRevokeMeshConfig)
-			admin.POST("/users/:id/revoke-mesh-configs", s.handleAdminRevokeMeshUserConfigs)
-
-			// Admin WireGuard config management
-			admin.GET("/wireguard/configs", s.handleAdminListWireGuardConfigs)
-			admin.POST("/wireguard/configs/:id/revoke", s.handleAdminRevokeWireGuardConfig)
-			admin.GET("/wireguard/peers", s.handleAdminListWireGuardPeers)
-
-			// API key management (admin)
-			admin.GET("/api-keys", s.handleAdminListAPIKeys)
-			admin.POST("/api-keys", s.handleAdminCreateAPIKey)
-			admin.GET("/api-keys/:id", s.handleAdminGetAPIKey)
-			admin.DELETE("/api-keys/:id", s.handleAdminRevokeAPIKey)
-			admin.GET("/users/:id/api-keys", s.handleAdminListUserAPIKeys)
-			admin.POST("/users/:id/api-keys", s.handleAdminCreateUserAPIKey)
-			admin.DELETE("/users/:id/api-keys", s.handleAdminRevokeUserAPIKeys)
-			admin.DELETE("/users/:id/api-keys/all", s.handleAdminDeleteUserAPIKeys)
-
-			// Geo-fencing management
-			admin.GET("/geo-fence/settings", s.handleGetGeoFenceSettings)
-			admin.PUT("/geo-fence/settings", s.handleUpdateGeoFenceSettings)
-			admin.GET("/geo-fence/rules", s.handleListGeoFenceRules)
-			admin.POST("/geo-fence/rules", s.handleCreateGeoFenceRule)
-			admin.GET("/geo-fence/rules/:id", s.handleGetGeoFenceRule)
-			admin.PUT("/geo-fence/rules/:id", s.handleUpdateGeoFenceRule)
-			admin.DELETE("/geo-fence/rules/:id", s.handleDeleteGeoFenceRule)
-			admin.GET("/geo-fence/global", s.handleListGlobalGeoRules)
-			admin.POST("/geo-fence/global", s.handleAddGlobalGeoRule)
-			admin.DELETE("/geo-fence/global/:ruleId", s.handleRemoveGlobalGeoRule)
-			admin.GET("/geo-fence/users/:userId/rules", s.handleListUserGeoRules)
-			admin.POST("/geo-fence/users/:userId/rules", s.handleAddUserGeoRule)
-			admin.DELETE("/geo-fence/users/:userId/rules/:ruleId", s.handleRemoveUserGeoRule)
-			admin.GET("/geo-fence/groups/:groupName/rules", s.handleListGroupGeoRules)
-			admin.POST("/geo-fence/groups/:groupName/rules", s.handleAddGroupGeoRule)
-			admin.DELETE("/geo-fence/groups/:groupName/rules/:ruleId", s.handleRemoveGroupGeoRule)
-
-			// Topology and network tools
-			admin.GET("/topology", s.handleGetTopology)
-			admin.GET("/sessions/active", s.handleGetActiveSessions)
-			admin.GET("/network-tools", s.handleListNetworkTools)
-			admin.POST("/network-tools/execute", s.handleExecuteNetworkTool)
-
-			// Remote session agents
-			admin.GET("/remote-session/agents", s.handleGetConnectedAgents)
+			// PKI management (admin scope - certificate revocation)
+			pkiRoutes := admin.Group("/pki")
+			pkiRoutes.Use(s.requireScope(ScopeAdmin))
+			{
+				pkiRoutes.POST("/revoke", s.handleRevokeCertificate)
+				pkiRoutes.GET("/revocations", s.handleListRevocations)
+				pkiRoutes.DELETE("/revocations/:serial", s.handleUnrevokeCertificate)
+			}
 		}
 
 		// User API key management
@@ -644,6 +737,14 @@ func (s *Server) setupRoutes() {
 	s.router.GET("/downloads", s.handleDownloadsPage)
 	s.router.GET("/downloads/:filename", s.handleDownloadBinary)
 	s.router.GET("/bin/:filename", s.handleDownloadBinary) // Alias for /downloads
+
+	// Public PKI endpoints (no authentication required)
+	pki := s.router.Group("/pki")
+	{
+		pki.GET("/crl", s.handleGetCRL)           // CRL in DER format
+		pki.GET("/crl.pem", s.handleGetCRLPEM)    // CRL in PEM format
+		pki.GET("/check/:serial", s.handleCheckRevocation) // Check if certificate is revoked
+	}
 }
 
 // ListenAndServe starts the HTTP server.
@@ -844,6 +945,267 @@ func (s *Server) cleanupOldLoginLogs(ctx context.Context) {
 		s.logger.Info("Cleaned up old login logs",
 			zap.Int64("deleted", count),
 			zap.Int("retention_days", retentionDays))
+	}
+}
+
+// adminAuthMiddleware returns middleware that requires admin authentication.
+// It validates the session/API key and checks for admin privileges.
+func (s *Server) adminAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user, err := s.getAuthenticatedUser(c)
+		if err != nil || user == nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Authentication required",
+			})
+			return
+		}
+
+		if !user.IsAdmin {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error": "Admin access required",
+			})
+			return
+		}
+
+		// Store user info in context for handlers
+		c.Set("authenticated_user", user)
+		c.Next()
+	}
+}
+
+// requireScope returns middleware that requires specific API key scopes.
+// Session-authenticated users are allowed through without scope checking.
+// API key users must have the required scope or the wildcard "*" scope.
+func (s *Server) requireScope(requiredScope string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user, err := s.getAuthenticatedUser(c)
+		if err != nil || user == nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Authentication required",
+			})
+			return
+		}
+
+		if !user.HasScope(requiredScope) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error":          "Insufficient scope",
+				"required_scope": requiredScope,
+			})
+			return
+		}
+
+		c.Set("authenticated_user", user)
+		c.Next()
+	}
+}
+
+// requireAnyScope returns middleware that requires any of the specified scopes.
+func (s *Server) requireAnyScope(requiredScopes ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user, err := s.getAuthenticatedUser(c)
+		if err != nil || user == nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Authentication required",
+			})
+			return
+		}
+
+		if !user.HasAnyScope(requiredScopes...) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error":           "Insufficient scope",
+				"required_scopes": requiredScopes,
+			})
+			return
+		}
+
+		c.Set("authenticated_user", user)
+		c.Next()
+	}
+}
+
+const (
+	csrfCookieName = "gatekey_csrf"
+	csrfHeaderName = "X-CSRF-Token"
+	csrfTokenLen   = 32
+)
+
+// csrfMiddleware provides CSRF protection using the double-submit cookie pattern.
+// It sets a CSRF token in a cookie and requires the same token in a header for
+// state-changing requests (POST, PUT, DELETE, PATCH).
+// Requests using API key authentication (Authorization: Bearer gk_*) are exempt
+// since they're not vulnerable to CSRF attacks.
+func (s *Server) csrfMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Skip CSRF for safe methods
+		method := c.Request.Method
+		if method == "GET" || method == "HEAD" || method == "OPTIONS" {
+			// Ensure CSRF cookie is set for subsequent requests
+			s.ensureCSRFCookie(c)
+			c.Next()
+			return
+		}
+
+		// Skip CSRF for API key authentication (not vulnerable to CSRF)
+		authHeader := c.GetHeader("Authorization")
+		if strings.HasPrefix(authHeader, "Bearer gk_") {
+			c.Next()
+			return
+		}
+
+		// Skip CSRF for gateway-to-server communication
+		if c.GetHeader("X-Gateway-Token") != "" || strings.HasPrefix(authHeader, "Gateway ") {
+			c.Next()
+			return
+		}
+
+		// Skip CSRF for SAML ACS (handled by signature validation)
+		if c.Request.URL.Path == "/api/v1/auth/saml/acs" {
+			c.Next()
+			return
+		}
+
+		// Validate CSRF token for state-changing requests with session auth
+		cookieToken, err := c.Cookie(csrfCookieName)
+		if err != nil || cookieToken == "" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error": "CSRF token missing",
+			})
+			return
+		}
+
+		headerToken := c.GetHeader(csrfHeaderName)
+		if headerToken == "" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error": "CSRF token header missing",
+			})
+			return
+		}
+
+		// Validate tokens match
+		if headerToken != cookieToken {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error": "CSRF token mismatch",
+			})
+			return
+		}
+
+		c.Next()
+	}
+}
+
+// ensureCSRFCookie sets a CSRF token cookie if not present.
+func (s *Server) ensureCSRFCookie(c *gin.Context) {
+	if _, err := c.Cookie(csrfCookieName); err != nil {
+		token := generateCSRFToken()
+		// Cookie settings: accessible to JS for header inclusion, SameSite for CSRF
+		c.SetCookie(csrfCookieName, token, 86400, "/", "", s.config.Server.TLSEnabled, false)
+	}
+}
+
+// generateCSRFToken creates a cryptographically secure random token.
+func generateCSRFToken() string {
+	b := make([]byte, csrfTokenLen)
+	rand.Read(b)
+	return base64.URLEncoding.EncodeToString(b)
+}
+
+// rateLimiter implements a sliding window rate limiter for auth endpoints.
+type rateLimiter struct {
+	mu       sync.RWMutex
+	requests map[string][]time.Time
+	limit    int           // Max requests per window
+	window   time.Duration // Time window
+}
+
+// newRateLimiter creates a rate limiter with the specified limit and window.
+func newRateLimiter(limit int, window time.Duration) *rateLimiter {
+	rl := &rateLimiter{
+		requests: make(map[string][]time.Time),
+		limit:    limit,
+		window:   window,
+	}
+	// Start cleanup goroutine
+	go rl.cleanup()
+	return rl
+}
+
+// allow checks if a request from the given key is allowed.
+func (rl *rateLimiter) allow(key string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	now := time.Now()
+	windowStart := now.Add(-rl.window)
+
+	// Get existing requests for this key
+	requests := rl.requests[key]
+
+	// Filter to only requests within the window
+	validRequests := make([]time.Time, 0, len(requests))
+	for _, t := range requests {
+		if t.After(windowStart) {
+			validRequests = append(validRequests, t)
+		}
+	}
+
+	// Check if limit exceeded
+	if len(validRequests) >= rl.limit {
+		rl.requests[key] = validRequests
+		return false
+	}
+
+	// Add current request
+	validRequests = append(validRequests, now)
+	rl.requests[key] = validRequests
+	return true
+}
+
+// cleanup periodically removes old entries to prevent memory leaks.
+func (rl *rateLimiter) cleanup() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		rl.mu.Lock()
+		now := time.Now()
+		windowStart := now.Add(-rl.window)
+
+		for key, requests := range rl.requests {
+			validRequests := make([]time.Time, 0)
+			for _, t := range requests {
+				if t.After(windowStart) {
+					validRequests = append(validRequests, t)
+				}
+			}
+			if len(validRequests) == 0 {
+				delete(rl.requests, key)
+			} else {
+				rl.requests[key] = validRequests
+			}
+		}
+		rl.mu.Unlock()
+	}
+}
+
+// authRateLimitMiddleware provides rate limiting for authentication endpoints.
+// It limits requests per IP to prevent brute force attacks.
+func (s *Server) authRateLimitMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Use client IP as rate limit key
+		key := c.ClientIP()
+
+		if !s.authRateLimiter.allow(key) {
+			s.logger.Warn("Rate limit exceeded for auth endpoint",
+				zap.String("ip", key),
+				zap.String("path", c.Request.URL.Path))
+
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+				"error": "Too many authentication attempts. Please try again later.",
+			})
+			return
+		}
+
+		c.Next()
 	}
 }
 

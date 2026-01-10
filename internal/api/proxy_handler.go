@@ -3,13 +3,17 @@ package api
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/tls"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -19,6 +23,139 @@ import (
 
 	"github.com/gatekey-project/gatekey/internal/db"
 )
+
+// ErrSSRFBlocked is returned when an SSRF attempt is detected
+var ErrSSRFBlocked = errors.New("SSRF: request to private/internal address blocked")
+
+// privateIPBlocks contains CIDR ranges for private/internal networks
+var privateIPBlocks []*net.IPNet
+
+func init() {
+	// Initialize private IP blocks
+	// RFC 1918 - Private IPv4
+	// RFC 4193 - Private IPv6 (Unique Local)
+	// RFC 3927 - Link-Local IPv4
+	// RFC 4291 - Link-Local IPv6
+	// Plus cloud metadata endpoints
+	privateCIDRs := []string{
+		"127.0.0.0/8",    // IPv4 loopback
+		"10.0.0.0/8",     // RFC 1918 Class A
+		"172.16.0.0/12",  // RFC 1918 Class B
+		"192.168.0.0/16", // RFC 1918 Class C
+		"169.254.0.0/16", // RFC 3927 Link-Local (includes AWS metadata 169.254.169.254)
+		"::1/128",        // IPv6 loopback
+		"fc00::/7",       // RFC 4193 Unique Local
+		"fe80::/10",      // RFC 4291 Link-Local
+		// Note: IPv4-mapped IPv6 addresses (::ffff:x.x.x.x) are handled by converting
+		// to IPv4 with To4() before checking against IPv4 ranges
+	}
+
+	for _, cidr := range privateCIDRs {
+		_, block, err := net.ParseCIDR(cidr)
+		if err == nil {
+			privateIPBlocks = append(privateIPBlocks, block)
+		}
+	}
+}
+
+// isPrivateIP checks if an IP address is private/internal
+func isPrivateIP(ip net.IP) bool {
+	// Convert to 4-byte representation if it's an IPv4 address
+	// This handles IPv4-mapped IPv6 addresses properly
+	if ip4 := ip.To4(); ip4 != nil {
+		ip = ip4
+	}
+
+	// Check if it's a private IP
+	for _, block := range privateIPBlocks {
+		if block.Contains(ip) {
+			return true
+		}
+	}
+	// Also block unspecified addresses (0.0.0.0, ::)
+	if ip.IsUnspecified() {
+		return true
+	}
+	return false
+}
+
+// validateProxyTarget performs SSRF validation on a URL
+// It resolves the hostname and checks if any resolved IPs are private
+func (s *Server) validateProxyTarget(targetURL *url.URL) error {
+	host := targetURL.Hostname()
+
+	// Check if it's already an IP address
+	if ip := net.ParseIP(host); ip != nil {
+		if isPrivateIP(ip) {
+			s.logger.Warn("SSRF blocked: direct IP to private address",
+				zap.String("ip", ip.String()))
+			return ErrSSRFBlocked
+		}
+		return nil
+	}
+
+	// Resolve hostname to check for DNS-based SSRF
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		s.logger.Warn("SSRF check: failed to resolve hostname",
+			zap.String("host", host),
+			zap.Error(err))
+		// Don't block on DNS failures - let the proxy attempt fail naturally
+		return nil
+	}
+
+	for _, ip := range ips {
+		if isPrivateIP(ip) {
+			s.logger.Warn("SSRF blocked: hostname resolves to private IP",
+				zap.String("host", host),
+				zap.String("resolved_ip", ip.String()))
+			return ErrSSRFBlocked
+		}
+	}
+
+	return nil
+}
+
+// ssrfSafeDialer creates a dialer that validates IPs at dial time
+// This protects against DNS rebinding attacks
+func (s *Server) ssrfSafeDialer() func(ctx context.Context, network, addr string) (net.Conn, error) {
+	dialer := &net.Dialer{
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, err
+		}
+
+		// Resolve the hostname
+		ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+		if err != nil {
+			return nil, err
+		}
+
+		// Check all resolved IPs
+		var validIP net.IP
+		for _, ip := range ips {
+			if !isPrivateIP(ip) {
+				validIP = ip
+				break
+			}
+		}
+
+		if validIP == nil {
+			s.logger.Warn("SSRF blocked at dial time: all resolved IPs are private",
+				zap.String("host", host),
+				zap.Int("ip_count", len(ips)))
+			return nil, ErrSSRFBlocked
+		}
+
+		// Connect to the validated IP
+		return dialer.DialContext(ctx, network, net.JoinHostPort(validIP.String(), port))
+	}
+}
 
 // Hop-by-hop headers that should not be forwarded
 var hopByHopHeaders = []string{
@@ -118,6 +255,19 @@ func (s *Server) handleProxyRequest(c *gin.Context) {
 			zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid target URL"})
 		return
+	}
+
+	// 3.5 SSRF protection check (if enabled)
+	if s.config.Security.ProxySSRFProtection {
+		if err := s.validateProxyTarget(targetURL); err != nil {
+			s.logger.Warn("SSRF protection blocked request",
+				zap.String("slug", slug),
+				zap.String("target", app.InternalURL),
+				zap.String("user", userID),
+				zap.Error(err))
+			c.JSON(http.StatusForbidden, gin.H{"error": "request to internal address blocked"})
+			return
+		}
 	}
 
 	// 4. Handle WebSocket upgrade
@@ -281,27 +431,113 @@ func (s *Server) createReverseProxy(app *db.ProxyApplication, targetURL *url.URL
 			} else if strings.Contains(err.Error(), "context canceled") {
 				s.logger.Warn("Proxy request canceled by client", zap.String("slug", slug))
 				http.Error(w, "Request canceled", http.StatusBadGateway)
+			} else if errors.Is(err, ErrSSRFBlocked) {
+				s.logger.Warn("SSRF blocked at dial time", zap.String("slug", slug))
+				http.Error(w, "Request to internal address blocked", http.StatusForbidden)
 			} else {
 				http.Error(w, "Application unavailable: "+err.Error(), http.StatusBadGateway)
 			}
 		},
-		Transport: &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout:   10 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).DialContext,
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true, // Allow self-signed certs for internal services
-			},
-			MaxIdleConns:          100,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ResponseHeaderTimeout: time.Duration(app.TimeoutSeconds) * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-		},
+		Transport: s.createProxyTransport(app),
 	}
 
 	return proxy
+}
+
+// createProxyTransport creates an HTTP transport with SSRF protection and TLS verification
+func (s *Server) createProxyTransport(app *db.ProxyApplication) *http.Transport {
+	tlsConfig := s.buildProxyTLSConfig(app)
+
+	transport := &http.Transport{
+		TLSClientConfig:       tlsConfig,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: time.Duration(app.TimeoutSeconds) * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	// Use SSRF-safe dialer when DNS rebinding protection is enabled
+	if s.config.Security.ProxyDNSRebindingProtection {
+		transport.DialContext = s.ssrfSafeDialer()
+	} else {
+		transport.DialContext = (&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext
+	}
+
+	return transport
+}
+
+// buildProxyTLSConfig creates a TLS config for proxy connections based on global and per-app settings
+func (s *Server) buildProxyTLSConfig(app *db.ProxyApplication) *tls.Config {
+	tlsConfig := &tls.Config{}
+
+	// Set minimum TLS version
+	switch s.config.Security.ProxyTLSMinVersion {
+	case "1.3":
+		tlsConfig.MinVersion = tls.VersionTLS13
+	default:
+		tlsConfig.MinVersion = tls.VersionTLS12
+	}
+
+	// Determine if we should skip TLS verification
+	// Per-app setting overrides global setting
+	skipVerify := !s.config.Security.ProxyTLSVerify // Global default
+	if app.SkipTLSVerify {
+		skipVerify = true // Per-app override to skip
+	}
+
+	tlsConfig.InsecureSkipVerify = skipVerify
+
+	// If we're verifying TLS, set up the CA bundle
+	if !skipVerify {
+		rootCAs := s.loadProxyCACerts(app)
+		if rootCAs != nil {
+			tlsConfig.RootCAs = rootCAs
+		}
+		// If no custom CA is loaded, system CA bundle will be used automatically
+	}
+
+	return tlsConfig
+}
+
+// loadProxyCACerts loads CA certificates for proxy TLS verification
+func (s *Server) loadProxyCACerts(app *db.ProxyApplication) *x509.CertPool {
+	// First, try per-app custom CA cert
+	if app.CustomCACert != nil && *app.CustomCACert != "" {
+		certPool := x509.NewCertPool()
+		if certPool.AppendCertsFromPEM([]byte(*app.CustomCACert)) {
+			s.logger.Debug("Using per-app custom CA certificate",
+				zap.String("app", app.Slug))
+			return certPool
+		}
+		s.logger.Warn("Failed to parse per-app custom CA certificate",
+			zap.String("app", app.Slug))
+	}
+
+	// Then, try global CA bundle file
+	if s.config.Security.ProxyCABundle != "" {
+		caCert, err := os.ReadFile(s.config.Security.ProxyCABundle)
+		if err != nil {
+			s.logger.Warn("Failed to read proxy CA bundle",
+				zap.String("path", s.config.Security.ProxyCABundle),
+				zap.Error(err))
+			return nil
+		}
+		certPool := x509.NewCertPool()
+		if certPool.AppendCertsFromPEM(caCert) {
+			s.logger.Debug("Using global proxy CA bundle",
+				zap.String("path", s.config.Security.ProxyCABundle))
+			return certPool
+		}
+		s.logger.Warn("Failed to parse proxy CA bundle",
+			zap.String("path", s.config.Security.ProxyCABundle))
+	}
+
+	// Return nil to use system CA bundle
+	return nil
 }
 
 // rewriteHTMLResponse rewrites URLs in HTML content for path-based proxy routing

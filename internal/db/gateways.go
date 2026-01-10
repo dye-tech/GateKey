@@ -3,7 +3,9 @@ package db
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"strings"
 	"time"
@@ -85,7 +87,15 @@ func GenerateToken() (string, error) {
 	return base64.URLEncoding.EncodeToString(b), nil
 }
 
+// HashGatewayToken creates a SHA-256 hash of a gateway token for storage.
+// The raw token is returned to the user; only the hash is stored in the database.
+func HashGatewayToken(rawToken string) string {
+	hash := sha256.Sum256([]byte(rawToken))
+	return hex.EncodeToString(hash[:])
+}
+
 // CreateGateway registers a new gateway
+// Note: gw.Token should contain the raw token; it will be hashed before storage
 func (s *GatewayStore) CreateGateway(ctx context.Context, gw *Gateway) error {
 	// Default gateway type to OpenVPN for backward compatibility
 	gatewayType := gw.GatewayType
@@ -107,11 +117,13 @@ func (s *GatewayStore) CreateGateway(ctx context.Context, gw *Gateway) error {
 	if wgListenPort == 0 {
 		wgListenPort = DefaultWGListenPort
 	}
+	// Hash the token before storing - only the hash is persisted
+	hashedToken := HashGatewayToken(gw.Token)
 	// Use NULLIF to convert empty string to NULL for hostname and inet type
 	_, err := s.db.Pool.Exec(ctx, `
 		INSERT INTO gateways (name, gateway_type, hostname, public_ip, public_ip_v6, vpn_port, vpn_protocol, crypto_profile, vpn_subnet, vpn_subnet_v6, tls_auth_enabled, full_tunnel_mode, push_dns, dns_servers, wg_private_key, wg_public_key, wg_listen_port, token, public_key)
 		VALUES ($1, $2, NULLIF($3, ''), NULLIF($4, '')::inet, NULLIF($5, '')::inet, $6, $7, $8, $9::cidr, $10::cidr, $11, $12, $13, $14, NULLIF($15, ''), NULLIF($16, ''), $17, $18, $19)
-	`, gw.Name, gatewayType, gw.Hostname, gw.PublicIP, gw.PublicIPv6, gw.VPNPort, gw.VPNProtocol, cryptoProfile, vpnSubnet, gw.VPNSubnetV6, gw.TLSAuthEnabled, gw.FullTunnelMode, gw.PushDNS, gw.DNSServers, gw.WGPrivateKey, gw.WGPublicKey, wgListenPort, gw.Token, gw.PublicKey)
+	`, gw.Name, gatewayType, gw.Hostname, gw.PublicIP, gw.PublicIPv6, gw.VPNPort, gw.VPNProtocol, cryptoProfile, vpnSubnet, gw.VPNSubnetV6, gw.TLSAuthEnabled, gw.FullTunnelMode, gw.PushDNS, gw.DNSServers, gw.WGPrivateKey, gw.WGPublicKey, wgListenPort, hashedToken, gw.PublicKey)
 	if err != nil && strings.Contains(err.Error(), "duplicate key") {
 		return ErrGatewayExists
 	}
@@ -202,14 +214,17 @@ func (s *GatewayStore) GetGatewayByName(ctx context.Context, name string) (*Gate
 }
 
 // GetGatewayByToken retrieves a gateway by its authentication token
+// The raw token is hashed before lookup since only hashes are stored
 func (s *GatewayStore) GetGatewayByToken(ctx context.Context, token string) (*Gateway, error) {
 	var gw Gateway
 	var hostname, publicIP, vpnSubnet, wgPrivateKey, wgPublicKey *string
 	var wgListenPort *int
+	// Hash the token to match against stored hash
+	hashedToken := HashGatewayToken(token)
 	err := s.db.Pool.QueryRow(ctx, `
 		SELECT id, name, COALESCE(gateway_type, 'openvpn'), hostname, host(public_ip), vpn_port, vpn_protocol, crypto_profile, vpn_subnet::text, tls_auth_enabled, COALESCE(tls_auth_key, ''), full_tunnel_mode, push_dns, dns_servers, COALESCE(config_version, ''), wg_private_key, wg_public_key, wg_listen_port, token, public_key, is_active, last_heartbeat, created_at, updated_at
 		FROM gateways WHERE token = $1
-	`, token).Scan(&gw.ID, &gw.Name, &gw.GatewayType, &hostname, &publicIP, &gw.VPNPort, &gw.VPNProtocol, &gw.CryptoProfile, &vpnSubnet, &gw.TLSAuthEnabled, &gw.TLSAuthKey, &gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers, &gw.ConfigVersion, &wgPrivateKey, &wgPublicKey, &wgListenPort, &gw.Token, &gw.PublicKey, &gw.IsActive, &gw.LastHeartbeat, &gw.CreatedAt, &gw.UpdatedAt)
+	`, hashedToken).Scan(&gw.ID, &gw.Name, &gw.GatewayType, &hostname, &publicIP, &gw.VPNPort, &gw.VPNProtocol, &gw.CryptoProfile, &vpnSubnet, &gw.TLSAuthEnabled, &gw.TLSAuthKey, &gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers, &gw.ConfigVersion, &wgPrivateKey, &wgPublicKey, &wgListenPort, &gw.Token, &gw.PublicKey, &gw.IsActive, &gw.LastHeartbeat, &gw.CreatedAt, &gw.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, ErrGatewayNotFound
 	}
@@ -451,8 +466,8 @@ func (s *GatewayStore) UpdateGatewayConfigVersion(ctx context.Context, id, confi
 	return nil
 }
 
-// RotateGatewayToken generates a new token for a gateway and returns it
-// The old token is immediately invalidated
+// RotateGatewayToken generates a new token for a gateway and returns the raw token
+// The old token is immediately invalidated. Only the hash of the new token is stored.
 func (s *GatewayStore) RotateGatewayToken(ctx context.Context, id string) (string, error) {
 	// Generate new token
 	newToken, err := GenerateToken()
@@ -460,17 +475,21 @@ func (s *GatewayStore) RotateGatewayToken(ctx context.Context, id string) (strin
 		return "", err
 	}
 
+	// Hash the token before storing - only the hash is persisted
+	hashedToken := HashGatewayToken(newToken)
+
 	result, err := s.db.Pool.Exec(ctx, `
 		UPDATE gateways
 		SET token = $2, updated_at = NOW()
 		WHERE id = $1
-	`, id, newToken)
+	`, id, hashedToken)
 	if err != nil {
 		return "", err
 	}
 	if result.RowsAffected() == 0 {
 		return "", ErrGatewayNotFound
 	}
+	// Return the raw token to the caller (this is the only time it's available)
 	return newToken, nil
 }
 

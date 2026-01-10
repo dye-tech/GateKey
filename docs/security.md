@@ -468,3 +468,272 @@ All security-relevant events are logged:
 | Access Revocation | Manual certificate revocation | Immediate (access check on connect) |
 | Audit Trail | Connection logs only | Full resource access logging |
 | Group Integration | None | Native IdP group support |
+
+---
+
+## Security Hardening
+
+GateKey implements multiple layers of security hardening to protect sensitive data and prevent common attack vectors.
+
+### Certificate Revocation Lists (CRL)
+
+GateKey provides a complete certificate revocation infrastructure for invalidating compromised certificates.
+
+#### CRL Endpoints
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/pki/crl` | GET | Public | Download CRL in DER format |
+| `/pki/crl.pem` | GET | Public | Download CRL in PEM format |
+| `/pki/check/:serial` | GET | Public | Check if a certificate is revoked |
+| `/admin/pki/revoke` | POST | Admin | Revoke a certificate |
+| `/admin/pki/revocations` | GET | Admin | List all revoked certificates |
+| `/admin/pki/revocations/:serial` | DELETE | Admin | Unrevoke a certificate |
+
+#### Revocation Reasons (RFC 5280)
+
+| Code | Reason |
+|------|--------|
+| 0 | Unspecified |
+| 1 | Key Compromise |
+| 2 | CA Compromise |
+| 3 | Affiliation Changed |
+| 4 | Superseded |
+| 5 | Cessation of Operation |
+| 6 | Certificate Hold |
+
+#### CRL Caching
+
+- CRLs are cached with 24-hour validity
+- Cache is automatically invalidated when certificates are revoked
+- HTTP Cache-Control headers enable client-side caching (1 hour)
+
+#### Usage Example
+
+```bash
+# Revoke a certificate
+curl -X POST https://control-plane/admin/pki/revoke \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"serial_number": "1234567890", "reason": 1, "notes": "Key compromise suspected"}'
+
+# Check revocation status
+curl https://control-plane/pki/check/1234567890
+
+# Download CRL
+curl -o revoked.crl https://control-plane/pki/crl
+```
+
+### CA Private Key Encryption
+
+CA private keys are encrypted at rest in the database using AES-256-GCM authenticated encryption.
+
+#### Configuration
+
+Set the encryption key in your configuration:
+
+```yaml
+security:
+  ca_key_encryption_key: "base64-encoded-32-byte-key"
+```
+
+To generate a key:
+
+```bash
+openssl rand -base64 32
+```
+
+#### Features
+
+- **AES-256-GCM**: Provides both confidentiality and integrity
+- **Random Nonce**: Each encryption uses a unique 12-byte nonce
+- **Backward Compatible**: Unencrypted keys are still readable if no key is configured
+- **Automatic Detection**: System detects whether keys are encrypted or plaintext
+- **Secure Wiping**: Keys are wiped from memory after use
+
+#### Storage Format
+
+Encrypted keys are stored as: `ENC:base64(nonce + ciphertext + tag)`
+
+### Secure Memory Wiping
+
+Sensitive data like Pre-Shared Keys (PSKs) are securely wiped from disk to prevent recovery.
+
+#### Wiping Process
+
+When PSK temporary files are deleted:
+
+1. **Random Overwrite**: File is overwritten with cryptographically random data
+2. **Sync**: Data is flushed to disk with `fsync()`
+3. **Zero Overwrite**: File is overwritten with zeros
+4. **Sync**: Data is flushed again
+5. **Delete**: File is finally removed
+
+This multi-pass approach prevents data recovery from:
+- File system journaling
+- SSD wear-leveling (to the extent possible)
+- Deleted file recovery tools
+
+#### File Permissions
+
+PSK files are created with `0600` permissions (owner read/write only) before any sensitive data is written.
+
+### Password Hashing (Argon2id)
+
+Local user passwords are hashed using Argon2id, the winner of the Password Hashing Competition.
+
+#### Parameters
+
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| Time Cost | 3 iterations | OWASP recommends 2-3 |
+| Memory | 64 MB | Increases GPU attack cost |
+| Parallelism | 4 threads | Balances security and performance |
+| Key Length | 32 bytes | 256-bit output |
+| Salt | 16 bytes | Unique per password |
+
+#### Hash Format
+
+```
+$argon2id$v=19$m=65536,t=3,p=4$<base64-salt>$<base64-hash>
+```
+
+#### Timing Attack Prevention
+
+When a user doesn't exist, password hashing is still performed to prevent timing attacks that could enumerate valid usernames.
+
+### SSRF Protection
+
+Server-Side Request Forgery (SSRF) attacks are prevented for proxy and external URL features.
+
+#### Protected Features
+
+- Proxy configuration with custom URLs
+- Webhook callbacks
+- External service integrations
+
+#### Blocked Destinations
+
+The following are blocked to prevent internal network access:
+
+| Type | Examples |
+|------|----------|
+| Private IPv4 | `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16` |
+| Loopback | `127.0.0.0/8`, `::1` |
+| Link-local | `169.254.0.0/16`, `fe80::/10` |
+| Private DNS | `.local`, `.internal`, `.localhost` |
+
+#### DNS Rebinding Prevention
+
+- DNS resolution is performed before the request
+- Resolved IP is checked against blocklist
+- Request is blocked if resolved IP is internal
+
+#### Configurable CA Bundles
+
+For proxy TLS verification, custom CA bundles can be configured:
+
+```yaml
+security:
+  proxy_ca_bundle: "/path/to/ca-bundle.crt"
+```
+
+This allows:
+- Using internal/corporate CAs for proxies
+- Strict TLS verification (no InsecureSkipVerify)
+- Custom trust anchors per environment
+
+### API Key Scopes
+
+API keys support fine-grained permission scopes to limit access.
+
+#### Available Scopes
+
+| Scope | Permissions |
+|-------|-------------|
+| `admin` | Full administrative access |
+| `gateway:read` | Read gateway configuration |
+| `gateway:write` | Modify gateway settings |
+| `user:read` | Read user information |
+| `user:write` | Manage users |
+| `config:generate` | Generate VPN configurations |
+| `audit:read` | Read audit logs |
+
+#### Scope Enforcement
+
+Scopes are enforced via middleware on all API endpoints:
+
+```go
+pkiRoutes.Use(s.requireScope(ScopeAdmin))
+```
+
+API keys without required scopes receive `403 Forbidden`.
+
+### Security Headers
+
+All HTTP responses include security headers:
+
+| Header | Value | Purpose |
+|--------|-------|---------|
+| `X-Content-Type-Options` | `nosniff` | Prevent MIME sniffing |
+| `X-Frame-Options` | `DENY` | Prevent clickjacking |
+| `X-XSS-Protection` | `1; mode=block` | XSS filtering |
+| `Strict-Transport-Security` | `max-age=31536000` | Force HTTPS |
+| `Content-Security-Policy` | Restrictive policy | Prevent XSS/injection |
+
+### Database Security
+
+#### Prepared Statements
+
+All database queries use parameterized prepared statements to prevent SQL injection:
+
+```go
+// Safe: parameterized query
+db.QueryRow(ctx, "SELECT * FROM users WHERE email = $1", email)
+
+// Never used: string concatenation
+db.QueryRow(ctx, "SELECT * FROM users WHERE email = '" + email + "'")
+```
+
+#### Connection Security
+
+- TLS required for production database connections
+- Connection pooling with secure defaults
+- Automatic connection health checks
+
+### Cryptographic Standards
+
+| Purpose | Algorithm | Standard |
+|---------|-----------|----------|
+| Password Hashing | Argon2id | PHC Winner |
+| Key Encryption | AES-256-GCM | NIST FIPS 197/SP 800-38D |
+| TLS | TLS 1.2+ | RFC 5246/8446 |
+| Certificates | ECDSA P-256 / RSA 2048+ | NIST FIPS 186-4 |
+| Random Generation | crypto/rand | OS CSPRNG |
+
+### Security Checklist
+
+#### Deployment
+
+- [ ] Set `CA_KEY_ENCRYPTION_KEY` environment variable
+- [ ] Configure `PROXY_CA_BUNDLE` if using HTTPS proxy
+- [ ] Enable TLS for database connections
+- [ ] Use HTTPS for all external endpoints
+- [ ] Configure firewall to block direct database access
+- [ ] Set up CRL distribution point in certificate configurations
+
+#### Operations
+
+- [ ] Rotate CA keys annually (or on compromise)
+- [ ] Review audit logs weekly
+- [ ] Check CRL for unexpected revocations
+- [ ] Verify API key scopes are minimal
+- [ ] Test backup/restore procedures
+- [ ] Monitor for failed authentication attempts
+
+#### Incident Response
+
+- [ ] Document certificate revocation procedure
+- [ ] Have CA rotation runbook ready
+- [ ] Know how to disable compromised API keys
+- [ ] Have database encryption key backup in secure location

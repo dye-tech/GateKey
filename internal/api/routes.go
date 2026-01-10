@@ -1691,12 +1691,13 @@ func (s *Server) getAuthenticatedUser(c *gin.Context) (*authenticatedUser, error
 		go func() { _ = s.apiKeyStore.UpdateLastUsed(context.Background(), apiKey.ID, c.ClientIP()) }()
 
 		return &authenticatedUser{
-			UserID:   ssoUser.ID,
-			Email:    ssoUser.Email,
-			Name:     ssoUser.Name,
-			Groups:   ssoUser.Groups,
-			IsAdmin:  ssoUser.IsAdmin,
-			Provider: "api_key",
+			UserID:       ssoUser.ID,
+			Email:        ssoUser.Email,
+			Name:         ssoUser.Name,
+			Groups:       ssoUser.Groups,
+			IsAdmin:      ssoUser.IsAdmin,
+			Provider:     "api_key",
+			APIKeyScopes: apiKey.Scopes, // Include API key scopes for scope enforcement
 		}, nil
 	}
 
@@ -1728,12 +1729,83 @@ func (s *Server) getAuthenticatedUser(c *gin.Context) (*authenticatedUser, error
 }
 
 type authenticatedUser struct {
-	UserID   string
-	Email    string
-	Name     string
-	Groups   []string
-	IsAdmin  bool
-	Provider string
+	UserID       string
+	Email        string
+	Name         string
+	Groups       []string
+	IsAdmin      bool
+	Provider     string
+	APIKeyScopes []string // Scopes if authenticated via API key, nil otherwise
+}
+
+// Common API key scope constants
+const (
+	ScopeAll          = "*"
+	ScopeRead         = "read"
+	ScopeWrite        = "write"
+	ScopeAdmin        = "admin"
+	ScopeVPNConnect   = "vpn:connect"
+	ScopeGatewaysRead = "gateways:read"
+	ScopeGatewaysWrite = "gateways:write"
+	ScopeUsersRead    = "users:read"
+	ScopeUsersWrite   = "users:write"
+	ScopeMeshRead     = "mesh:read"
+	ScopeMeshWrite    = "mesh:write"
+	ScopeConfigRead   = "config:read"
+	ScopeConfigWrite  = "config:write"
+)
+
+// HasScope checks if the user has the required scope.
+// Session-authenticated users (APIKeyScopes == nil) are assumed to have full access.
+// API key users must have either the specific scope or the wildcard scope "*".
+func (u *authenticatedUser) HasScope(requiredScope string) bool {
+	// Session-based authentication has full access
+	if u.APIKeyScopes == nil {
+		return true
+	}
+	// Check API key scopes
+	for _, scope := range u.APIKeyScopes {
+		// Wildcard grants all access
+		if scope == ScopeAll {
+			return true
+		}
+		// Exact match
+		if scope == requiredScope {
+			return true
+		}
+		// Hierarchical scope matching: "gateways" grants "gateways:read" and "gateways:write"
+		if strings.HasPrefix(requiredScope, scope+":") {
+			return true
+		}
+		// Read scope grants read-only access to all resources
+		if scope == ScopeRead && strings.HasSuffix(requiredScope, ":read") {
+			return true
+		}
+		// Write scope grants write access (which implies read)
+		if scope == ScopeWrite && (strings.HasSuffix(requiredScope, ":read") || strings.HasSuffix(requiredScope, ":write")) {
+			return true
+		}
+		// Resource-specific write scope implies read access for that resource
+		// e.g., "gateways:write" grants "gateways:read"
+		if strings.HasSuffix(scope, ":write") && strings.HasSuffix(requiredScope, ":read") {
+			scopeResource := strings.TrimSuffix(scope, ":write")
+			requiredResource := strings.TrimSuffix(requiredScope, ":read")
+			if scopeResource == requiredResource {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// HasAnyScope checks if the user has any of the required scopes.
+func (u *authenticatedUser) HasAnyScope(requiredScopes ...string) bool {
+	for _, scope := range requiredScopes {
+		if u.HasScope(scope) {
+			return true
+		}
+	}
+	return false
 }
 
 func generateConfigID() string {

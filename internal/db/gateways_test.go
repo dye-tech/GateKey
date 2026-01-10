@@ -274,3 +274,55 @@ func TestGateway_AllGatewayTypes(t *testing.T) {
 		}
 	}
 }
+
+func TestHashGatewayToken(t *testing.T) {
+	token := "test-token-12345"
+	hash := HashGatewayToken(token)
+
+	// Hash should be non-empty
+	if hash == "" {
+		t.Error("Expected non-empty hash")
+	}
+
+	// Hash should be 64 characters (SHA-256 hex encoded)
+	if len(hash) != 64 {
+		t.Errorf("Expected hash length 64, got %d", len(hash))
+	}
+
+	// Hash should be deterministic
+	hash2 := HashGatewayToken(token)
+	if hash != hash2 {
+		t.Error("Expected same hash for same input")
+	}
+
+	// Different tokens should produce different hashes
+	hash3 := HashGatewayToken("different-token")
+	if hash == hash3 {
+		t.Error("Expected different hashes for different inputs")
+	}
+}
+
+func TestHashGatewayToken_EmptyToken(t *testing.T) {
+	hash := HashGatewayToken("")
+
+	// Empty token should still produce a valid hash
+	if hash == "" {
+		t.Error("Expected non-empty hash even for empty input")
+	}
+
+	if len(hash) != 64 {
+		t.Errorf("Expected hash length 64, got %d", len(hash))
+	}
+}
+
+func TestHashGatewayToken_HexEncoding(t *testing.T) {
+	token := "test-token"
+	hash := HashGatewayToken(token)
+
+	// Hash should contain only hex characters
+	for _, c := range hash {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			t.Errorf("Hash contains non-hex character: %c", c)
+		}
+	}
+}

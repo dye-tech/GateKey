@@ -8,6 +8,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/gatekey-project/gatekey/internal/crypto"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -52,12 +53,44 @@ type CARotationEvent struct {
 
 // PKIStore handles PKI persistence.
 type PKIStore struct {
-	db *DB
+	db        *DB
+	encryptor *crypto.KeyEncryptor
 }
 
 // NewPKIStore creates a new PKI store.
 func NewPKIStore(db *DB) *PKIStore {
 	return &PKIStore{db: db}
+}
+
+// NewPKIStoreWithEncryption creates a new PKI store with encryption for CA private keys.
+// The encryptionKey should be a 32-byte base64-encoded string.
+// If empty, encryption is disabled (backward compatible).
+func NewPKIStoreWithEncryption(db *DB, encryptionKey string) (*PKIStore, error) {
+	var encryptor *crypto.KeyEncryptor
+	var err error
+	if encryptionKey != "" {
+		encryptor, err = crypto.NewKeyEncryptor(encryptionKey)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &PKIStore{db: db, encryptor: encryptor}, nil
+}
+
+// decryptPrivateKey decrypts a CA private key if encryption is enabled.
+func (s *PKIStore) decryptPrivateKey(encryptedKey string) (string, error) {
+	if s.encryptor == nil {
+		return encryptedKey, nil
+	}
+	return s.encryptor.Decrypt(encryptedKey)
+}
+
+// encryptPrivateKey encrypts a CA private key if encryption is enabled.
+func (s *PKIStore) encryptPrivateKey(plainKey string) (string, error) {
+	if s.encryptor == nil {
+		return plainKey, nil
+	}
+	return s.encryptor.Encrypt(plainKey)
 }
 
 // GetCA retrieves the active CA from the database.
@@ -88,6 +121,14 @@ func (s *PKIStore) GetCA(ctx context.Context) (*StoredCA, error) {
 	if description != nil {
 		ca.Description = *description
 	}
+
+	// Decrypt private key
+	decryptedKey, err := s.decryptPrivateKey(ca.PrivateKeyPEM)
+	if err != nil {
+		return nil, err
+	}
+	ca.PrivateKeyPEM = decryptedKey
+
 	return &ca, nil
 }
 
@@ -117,6 +158,14 @@ func (s *PKIStore) GetCAByID(ctx context.Context, id string) (*StoredCA, error) 
 	if description != nil {
 		ca.Description = *description
 	}
+
+	// Decrypt private key
+	decryptedKey, err := s.decryptPrivateKey(ca.PrivateKeyPEM)
+	if err != nil {
+		return nil, err
+	}
+	ca.PrivateKeyPEM = decryptedKey
+
 	return &ca, nil
 }
 
@@ -150,6 +199,14 @@ func (s *PKIStore) ListCAs(ctx context.Context) ([]*StoredCA, error) {
 		if description != nil {
 			ca.Description = *description
 		}
+
+		// Decrypt private key
+		decryptedKey, err := s.decryptPrivateKey(ca.PrivateKeyPEM)
+		if err != nil {
+			return nil, err
+		}
+		ca.PrivateKeyPEM = decryptedKey
+
 		cas = append(cas, &ca)
 	}
 	return cas, rows.Err()
@@ -186,6 +243,14 @@ func (s *PKIStore) GetTrustedCAs(ctx context.Context) ([]*StoredCA, error) {
 		if description != nil {
 			ca.Description = *description
 		}
+
+		// Decrypt private key
+		decryptedKey, err := s.decryptPrivateKey(ca.PrivateKeyPEM)
+		if err != nil {
+			return nil, err
+		}
+		ca.PrivateKeyPEM = decryptedKey
+
 		cas = append(cas, &ca)
 	}
 	return cas, rows.Err()
@@ -201,7 +266,13 @@ func (s *PKIStore) SaveCA(ctx context.Context, ca *StoredCA) error {
 		status = CAStatusActive
 	}
 
-	_, err := s.db.Pool.Exec(ctx, `
+	// Encrypt private key before storing
+	encryptedKey, err := s.encryptPrivateKey(ca.PrivateKeyPEM)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.db.Pool.Exec(ctx, `
 		INSERT INTO pki_ca (id, certificate_pem, private_key_pem, serial_number, not_before, not_after, status, fingerprint, description)
 		VALUES ('default', $1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (id) DO UPDATE SET
@@ -214,7 +285,7 @@ func (s *PKIStore) SaveCA(ctx context.Context, ca *StoredCA) error {
 			fingerprint = EXCLUDED.fingerprint,
 			description = EXCLUDED.description,
 			updated_at = NOW()
-	`, ca.CertificatePEM, ca.PrivateKeyPEM, ca.SerialNumber, ca.NotBefore, ca.NotAfter, status, fingerprint, ca.Description)
+	`, ca.CertificatePEM, encryptedKey, ca.SerialNumber, ca.NotBefore, ca.NotAfter, status, fingerprint, ca.Description)
 	return err
 }
 
@@ -227,7 +298,13 @@ func (s *PKIStore) SaveCAWithID(ctx context.Context, ca *StoredCA) error {
 		status = CAStatusPending
 	}
 
-	_, err := s.db.Pool.Exec(ctx, `
+	// Encrypt private key before storing
+	encryptedKey, err := s.encryptPrivateKey(ca.PrivateKeyPEM)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.db.Pool.Exec(ctx, `
 		INSERT INTO pki_ca (id, certificate_pem, private_key_pem, serial_number, not_before, not_after, status, fingerprint, description)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (id) DO UPDATE SET
@@ -240,7 +317,7 @@ func (s *PKIStore) SaveCAWithID(ctx context.Context, ca *StoredCA) error {
 			fingerprint = EXCLUDED.fingerprint,
 			description = EXCLUDED.description,
 			updated_at = NOW()
-	`, ca.ID, ca.CertificatePEM, ca.PrivateKeyPEM, ca.SerialNumber, ca.NotBefore, ca.NotAfter, status, fingerprint, ca.Description)
+	`, ca.ID, ca.CertificatePEM, encryptedKey, ca.SerialNumber, ca.NotBefore, ca.NotAfter, status, fingerprint, ca.Description)
 	return err
 }
 

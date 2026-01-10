@@ -504,3 +504,93 @@ server:
 		t.Errorf("Expected 2 trusted proxies, got %d", len(cfg.Server.TrustedProxies))
 	}
 }
+
+func TestConfig_Validate_SSLModes(t *testing.T) {
+	tests := []struct {
+		name        string
+		sslMode     string
+		sslRootCert string
+		wantErr     bool
+	}{
+		{"disable is valid", "disable", "", false},
+		{"require is valid", "require", "", false},
+		{"verify-ca is valid with root cert", "verify-ca", "/path/to/ca.crt", false},
+		{"verify-ca without root cert fails", "verify-ca", "", true},
+		{"verify-full is valid with root cert", "verify-full", "/path/to/ca.crt", false},
+		{"verify-full without root cert fails", "verify-full", "", true},
+		{"invalid ssl mode", "invalid-mode", "", true},
+		{"empty ssl mode is valid (defaults)", "", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				Database: DatabaseConfig{
+					URL:         "postgres://localhost/gatekey",
+					SSLMode:     tt.sslMode,
+					SSLRootCert: tt.sslRootCert,
+				},
+				PKI: PKIConfig{
+					KeyAlgorithm: "ecdsa256",
+				},
+			}
+
+			err := cfg.Validate()
+			if tt.wantErr && err == nil {
+				t.Errorf("Expected error for SSL mode %s, got nil", tt.sslMode)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("Expected no error for SSL mode %s, got: %v", tt.sslMode, err)
+			}
+		})
+	}
+}
+
+func TestDatabaseConfig_SSLFields(t *testing.T) {
+	cfg := DatabaseConfig{
+		URL:         "postgres://localhost/gatekey",
+		SSLMode:     "verify-full",
+		SSLRootCert: "/path/to/ca.crt",
+		SSLCert:     "/path/to/client.crt",
+		SSLKey:      "/path/to/client.key",
+	}
+
+	if cfg.SSLMode != "verify-full" {
+		t.Errorf("Expected SSLMode 'verify-full', got '%s'", cfg.SSLMode)
+	}
+	if cfg.SSLRootCert != "/path/to/ca.crt" {
+		t.Errorf("Expected SSLRootCert '/path/to/ca.crt', got '%s'", cfg.SSLRootCert)
+	}
+	if cfg.SSLCert != "/path/to/client.crt" {
+		t.Errorf("Expected SSLCert '/path/to/client.crt', got '%s'", cfg.SSLCert)
+	}
+	if cfg.SSLKey != "/path/to/client.key" {
+		t.Errorf("Expected SSLKey '/path/to/client.key', got '%s'", cfg.SSLKey)
+	}
+}
+
+func TestLoad_DatabaseSSLDefaults(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "ssl_defaults.yaml")
+
+	configContent := `
+database:
+  url: postgres://localhost/gatekey
+pki:
+  key_algorithm: ecdsa256
+`
+	err := os.WriteFile(tmpFile, []byte(configContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	cfg, err := Load(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	// Default ssl_mode should be 'require'
+	if cfg.Database.SSLMode != "require" {
+		t.Errorf("Expected default ssl_mode 'require', got '%s'", cfg.Database.SSLMode)
+	}
+}
