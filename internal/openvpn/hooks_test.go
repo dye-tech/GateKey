@@ -463,3 +463,182 @@ func TestProvisionResponse_Fields(t *testing.T) {
 		t.Errorf("Expected VPNPort 443, got %d", resp.VPNPort)
 	}
 }
+
+func TestGetOpenVPNEnv(t *testing.T) {
+	// Save and restore original environment
+	originalEnv := make(map[string]string)
+	envVars := []string{
+		"common_name", "username", "password", "trusted_ip",
+		"untrusted_ip", "untrusted_port", "ifconfig_pool_remote_ip",
+	}
+	for _, v := range envVars {
+		originalEnv[v] = os.Getenv(v)
+	}
+	defer func() {
+		for k, v := range originalEnv {
+			if v == "" {
+				os.Unsetenv(k)
+			} else {
+				os.Setenv(k, v)
+			}
+		}
+	}()
+
+	// Set test environment variables
+	os.Setenv("common_name", "test@example.com")
+	os.Setenv("username", "testuser")
+	os.Setenv("trusted_ip", "10.0.0.1")
+	os.Setenv("untrusted_ip", "192.168.1.100")
+	os.Setenv("untrusted_port", "51234")
+	os.Setenv("ifconfig_pool_remote_ip", "10.8.0.5")
+
+	env := GetOpenVPNEnv()
+
+	if env["common_name"] != "test@example.com" {
+		t.Errorf("Expected common_name 'test@example.com', got '%s'", env["common_name"])
+	}
+	if env["username"] != "testuser" {
+		t.Errorf("Expected username 'testuser', got '%s'", env["username"])
+	}
+	if env["trusted_ip"] != "10.0.0.1" {
+		t.Errorf("Expected trusted_ip '10.0.0.1', got '%s'", env["trusted_ip"])
+	}
+	if env["untrusted_ip"] != "192.168.1.100" {
+		t.Errorf("Expected untrusted_ip '192.168.1.100', got '%s'", env["untrusted_ip"])
+	}
+	if env["ifconfig_pool_remote_ip"] != "10.8.0.5" {
+		t.Errorf("Expected ifconfig_pool_remote_ip '10.8.0.5', got '%s'", env["ifconfig_pool_remote_ip"])
+	}
+
+	// Empty env vars should not be included
+	os.Unsetenv("password")
+	env = GetOpenVPNEnv()
+	if _, exists := env["password"]; exists {
+		t.Error("Expected password to not be in env map when not set")
+	}
+}
+
+func TestGetOpenVPNEnv_Empty(t *testing.T) {
+	// Save and restore original environment
+	envVars := []string{
+		"common_name", "username", "password", "trusted_ip",
+		"untrusted_ip", "untrusted_port",
+	}
+	originalEnv := make(map[string]string)
+	for _, v := range envVars {
+		originalEnv[v] = os.Getenv(v)
+		os.Unsetenv(v)
+	}
+	defer func() {
+		for k, v := range originalEnv {
+			if v == "" {
+				os.Unsetenv(k)
+			} else {
+				os.Setenv(k, v)
+			}
+		}
+	}()
+
+	env := GetOpenVPNEnv()
+
+	// Should return empty map when no env vars are set
+	if len(env) != 0 {
+		t.Errorf("Expected empty env map, got %d entries", len(env))
+	}
+}
+
+func TestBuildHookRequest(t *testing.T) {
+	// Save and restore original environment
+	envVars := []string{
+		"common_name", "username", "password", "trusted_ip",
+		"untrusted_ip", "untrusted_port", "tls_serial_hex_0",
+		"tls_digest_sha256_0", "ifconfig_local", "ifconfig_pool_remote_ip",
+	}
+	originalEnv := make(map[string]string)
+	for _, v := range envVars {
+		originalEnv[v] = os.Getenv(v)
+	}
+	defer func() {
+		for k, v := range originalEnv {
+			if v == "" {
+				os.Unsetenv(k)
+			} else {
+				os.Setenv(k, v)
+			}
+		}
+	}()
+
+	// Set test environment variables
+	os.Setenv("common_name", "user@example.com")
+	os.Setenv("username", "testuser")
+	os.Setenv("password", "auth-token-123")
+	os.Setenv("trusted_ip", "10.0.0.1")
+	os.Setenv("untrusted_ip", "192.168.1.100")
+	os.Setenv("untrusted_port", "51234")
+	os.Setenv("tls_serial_hex_0", "AABBCCDD")
+	os.Setenv("tls_digest_sha256_0", "sha256fingerprint")
+	os.Setenv("ifconfig_local", "10.8.0.1")
+	os.Setenv("ifconfig_pool_remote_ip", "10.8.0.5")
+
+	req := BuildHookRequest(HookClientConnect)
+
+	if req.Type != HookClientConnect {
+		t.Errorf("Expected Type '%s', got '%s'", HookClientConnect, req.Type)
+	}
+	if req.CommonName != "user@example.com" {
+		t.Errorf("Expected CommonName 'user@example.com', got '%s'", req.CommonName)
+	}
+	if req.Username != "testuser" {
+		t.Errorf("Expected Username 'testuser', got '%s'", req.Username)
+	}
+	if req.Password != "auth-token-123" {
+		t.Errorf("Expected Password 'auth-token-123', got '%s'", req.Password)
+	}
+	if req.TrustedIP != "10.0.0.1" {
+		t.Errorf("Expected TrustedIP '10.0.0.1', got '%s'", req.TrustedIP)
+	}
+	if req.UntrustedIP != "192.168.1.100" {
+		t.Errorf("Expected UntrustedIP '192.168.1.100', got '%s'", req.UntrustedIP)
+	}
+	if req.UntrustedPort != "51234" {
+		t.Errorf("Expected UntrustedPort '51234', got '%s'", req.UntrustedPort)
+	}
+	if req.TLSSerial != "AABBCCDD" {
+		t.Errorf("Expected TLSSerial 'AABBCCDD', got '%s'", req.TLSSerial)
+	}
+	if req.TLSFingerprint != "sha256fingerprint" {
+		t.Errorf("Expected TLSFingerprint 'sha256fingerprint', got '%s'", req.TLSFingerprint)
+	}
+	if req.IFConfigLocal != "10.8.0.1" {
+		t.Errorf("Expected IFConfigLocal '10.8.0.1', got '%s'", req.IFConfigLocal)
+	}
+	if req.IFConfigRemote != "10.8.0.5" {
+		t.Errorf("Expected IFConfigRemote '10.8.0.5', got '%s'", req.IFConfigRemote)
+	}
+
+	// Verify Env map is populated
+	if req.Env == nil {
+		t.Error("Expected Env map to be populated")
+	}
+	if req.Env["common_name"] != "user@example.com" {
+		t.Errorf("Expected Env[common_name] 'user@example.com', got '%s'", req.Env["common_name"])
+	}
+}
+
+func TestBuildHookRequest_AllHookTypes(t *testing.T) {
+	hookTypes := []HookType{
+		HookAuthUserPassVerify,
+		HookTLSVerify,
+		HookClientConnect,
+		HookClientDisconnect,
+	}
+
+	for _, hookType := range hookTypes {
+		t.Run(string(hookType), func(t *testing.T) {
+			req := BuildHookRequest(hookType)
+			if req.Type != hookType {
+				t.Errorf("Expected Type '%s', got '%s'", hookType, req.Type)
+			}
+		})
+	}
+}

@@ -138,9 +138,14 @@ export default function AdminNetworks() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="space-y-1">
-                      <code className="px-2 py-1 bg-theme-tertiary rounded text-sm font-mono text-theme-secondary">
-                        {network.cidr}
-                      </code>
+                      {network.cidr && (
+                        <div>
+                          <code className="px-2 py-1 bg-theme-tertiary rounded text-sm font-mono text-theme-secondary">
+                            {network.cidr}
+                          </code>
+                          {network.cidrV6 && <span className="ml-1 text-xs text-theme-muted">IPv4</span>}
+                        </div>
+                      )}
                       {network.cidrV6 && (
                         <div>
                           <code className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 rounded text-sm font-mono text-purple-700 dark:text-purple-300">
@@ -264,11 +269,18 @@ function NetworkModal({ network, onClose, onSuccess }: NetworkModalProps) {
     setSubmitting(true)
     setError(null)
 
+    // Validate that at least one CIDR is provided
+    if (!cidr && !cidrV6) {
+      setError('At least one of IPv4 or IPv6 CIDR is required')
+      setSubmitting(false)
+      return
+    }
+
     try {
       const req = {
         name,
         description,
-        cidr,
+        cidr: cidr || undefined,
         cidrV6: cidrV6 || undefined,
         is_active: isActive
       }
@@ -314,9 +326,13 @@ function NetworkModal({ network, onClose, onSuccess }: NetworkModalProps) {
             />
           </div>
 
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm text-blue-700 dark:text-blue-300">
+            Provide IPv4, IPv6, or both CIDR blocks. At least one is required.
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-theme-secondary mb-1">
-              IPv4 CIDR Block *
+              IPv4 CIDR Block
             </label>
             <input
               type="text"
@@ -324,7 +340,6 @@ function NetworkModal({ network, onClose, onSuccess }: NetworkModalProps) {
               onChange={(e) => setCidr(e.target.value)}
               placeholder="10.0.0.0/23"
               className="input font-mono"
-              required
             />
             <p className="text-xs text-theme-muted mt-1">e.g., 10.0.0.0/24, 192.168.1.0/24</p>
           </div>
@@ -332,7 +347,6 @@ function NetworkModal({ network, onClose, onSuccess }: NetworkModalProps) {
           <div>
             <label className="block text-sm font-medium text-theme-secondary mb-1">
               IPv6 CIDR Block
-              <span className="ml-2 text-xs font-normal text-purple-600 dark:text-purple-400">(Optional)</span>
             </label>
             <input
               type="text"

@@ -436,7 +436,7 @@ export default function AdminMesh() {
                             {spoke.localNetworks.length > 0 ? (
                               <div className="flex flex-wrap gap-1">
                                 {spoke.localNetworks.map((net, i) => (
-                                  <span key={i} className="px-2 py-0.5 bg-slate-700 text-slate-200 rounded text-xs font-medium">{net}</span>
+                                  <span key={i} className="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded text-xs font-medium">{net}</span>
                                 ))}
                               </div>
                             ) : (
@@ -444,7 +444,8 @@ export default function AdminMesh() {
                             )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-tertiary">
-                            {spoke.tunnelIp || <span className="text-theme-muted">Not assigned</span>}
+                            <div>{spoke.tunnelIp || <span className="text-theme-muted">Not assigned</span>}</div>
+                            {spoke.tunnelIpV6 && <div className="text-xs text-theme-muted">{spoke.tunnelIpV6}</div>}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-tertiary">
                             {spoke.lastSeen
@@ -643,8 +644,25 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
     setLoading(true)
     setError(null)
 
+    // Validate that at least one public endpoint is provided
+    if (!form.publicEndpoint && !form.publicEndpointV6) {
+      setError('At least one of IPv4 or IPv6 public endpoint is required')
+      setLoading(false)
+      return
+    }
+
+    // Validate that at least one VPN subnet is provided
+    if (!form.vpnSubnet && !form.vpnSubnetV6) {
+      setError('At least one of IPv4 or IPv6 VPN subnet is required')
+      setLoading(false)
+      return
+    }
+
     try {
-      const hub = await createMeshHub(form)
+      const hub = await createMeshHub({
+        ...form,
+        vpnSubnet: form.vpnSubnet || undefined,
+      })
       onSuccess(hub)
     } catch (err) {
       setError('Failed to create hub')
@@ -723,17 +741,32 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
               </p>
             </div>
 
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm text-blue-700 dark:text-blue-300">
+              Provide IPv4, IPv6, or both public endpoints. At least one is required.
+            </div>
+
             <div>
-              <label className="block text-sm font-medium text-theme-secondary">Public Endpoint</label>
+              <label className="block text-sm font-medium text-theme-secondary">Public Endpoint (IPv4)</label>
               <input
                 type="text"
-                value={form.publicEndpoint}
+                value={form.publicEndpoint || ''}
                 onChange={(e) => setForm({ ...form, publicEndpoint: e.target.value })}
                 className="input"
-                required
                 placeholder="e.g., hub.example.com or 1.2.3.4"
               />
-              <p className="text-xs text-theme-tertiary mt-1">The public hostname or IP where spokes will connect</p>
+              <p className="text-xs text-theme-tertiary mt-1">The public hostname or IPv4 address where spokes will connect</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-theme-secondary">Public Endpoint (IPv6)</label>
+              <input
+                type="text"
+                value={form.publicEndpointV6 || ''}
+                onChange={(e) => setForm({ ...form, publicEndpointV6: e.target.value })}
+                className="input"
+                placeholder="e.g., 2001:db8::1"
+              />
+              <p className="text-xs text-theme-tertiary mt-1">The public IPv6 address where spokes will connect</p>
             </div>
 
             {/* OpenVPN-specific fields */}
@@ -762,14 +795,29 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                   </div>
                 </div>
 
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm text-blue-700 dark:text-blue-300">
+                  Provide IPv4, IPv6, or both VPN subnets. At least one is required.
+                </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-theme-secondary">VPN Subnet</label>
+                  <label className="block text-sm font-medium text-theme-secondary">VPN Subnet (IPv4)</label>
                   <input
                     type="text"
                     value={form.vpnSubnet}
                     onChange={(e) => setForm({ ...form, vpnSubnet: e.target.value })}
                     className="input"
                     placeholder="172.30.0.0/16"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-theme-secondary">VPN Subnet (IPv6)</label>
+                  <input
+                    type="text"
+                    value={form.vpnSubnetV6 || ''}
+                    onChange={(e) => setForm({ ...form, vpnSubnetV6: e.target.value })}
+                    className="input"
+                    placeholder="fd00::/64"
                   />
                 </div>
 
@@ -804,27 +852,41 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             {/* WireGuard-specific fields */}
             {form.gatewayType === 'wireguard' && (
               <>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-theme-secondary">WireGuard Port</label>
-                    <input
-                      type="number"
-                      value={form.wgListenPort}
-                      onChange={(e) => setForm({ ...form, wgListenPort: parseInt(e.target.value) })}
-                      className="input"
-                    />
-                    <p className="text-xs text-theme-tertiary mt-1">UDP only</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-theme-secondary">VPN Subnet</label>
-                    <input
-                      type="text"
-                      value={form.vpnSubnet}
-                      onChange={(e) => setForm({ ...form, vpnSubnet: e.target.value })}
-                      className="input"
-                      placeholder="172.30.0.0/16"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-theme-secondary">WireGuard Port</label>
+                  <input
+                    type="number"
+                    value={form.wgListenPort}
+                    onChange={(e) => setForm({ ...form, wgListenPort: parseInt(e.target.value) })}
+                    className="input"
+                  />
+                  <p className="text-xs text-theme-tertiary mt-1">UDP only</p>
+                </div>
+
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm text-blue-700 dark:text-blue-300">
+                  Provide IPv4, IPv6, or both VPN subnets. At least one is required.
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-theme-secondary">VPN Subnet (IPv4)</label>
+                  <input
+                    type="text"
+                    value={form.vpnSubnet}
+                    onChange={(e) => setForm({ ...form, vpnSubnet: e.target.value })}
+                    className="input"
+                    placeholder="172.30.0.0/16"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-theme-secondary">VPN Subnet (IPv6)</label>
+                  <input
+                    type="text"
+                    value={form.vpnSubnetV6 || ''}
+                    onChange={(e) => setForm({ ...form, vpnSubnetV6: e.target.value })}
+                    className="input"
+                    placeholder="fd00::/64"
+                  />
                 </div>
 
                 <div>
@@ -902,12 +964,12 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                 {form.dnsServers && form.dnsServers.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
                     {form.dnsServers.map((dns, idx) => (
-                      <span key={idx} className="px-2 py-1 bg-slate-700 text-slate-200 rounded text-sm flex items-center font-medium">
+                      <span key={idx} className="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded text-sm flex items-center font-medium">
                         {dns}
                         <button
                           type="button"
                           onClick={() => setForm({ ...form, dnsServers: form.dnsServers?.filter((_, i) => i !== idx) })}
-                          className="ml-1 text-violet-500 hover:text-red-600"
+                          className="ml-1 text-red-500 hover:text-red-600"
                         >
                           ×
                         </button>
@@ -1059,7 +1121,7 @@ function AddSpokeModal({ hubId, hubGatewayType, onClose, onSuccess }: { hubId: s
                   value={networkInput}
                   onChange={(e) => setNetworkInput(e.target.value)}
                   className="input flex-1"
-                  placeholder="e.g., 10.0.0.0/8"
+                  placeholder="e.g., 10.0.0.0/8 or fd00::/64"
                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addNetwork())}
                 />
                 <button type="button" onClick={addNetwork} className="btn btn-secondary">Add</button>
@@ -1068,9 +1130,9 @@ function AddSpokeModal({ hubId, hubGatewayType, onClose, onSuccess }: { hubId: s
               {form.localNetworks.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   {form.localNetworks.map((net) => (
-                    <span key={net} className="px-2 py-1 bg-slate-700 text-slate-200 rounded text-sm flex items-center font-medium">
+                    <span key={net} className="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded text-sm flex items-center font-medium">
                       {net}
-                      <button type="button" onClick={() => removeNetwork(net)} className="ml-1 text-emerald-500 hover:text-red-600">×</button>
+                      <button type="button" onClick={() => removeNetwork(net)} className="ml-1 text-red-500 hover:text-red-600">×</button>
                     </span>
                   ))}
                 </div>
@@ -2062,7 +2124,7 @@ function ManageSpokeAccessModal({ spoke, onClose }: { spoke: MeshSpoke; onClose:
 
 // Edit Hub Modal Component
 function EditHubModal({ hub, onClose, onSuccess }: { hub: MeshHub; onClose: () => void; onSuccess: () => void }) {
-  const [form, setForm] = useState({ name: hub.name, description: hub.description || '', publicEndpoint: hub.publicEndpoint || '', vpnPort: hub.vpnPort || 1194, vpnProtocol: hub.vpnProtocol || 'udp', vpnSubnet: hub.vpnSubnet || '172.30.0.0/16', cryptoProfile: hub.cryptoProfile || 'modern' as CryptoProfile, tlsAuthEnabled: hub.tlsAuthEnabled ?? true, fullTunnelMode: hub.fullTunnelMode ?? false, pushDns: hub.pushDns ?? false, dnsServers: hub.dnsServers || [], localNetworks: hub.localNetworks || [], sessionEnabled: hub.sessionEnabled ?? true })
+  const [form, setForm] = useState({ name: hub.name, description: hub.description || '', publicEndpoint: hub.publicEndpoint || '', vpnPort: hub.vpnPort || 1194, vpnProtocol: hub.vpnProtocol || 'udp', vpnSubnet: hub.vpnSubnet || '172.30.0.0/16', vpnSubnetV6: hub.vpnSubnetV6 || '', cryptoProfile: hub.cryptoProfile || 'modern' as CryptoProfile, tlsAuthEnabled: hub.tlsAuthEnabled ?? true, fullTunnelMode: hub.fullTunnelMode ?? false, pushDns: hub.pushDns ?? false, dnsServers: hub.dnsServers || [], localNetworks: hub.localNetworks || [], sessionEnabled: hub.sessionEnabled ?? true })
   const [dnsInput, setDnsInput] = useState('')
   const [networkInput, setNetworkInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -2093,7 +2155,8 @@ function EditHubModal({ hub, onClose, onSuccess }: { hub: MeshHub; onClose: () =
                   <input type="number" value={form.vpnPort} onChange={(e) => setForm({ ...form, vpnPort: parseInt(e.target.value) })} className="input" />
                   <p className="text-xs text-theme-tertiary mt-1">WireGuard uses UDP only</p>
                 </div>
-                <div><label className="block text-sm font-medium text-theme-secondary">VPN Subnet</label><input type="text" value={form.vpnSubnet} onChange={(e) => setForm({ ...form, vpnSubnet: e.target.value })} className="input" /></div>
+                <div><label className="block text-sm font-medium text-theme-secondary">VPN Subnet (IPv4)</label><input type="text" value={form.vpnSubnet} onChange={(e) => setForm({ ...form, vpnSubnet: e.target.value })} className="input" /></div>
+                <div><label className="block text-sm font-medium text-theme-secondary">VPN Subnet (IPv6)</label><input type="text" value={form.vpnSubnetV6} onChange={(e) => setForm({ ...form, vpnSubnetV6: e.target.value })} className="input" placeholder="fd00::/64" /><p className="text-xs text-theme-tertiary mt-1">Optional IPv6 subnet for dual-stack.</p></div>
                 <div>
                   <label className="block text-sm font-medium text-theme-secondary">Crypto Profile</label>
                   <div className="w-full px-3 py-2 bg-theme-tertiary border border-theme rounded-lg text-theme-secondary">
@@ -2107,7 +2170,8 @@ function EditHubModal({ hub, onClose, onSuccess }: { hub: MeshHub; onClose: () =
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-theme-secondary">Port</label><input type="number" value={form.vpnPort} onChange={(e) => setForm({ ...form, vpnPort: parseInt(e.target.value) })} className="input" /></div><div><label className="block text-sm font-medium text-theme-secondary">Protocol</label><select value={form.vpnProtocol} onChange={(e) => setForm({ ...form, vpnProtocol: e.target.value })} className="input"><option value="udp">UDP</option><option value="tcp">TCP</option></select></div></div>
-                <div><label className="block text-sm font-medium text-theme-secondary">VPN Subnet</label><input type="text" value={form.vpnSubnet} onChange={(e) => setForm({ ...form, vpnSubnet: e.target.value })} className="input" /></div>
+                <div><label className="block text-sm font-medium text-theme-secondary">VPN Subnet (IPv4)</label><input type="text" value={form.vpnSubnet} onChange={(e) => setForm({ ...form, vpnSubnet: e.target.value })} className="input" /></div>
+                <div><label className="block text-sm font-medium text-theme-secondary">VPN Subnet (IPv6)</label><input type="text" value={form.vpnSubnetV6} onChange={(e) => setForm({ ...form, vpnSubnetV6: e.target.value })} className="input" placeholder="fd00::/64" /><p className="text-xs text-theme-tertiary mt-1">Optional IPv6 subnet for dual-stack.</p></div>
                 <div><label className="block text-sm font-medium text-theme-secondary">Crypto Profile</label><select value={form.cryptoProfile} onChange={(e) => setForm({ ...form, cryptoProfile: e.target.value as CryptoProfile })} className="input"><option value="modern">Modern</option><option value="fips">FIPS</option><option value="compatible">Compatible</option></select></div>
               </>
             )}
@@ -2119,8 +2183,8 @@ function EditHubModal({ hub, onClose, onSuccess }: { hub: MeshHub; onClose: () =
               <label className="flex items-center"><input type="checkbox" checked={form.fullTunnelMode} onChange={(e) => setForm({ ...form, fullTunnelMode: e.target.checked })} className="mr-2" /><span className="text-sm">Full Tunnel</span></label>
               <label className="flex items-center"><input type="checkbox" checked={form.pushDns} onChange={(e) => setForm({ ...form, pushDns: e.target.checked })} className="mr-2" /><span className="text-sm">Push DNS</span></label>
             </div>
-            {form.pushDns && <div><label className="block text-sm font-medium text-theme-secondary">DNS Servers</label><div className="flex space-x-2"><input type="text" value={dnsInput} onChange={(e) => setDnsInput(e.target.value)} className="input flex-1" placeholder="1.1.1.1" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (dnsInput) { setForm({ ...form, dnsServers: [...form.dnsServers, dnsInput] }); setDnsInput('') } } }} /><button type="button" onClick={() => { if (dnsInput) { setForm({ ...form, dnsServers: [...form.dnsServers, dnsInput] }); setDnsInput('') } }} className="btn btn-secondary">Add</button></div>{form.dnsServers.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.dnsServers.map((d) => <span key={d} className="px-2 py-1 bg-slate-700 text-slate-200 rounded text-sm font-medium">{d}<button type="button" onClick={() => setForm({ ...form, dnsServers: form.dnsServers.filter(x => x !== d) })} className="ml-1 text-violet-500 hover:text-red-600">×</button></span>)}</div>}</div>}
-            <div><label className="block text-sm font-medium text-theme-secondary">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="192.168.1.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((n) => <span key={n} className="px-2 py-1 bg-slate-700 text-slate-200 rounded text-sm font-medium">{n}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(x => x !== n) })} className="ml-1 text-emerald-500 hover:text-red-600">×</button></span>)}</div>}</div>
+            {form.pushDns && <div><label className="block text-sm font-medium text-theme-secondary">DNS Servers</label><div className="flex space-x-2"><input type="text" value={dnsInput} onChange={(e) => setDnsInput(e.target.value)} className="input flex-1" placeholder="1.1.1.1" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (dnsInput) { setForm({ ...form, dnsServers: [...form.dnsServers, dnsInput] }); setDnsInput('') } } }} /><button type="button" onClick={() => { if (dnsInput) { setForm({ ...form, dnsServers: [...form.dnsServers, dnsInput] }); setDnsInput('') } }} className="btn btn-secondary">Add</button></div>{form.dnsServers.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.dnsServers.map((d) => <span key={d} className="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded text-sm font-medium">{d}<button type="button" onClick={() => setForm({ ...form, dnsServers: form.dnsServers.filter(x => x !== d) })} className="ml-1 text-red-500 hover:text-red-600">×</button></span>)}</div>}</div>}
+            <div><label className="block text-sm font-medium text-theme-secondary">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="192.168.1.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((n) => <span key={n} className="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded text-sm font-medium">{n}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(x => x !== n) })} className="ml-1 text-red-500 hover:text-red-600">×</button></span>)}</div>}</div>
             <div className="flex items-center"><input type="checkbox" id="editHubSessionEnabled" checked={form.sessionEnabled ?? true} onChange={(e) => setForm({ ...form, sessionEnabled: e.target.checked })} className="rounded border-theme text-primary-600 focus:ring-primary-500" /><label htmlFor="editHubSessionEnabled" className="ml-2 text-sm text-theme-secondary">Enable Remote Sessions</label></div>
             <p className="text-xs text-theme-tertiary -mt-2">Allow administrators to run commands on this hub via the Remote Sessions page.</p>
             <div className="flex justify-end space-x-3 pt-4"><button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button><button type="submit" disabled={loading} className="btn btn-primary">{loading ? 'Saving...' : 'Save'}</button></div>
@@ -2165,7 +2229,7 @@ function EditSpokeModal({ spoke, onClose, onSuccess }: { spoke: MeshSpoke; onClo
                 </p>
               </div>
             )}
-            <div><label className="block text-sm font-medium text-theme-secondary">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="e.g., 10.0.0.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div><p className="text-xs text-theme-tertiary mt-1">Networks behind this spoke routable via hub</p>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((net) => <span key={net} className="px-2 py-1 bg-slate-700 text-slate-200 rounded text-sm flex items-center font-medium">{net}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(n => n !== net) })} className="ml-1 text-emerald-500 hover:text-red-600">×</button></span>)}</div>}</div>
+            <div><label className="block text-sm font-medium text-theme-secondary">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="e.g., 10.0.0.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div><p className="text-xs text-theme-tertiary mt-1">Networks behind this spoke routable via hub</p>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((net) => <span key={net} className="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded text-sm flex items-center font-medium">{net}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(n => n !== net) })} className="ml-1 text-red-500 hover:text-red-600">×</button></span>)}</div>}</div>
             <div className="flex items-center"><input type="checkbox" id="editSpokeSessionEnabled" checked={form.sessionEnabled ?? true} onChange={(e) => setForm({ ...form, sessionEnabled: e.target.checked })} className="rounded border-theme text-primary-600 focus:ring-primary-500" /><label htmlFor="editSpokeSessionEnabled" className="ml-2 text-sm text-theme-secondary">Enable Remote Sessions</label></div>
             <p className="text-xs text-theme-tertiary -mt-2">Allow administrators to run commands on this spoke via the Remote Sessions page.</p>
             <div className="flex justify-end space-x-3 pt-4"><button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button><button type="submit" disabled={loading} className="btn btn-primary">{loading ? 'Saving...' : 'Save'}</button></div>
