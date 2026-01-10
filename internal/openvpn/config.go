@@ -105,11 +105,12 @@ func GetCryptoSettings(profile string) CryptoSettings {
 			CryptoProfile: "FIPS 140-3 Compliant",
 		}
 	case CryptoProfileCompatible:
-		// Maximum compatibility with older clients
+		// Maximum compatibility with older clients while maintaining TLS 1.2 minimum
+		// Note: TLS 1.0/1.1 are deprecated and have known vulnerabilities
 		return CryptoSettings{
 			Cipher:        "AES-256-CBC",
 			Auth:          "SHA256",
-			TLSVersionMin: "1.0",
+			TLSVersionMin: "1.2",
 			TLSCipher:     "", // Let OpenVPN negotiate
 			DataCiphers:   "AES-256-GCM:AES-128-GCM:AES-256-CBC:AES-128-CBC",
 			CryptoProfile: "Compatible (Legacy Support)",
