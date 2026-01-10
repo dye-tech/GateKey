@@ -20,13 +20,28 @@ server:
 # Database configuration
 database:
   # PostgreSQL connection string
-  url: "postgres://gatex:gatex@localhost:5432/gatex?sslmode=disable"
+  # Note: sslmode in URL is overridden by ssl_mode config below
+  url: "postgres://gatex:gatex@localhost:5432/gatex?sslmode=require"
   # Maximum open connections
   max_open_conns: 25
   # Maximum idle connections
   max_idle_conns: 5
   # Connection max lifetime
   conn_max_lifetime: "5m"
+  # SSL/TLS mode for database connections (default: require)
+  # Options:
+  #   disable     - No encryption (NOT recommended for production)
+  #   require     - Encrypted, no certificate verification (default)
+  #   verify-ca   - Encrypted, verify server certificate against CA
+  #   verify-full - Encrypted, verify certificate and hostname
+  # Can be overridden via DATABASE_SSL_MODE environment variable
+  ssl_mode: "require"
+  # Path to CA certificate (required for verify-ca/verify-full modes)
+  # ssl_root_cert: "/path/to/ca.crt"
+  # Path to client certificate (for mTLS)
+  # ssl_cert: "/path/to/client.crt"
+  # Path to client private key (for mTLS)
+  # ssl_key: "/path/to/client.key"
 
 # PKI configuration
 pki:

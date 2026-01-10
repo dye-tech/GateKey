@@ -524,6 +524,59 @@ curl https://control-plane/pki/check/1234567890
 curl -o revoked.crl https://control-plane/pki/crl
 ```
 
+### Immediate User Session Termination
+
+GateKey provides the ability to immediately terminate active VPN sessions for specific users. This is critical for security incident response and access revocation.
+
+#### Capabilities
+
+| Action | Effect | Use Case |
+|--------|--------|----------|
+| **Disable User** | Terminates all sessions, revokes configs, prevents login | Employee offboarding, security incidents |
+| **Disconnect Session** | Terminates a specific VPN session | Maintenance, troubleshooting |
+| **Disconnect All Sessions** | Terminates all sessions for a user | Immediate access revocation |
+
+#### Key Security Features
+
+- **Individual User Targeting**: Only the specific user is affected - other users in the same groups are not impacted
+- **Infrastructure Preservation**: Gateways, hubs, and spokes remain running and serving other users
+- **Immediate Effect**: Sessions are terminated within seconds via the gateway polling mechanism
+- **Audit Trail**: All disconnect actions are logged with the admin who initiated them
+
+#### Usage
+
+**Web UI:**
+1. Navigate to Admin → Users & Groups
+2. Find the user and click Actions → Disable User
+
+**CLI:**
+```bash
+# Disable user and disconnect all sessions
+gatekey-admin user disable USER_ID --reason "Security concern"
+
+# Disconnect sessions without disabling account
+gatekey-admin user disconnect USER_ID
+
+# View active sessions for a user
+gatekey-admin user sessions USER_ID
+
+# Re-enable a disabled user
+gatekey-admin user enable USER_ID
+```
+
+**API:**
+```bash
+# Disable user
+curl -X POST https://control-plane/api/v1/admin/users/$USER_ID/disable \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "Security incident", "disconnect_active": true}'
+
+# Disconnect all sessions for a user
+curl -X POST https://control-plane/api/v1/admin/users/$USER_ID/disconnect \
+  -H "Authorization: Bearer $TOKEN"
+```
+
 ### CA Private Key Encryption
 
 CA private keys are encrypted at rest in the database using AES-256-GCM authenticated encryption.
@@ -697,9 +750,87 @@ db.QueryRow(ctx, "SELECT * FROM users WHERE email = '" + email + "'")
 
 #### Connection Security
 
-- TLS required for production database connections
+- TLS required for production database connections (`ssl_mode: require` default)
 - Connection pooling with secure defaults
 - Automatic connection health checks
+
+#### Database TLS Configuration
+
+GateKey requires encrypted connections to PostgreSQL by default. The SSL/TLS mode can be configured via environment variable or config file.
+
+##### SSL Modes
+
+| Mode | Description | Recommended For |
+|------|-------------|-----------------|
+| `disable` | No encryption (NOT recommended) | Local development only |
+| `require` | Encrypted, no certificate verification | **Default** - Internal networks with self-signed certs |
+| `verify-ca` | Encrypted, verify CA signature | Production with internal CA |
+| `verify-full` | Encrypted, verify CA + hostname | Production with public CA |
+
+##### Configuration
+
+**Environment Variable (Recommended):**
+
+```bash
+# Set SSL mode via environment variable
+export DATABASE_SSL_MODE=require
+```
+
+**Config File:**
+
+```yaml
+database:
+  url: "${DATABASE_URL}"
+  ssl_mode: "${DATABASE_SSL_MODE}"  # Defaults to 'require'
+  # For verify-ca/verify-full modes:
+  ssl_root_cert: "/path/to/ca.crt"
+  ssl_cert: "/path/to/client.crt"  # Optional: for mTLS
+  ssl_key: "/path/to/client.key"   # Optional: for mTLS
+```
+
+**Database URL:**
+
+The `sslmode` parameter in the database URL also controls TLS:
+
+```
+postgres://user:pass@host:5432/db?sslmode=require
+```
+
+##### PostgreSQL Server Configuration
+
+For TLS to work, PostgreSQL must be configured with SSL:
+
+```conf
+# postgresql.conf
+ssl = on
+ssl_cert_file = '/path/to/server.crt'
+ssl_key_file = '/path/to/server.key'
+```
+
+##### Kubernetes Deployment
+
+When deploying on Kubernetes, the included manifests automatically:
+
+1. Generate self-signed TLS certificates for PostgreSQL via init container
+2. Configure PostgreSQL with SSL enabled
+3. Set `DATABASE_SSL_MODE=require` on the application
+
+To override the SSL mode in Kubernetes:
+
+```yaml
+env:
+  - name: DATABASE_SSL_MODE
+    value: "verify-ca"  # Override the default
+  - name: DATABASE_SSL_ROOT_CERT
+    value: "/path/to/ca.crt"
+```
+
+##### Security Best Practices
+
+1. **Production**: Use `require` at minimum, `verify-ca` or `verify-full` preferred
+2. **Never use `disable`** in production - credentials transmitted in cleartext
+3. **Certificate rotation**: PostgreSQL certs should be rotated annually
+4. **Network isolation**: Even with TLS, database should not be publicly accessible
 
 ### Cryptographic Standards
 
