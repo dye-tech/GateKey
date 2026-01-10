@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -38,16 +37,27 @@ type InterfacePeerStats struct {
 
 // InterfaceManager manages a WireGuard network interface.
 type InterfaceManager struct {
-	name   string
-	config InterfaceConfig
-	logger *zap.Logger
+	name     string
+	config   InterfaceConfig
+	logger   *zap.Logger
+	executor CommandExecutor
 }
 
 // NewInterfaceManager creates a new interface manager.
 func NewInterfaceManager(name string, logger *zap.Logger) *InterfaceManager {
 	return &InterfaceManager{
-		name:   name,
-		logger: logger,
+		name:     name,
+		logger:   logger,
+		executor: DefaultExecutor(),
+	}
+}
+
+// NewInterfaceManagerWithExecutor creates an interface manager with a custom executor (for testing).
+func NewInterfaceManagerWithExecutor(name string, logger *zap.Logger, executor CommandExecutor) *InterfaceManager {
+	return &InterfaceManager{
+		name:     name,
+		logger:   logger,
+		executor: executor,
 	}
 }
 
@@ -89,8 +99,7 @@ func (m *InterfaceManager) Setup(ctx context.Context, config InterfaceConfig) er
 
 // Teardown removes the WireGuard interface.
 func (m *InterfaceManager) Teardown(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "ip", "link", "delete", m.name)
-	if err := cmd.Run(); err != nil {
+	if err := m.executor.Run(ctx, "ip", "link", "delete", m.name); err != nil {
 		// Don't return error if interface doesn't exist
 		if !strings.Contains(err.Error(), "Cannot find device") {
 			return fmt.Errorf("failed to delete interface: %w", err)
@@ -102,8 +111,7 @@ func (m *InterfaceManager) Teardown(ctx context.Context) error {
 // createInterface creates the WireGuard interface.
 func (m *InterfaceManager) createInterface(ctx context.Context) error {
 	// Check if interface already exists
-	cmd := exec.CommandContext(ctx, "ip", "link", "show", m.name)
-	if cmd.Run() == nil {
+	if m.executor.Run(ctx, "ip", "link", "show", m.name) == nil {
 		// Interface exists, delete it first
 		if err := m.Teardown(ctx); err != nil {
 			return err
@@ -111,8 +119,7 @@ func (m *InterfaceManager) createInterface(ctx context.Context) error {
 	}
 
 	// Try kernel module first
-	cmd = exec.CommandContext(ctx, "ip", "link", "add", m.name, "type", "wireguard")
-	output, err := cmd.CombinedOutput()
+	output, err := m.executor.Output(ctx, "ip", "link", "add", m.name, "type", "wireguard")
 	if err == nil {
 		return nil
 	}
@@ -120,25 +127,27 @@ func (m *InterfaceManager) createInterface(ctx context.Context) error {
 	// If kernel module not available, try wireguard-go
 	outputStr := string(output)
 	if strings.Contains(outputStr, "Operation not supported") || strings.Contains(outputStr, "not supported") {
-		m.logger.Info("Kernel WireGuard not available, trying wireguard-go userspace implementation")
+		if m.logger != nil {
+			m.logger.Info("Kernel WireGuard not available, trying wireguard-go userspace implementation")
+		}
 
 		// Check if wireguard-go is available
-		wgGoPath, err := exec.LookPath("wireguard-go")
+		wgGoPath, err := m.executor.LookPath("wireguard-go")
 		if err != nil {
 			return fmt.Errorf("kernel WireGuard not supported and wireguard-go not found in PATH: %w", err)
 		}
 
 		// Start wireguard-go in background mode (default behavior - it forks)
-		wgGoCmd := exec.CommandContext(ctx, wgGoPath, m.name)
-		if wgOutput, err := wgGoCmd.CombinedOutput(); err != nil {
+		if wgOutput, err := m.executor.Output(ctx, wgGoPath, m.name); err != nil {
 			return fmt.Errorf("wireguard-go failed: %s: %w", string(wgOutput), err)
 		}
 
 		// Wait for the interface to be created
 		for i := 0; i < 30; i++ {
-			cmd := exec.CommandContext(ctx, "ip", "link", "show", m.name)
-			if cmd.Run() == nil {
-				m.logger.Info("WireGuard interface created via wireguard-go", zap.String("interface", m.name))
+			if m.executor.Run(ctx, "ip", "link", "show", m.name) == nil {
+				if m.logger != nil {
+					m.logger.Info("WireGuard interface created via wireguard-go", zap.String("interface", m.name))
+				}
 				return nil
 			}
 			select {
@@ -168,8 +177,7 @@ func (m *InterfaceManager) setPrivateKey(ctx context.Context) error {
 	}
 	tmpFile.Close()
 
-	cmd := exec.CommandContext(ctx, "wg", "set", m.name, "private-key", tmpFile.Name())
-	if output, err := cmd.CombinedOutput(); err != nil {
+	if output, err := m.executor.Output(ctx, "wg", "set", m.name, "private-key", tmpFile.Name()); err != nil {
 		return fmt.Errorf("wg set private-key failed: %s: %w", string(output), err)
 	}
 	return nil
@@ -177,8 +185,7 @@ func (m *InterfaceManager) setPrivateKey(ctx context.Context) error {
 
 // setListenPort sets the WireGuard listen port.
 func (m *InterfaceManager) setListenPort(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "wg", "set", m.name, "listen-port", fmt.Sprintf("%d", m.config.ListenPort))
-	if output, err := cmd.CombinedOutput(); err != nil {
+	if output, err := m.executor.Output(ctx, "wg", "set", m.name, "listen-port", fmt.Sprintf("%d", m.config.ListenPort)); err != nil {
 		return fmt.Errorf("wg set listen-port failed: %s: %w", string(output), err)
 	}
 	return nil
@@ -186,8 +193,7 @@ func (m *InterfaceManager) setListenPort(ctx context.Context) error {
 
 // setAddress assigns an IP address to the interface.
 func (m *InterfaceManager) setAddress(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "ip", "address", "add", m.config.Address, "dev", m.name)
-	if output, err := cmd.CombinedOutput(); err != nil {
+	if output, err := m.executor.Output(ctx, "ip", "address", "add", m.config.Address, "dev", m.name); err != nil {
 		// Ignore "RTNETLINK answers: File exists" error (address already set)
 		if !strings.Contains(string(output), "File exists") {
 			return fmt.Errorf("ip address add failed: %s: %w", string(output), err)
@@ -198,8 +204,7 @@ func (m *InterfaceManager) setAddress(ctx context.Context) error {
 
 // bringUp brings the interface up.
 func (m *InterfaceManager) bringUp(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "ip", "link", "set", m.name, "up")
-	if output, err := cmd.CombinedOutput(); err != nil {
+	if output, err := m.executor.Output(ctx, "ip", "link", "set", m.name, "up"); err != nil {
 		return fmt.Errorf("ip link set up failed: %s: %w", string(output), err)
 	}
 	return nil
@@ -207,8 +212,7 @@ func (m *InterfaceManager) bringUp(ctx context.Context) error {
 
 // GetStats retrieves interface and peer statistics.
 func (m *InterfaceManager) GetStats(ctx context.Context) (*InterfaceStats, error) {
-	cmd := exec.CommandContext(ctx, "wg", "show", m.name, "dump")
-	output, err := cmd.Output()
+	output, err := m.executor.Output(ctx, "wg", "show", m.name, "dump")
 	if err != nil {
 		return nil, fmt.Errorf("wg show failed: %w", err)
 	}
@@ -264,8 +268,7 @@ func parseWgShowDump(output string) (*InterfaceStats, error) {
 
 // IsInterfaceUp checks if the interface exists and is up.
 func (m *InterfaceManager) IsInterfaceUp(ctx context.Context) bool {
-	cmd := exec.CommandContext(ctx, "ip", "link", "show", m.name, "up")
-	return cmd.Run() == nil
+	return m.executor.Run(ctx, "ip", "link", "show", m.name, "up") == nil
 }
 
 // AddPeer adds a peer to the WireGuard interface.
@@ -305,8 +308,7 @@ func (m *InterfaceManager) AddPeer(ctx context.Context, peer PeerConfig) error {
 		args = append(args, "persistent-keepalive", fmt.Sprintf("%d", peer.PersistentKeepalive))
 	}
 
-	cmd := exec.CommandContext(ctx, "wg", args...)
-	if output, err := cmd.CombinedOutput(); err != nil {
+	if output, err := m.executor.Output(ctx, "wg", args...); err != nil {
 		return fmt.Errorf("wg set peer failed: %s: %w", string(output), err)
 	}
 
@@ -324,8 +326,7 @@ func (m *InterfaceManager) AddPeer(ctx context.Context, peer PeerConfig) error {
 
 // RemovePeer removes a peer from the WireGuard interface.
 func (m *InterfaceManager) RemovePeer(ctx context.Context, publicKey string) error {
-	cmd := exec.CommandContext(ctx, "wg", "set", m.name, "peer", publicKey, "remove")
-	if output, err := cmd.CombinedOutput(); err != nil {
+	if output, err := m.executor.Output(ctx, "wg", "set", m.name, "peer", publicKey, "remove"); err != nil {
 		return fmt.Errorf("wg set peer remove failed: %s: %w", string(output), err)
 	}
 

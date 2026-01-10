@@ -107,10 +107,12 @@ export interface AdminGateway {
   name: string
   hostname: string
   publicIp: string
+  publicIpv6?: string
   vpnPort: number
   vpnProtocol: string
   cryptoProfile: CryptoProfile
   vpnSubnet: string
+  vpnSubnetV6?: string
   tlsAuthEnabled: boolean
   fullTunnelMode: boolean
   pushDns: boolean
@@ -131,10 +133,12 @@ export interface RegisterGatewayRequest {
   name: string
   hostname?: string
   public_ip?: string
+  public_ip_v6?: string
   vpn_port?: number
   vpn_protocol?: string
   crypto_profile?: CryptoProfile
   vpn_subnet?: string
+  vpn_subnet_v6?: string
   tls_auth_enabled?: boolean
   full_tunnel_mode?: boolean
   push_dns?: boolean
@@ -196,10 +200,12 @@ export interface UpdateGatewayRequest {
   name: string
   hostname?: string
   public_ip?: string
+  public_ip_v6?: string
   vpn_port?: number
   vpn_protocol?: string
   crypto_profile?: CryptoProfile
   vpn_subnet?: string
+  vpn_subnet_v6?: string
   tls_auth_enabled?: boolean
   full_tunnel_mode?: boolean
   push_dns?: boolean
@@ -265,8 +271,8 @@ export interface Network {
 export interface CreateNetworkRequest {
   name: string
   description?: string
-  cidr: string
-  cidrV6?: string // IPv6 CIDR (optional)
+  cidr?: string // IPv4 CIDR (optional if IPv6 provided)
+  cidrV6?: string // IPv6 CIDR (optional if IPv4 provided)
   is_active?: boolean
 }
 
@@ -362,8 +368,8 @@ export interface CreateAccessRuleRequest {
   name: string
   description?: string
   rule_type: AccessRuleType
-  value: string
-  value_v6?: string // IPv6 IP or CIDR (optional)
+  value?: string // IPv4 value (optional if IPv6 provided for IP/CIDR rules)
+  value_v6?: string // IPv6 IP or CIDR (optional if IPv4 provided)
   port_range?: string
   protocol?: string
   network_id?: string
@@ -1222,9 +1228,11 @@ export interface MeshHub {
   description: string
   gatewayType: GatewayType
   publicEndpoint: string
+  publicEndpointV6?: string
   vpnPort: number
   vpnProtocol: string
   vpnSubnet: string
+  vpnSubnetV6?: string
   cryptoProfile: CryptoProfile
   tlsAuthEnabled: boolean
   wgPublicKey?: string
@@ -1252,10 +1260,12 @@ export interface CreateMeshHubRequest {
   name: string
   description?: string
   gatewayType?: GatewayType  // 'openvpn' (default) or 'wireguard'
-  publicEndpoint: string
+  publicEndpoint?: string  // IPv4 public endpoint (optional if IPv6 provided)
+  publicEndpointV6?: string  // IPv6 public endpoint (optional if IPv4 provided)
   vpnPort?: number
   vpnProtocol?: string
-  vpnSubnet?: string
+  vpnSubnet?: string  // IPv4 VPN subnet (optional if IPv6 provided)
+  vpnSubnetV6?: string  // IPv6 VPN subnet (optional if IPv4 provided)
   cryptoProfile?: CryptoProfile
   tlsAuthEnabled?: boolean
   wgListenPort?: number  // WireGuard listen port (default: 51820)
@@ -1279,6 +1289,7 @@ export interface MeshSpoke {
   dnsServers: string[]
   sessionEnabled: boolean
   tunnelIp: string
+  tunnelIpV6?: string
   status: MeshSpokeStatus
   statusMessage: string
   bytesSent: number
@@ -1313,6 +1324,7 @@ export async function getMeshHubs(): Promise<MeshHub[]> {
     vpnPort: hub.vpnPort,
     vpnProtocol: hub.vpnProtocol,
     vpnSubnet: hub.vpnSubnet,
+    vpnSubnetV6: hub.vpnSubnetV6 as string | undefined,
     cryptoProfile: hub.cryptoProfile,
     tlsAuthEnabled: hub.tlsAuthEnabled,
     wgPublicKey: hub.wgPublicKey as string | undefined,
@@ -1344,6 +1356,7 @@ export async function getMeshHub(id: string): Promise<MeshHub> {
     vpnPort: hub.vpnPort,
     vpnProtocol: hub.vpnProtocol,
     vpnSubnet: hub.vpnSubnet,
+    vpnSubnetV6: hub.vpnSubnetV6,
     cryptoProfile: hub.cryptoProfile,
     tlsAuthEnabled: hub.tlsAuthEnabled,
     wgPublicKey: hub.wgPublicKey,
@@ -1375,6 +1388,7 @@ export async function createMeshHub(req: CreateMeshHubRequest): Promise<MeshHubW
     vpnPort: hub.vpnPort,
     vpnProtocol: hub.vpnProtocol,
     vpnSubnet: hub.vpnSubnet,
+    vpnSubnetV6: hub.vpnSubnetV6,
     cryptoProfile: hub.cryptoProfile,
     tlsAuthEnabled: hub.tlsAuthEnabled,
     wgPublicKey: hub.wgPublicKey,
@@ -1484,6 +1498,7 @@ export async function getMeshSpokes(hubId: string): Promise<MeshSpoke[]> {
     dnsServers: (spoke.dnsServers as string[]) || [],
     sessionEnabled: spoke.sessionEnabled ?? true,
     tunnelIp: spoke.tunnelIp || '',
+    tunnelIpV6: spoke.tunnelIpV6 as string | undefined,
     status: spoke.status,
     statusMessage: spoke.statusMessage || '',
     bytesSent: spoke.bytesSent || 0,
@@ -1512,6 +1527,7 @@ export async function getMeshSpoke(id: string): Promise<MeshSpoke> {
     dnsServers: spoke.dnsServers || [],
     sessionEnabled: spoke.sessionEnabled ?? true,
     tunnelIp: spoke.tunnelIp || '',
+    tunnelIpV6: spoke.tunnelIpV6,
     status: spoke.status,
     statusMessage: spoke.statusMessage || '',
     bytesSent: spoke.bytesSent || 0,
@@ -1540,6 +1556,7 @@ export async function createMeshSpoke(hubId: string, req: CreateMeshSpokeRequest
     dnsServers: spoke.dnsServers || [],
     sessionEnabled: spoke.sessionEnabled ?? true,
     tunnelIp: '',
+    tunnelIpV6: spoke.tunnelIpV6,
     token: spoke.token,
     status: spoke.status,
     statusMessage: '',
@@ -1956,6 +1973,7 @@ export interface TopologyGateway {
   name: string
   hostname: string
   publicIp: string
+  publicIpV6?: string
   vpnPort: number
   vpnProtocol: string
   isActive: boolean
@@ -1967,10 +1985,14 @@ export interface TopologyMeshHub {
   id: string
   name: string
   publicEndpoint: string
+  publicEndpointV6?: string
   publicIp: string
+  publicIpV6?: string
   vpnPort: number
   vpnSubnet: string
+  vpnSubnetV6?: string
   serverTunnelIp: string
+  serverTunnelIpV6?: string
   localNetworks: string[]
   status: string
   lastHeartbeat: string | null
@@ -1985,9 +2007,11 @@ export interface TopologyMeshSpoke {
   name: string
   localNetworks: string[]
   tunnelIp: string
+  tunnelIpV6?: string
   status: string
   lastSeen: string | null
   remoteIp: string
+  remoteIpV6?: string
   gatewayType: string // 'openvpn' or 'wireguard'
 }
 
