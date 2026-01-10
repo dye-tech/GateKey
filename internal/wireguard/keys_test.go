@@ -174,3 +174,161 @@ func TestPrivateKeyIsClamped(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateKey_TooLong(t *testing.T) {
+	// Test with a key that's too long (more than 32 bytes)
+	longKey := make([]byte, 64)
+	for i := range longKey {
+		longKey[i] = byte(i)
+	}
+	longKeyBase64 := base64.StdEncoding.EncodeToString(longKey)
+
+	err := ValidateKey(longKeyBase64)
+	if err == nil {
+		t.Error("ValidateKey should fail for key longer than 32 bytes")
+	}
+}
+
+func TestValidateKey_ExactLength(t *testing.T) {
+	// Test with exactly 32 bytes
+	exactKey := make([]byte, 32)
+	for i := range exactKey {
+		exactKey[i] = byte(i)
+	}
+	exactKeyBase64 := base64.StdEncoding.EncodeToString(exactKey)
+
+	err := ValidateKey(exactKeyBase64)
+	if err != nil {
+		t.Errorf("ValidateKey should pass for exactly 32 bytes: %v", err)
+	}
+}
+
+func TestDerivePublicKey_Consistency(t *testing.T) {
+	// Derive public key multiple times from same private key
+	keyPair, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair failed: %v", err)
+	}
+
+	var derivedKeys []string
+	for i := 0; i < 5; i++ {
+		derived, err := DerivePublicKey(keyPair.PrivateKey)
+		if err != nil {
+			t.Fatalf("DerivePublicKey failed: %v", err)
+		}
+		derivedKeys = append(derivedKeys, derived)
+	}
+
+	// All derived keys should be identical
+	for i := 1; i < len(derivedKeys); i++ {
+		if derivedKeys[i] != derivedKeys[0] {
+			t.Errorf("Derived key %d doesn't match: %s vs %s", i, derivedKeys[i], derivedKeys[0])
+		}
+	}
+
+	// And should match the original public key
+	if derivedKeys[0] != keyPair.PublicKey {
+		t.Errorf("Derived key doesn't match original: %s vs %s", derivedKeys[0], keyPair.PublicKey)
+	}
+}
+
+func TestKeyPair_Struct(t *testing.T) {
+	kp := KeyPair{
+		PrivateKey: "test-private-key",
+		PublicKey:  "test-public-key",
+	}
+
+	if kp.PrivateKey != "test-private-key" {
+		t.Errorf("Expected PrivateKey 'test-private-key', got %q", kp.PrivateKey)
+	}
+	if kp.PublicKey != "test-public-key" {
+		t.Errorf("Expected PublicKey 'test-public-key', got %q", kp.PublicKey)
+	}
+}
+
+func TestGenerateKeyPair_KeysAreBase64(t *testing.T) {
+	keyPair, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair failed: %v", err)
+	}
+
+	// Verify both keys are valid base64
+	_, err = base64.StdEncoding.DecodeString(keyPair.PrivateKey)
+	if err != nil {
+		t.Errorf("Private key is not valid base64: %v", err)
+	}
+
+	_, err = base64.StdEncoding.DecodeString(keyPair.PublicKey)
+	if err != nil {
+		t.Errorf("Public key is not valid base64: %v", err)
+	}
+
+	// Verify key lengths (base64 encoded 32 bytes = 44 characters)
+	if len(keyPair.PrivateKey) != 44 {
+		t.Errorf("Expected private key length 44, got %d", len(keyPair.PrivateKey))
+	}
+	if len(keyPair.PublicKey) != 44 {
+		t.Errorf("Expected public key length 44, got %d", len(keyPair.PublicKey))
+	}
+}
+
+func TestGeneratePresharedKey_IsBase64(t *testing.T) {
+	psk, err := GeneratePresharedKey()
+	if err != nil {
+		t.Fatalf("GeneratePresharedKey failed: %v", err)
+	}
+
+	// Verify PSK is valid base64
+	decoded, err := base64.StdEncoding.DecodeString(psk)
+	if err != nil {
+		t.Errorf("PSK is not valid base64: %v", err)
+	}
+
+	if len(decoded) != 32 {
+		t.Errorf("Expected PSK decoded length 32, got %d", len(decoded))
+	}
+
+	// Verify PSK base64 length
+	if len(psk) != 44 {
+		t.Errorf("Expected PSK length 44, got %d", len(psk))
+	}
+}
+
+func TestValidateKey_ValidPSK(t *testing.T) {
+	// Generate a PSK and validate it
+	psk, err := GeneratePresharedKey()
+	if err != nil {
+		t.Fatalf("GeneratePresharedKey failed: %v", err)
+	}
+
+	err = ValidateKey(psk)
+	if err != nil {
+		t.Errorf("ValidateKey should pass for valid PSK: %v", err)
+	}
+}
+
+func TestDerivePublicKey_WrongLengthButValidBase64(t *testing.T) {
+	// Test with valid base64 but wrong length (16 bytes instead of 32)
+	shortKey := make([]byte, 16)
+	for i := range shortKey {
+		shortKey[i] = byte(i)
+	}
+	shortKeyBase64 := base64.StdEncoding.EncodeToString(shortKey)
+
+	_, err := DerivePublicKey(shortKeyBase64)
+	if err == nil {
+		t.Error("DerivePublicKey should fail for 16-byte key")
+	}
+
+	// Test with 64 bytes
+	longKey := make([]byte, 64)
+	for i := range longKey {
+		longKey[i] = byte(i)
+	}
+	longKeyBase64 := base64.StdEncoding.EncodeToString(longKey)
+
+	_, err = DerivePublicKey(longKeyBase64)
+	if err == nil {
+		t.Error("DerivePublicKey should fail for 64-byte key")
+	}
+}

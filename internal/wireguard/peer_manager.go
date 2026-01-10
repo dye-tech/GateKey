@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +26,7 @@ type PeerManager struct {
 	interfaceName string
 	peers         map[string]*Peer // keyed by public key
 	mu            sync.RWMutex
+	executor      CommandExecutor
 }
 
 // NewPeerManager creates a new peer manager.
@@ -34,6 +34,16 @@ func NewPeerManager(interfaceName string) *PeerManager {
 	return &PeerManager{
 		interfaceName: interfaceName,
 		peers:         make(map[string]*Peer),
+		executor:      DefaultExecutor(),
+	}
+}
+
+// NewPeerManagerWithExecutor creates a peer manager with a custom executor (for testing).
+func NewPeerManagerWithExecutor(interfaceName string, executor CommandExecutor) *PeerManager {
+	return &PeerManager{
+		interfaceName: interfaceName,
+		peers:         make(map[string]*Peer),
+		executor:      executor,
 	}
 }
 
@@ -67,8 +77,7 @@ func (m *PeerManager) AddPeer(ctx context.Context, peer *Peer) error {
 		args = append(args, "preshared-key", tmpFile.Name())
 	}
 
-	cmd := exec.CommandContext(ctx, "wg", args...)
-	if output, err := cmd.CombinedOutput(); err != nil {
+	if output, err := m.executor.Output(ctx, "wg", args...); err != nil {
 		return fmt.Errorf("wg set peer failed: %s: %w", string(output), err)
 	}
 
@@ -81,8 +90,7 @@ func (m *PeerManager) RemovePeer(ctx context.Context, publicKey string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	cmd := exec.CommandContext(ctx, "wg", "set", m.interfaceName, "peer", publicKey, "remove")
-	if output, err := cmd.CombinedOutput(); err != nil {
+	if output, err := m.executor.Output(ctx, "wg", "set", m.interfaceName, "peer", publicKey, "remove"); err != nil {
 		return fmt.Errorf("wg set peer remove failed: %s: %w", string(output), err)
 	}
 
@@ -105,8 +113,7 @@ func (m *PeerManager) SyncPeers(ctx context.Context, authorizedPeers []*Peer) er
 	// Remove peers that are no longer authorized
 	for pubKey := range m.peers {
 		if _, ok := authorizedMap[pubKey]; !ok {
-			cmd := exec.CommandContext(ctx, "wg", "set", m.interfaceName, "peer", pubKey, "remove")
-			if output, err := cmd.CombinedOutput(); err != nil {
+			if output, err := m.executor.Output(ctx, "wg", "set", m.interfaceName, "peer", pubKey, "remove"); err != nil {
 				// Log but continue - don't fail the entire sync for one peer
 				fmt.Printf("warning: failed to remove peer %s: %s: %v\n", pubKey[:8], string(output), err)
 			}
@@ -152,8 +159,7 @@ func (m *PeerManager) SyncPeers(ctx context.Context, authorizedPeers []*Peer) er
 				defer os.Remove(tmpFile.Name())
 			}
 
-			cmd := exec.CommandContext(ctx, "wg", args...)
-			if output, err := cmd.CombinedOutput(); err != nil {
+			if output, err := m.executor.Output(ctx, "wg", args...); err != nil {
 				fmt.Printf("warning: failed to add/update peer %s: %s: %v\n", peer.PublicKey[:8], string(output), err)
 				continue
 			}

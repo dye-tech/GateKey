@@ -438,3 +438,209 @@ func TestIncrementIP_IPv6(t *testing.T) {
 		t.Errorf("Expected 'fd00::6/32', got '%s'", ip6)
 	}
 }
+
+func TestPeerManager_MultiplePeers(t *testing.T) {
+	pm := NewPeerManager("wg0")
+
+	// Add multiple peers directly
+	for i := 0; i < 5; i++ {
+		pm.peers["peer-key-"+string(rune('A'+i))] = &Peer{
+			PublicKey:  "peer-key-" + string(rune('A'+i)),
+			UserEmail:  "user" + string(rune('0'+i)) + "@example.com",
+			AllowedIPs: []string{"10.0.0." + string(rune('2'+i)) + "/32"},
+			ExpiresAt:  time.Now().Add(24 * time.Hour),
+		}
+	}
+
+	if pm.PeerCount() != 5 {
+		t.Errorf("Expected 5 peers, got %d", pm.PeerCount())
+	}
+
+	peers := pm.GetPeers()
+	if len(peers) != 5 {
+		t.Errorf("Expected 5 peers from GetPeers, got %d", len(peers))
+	}
+}
+
+func TestPeerManager_GetPeer_AllFields(t *testing.T) {
+	pm := NewPeerManager("wg0")
+
+	expiresAt := time.Now().Add(48 * time.Hour)
+	pm.peers["full-peer"] = &Peer{
+		PublicKey:    "full-peer",
+		PresharedKey: "psk-value",
+		AllowedIPs:   []string{"10.0.0.5/32", "192.168.1.0/24"},
+		UserID:       "user-uuid-123",
+		UserEmail:    "fulltest@example.com",
+		ConfigID:     "config-uuid-456",
+		ExpiresAt:    expiresAt,
+	}
+
+	peer, found := pm.GetPeer("full-peer")
+	if !found {
+		t.Fatal("Expected peer to be found")
+	}
+
+	if peer.PublicKey != "full-peer" {
+		t.Errorf("Expected PublicKey 'full-peer', got '%s'", peer.PublicKey)
+	}
+	if peer.PresharedKey != "psk-value" {
+		t.Errorf("Expected PresharedKey 'psk-value', got '%s'", peer.PresharedKey)
+	}
+	if len(peer.AllowedIPs) != 2 {
+		t.Errorf("Expected 2 AllowedIPs, got %d", len(peer.AllowedIPs))
+	}
+	if peer.UserID != "user-uuid-123" {
+		t.Errorf("Expected UserID 'user-uuid-123', got '%s'", peer.UserID)
+	}
+	if peer.UserEmail != "fulltest@example.com" {
+		t.Errorf("Expected UserEmail 'fulltest@example.com', got '%s'", peer.UserEmail)
+	}
+	if peer.ConfigID != "config-uuid-456" {
+		t.Errorf("Expected ConfigID 'config-uuid-456', got '%s'", peer.ConfigID)
+	}
+	if !peer.ExpiresAt.Equal(expiresAt) {
+		t.Errorf("Expected ExpiresAt %v, got %v", expiresAt, peer.ExpiresAt)
+	}
+}
+
+func TestIPAllocator_ReleaseNonExistent(t *testing.T) {
+	allocator, err := NewIPAllocator("10.0.0.0/24")
+	if err != nil {
+		t.Fatalf("Failed to create allocator: %v", err)
+	}
+
+	// Releasing a non-allocated IP should not panic
+	allocator.Release("10.0.0.50/32")
+
+	// Should still be able to allocate normally
+	ip, err := allocator.Allocate()
+	if err != nil {
+		t.Fatalf("Allocate failed after release: %v", err)
+	}
+	if ip != "10.0.0.2/32" {
+		t.Errorf("Expected '10.0.0.2/32', got '%s'", ip)
+	}
+}
+
+func TestIPAllocator_MarkAllocated_Multiple(t *testing.T) {
+	allocator, err := NewIPAllocator("10.0.0.0/24")
+	if err != nil {
+		t.Fatalf("Failed to create allocator: %v", err)
+	}
+
+	// Mark several IPs as allocated
+	allocator.MarkAllocated("10.0.0.2")
+	allocator.MarkAllocated("10.0.0.3")
+	allocator.MarkAllocated("10.0.0.5")
+	allocator.MarkAllocated("10.0.0.6")
+
+	// First available should be .4
+	ip1, err := allocator.Allocate()
+	if err != nil {
+		t.Fatalf("Allocate failed: %v", err)
+	}
+	if ip1 != "10.0.0.4/32" {
+		t.Errorf("Expected '10.0.0.4/32', got '%s'", ip1)
+	}
+
+	// Next available should be .7 (skipping .5 and .6)
+	ip2, err := allocator.Allocate()
+	if err != nil {
+		t.Fatalf("Allocate failed: %v", err)
+	}
+	if ip2 != "10.0.0.7/32" {
+		t.Errorf("Expected '10.0.0.7/32', got '%s'", ip2)
+	}
+}
+
+func TestEqualStringSlices_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		a        []string
+		b        []string
+		expected bool
+	}{
+		{
+			name:     "nil vs empty",
+			a:        nil,
+			b:        []string{},
+			expected: true, // Both have length 0
+		},
+		{
+			name:     "empty vs nil",
+			a:        []string{},
+			b:        nil,
+			expected: true,
+		},
+		{
+			name:     "single empty string vs empty slice",
+			a:        []string{""},
+			b:        []string{},
+			expected: false,
+		},
+		{
+			name:     "identical empty strings",
+			a:        []string{""},
+			b:        []string{""},
+			expected: true,
+		},
+		{
+			name:     "many identical elements",
+			a:        []string{"a", "b", "c", "d", "e"},
+			b:        []string{"a", "b", "c", "d", "e"},
+			expected: true,
+		},
+		{
+			name:     "many elements, one different",
+			a:        []string{"a", "b", "c", "d", "e"},
+			b:        []string{"a", "b", "x", "d", "e"},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := equalStringSlices(tt.a, tt.b)
+			if result != tt.expected {
+				t.Errorf("equalStringSlices(%v, %v) = %v, expected %v", tt.a, tt.b, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestPeerManager_DifferentInterfaceNames(t *testing.T) {
+	names := []string{"wg0", "wg1", "wg-vpn", "wireguard0", "vpn"}
+
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			pm := NewPeerManager(name)
+			if pm.interfaceName != name {
+				t.Errorf("Expected interface name '%s', got '%s'", name, pm.interfaceName)
+			}
+		})
+	}
+}
+
+func TestPeer_EmptyAllowedIPs(t *testing.T) {
+	peer := Peer{
+		PublicKey:  "empty-allowed-ips",
+		AllowedIPs: nil,
+		UserEmail:  "test@example.com",
+	}
+
+	if peer.AllowedIPs != nil {
+		t.Error("Expected nil AllowedIPs")
+	}
+}
+
+func TestPeer_ZeroExpiresAt(t *testing.T) {
+	peer := Peer{
+		PublicKey: "zero-expires",
+		UserEmail: "test@example.com",
+	}
+
+	if !peer.ExpiresAt.IsZero() {
+		t.Errorf("Expected zero ExpiresAt, got %v", peer.ExpiresAt)
+	}
+}

@@ -248,16 +248,17 @@ export default function AdminTopology() {
                                 type: 'user',
                                 data: { hubId: hub.id, hubName: hub.name, count: hub.connectedUsers }
                               })}
-                              className="w-full p-4 rounded-xl border-2 border-cyan-400 bg-white dark:border-slate-600 dark:bg-slate-800 hover:border-cyan-500 dark:hover:border-cyan-400 transition-all duration-200 cursor-pointer text-left shadow-sm hover:shadow-md"
+                              className="w-full p-4 rounded-xl border-2 border-cyan-400 dark:border-slate-600 hover:border-cyan-500 dark:hover:border-cyan-400 transition-all duration-200 cursor-pointer text-left shadow-sm hover:shadow-md"
+                              style={{ backgroundColor: 'var(--card-bg)' }}
                             >
                               <div className="flex items-center gap-2 mb-3">
-                                <div className="p-2 rounded-lg bg-cyan-100 dark:bg-cyan-900/50">
+                                <div className="p-2 rounded-lg bg-slate-100 dark:bg-cyan-900/50">
                                   <UserGroupIcon className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
                                 </div>
-                                <span className="font-semibold text-slate-700 dark:text-slate-200">Users</span>
+                                <span className="font-semibold text-slate-950 dark:text-slate-200">Users</span>
                               </div>
-                              <div className="text-3xl font-bold text-slate-900 dark:text-white">{hub.connectedUsers}</div>
-                              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">connected clients</div>
+                              <div className="text-3xl font-bold text-slate-950 dark:text-white">{hub.connectedUsers}</div>
+                              <div className="text-xs text-slate-950 dark:text-slate-400 mt-1">connected clients</div>
                             </button>
                           </div>
 
@@ -271,45 +272,64 @@ export default function AdminTopology() {
                           <div className="flex-shrink-0 w-72">
                             <button
                               onClick={() => setSelectedNode({ type: 'hub', data: hub })}
-                              className={`w-full p-4 rounded-xl border-2 bg-white dark:bg-slate-800 transition-all duration-200 cursor-pointer text-left shadow-sm hover:shadow-md ${
+                              className={`w-full p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left shadow-sm hover:shadow-md ${
                                 isOnline
                                   ? 'border-indigo-400 dark:border-indigo-500 hover:border-indigo-500 dark:hover:border-indigo-400'
                                   : 'border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'
                               }`}
+                              style={{ backgroundColor: 'var(--card-bg)' }}
                             >
                               <div className="flex items-center gap-2 mb-2">
                                 <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                                <span className="font-semibold text-slate-800 dark:text-slate-100">{hub.name}</span>
+                                <span className="font-semibold text-slate-950 dark:text-slate-100">{hub.name}</span>
                               </div>
                               <div className="flex items-center gap-2 mb-3">
-                                <div className={`p-1.5 rounded-lg ${isOnline ? 'bg-indigo-100 dark:bg-indigo-900/50' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                                <div className={`p-1.5 rounded-lg ${isOnline ? 'bg-slate-100 dark:bg-indigo-900/50' : 'bg-slate-200 dark:bg-slate-700'}`}>
                                   <ServerStackIcon className={`w-4 h-4 ${isOnline ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500'}`} />
                                 </div>
-                                <span className="text-xs text-slate-500 dark:text-slate-400">Mesh Hub</span>
+                                <span className="text-xs text-slate-950 dark:text-slate-400">Mesh Hub</span>
                                 <VpnTypeBadge type={hub.gatewayType || 'openvpn'} />
                               </div>
 
                               {/* Hub IPs */}
                               <div className="space-y-1.5 text-xs border-t border-slate-200 dark:border-slate-700 pt-3 mt-2">
                                 <div className="flex justify-between">
-                                  <span className="text-slate-500 dark:text-slate-400">Public:</span>
-                                  <span className="font-mono text-slate-700 dark:text-slate-300">{hub.publicIp}:{hub.vpnPort}</span>
+                                  <span className="text-slate-950 dark:text-slate-400">Public:</span>
+                                  <span className="font-mono text-slate-950 dark:text-slate-300">{hub.publicIp}:{hub.vpnPort}</span>
                                 </div>
+                                {hub.publicIpV6 && (
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-950 dark:text-slate-400">Public v6:</span>
+                                    <span className="font-mono text-slate-950 dark:text-slate-300 text-[10px]">[{hub.publicIpV6}]:{hub.vpnPort}</span>
+                                  </div>
+                                )}
                                 <div className="flex justify-between">
-                                  <span className="text-slate-500 dark:text-slate-400">Tunnel:</span>
-                                  <span className="font-mono text-indigo-600 dark:text-indigo-400">{hub.serverTunnelIp}</span>
+                                  <span className="text-slate-950 dark:text-slate-400">Tunnel:</span>
+                                  <span className="font-mono text-indigo-700 dark:text-indigo-400">{hub.serverTunnelIp}</span>
                                 </div>
+                                {hub.serverTunnelIpV6 && (
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-950 dark:text-slate-400">Tunnel v6:</span>
+                                    <span className="font-mono text-indigo-700 dark:text-indigo-400 text-[10px]">{hub.serverTunnelIpV6}</span>
+                                  </div>
+                                )}
                                 <div className="flex justify-between">
-                                  <span className="text-slate-500 dark:text-slate-400">Subnet:</span>
-                                  <span className="font-mono text-slate-600 dark:text-slate-400">{hub.vpnSubnet}</span>
+                                  <span className="text-slate-950 dark:text-slate-400">Subnet:</span>
+                                  <span className="font-mono text-slate-950 dark:text-slate-400">{hub.vpnSubnet}</span>
                                 </div>
+                                {hub.vpnSubnetV6 && (
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-950 dark:text-slate-400">Subnet v6:</span>
+                                    <span className="font-mono text-slate-950 dark:text-slate-400 text-[10px]">{hub.vpnSubnetV6}</span>
+                                  </div>
+                                )}
                               </div>
 
                               {/* Status */}
                               <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-700">
                                 <div className="flex justify-between text-xs">
-                                  <span className="text-slate-500 dark:text-slate-400">Spokes:</span>
-                                  <span className="font-semibold text-slate-700 dark:text-slate-200">{hub.connectedSpokes}</span>
+                                  <span className="text-slate-950 dark:text-slate-400">Spokes:</span>
+                                  <span className="font-semibold text-slate-950 dark:text-slate-200">{hub.connectedSpokes}</span>
                                 </div>
                               </div>
                             </button>
@@ -334,18 +354,19 @@ export default function AdminTopology() {
                                   <button
                                     key={spoke.id}
                                     onClick={() => setSelectedNode({ type: 'spoke', data: spoke })}
-                                    className={`w-full p-4 rounded-xl border-2 bg-white dark:bg-slate-800 transition-all duration-200 cursor-pointer text-left shadow-sm hover:shadow-md ${
+                                    className={`w-full p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left shadow-sm hover:shadow-md ${
                                       isConnected
                                         ? 'border-amber-400 dark:border-amber-500 hover:border-amber-500 dark:hover:border-amber-400'
                                         : 'border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'
                                     }`}
+                                    style={{ backgroundColor: 'var(--card-bg)' }}
                                   >
                                     <div className="flex items-center gap-2 mb-2">
                                       <div className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                                      <span className="font-semibold text-slate-800 dark:text-slate-100">{spoke.name}</span>
+                                      <span className="font-semibold text-slate-950 dark:text-slate-100">{spoke.name}</span>
                                       <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${
                                         isConnected
-                                          ? 'bg-slate-700 text-slate-200'
+                                          ? 'bg-slate-200 dark:bg-slate-700 text-emerald-600 dark:text-emerald-400'
                                           : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
                                       }`}>
                                         {spoke.status}
@@ -353,23 +374,35 @@ export default function AdminTopology() {
                                     </div>
 
                                     <div className="flex items-center gap-2 mb-2">
-                                      <div className={`p-1.5 rounded-lg ${isConnected ? 'bg-amber-100 dark:bg-amber-900/40' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                                      <div className={`p-1.5 rounded-lg ${isConnected ? 'bg-slate-100 dark:bg-amber-900/40' : 'bg-slate-200 dark:bg-slate-700'}`}>
                                         <CubeTransparentIcon className={`w-4 h-4 ${isConnected ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`} />
                                       </div>
-                                      <span className="text-xs text-slate-500 dark:text-slate-400">Spoke</span>
+                                      <span className="text-xs text-slate-950 dark:text-slate-400">Spoke</span>
                                       <VpnTypeBadge type={spoke.gatewayType || 'openvpn'} />
                                     </div>
 
                                     {/* Spoke IPs */}
                                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs border-t border-slate-200 dark:border-slate-700 pt-2 mt-2">
                                       <div>
-                                        <span className="text-slate-500 dark:text-slate-400">Tunnel: </span>
-                                        <span className="font-mono text-amber-600 dark:text-amber-400">{spoke.tunnelIp || 'N/A'}</span>
+                                        <span className="text-slate-950 dark:text-slate-400">Tunnel: </span>
+                                        <span className="font-mono text-amber-700 dark:text-amber-400">{spoke.tunnelIp || 'N/A'}</span>
                                       </div>
                                       <div>
-                                        <span className="text-slate-500 dark:text-slate-400">Remote: </span>
-                                        <span className="font-mono text-slate-600 dark:text-slate-400">{spoke.remoteIp || 'N/A'}</span>
+                                        <span className="text-slate-950 dark:text-slate-400">Remote: </span>
+                                        <span className="font-mono text-slate-950 dark:text-slate-400">{spoke.remoteIp || 'N/A'}</span>
                                       </div>
+                                      {spoke.tunnelIpV6 && (
+                                        <div className="col-span-2">
+                                          <span className="text-slate-950 dark:text-slate-400">Tunnel v6: </span>
+                                          <span className="font-mono text-amber-700 dark:text-amber-400 text-[10px]">{spoke.tunnelIpV6}</span>
+                                        </div>
+                                      )}
+                                      {spoke.remoteIpV6 && (
+                                        <div className="col-span-2">
+                                          <span className="text-slate-950 dark:text-slate-400">Remote v6: </span>
+                                          <span className="font-mono text-slate-950 dark:text-slate-400 text-[10px]">{spoke.remoteIpV6}</span>
+                                        </div>
+                                      )}
                                     </div>
 
                                     {/* Local Networks */}
@@ -380,13 +413,13 @@ export default function AdminTopology() {
                                           {spoke.localNetworks.slice(0, 3).map((net, i) => (
                                             <span
                                               key={i}
-                                              className="px-2 py-0.5 bg-slate-700 text-slate-200 text-xs font-mono rounded-md"
+                                              className="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-mono rounded-md"
                                             >
                                               {net}
                                             </span>
                                           ))}
                                           {spoke.localNetworks.length > 3 && (
-                                            <span className="px-2 py-0.5 bg-slate-600 text-slate-100 text-xs rounded-md">
+                                            <span className="px-2 py-0.5 bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-100 text-xs rounded-md">
                                               +{spoke.localNetworks.length - 3} more
                                             </span>
                                           )}
@@ -449,7 +482,7 @@ export default function AdminTopology() {
                       {/* Hub Details */}
                       {selectedNode.type === 'hub' && (
                         <div className="space-y-4">
-                          <div className={`p-3 rounded-lg border-2 bg-white dark:bg-slate-800 ${(selectedNode.data as TopologyMeshHub).status === 'online' ? 'border-indigo-400 dark:border-indigo-500' : 'border-slate-300 dark:border-slate-600'}`}>
+                          <div className={`p-3 rounded-lg border-2 ${(selectedNode.data as TopologyMeshHub).status === 'online' ? 'border-indigo-400 dark:border-indigo-500' : 'border-slate-300 dark:border-slate-600'}`} style={{ backgroundColor: 'var(--card-bg)' }}>
                             <div className="flex items-center gap-2">
                               <ServerStackIcon className={`w-6 h-6 ${(selectedNode.data as TopologyMeshHub).status === 'online' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500'}`} />
                               <span className={`text-lg font-medium ${(selectedNode.data as TopologyMeshHub).status === 'online' ? 'text-slate-800 dark:text-slate-200' : 'text-slate-600 dark:text-slate-400'}`}>
@@ -466,17 +499,35 @@ export default function AdminTopology() {
                               <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">Network Endpoints</div>
                               <div className="space-y-2 text-sm">
                                 <div className="flex justify-between">
-                                  <span className="text-slate-500 dark:text-slate-400">Public:</span>
-                                  <span className="font-mono text-slate-700 dark:text-slate-300">{(selectedNode.data as TopologyMeshHub).publicEndpoint}</span>
+                                  <span className="text-slate-700 dark:text-slate-400">Public:</span>
+                                  <span className="font-mono text-slate-900 dark:text-slate-300">{(selectedNode.data as TopologyMeshHub).publicEndpoint}</span>
                                 </div>
+                                {(selectedNode.data as TopologyMeshHub).publicEndpointV6 && (
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-700 dark:text-slate-400">Public v6:</span>
+                                    <span className="font-mono text-slate-900 dark:text-slate-300 text-xs">{(selectedNode.data as TopologyMeshHub).publicEndpointV6}</span>
+                                  </div>
+                                )}
                                 <div className="flex justify-between">
-                                  <span className="text-slate-500 dark:text-slate-400">Server Tunnel IP:</span>
-                                  <span className="font-mono text-indigo-600 dark:text-indigo-400">{(selectedNode.data as TopologyMeshHub).serverTunnelIp}</span>
+                                  <span className="text-slate-700 dark:text-slate-400">Server Tunnel IP:</span>
+                                  <span className="font-mono text-indigo-700 dark:text-indigo-400">{(selectedNode.data as TopologyMeshHub).serverTunnelIp}</span>
                                 </div>
+                                {(selectedNode.data as TopologyMeshHub).serverTunnelIpV6 && (
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-700 dark:text-slate-400">Tunnel v6:</span>
+                                    <span className="font-mono text-indigo-700 dark:text-indigo-400 text-xs">{(selectedNode.data as TopologyMeshHub).serverTunnelIpV6}</span>
+                                  </div>
+                                )}
                                 <div className="flex justify-between">
-                                  <span className="text-slate-500 dark:text-slate-400">VPN Subnet:</span>
-                                  <span className="font-mono text-slate-600 dark:text-slate-400">{(selectedNode.data as TopologyMeshHub).vpnSubnet}</span>
+                                  <span className="text-slate-700 dark:text-slate-400">VPN Subnet:</span>
+                                  <span className="font-mono text-slate-900 dark:text-slate-400">{(selectedNode.data as TopologyMeshHub).vpnSubnet}</span>
                                 </div>
+                                {(selectedNode.data as TopologyMeshHub).vpnSubnetV6 && (
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-700 dark:text-slate-400">Subnet v6:</span>
+                                    <span className="font-mono text-slate-900 dark:text-slate-400 text-xs">{(selectedNode.data as TopologyMeshHub).vpnSubnetV6}</span>
+                                  </div>
+                                )}
                               </div>
                             </div>
                             <div>
@@ -498,7 +549,7 @@ export default function AdminTopology() {
                                 <label className="text-xs text-slate-500 dark:text-slate-400">Hub Local Networks</label>
                                 <div className="flex flex-wrap gap-1 mt-1">
                                   {(selectedNode.data as TopologyMeshHub).localNetworks.map((net, i) => (
-                                    <span key={i} className="px-2 py-0.5 bg-slate-700 text-slate-200 text-xs font-mono rounded-md">{net}</span>
+                                    <span key={i} className="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-mono rounded-md">{net}</span>
                                   ))}
                                 </div>
                               </div>
@@ -519,7 +570,7 @@ export default function AdminTopology() {
                       {/* Spoke Details */}
                       {selectedNode.type === 'spoke' && (
                         <div className="space-y-4">
-                          <div className={`p-3 rounded-lg border-2 bg-white dark:bg-slate-800 ${(selectedNode.data as TopologyMeshSpoke).status === 'connected' ? 'border-amber-400 dark:border-amber-500' : 'border-slate-300 dark:border-slate-600'}`}>
+                          <div className={`p-3 rounded-lg border-2 ${(selectedNode.data as TopologyMeshSpoke).status === 'connected' ? 'border-amber-400 dark:border-amber-500' : 'border-slate-300 dark:border-slate-600'}`} style={{ backgroundColor: 'var(--card-bg)' }}>
                             <div className="flex items-center gap-2">
                               <CubeTransparentIcon className={`w-6 h-6 ${(selectedNode.data as TopologyMeshSpoke).status === 'connected' ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`} />
                               <span className={`text-lg font-medium ${(selectedNode.data as TopologyMeshSpoke).status === 'connected' ? 'text-slate-800 dark:text-slate-200' : 'text-slate-600 dark:text-slate-400'}`}>
@@ -536,13 +587,25 @@ export default function AdminTopology() {
                               <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">Network Endpoints</div>
                               <div className="space-y-2 text-sm">
                                 <div className="flex justify-between">
-                                  <span className="text-slate-500 dark:text-slate-400">Tunnel IP:</span>
-                                  <span className="font-mono text-amber-600 dark:text-amber-400">{(selectedNode.data as TopologyMeshSpoke).tunnelIp || 'N/A'}</span>
+                                  <span className="text-slate-700 dark:text-slate-400">Tunnel IP:</span>
+                                  <span className="font-mono text-amber-700 dark:text-amber-400">{(selectedNode.data as TopologyMeshSpoke).tunnelIp || 'N/A'}</span>
                                 </div>
+                                {(selectedNode.data as TopologyMeshSpoke).tunnelIpV6 && (
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-700 dark:text-slate-400">Tunnel v6:</span>
+                                    <span className="font-mono text-amber-700 dark:text-amber-400 text-xs">{(selectedNode.data as TopologyMeshSpoke).tunnelIpV6}</span>
+                                  </div>
+                                )}
                                 <div className="flex justify-between">
-                                  <span className="text-slate-500 dark:text-slate-400">Remote Public IP:</span>
-                                  <span className="font-mono text-slate-600 dark:text-slate-400">{(selectedNode.data as TopologyMeshSpoke).remoteIp || 'N/A'}</span>
+                                  <span className="text-slate-700 dark:text-slate-400">Remote Public IP:</span>
+                                  <span className="font-mono text-slate-900 dark:text-slate-400">{(selectedNode.data as TopologyMeshSpoke).remoteIp || 'N/A'}</span>
                                 </div>
+                                {(selectedNode.data as TopologyMeshSpoke).remoteIpV6 && (
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-700 dark:text-slate-400">Remote v6:</span>
+                                    <span className="font-mono text-slate-900 dark:text-slate-400 text-xs">{(selectedNode.data as TopologyMeshSpoke).remoteIpV6}</span>
+                                  </div>
+                                )}
                               </div>
                             </div>
                             <div>
@@ -556,7 +619,7 @@ export default function AdminTopology() {
                                 <label className="text-xs text-slate-500 dark:text-slate-400">Advertised Routes</label>
                                 <div className="flex flex-wrap gap-1 mt-1">
                                   {(selectedNode.data as TopologyMeshSpoke).localNetworks.map((net, i) => (
-                                    <span key={i} className="px-2 py-0.5 bg-slate-700 text-slate-200 text-xs font-mono rounded-md">{net}</span>
+                                    <span key={i} className="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-mono rounded-md">{net}</span>
                                   ))}
                                 </div>
                               </div>
@@ -596,15 +659,15 @@ export default function AdminTopology() {
                             <div className="flex items-start gap-4">
                               {/* Users Column */}
                               <div className="flex-shrink-0 w-52">
-                                <div className="w-full p-4 rounded-xl border-2 border-cyan-400 bg-white dark:border-slate-600 dark:bg-slate-800 shadow-sm text-left">
+                                <div className="w-full p-4 rounded-xl border-2 border-cyan-400 dark:border-slate-600 shadow-sm text-left" style={{ backgroundColor: 'var(--card-bg)' }}>
                                   <div className="flex items-center gap-2 mb-3">
-                                    <div className="p-2 rounded-lg bg-cyan-100 dark:bg-cyan-900/50">
+                                    <div className="p-2 rounded-lg bg-slate-100 dark:bg-cyan-900/50">
                                       <ComputerDesktopIcon className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
                                     </div>
-                                    <span className="font-semibold text-slate-700 dark:text-slate-200">Clients</span>
+                                    <span className="font-semibold text-slate-950 dark:text-slate-200">Clients</span>
                                   </div>
-                                  <div className="text-3xl font-bold text-slate-900 dark:text-white">{gw.clientCount}</div>
-                                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">connected clients</div>
+                                  <div className="text-3xl font-bold text-slate-950 dark:text-white">{gw.clientCount}</div>
+                                  <div className="text-xs text-slate-950 dark:text-slate-400 mt-1">connected clients</div>
                                 </div>
                               </div>
 
@@ -618,33 +681,34 @@ export default function AdminTopology() {
                               <div className="flex-shrink-0 w-72">
                                 <button
                                   onClick={() => setSelectedNode({ type: 'gateway', data: gw })}
-                                  className={`w-full p-4 rounded-xl border-2 bg-white dark:bg-slate-800 transition-all duration-200 cursor-pointer text-left shadow-sm hover:shadow-md ${
+                                  className={`w-full p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left shadow-sm hover:shadow-md ${
                                     gw.isActive
                                       ? 'border-emerald-400 dark:border-emerald-500 hover:border-emerald-500 dark:hover:border-emerald-400'
                                       : 'border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'
                                   }`}
+                                  style={{ backgroundColor: 'var(--card-bg)' }}
                                 >
                                   <div className="flex items-center gap-2 mb-2">
                                     <div className={`w-2.5 h-2.5 rounded-full ${gw.isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                                    <span className="font-semibold text-slate-800 dark:text-slate-100">{gw.name}</span>
+                                    <span className="font-semibold text-slate-950 dark:text-slate-100">{gw.name}</span>
                                   </div>
                                   <div className="flex items-center gap-2 mb-3">
-                                    <div className={`p-1.5 rounded-lg ${gw.isActive ? 'bg-emerald-100 dark:bg-emerald-900/50' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                                    <div className={`p-1.5 rounded-lg ${gw.isActive ? 'bg-slate-100 dark:bg-emerald-900/50' : 'bg-slate-200 dark:bg-slate-700'}`}>
                                       <GlobeAltIcon className={`w-4 h-4 ${gw.isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500'}`} />
                                     </div>
-                                    <span className="text-xs text-slate-500 dark:text-slate-400">Gateway</span>
+                                    <span className="text-xs text-slate-950 dark:text-slate-400">Gateway</span>
                                   </div>
                                   <div className="space-y-1.5 text-xs border-t border-slate-200 dark:border-slate-700 pt-3 mt-2">
                                     <div className="flex justify-between">
-                                      <span className="text-slate-500 dark:text-slate-400">Public:</span>
-                                      <span className="font-mono text-slate-700 dark:text-slate-300">{gw.publicIp}:{gw.vpnPort}</span>
+                                      <span className="text-slate-950 dark:text-slate-400">Public:</span>
+                                      <span className="font-mono text-slate-950 dark:text-slate-300">{gw.publicIp}:{gw.vpnPort}</span>
                                     </div>
                                     <div className="flex justify-between">
-                                      <span className="text-slate-500 dark:text-slate-400">Protocol:</span>
-                                      <span className="text-slate-700 dark:text-slate-300">{gw.vpnProtocol?.toUpperCase()}</span>
+                                      <span className="text-slate-950 dark:text-slate-400">Protocol:</span>
+                                      <span className="text-slate-950 dark:text-slate-300">{gw.vpnProtocol?.toUpperCase()}</span>
                                     </div>
                                     <div className="flex justify-between">
-                                      <span className="text-slate-500 dark:text-slate-400">Status:</span>
+                                      <span className="text-slate-950 dark:text-slate-400">Status:</span>
                                       <span className={gw.isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500'}>
                                         {gw.isActive ? 'Active' : 'Inactive'}
                                       </span>
@@ -668,7 +732,7 @@ export default function AdminTopology() {
                         </button>
                       </div>
                       <div className="space-y-4">
-                        <div className={`p-3 rounded-lg border-2 bg-white dark:bg-slate-800 ${(selectedNode.data as TopologyGateway).isActive ? 'border-emerald-400 dark:border-emerald-500' : 'border-slate-300 dark:border-slate-600'}`}>
+                        <div className={`p-3 rounded-lg border-2 ${(selectedNode.data as TopologyGateway).isActive ? 'border-emerald-400 dark:border-emerald-500' : 'border-slate-300 dark:border-slate-600'}`} style={{ backgroundColor: 'var(--card-bg)' }}>
                           <div className="flex items-center gap-2">
                             <GlobeAltIcon className={`w-6 h-6 ${(selectedNode.data as TopologyGateway).isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500'}`} />
                             <span className={`text-lg font-medium ${(selectedNode.data as TopologyGateway).isActive ? 'text-slate-800 dark:text-slate-200' : 'text-slate-600 dark:text-slate-400'}`}>
@@ -679,16 +743,22 @@ export default function AdminTopology() {
                         </div>
                         <div className="space-y-3">
                           <div>
-                            <label className="text-xs text-slate-500 dark:text-slate-400">Hostname</label>
-                            <div className="text-sm font-mono text-slate-700 dark:text-slate-300">{(selectedNode.data as TopologyGateway).hostname || 'N/A'}</div>
+                            <label className="text-xs text-slate-700 dark:text-slate-400">Hostname</label>
+                            <div className="text-sm font-mono text-slate-900 dark:text-slate-300">{(selectedNode.data as TopologyGateway).hostname || 'N/A'}</div>
                           </div>
                           <div>
-                            <label className="text-xs text-slate-500 dark:text-slate-400">Public IP</label>
-                            <div className="text-sm font-mono text-slate-700 dark:text-slate-300">{(selectedNode.data as TopologyGateway).publicIp}</div>
+                            <label className="text-xs text-slate-700 dark:text-slate-400">Public IP</label>
+                            <div className="text-sm font-mono text-slate-900 dark:text-slate-300">{(selectedNode.data as TopologyGateway).publicIp}</div>
                           </div>
+                          {(selectedNode.data as TopologyGateway).publicIpV6 && (
+                            <div>
+                              <label className="text-xs text-slate-700 dark:text-slate-400">Public IPv6</label>
+                              <div className="text-sm font-mono text-slate-900 dark:text-slate-300">{(selectedNode.data as TopologyGateway).publicIpV6}</div>
+                            </div>
+                          )}
                           <div>
-                            <label className="text-xs text-slate-500 dark:text-slate-400">VPN Port</label>
-                            <div className="text-sm text-slate-700 dark:text-slate-300">{(selectedNode.data as TopologyGateway).vpnPort} ({(selectedNode.data as TopologyGateway).vpnProtocol?.toUpperCase()})</div>
+                            <label className="text-xs text-slate-700 dark:text-slate-400">VPN Port</label>
+                            <div className="text-sm text-slate-900 dark:text-slate-300">{(selectedNode.data as TopologyGateway).vpnPort} ({(selectedNode.data as TopologyGateway).vpnProtocol?.toUpperCase()})</div>
                           </div>
                           <div>
                             <label className="text-xs text-slate-500 dark:text-slate-400">Status</label>

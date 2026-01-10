@@ -362,10 +362,12 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
   const [name, setName] = useState('')
   const [hostname, setHostname] = useState('')
   const [publicIp, setPublicIp] = useState('')
+  const [publicIpv6, setPublicIpv6] = useState('')
   const [vpnPort, setVpnPort] = useState('1194')
   const [vpnProtocol, setVpnProtocol] = useState('udp')
   const [cryptoProfile, setCryptoProfile] = useState<CryptoProfile>('modern')
   const [vpnSubnet, setVpnSubnet] = useState('172.31.255.0/24')
+  const [vpnSubnetV6, setVpnSubnetV6] = useState('')
   const [tlsAuthEnabled, setTlsAuthEnabled] = useState(true)
   const [fullTunnelMode, setFullTunnelMode] = useState(false)
   const [pushDns, setPushDns] = useState(false)
@@ -400,10 +402,12 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
         name,
         hostname: hostname || undefined,
         public_ip: publicIp || undefined,
+        public_ip_v6: publicIpv6 || undefined,
         vpn_port: parseInt(vpnPort) || (gatewayType === 'wireguard' ? 51820 : 1194),
         vpn_protocol: gatewayType === 'wireguard' ? 'udp' : vpnProtocol,
         crypto_profile: gatewayType === 'wireguard' ? undefined : cryptoProfile,
         vpn_subnet: vpnSubnet || '172.31.255.0/24',
+        vpn_subnet_v6: vpnSubnetV6 || undefined,
         tls_auth_enabled: gatewayType === 'wireguard' ? undefined : tlsAuthEnabled,
         full_tunnel_mode: fullTunnelMode,
         push_dns: pushDns,
@@ -506,7 +510,7 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
 
           <div>
             <label className="block text-sm font-medium text-theme-secondary mb-1">
-              Public IP
+              Public IP (IPv4)
             </label>
             <input
               type="text"
@@ -515,6 +519,22 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
               placeholder="203.0.113.10"
               className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">
+              Public IP (IPv6)
+            </label>
+            <input
+              type="text"
+              value={publicIpv6}
+              onChange={(e) => setPublicIpv6(e.target.value)}
+              placeholder="2001:db8::1"
+              className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            />
+            <p className="mt-1 text-xs text-theme-tertiary">
+              Optional IPv6 address for dual-stack connectivity.
+            </p>
           </div>
 
           <div className={gatewayType === 'openvpn' ? 'grid grid-cols-2 gap-4' : ''}>
@@ -590,7 +610,7 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
 
           <div>
             <label className="block text-sm font-medium text-theme-secondary mb-1">
-              VPN Subnet
+              VPN Subnet (IPv4)
             </label>
             <input
               type="text"
@@ -601,6 +621,22 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
             />
             <p className="mt-1 text-xs text-theme-tertiary">
               The subnet used for VPN client IP addresses. Must be a valid CIDR block.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">
+              VPN Subnet (IPv6)
+            </label>
+            <input
+              type="text"
+              value={vpnSubnetV6}
+              onChange={(e) => setVpnSubnetV6(e.target.value)}
+              placeholder="fd00::/64"
+              className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            />
+            <p className="mt-1 text-xs text-theme-tertiary">
+              Optional IPv6 subnet for dual-stack VPN clients.
             </p>
           </div>
 
@@ -949,10 +985,12 @@ function EditGatewayModal({ gateway, onClose, onSuccess }: EditGatewayModalProps
   const [name, setName] = useState(gateway.name)
   const [hostname, setHostname] = useState(gateway.hostname)
   const [publicIp, setPublicIp] = useState(gateway.publicIp || '')
+  const [publicIpv6, setPublicIpv6] = useState(gateway.publicIpv6 || '')
   const [vpnPort, setVpnPort] = useState(gateway.vpnPort.toString())
   const [vpnProtocol, setVpnProtocol] = useState(gateway.vpnProtocol)
   const [cryptoProfile, setCryptoProfile] = useState<CryptoProfile>(gateway.cryptoProfile || 'modern')
   const [vpnSubnet, setVpnSubnet] = useState(gateway.vpnSubnet || '10.8.0.0/24')
+  const [vpnSubnetV6, setVpnSubnetV6] = useState(gateway.vpnSubnetV6 || '')
   const [tlsAuthEnabled, setTlsAuthEnabled] = useState(gateway.tlsAuthEnabled ?? true)
   const [fullTunnelMode, setFullTunnelMode] = useState(gateway.fullTunnelMode ?? false)
   const [pushDns, setPushDns] = useState(gateway.pushDns ?? false)
@@ -980,10 +1018,12 @@ function EditGatewayModal({ gateway, onClose, onSuccess }: EditGatewayModalProps
         name,
         hostname: hostname || undefined,
         public_ip: publicIp || undefined,
+        public_ip_v6: publicIpv6 || undefined,
         vpn_port: parseInt(vpnPort) || 1194,
         vpn_protocol: vpnProtocol,
         crypto_profile: cryptoProfile,
         vpn_subnet: vpnSubnet || '172.31.255.0/24',
+        vpn_subnet_v6: vpnSubnetV6 || undefined,
         tls_auth_enabled: tlsAuthEnabled,
         full_tunnel_mode: fullTunnelMode,
         push_dns: pushDns,
@@ -1042,7 +1082,7 @@ function EditGatewayModal({ gateway, onClose, onSuccess }: EditGatewayModalProps
 
           <div>
             <label className="block text-sm font-medium text-theme-secondary mb-1">
-              Public IP
+              Public IP (IPv4)
             </label>
             <input
               type="text"
@@ -1051,6 +1091,22 @@ function EditGatewayModal({ gateway, onClose, onSuccess }: EditGatewayModalProps
               placeholder="203.0.113.10"
               className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">
+              Public IP (IPv6)
+            </label>
+            <input
+              type="text"
+              value={publicIpv6}
+              onChange={(e) => setPublicIpv6(e.target.value)}
+              placeholder="2001:db8::1"
+              className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            />
+            <p className="mt-1 text-xs text-theme-tertiary">
+              Optional IPv6 address for dual-stack connectivity.
+            </p>
           </div>
 
           <div className={isWireGuard ? '' : 'grid grid-cols-2 gap-4'}>
@@ -1124,7 +1180,7 @@ function EditGatewayModal({ gateway, onClose, onSuccess }: EditGatewayModalProps
 
           <div>
             <label className="block text-sm font-medium text-theme-secondary mb-1">
-              VPN Subnet
+              VPN Subnet (IPv4)
             </label>
             <input
               type="text"
@@ -1135,6 +1191,22 @@ function EditGatewayModal({ gateway, onClose, onSuccess }: EditGatewayModalProps
             />
             <p className="mt-1 text-xs text-theme-tertiary">
               The subnet used for VPN client IP addresses. Must be a valid CIDR block.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">
+              VPN Subnet (IPv6)
+            </label>
+            <input
+              type="text"
+              value={vpnSubnetV6}
+              onChange={(e) => setVpnSubnetV6(e.target.value)}
+              placeholder="fd00::/64"
+              className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            />
+            <p className="mt-1 text-xs text-theme-tertiary">
+              Optional IPv6 subnet for dual-stack VPN clients.
             </p>
           </div>
 

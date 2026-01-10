@@ -23,10 +23,12 @@ type Gateway struct {
 	GatewayType    string // "openvpn" or "wireguard"
 	Hostname       string
 	PublicIP       string
+	PublicIPv6     *string  // IPv6 public IP (optional)
 	VPNPort        int
 	VPNProtocol    string
 	CryptoProfile  string   // "modern", "fips", or "compatible" (OpenVPN only)
 	VPNSubnet      string   // VPN client subnet (e.g., "10.8.0.0/24")
+	VPNSubnetV6    *string  // IPv6 VPN client subnet (optional, e.g., "fd00::/64")
 	TLSAuthEnabled bool     // Enable TLS-Auth for additional security (OpenVPN only)
 	TLSAuthKey     string   // TLS-Auth static key (generated during provisioning) (OpenVPN only)
 	FullTunnelMode bool     // When true, route all traffic through VPN (push 0.0.0.0/0)
@@ -107,9 +109,9 @@ func (s *GatewayStore) CreateGateway(ctx context.Context, gw *Gateway) error {
 	}
 	// Use NULLIF to convert empty string to NULL for hostname and inet type
 	_, err := s.db.Pool.Exec(ctx, `
-		INSERT INTO gateways (name, gateway_type, hostname, public_ip, vpn_port, vpn_protocol, crypto_profile, vpn_subnet, tls_auth_enabled, full_tunnel_mode, push_dns, dns_servers, wg_private_key, wg_public_key, wg_listen_port, token, public_key)
-		VALUES ($1, $2, NULLIF($3, ''), NULLIF($4, '')::inet, $5, $6, $7, $8::cidr, $9, $10, $11, $12, NULLIF($13, ''), NULLIF($14, ''), $15, $16, $17)
-	`, gw.Name, gatewayType, gw.Hostname, gw.PublicIP, gw.VPNPort, gw.VPNProtocol, cryptoProfile, vpnSubnet, gw.TLSAuthEnabled, gw.FullTunnelMode, gw.PushDNS, gw.DNSServers, gw.WGPrivateKey, gw.WGPublicKey, wgListenPort, gw.Token, gw.PublicKey)
+		INSERT INTO gateways (name, gateway_type, hostname, public_ip, public_ip_v6, vpn_port, vpn_protocol, crypto_profile, vpn_subnet, vpn_subnet_v6, tls_auth_enabled, full_tunnel_mode, push_dns, dns_servers, wg_private_key, wg_public_key, wg_listen_port, token, public_key)
+		VALUES ($1, $2, NULLIF($3, ''), NULLIF($4, '')::inet, NULLIF($5, '')::inet, $6, $7, $8, $9::cidr, $10::cidr, $11, $12, $13, $14, NULLIF($15, ''), NULLIF($16, ''), $17, $18, $19)
+	`, gw.Name, gatewayType, gw.Hostname, gw.PublicIP, gw.PublicIPv6, gw.VPNPort, gw.VPNProtocol, cryptoProfile, vpnSubnet, gw.VPNSubnetV6, gw.TLSAuthEnabled, gw.FullTunnelMode, gw.PushDNS, gw.DNSServers, gw.WGPrivateKey, gw.WGPublicKey, wgListenPort, gw.Token, gw.PublicKey)
 	if err != nil && strings.Contains(err.Error(), "duplicate key") {
 		return ErrGatewayExists
 	}
@@ -119,12 +121,12 @@ func (s *GatewayStore) CreateGateway(ctx context.Context, gw *Gateway) error {
 // GetGateway retrieves a gateway by ID
 func (s *GatewayStore) GetGateway(ctx context.Context, id string) (*Gateway, error) {
 	var gw Gateway
-	var hostname, publicIP, vpnSubnet, tlsAuthKey, wgPrivateKey, wgPublicKey *string
+	var hostname, publicIP, publicIPv6, vpnSubnet, vpnSubnetV6, tlsAuthKey, wgPrivateKey, wgPublicKey *string
 	var wgListenPort *int
 	err := s.db.Pool.QueryRow(ctx, `
-		SELECT id, name, COALESCE(gateway_type, 'openvpn'), hostname, host(public_ip), vpn_port, vpn_protocol, crypto_profile, vpn_subnet::text, tls_auth_enabled, COALESCE(tls_auth_key, ''), full_tunnel_mode, push_dns, dns_servers, COALESCE(config_version, ''), wg_private_key, wg_public_key, wg_listen_port, token, public_key, is_active, last_heartbeat, created_at, updated_at
+		SELECT id, name, COALESCE(gateway_type, 'openvpn'), hostname, host(public_ip), host(public_ip_v6), vpn_port, vpn_protocol, crypto_profile, vpn_subnet::text, vpn_subnet_v6::text, tls_auth_enabled, COALESCE(tls_auth_key, ''), full_tunnel_mode, push_dns, dns_servers, COALESCE(config_version, ''), wg_private_key, wg_public_key, wg_listen_port, token, public_key, is_active, last_heartbeat, created_at, updated_at
 		FROM gateways WHERE id = $1
-	`, id).Scan(&gw.ID, &gw.Name, &gw.GatewayType, &hostname, &publicIP, &gw.VPNPort, &gw.VPNProtocol, &gw.CryptoProfile, &vpnSubnet, &gw.TLSAuthEnabled, &gw.TLSAuthKey, &gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers, &gw.ConfigVersion, &wgPrivateKey, &wgPublicKey, &wgListenPort, &gw.Token, &gw.PublicKey, &gw.IsActive, &gw.LastHeartbeat, &gw.CreatedAt, &gw.UpdatedAt)
+	`, id).Scan(&gw.ID, &gw.Name, &gw.GatewayType, &hostname, &publicIP, &publicIPv6, &gw.VPNPort, &gw.VPNProtocol, &gw.CryptoProfile, &vpnSubnet, &vpnSubnetV6, &gw.TLSAuthEnabled, &gw.TLSAuthKey, &gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers, &gw.ConfigVersion, &wgPrivateKey, &wgPublicKey, &wgListenPort, &gw.Token, &gw.PublicKey, &gw.IsActive, &gw.LastHeartbeat, &gw.CreatedAt, &gw.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, ErrGatewayNotFound
 	}
@@ -137,11 +139,13 @@ func (s *GatewayStore) GetGateway(ctx context.Context, id string) (*Gateway, err
 	if publicIP != nil {
 		gw.PublicIP = *publicIP
 	}
+	gw.PublicIPv6 = publicIPv6
 	if vpnSubnet != nil {
 		gw.VPNSubnet = *vpnSubnet
 	} else {
 		gw.VPNSubnet = DefaultVPNSubnet
 	}
+	gw.VPNSubnetV6 = vpnSubnetV6
 	if wgPrivateKey != nil {
 		gw.WGPrivateKey = *wgPrivateKey
 	}
@@ -413,12 +417,12 @@ func (s *GatewayStore) UpdateGateway(ctx context.Context, gw *Gateway) error {
 	}
 	result, err := s.db.Pool.Exec(ctx, `
 		UPDATE gateways
-		SET name = $2, hostname = NULLIF($3, ''), public_ip = NULLIF($4, '')::inet,
-		    vpn_port = $5, vpn_protocol = $6, crypto_profile = $7, vpn_subnet = $8::cidr,
-		    tls_auth_enabled = $9, full_tunnel_mode = $10, push_dns = $11, dns_servers = $12,
-		    wg_listen_port = $13, updated_at = NOW()
+		SET name = $2, hostname = NULLIF($3, ''), public_ip = NULLIF($4, '')::inet, public_ip_v6 = NULLIF($5, '')::inet,
+		    vpn_port = $6, vpn_protocol = $7, crypto_profile = $8, vpn_subnet = $9::cidr, vpn_subnet_v6 = $10::cidr,
+		    tls_auth_enabled = $11, full_tunnel_mode = $12, push_dns = $13, dns_servers = $14,
+		    wg_listen_port = $15, updated_at = NOW()
 		WHERE id = $1
-	`, gw.ID, gw.Name, gw.Hostname, gw.PublicIP, gw.VPNPort, gw.VPNProtocol, cryptoProfile, vpnSubnet, gw.TLSAuthEnabled, gw.FullTunnelMode, gw.PushDNS, gw.DNSServers, wgListenPort)
+	`, gw.ID, gw.Name, gw.Hostname, gw.PublicIP, gw.PublicIPv6, gw.VPNPort, gw.VPNProtocol, cryptoProfile, vpnSubnet, gw.VPNSubnetV6, gw.TLSAuthEnabled, gw.FullTunnelMode, gw.PushDNS, gw.DNSServers, wgListenPort)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {
 			return ErrGatewayExists

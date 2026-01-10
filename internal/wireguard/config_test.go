@@ -516,3 +516,316 @@ func TestDefaultConstants(t *testing.T) {
 		t.Errorf("DefaultListenPort should be 51820, got %d", DefaultListenPort)
 	}
 }
+
+func TestGenerateClientConfig_SingleDNS(t *testing.T) {
+	clientKeyPair, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair failed: %v", err)
+	}
+
+	gatewayKeyPair, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair failed: %v", err)
+	}
+
+	req := ClientConfigRequest{
+		GatewayName:      "single-dns-gateway",
+		GatewayEndpoint:  "vpn.example.com:51820",
+		GatewayPublicKey: gatewayKeyPair.PublicKey,
+		ClientPrivateKey: clientKeyPair.PrivateKey,
+		ClientAddress:    "10.0.0.2/32",
+		AllowedIPs:       []string{"10.0.0.0/24"},
+		DNS:              []string{"8.8.8.8"},
+		ExpiresAt:        time.Now().Add(24 * time.Hour),
+		UserEmail:        "test@example.com",
+	}
+
+	config, err := GenerateClientConfig(req)
+	if err != nil {
+		t.Fatalf("GenerateClientConfig failed: %v", err)
+	}
+
+	content := string(config.Content)
+
+	if !strings.Contains(content, "DNS = 8.8.8.8") {
+		t.Error("Config should contain single DNS server")
+	}
+}
+
+func TestGenerateClientConfig_NilAllowedIPs(t *testing.T) {
+	clientKeyPair, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair failed: %v", err)
+	}
+
+	gatewayKeyPair, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair failed: %v", err)
+	}
+
+	req := ClientConfigRequest{
+		GatewayName:      "nil-allowed-gateway",
+		GatewayEndpoint:  "vpn.example.com:51820",
+		GatewayPublicKey: gatewayKeyPair.PublicKey,
+		ClientPrivateKey: clientKeyPair.PrivateKey,
+		ClientAddress:    "10.0.0.2/32",
+		AllowedIPs:       nil, // nil AllowedIPs
+		ExpiresAt:        time.Now().Add(24 * time.Hour),
+		UserEmail:        "test@example.com",
+	}
+
+	config, err := GenerateClientConfig(req)
+	if err != nil {
+		t.Fatalf("GenerateClientConfig failed: %v", err)
+	}
+
+	content := string(config.Content)
+
+	// Should default to full tunnel when AllowedIPs is nil
+	if !strings.Contains(content, "AllowedIPs = 0.0.0.0/0, ::/0") {
+		t.Error("Config should default to full tunnel when AllowedIPs is nil")
+	}
+}
+
+func TestGenerateServerConfig_MultiplePeers(t *testing.T) {
+	gatewayKeyPair, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair failed: %v", err)
+	}
+
+	client1KeyPair, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair failed: %v", err)
+	}
+
+	client2KeyPair, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair failed: %v", err)
+	}
+
+	client3KeyPair, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair failed: %v", err)
+	}
+
+	req := ServerConfigRequest{
+		InterfaceName: "wg0",
+		PrivateKey:    gatewayKeyPair.PrivateKey,
+		Address:       "10.0.0.1/24",
+		ListenPort:    51820,
+	}
+
+	peers := []PeerConfig{
+		{
+			PublicKey:  client1KeyPair.PublicKey,
+			AllowedIPs: []string{"10.0.0.2/32"},
+			Comment:    "user1@example.com",
+		},
+		{
+			PublicKey:  client2KeyPair.PublicKey,
+			AllowedIPs: []string{"10.0.0.3/32"},
+			Comment:    "user2@example.com",
+		},
+		{
+			PublicKey:  client3KeyPair.PublicKey,
+			AllowedIPs: []string{"10.0.0.4/32", "192.168.100.0/24"},
+			Comment:    "user3@example.com",
+		},
+	}
+
+	config, err := GenerateServerConfig(req, peers)
+	if err != nil {
+		t.Fatalf("GenerateServerConfig failed: %v", err)
+	}
+
+	content := string(config)
+
+	// Verify all peers are present
+	if !strings.Contains(content, client1KeyPair.PublicKey) {
+		t.Error("Config should contain peer 1 public key")
+	}
+	if !strings.Contains(content, client2KeyPair.PublicKey) {
+		t.Error("Config should contain peer 2 public key")
+	}
+	if !strings.Contains(content, client3KeyPair.PublicKey) {
+		t.Error("Config should contain peer 3 public key")
+	}
+
+	// Count [Peer] sections
+	peerCount := strings.Count(content, "[Peer]")
+	if peerCount != 3 {
+		t.Errorf("Expected 3 [Peer] sections, got %d", peerCount)
+	}
+
+	// Verify peer 3 has multiple allowed IPs
+	if !strings.Contains(content, "192.168.100.0/24") {
+		t.Error("Config should contain peer 3's additional allowed IP")
+	}
+}
+
+func TestGenerateServerConfig_IPv6Address(t *testing.T) {
+	gatewayKeyPair, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair failed: %v", err)
+	}
+
+	req := ServerConfigRequest{
+		InterfaceName: "wg0",
+		PrivateKey:    gatewayKeyPair.PrivateKey,
+		Address:       "fd00::1/64",
+		ListenPort:    51820,
+	}
+
+	config, err := GenerateServerConfig(req, nil)
+	if err != nil {
+		t.Fatalf("GenerateServerConfig failed: %v", err)
+	}
+
+	content := string(config)
+
+	if !strings.Contains(content, "Address = fd00::1/64") {
+		t.Error("Config should contain IPv6 server address")
+	}
+}
+
+func TestGenerateServerConfig_NoPostScripts(t *testing.T) {
+	gatewayKeyPair, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair failed: %v", err)
+	}
+
+	req := ServerConfigRequest{
+		InterfaceName: "wg0",
+		PrivateKey:    gatewayKeyPair.PrivateKey,
+		Address:       "10.0.0.1/24",
+		ListenPort:    51820,
+		PostUp:        "",
+		PostDown:      "",
+	}
+
+	config, err := GenerateServerConfig(req, nil)
+	if err != nil {
+		t.Fatalf("GenerateServerConfig failed: %v", err)
+	}
+
+	content := string(config)
+
+	if strings.Contains(content, "PostUp") {
+		t.Error("Config should not contain PostUp when empty")
+	}
+	if strings.Contains(content, "PostDown") {
+		t.Error("Config should not contain PostDown when empty")
+	}
+}
+
+func TestClientConfigRequest_Struct(t *testing.T) {
+	req := ClientConfigRequest{
+		GatewayName:         "test-gateway",
+		GatewayEndpoint:     "vpn.example.com:51820",
+		GatewayPublicKey:    "pubkey123",
+		ClientPrivateKey:    "privkey123",
+		ClientAddress:       "10.0.0.2/32",
+		AllowedIPs:          []string{"10.0.0.0/24"},
+		DNS:                 []string{"8.8.8.8"},
+		PresharedKey:        "psk123",
+		PersistentKeepalive: 25,
+		ExpiresAt:           time.Now().Add(24 * time.Hour),
+		UserEmail:           "user@example.com",
+	}
+
+	if req.GatewayName != "test-gateway" {
+		t.Errorf("Expected GatewayName 'test-gateway', got %q", req.GatewayName)
+	}
+	if req.GatewayEndpoint != "vpn.example.com:51820" {
+		t.Errorf("Expected GatewayEndpoint 'vpn.example.com:51820', got %q", req.GatewayEndpoint)
+	}
+	if req.PersistentKeepalive != 25 {
+		t.Errorf("Expected PersistentKeepalive 25, got %d", req.PersistentKeepalive)
+	}
+}
+
+func TestServerConfigRequest_Struct(t *testing.T) {
+	req := ServerConfigRequest{
+		InterfaceName: "wg0",
+		PrivateKey:    "privkey123",
+		Address:       "10.0.0.1/24",
+		ListenPort:    51820,
+		PostUp:        "echo up",
+		PostDown:      "echo down",
+	}
+
+	if req.InterfaceName != "wg0" {
+		t.Errorf("Expected InterfaceName 'wg0', got %q", req.InterfaceName)
+	}
+	if req.ListenPort != 51820 {
+		t.Errorf("Expected ListenPort 51820, got %d", req.ListenPort)
+	}
+	if req.PostUp != "echo up" {
+		t.Errorf("Expected PostUp 'echo up', got %q", req.PostUp)
+	}
+}
+
+func TestPeerConfig_Struct(t *testing.T) {
+	cfg := PeerConfig{
+		PublicKey:           "peerkey123",
+		PresharedKey:        "psk123",
+		AllowedIPs:          []string{"10.0.0.2/32"},
+		Comment:             "test user",
+		Endpoint:            "192.168.1.100:51820",
+		PersistentKeepalive: 25,
+	}
+
+	if cfg.PublicKey != "peerkey123" {
+		t.Errorf("Expected PublicKey 'peerkey123', got %q", cfg.PublicKey)
+	}
+	if cfg.Comment != "test user" {
+		t.Errorf("Expected Comment 'test user', got %q", cfg.Comment)
+	}
+	if cfg.PersistentKeepalive != 25 {
+		t.Errorf("Expected PersistentKeepalive 25, got %d", cfg.PersistentKeepalive)
+	}
+	if len(cfg.AllowedIPs) != 1 {
+		t.Errorf("Expected 1 AllowedIP, got %d", len(cfg.AllowedIPs))
+	}
+}
+
+func TestGeneratedConfig_Struct(t *testing.T) {
+	now := time.Now()
+	cfg := GeneratedConfig{
+		Content:   []byte("config content"),
+		FileName:  "test.conf",
+		ExpiresAt: now,
+	}
+
+	if string(cfg.Content) != "config content" {
+		t.Errorf("Expected Content 'config content', got %q", string(cfg.Content))
+	}
+	if cfg.FileName != "test.conf" {
+		t.Errorf("Expected FileName 'test.conf', got %q", cfg.FileName)
+	}
+	if !cfg.ExpiresAt.Equal(now) {
+		t.Errorf("Expected ExpiresAt %v, got %v", now, cfg.ExpiresAt)
+	}
+}
+
+func TestSanitizeFileName_MoreCases(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"", ""},
+		{"a", "a"},
+		{"with\"quotes", "with-quotes"},
+		{"with<less>than", "with-less-than"},
+		{"with|pipe", "with-pipe"},
+		{"multiple   spaces", "multiple---spaces"},
+		{"back\\slash", "back-slash"},
+	}
+
+	for _, tc := range tests {
+		result := sanitizeFileName(tc.input)
+		if result != tc.expected {
+			t.Errorf("sanitizeFileName(%q) = %q, expected %q", tc.input, result, tc.expected)
+		}
+	}
+}

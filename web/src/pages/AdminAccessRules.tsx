@@ -188,9 +188,14 @@ export default function AdminAccessRules() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="space-y-1">
-                      <code className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded text-sm font-mono">
-                        {rule.value}
-                      </code>
+                      {rule.value && (
+                        <div>
+                          <code className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded text-sm font-mono">
+                            {rule.value}
+                          </code>
+                          {rule.valueV6 && <span className="ml-1 text-xs text-theme-muted">IPv4</span>}
+                        </div>
+                      )}
                       {rule.valueV6 && (
                         <div>
                           <code className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 rounded text-sm font-mono text-purple-700 dark:text-purple-300">
@@ -315,12 +320,26 @@ function RuleModal({ rule, onClose, onSuccess }: RuleModalProps) {
     setSubmitting(true)
     setError(null)
 
+    // Validate that at least one value is provided for IP/CIDR rules
+    if ((ruleType === 'ip' || ruleType === 'cidr') && !value && !valueV6) {
+      setError('At least one of IPv4 or IPv6 value is required')
+      setSubmitting(false)
+      return
+    }
+
+    // For hostname rules, value is required
+    if ((ruleType === 'hostname' || ruleType === 'hostname_wildcard') && !value) {
+      setError('Hostname value is required')
+      setSubmitting(false)
+      return
+    }
+
     try {
       const req = {
         name,
         description: description || undefined,
         rule_type: ruleType,
-        value,
+        value: value || undefined,
         value_v6: (ruleType === 'ip' || ruleType === 'cidr') && valueV6 ? valueV6 : undefined,
         port_range: portRange || undefined,
         protocol: protocol || undefined,
@@ -388,38 +407,57 @@ function RuleModal({ rule, onClose, onSuccess }: RuleModalProps) {
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-theme-secondary mb-1">
-              {ruleType === 'ip' || ruleType === 'cidr' ? 'IPv4 Value *' : 'Value *'}
-            </label>
-            <input
-              type="text"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder={RULE_TYPE_EXAMPLES[ruleType]}
-              className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono"
-              required
-            />
-            <p className="text-xs text-theme-tertiary mt-1">
-              Example: {RULE_TYPE_EXAMPLES[ruleType]}
-            </p>
-          </div>
-
-          {(ruleType === 'ip' || ruleType === 'cidr') && (
+          {(ruleType === 'ip' || ruleType === 'cidr') ? (
+            <>
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm text-blue-700 dark:text-blue-300">
+                Provide IPv4, IPv6, or both. At least one is required.
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-theme-secondary mb-1">
+                  IPv4 Value
+                </label>
+                <input
+                  type="text"
+                  value={value}
+                  onChange={(e) => setValue(e.target.value)}
+                  placeholder={RULE_TYPE_EXAMPLES[ruleType]}
+                  className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono"
+                />
+                <p className="text-xs text-theme-tertiary mt-1">
+                  Example: {RULE_TYPE_EXAMPLES[ruleType]}
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-theme-secondary mb-1">
+                  IPv6 Value
+                </label>
+                <input
+                  type="text"
+                  value={valueV6}
+                  onChange={(e) => setValueV6(e.target.value)}
+                  placeholder={ruleType === 'ip' ? '2001:db8::1' : '2001:db8::/32'}
+                  className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono"
+                />
+                <p className="text-xs text-theme-tertiary mt-1">
+                  Example: {ruleType === 'ip' ? '2001:db8::1' : '2001:db8::/32'}
+                </p>
+              </div>
+            </>
+          ) : (
             <div>
               <label className="block text-sm font-medium text-theme-secondary mb-1">
-                IPv6 Value
-                <span className="ml-2 text-xs font-normal text-purple-600 dark:text-purple-400">(Optional)</span>
+                Value *
               </label>
               <input
                 type="text"
-                value={valueV6}
-                onChange={(e) => setValueV6(e.target.value)}
-                placeholder={ruleType === 'ip' ? '2001:db8::1' : '2001:db8::/32'}
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder={RULE_TYPE_EXAMPLES[ruleType]}
                 className="w-full px-3 py-2 border border-theme rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono"
+                required
               />
               <p className="text-xs text-theme-tertiary mt-1">
-                Example: {ruleType === 'ip' ? '2001:db8::1' : '2001:db8::/32'}
+                Example: {RULE_TYPE_EXAMPLES[ruleType]}
               </p>
             </div>
           )}
