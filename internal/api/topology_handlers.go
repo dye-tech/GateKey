@@ -7,7 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gatekey-project/gatekey/internal/db"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // TopologyResponse represents the full network topology
@@ -369,6 +371,567 @@ func (s *Server) getActiveMeshConnections(ctx context.Context) ([]ActiveSession,
 		sessions = append(sessions, sess)
 	}
 	return sessions, gatewayRows.Err()
+}
+
+// DisconnectSessionRequest represents a request to disconnect a specific session
+type DisconnectSessionRequest struct {
+	Reason string `json:"reason"`
+}
+
+// DisconnectUserRequest represents a request to disconnect all sessions for a user
+type DisconnectUserRequest struct {
+	Reason string `json:"reason"`
+}
+
+// handleDisconnectSession disconnects a specific VPN session immediately.
+// This targets one individual session, not groups or all users.
+// POST /api/v1/admin/sessions/:sessionId/disconnect
+func (s *Server) handleDisconnectSession(c *gin.Context) {
+	ctx := c.Request.Context()
+	sessionID := c.Param("sessionId")
+
+	// Auth check
+	admin, err := s.getAuthenticatedUser(c)
+	if err != nil || admin == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
+		return
+	}
+	if !admin.IsAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+		return
+	}
+
+	var req DisconnectSessionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		req.Reason = "Disconnected by administrator"
+	}
+	if req.Reason == "" {
+		req.Reason = "Disconnected by administrator"
+	}
+
+	// Get admin email for audit
+	adminEmail := admin.Email
+	if adminEmail == "" {
+		adminEmail = "admin"
+	}
+
+	// Try to find and disconnect the session in gateway_connections
+	var userID, userEmail, gatewayID, vpnAddress string
+	var nodeType string
+	err = s.db.Pool.QueryRow(ctx, `
+		SELECT gc.user_id, COALESCE(u.email, lu.email, ''), gc.gateway_id::text, host(gc.tunnel_ip)
+		FROM gateway_connections gc
+		LEFT JOIN users u ON gc.user_type = 'sso' AND gc.user_id = u.id::text
+		LEFT JOIN local_users lu ON gc.user_type = 'local' AND gc.user_id = lu.id::text
+		WHERE gc.id = $1 AND gc.disconnected_at IS NULL
+	`, sessionID).Scan(&userID, &userEmail, &gatewayID, &vpnAddress)
+
+	if err == nil {
+		nodeType = "gateway"
+	} else {
+		// Try mesh_connections
+		err = s.db.Pool.QueryRow(ctx, `
+			SELECT mc.user_id, COALESCE(u.email, lu.email, ''), mc.hub_id::text, host(mc.tunnel_ip)
+			FROM mesh_connections mc
+			LEFT JOIN users u ON COALESCE(mc.user_type, 'sso') = 'sso' AND mc.user_id = u.id::text
+			LEFT JOIN local_users lu ON mc.user_type = 'local' AND mc.user_id = lu.id::text
+			WHERE mc.id = $1 AND mc.disconnected_at IS NULL
+		`, sessionID).Scan(&userID, &userEmail, &gatewayID, &vpnAddress)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Session not found or already disconnected"})
+			return
+		}
+		nodeType = "hub"
+	}
+
+	// Create pending disconnect for gateway agent to execute
+	store := db.NewPendingDisconnectStore(s.db)
+	_, err = store.CreateDisconnectRequest(ctx, &db.DisconnectRequest{
+		UserID:       userID,
+		UserEmail:    userEmail,
+		GatewayID:    &gatewayID,
+		NodeType:     nodeType,
+		ConnectionID: &sessionID,
+		VPNAddress:   &vpnAddress,
+		Reason:       req.Reason,
+		RequestedBy:  adminEmail,
+	})
+	if err != nil {
+		s.logger.Error("Failed to create disconnect request")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create disconnect request"})
+		return
+	}
+
+	// Also mark the connection as disconnect requested
+	isGateway := nodeType == "gateway"
+	_ = store.MarkConnectionDisconnectRequested(ctx, sessionID, adminEmail, isGateway)
+
+	s.logger.Info("Session disconnect requested",
+		zap.String("sessionId", sessionID),
+		zap.String("userEmail", userEmail),
+		zap.String("gatewayId", gatewayID),
+		zap.String("requestedBy", adminEmail),
+		zap.String("reason", req.Reason))
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":    true,
+		"message":    "Disconnect request created",
+		"sessionId":  sessionID,
+		"userEmail":  userEmail,
+		"gatewayId":  gatewayID,
+		"nodeType":   nodeType,
+		"vpnAddress": vpnAddress,
+	})
+}
+
+// handleDisconnectUser disconnects ALL active sessions for a specific user.
+// This targets one individual user, NOT groups or other users.
+// POST /api/v1/admin/users/:id/disconnect
+func (s *Server) handleDisconnectUser(c *gin.Context) {
+	ctx := c.Request.Context()
+	userID := c.Param("id")
+
+	// Auth check
+	admin, err := s.getAuthenticatedUser(c)
+	if err != nil || admin == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
+		return
+	}
+	if !admin.IsAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+		return
+	}
+
+	var req DisconnectUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		req.Reason = "Disconnected by administrator"
+	}
+	if req.Reason == "" {
+		req.Reason = "Disconnected by administrator"
+	}
+
+	adminEmail := admin.Email
+	if adminEmail == "" {
+		adminEmail = "admin"
+	}
+
+	// Get user email for display
+	var userEmail string
+	err = s.db.Pool.QueryRow(ctx, `
+		SELECT email FROM users WHERE id = $1
+		UNION ALL
+		SELECT email FROM local_users WHERE id = $1
+		LIMIT 1
+	`, userID).Scan(&userEmail)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	store := db.NewPendingDisconnectStore(s.db)
+
+	// Get all active connections for this user
+	connections, err := store.GetActiveConnectionsForUser(ctx, userID)
+	if err != nil {
+		s.logger.Error("Failed to get active connections for user")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get connections"})
+		return
+	}
+
+	if len(connections) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"success":     true,
+			"message":     "No active sessions found for user",
+			"userEmail":   userEmail,
+			"disconnects": 0,
+		})
+		return
+	}
+
+	// Create disconnect requests for each connection
+	disconnectCount := 0
+	for _, conn := range connections {
+		connID := conn["id"].(string)
+		gwID := conn["gateway_id"].(string)
+		nodeType := conn["node_type"].(string)
+		vpnAddr := conn["vpn_address"].(string)
+
+		_, err := store.CreateDisconnectRequest(ctx, &db.DisconnectRequest{
+			UserID:       userID,
+			UserEmail:    userEmail,
+			GatewayID:    &gwID,
+			NodeType:     nodeType,
+			ConnectionID: &connID,
+			VPNAddress:   &vpnAddr,
+			Reason:       req.Reason,
+			RequestedBy:  adminEmail,
+		})
+		if err != nil {
+			s.logger.Error("Failed to create disconnect request for connection")
+			continue
+		}
+
+		// Mark connection as disconnect requested
+		_ = store.MarkConnectionDisconnectRequested(ctx, connID, adminEmail, nodeType == "gateway")
+		disconnectCount++
+	}
+
+	s.logger.Info("User disconnect requested",
+		zap.String("userId", userID),
+		zap.String("userEmail", userEmail),
+		zap.String("requestedBy", adminEmail),
+		zap.Int("disconnectCount", disconnectCount),
+		zap.String("reason", req.Reason))
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":     true,
+		"message":     "Disconnect requests created",
+		"userEmail":   userEmail,
+		"disconnects": disconnectCount,
+	})
+}
+
+// handleGetPendingDisconnects returns pending disconnect requests for a gateway.
+// Gateway agents call this to check if any users need to be disconnected.
+// POST /api/v1/gateway/pending-disconnects
+func (s *Server) handleGetPendingDisconnects(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var req struct {
+		GatewayID string `json:"gateway_id" binding:"required"`
+		NodeType  string `json:"node_type"` // gateway or hub
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "gateway_id is required"})
+		return
+	}
+	if req.NodeType == "" {
+		req.NodeType = "gateway"
+	}
+
+	// Verify gateway token
+	token := c.GetHeader("X-Gateway-Token")
+	if token == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing gateway token"})
+		return
+	}
+
+	// Validate token belongs to this gateway
+	var gatewayID string
+	err := s.db.Pool.QueryRow(ctx, `
+		SELECT id::text FROM gateways WHERE gateway_token = $1 AND id = $2
+		UNION ALL
+		SELECT id::text FROM mesh_hubs WHERE gateway_token = $1 AND id = $2
+		LIMIT 1
+	`, token, req.GatewayID).Scan(&gatewayID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid gateway token"})
+		return
+	}
+
+	store := db.NewPendingDisconnectStore(s.db)
+	disconnects, err := store.GetPendingDisconnectsForGateway(ctx, req.GatewayID, req.NodeType)
+	if err != nil {
+		s.logger.Error("Failed to get pending disconnects")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get pending disconnects"})
+		return
+	}
+
+	// Return disconnect list
+	c.JSON(http.StatusOK, gin.H{
+		"pending_disconnects": disconnects,
+		"count":               len(disconnects),
+	})
+}
+
+// handleAckDisconnect acknowledges that a disconnect has been executed.
+// Gateway agents call this after successfully disconnecting a user.
+// POST /api/v1/gateway/ack-disconnect
+func (s *Server) handleAckDisconnect(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var req struct {
+		DisconnectID string `json:"disconnect_id" binding:"required"`
+		GatewayID    string `json:"gateway_id" binding:"required"`
+		ConnectionID string `json:"connection_id"`
+		Success      bool   `json:"success"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Verify gateway token
+	token := c.GetHeader("X-Gateway-Token")
+	if token == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing gateway token"})
+		return
+	}
+
+	store := db.NewPendingDisconnectStore(s.db)
+
+	// Mark disconnect as executed
+	err := store.MarkDisconnectExecuted(ctx, req.DisconnectID, req.GatewayID)
+	if err != nil {
+		s.logger.Error("Failed to mark disconnect as executed")
+	}
+
+	// If we have a connection ID, mark it as disconnected by admin
+	if req.ConnectionID != "" && req.Success {
+		// Try gateway_connections first, then mesh_connections
+		_ = store.DisconnectUserConnection(ctx, req.ConnectionID, "admin", true)
+		_ = store.DisconnectUserConnection(ctx, req.ConnectionID, "admin", false)
+	}
+
+	s.logger.Info("Disconnect acknowledged",
+		zap.String("disconnectId", req.DisconnectID),
+		zap.String("gatewayId", req.GatewayID),
+		zap.Bool("success", req.Success))
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// handleGetUserActiveSessions returns active sessions for a specific user.
+// GET /api/v1/admin/users/:id/sessions
+func (s *Server) handleGetUserActiveSessions(c *gin.Context) {
+	ctx := c.Request.Context()
+	userID := c.Param("id")
+
+	// Auth check
+	admin, err := s.getAuthenticatedUser(c)
+	if err != nil || admin == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
+		return
+	}
+	if !admin.IsAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+		return
+	}
+
+	store := db.NewPendingDisconnectStore(s.db)
+	connections, err := store.GetActiveConnectionsForUser(ctx, userID)
+	if err != nil {
+		s.logger.Error("Failed to get active connections for user")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get sessions"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"sessions": connections,
+		"count":    len(connections),
+	})
+}
+
+// DisableUserRequest represents a request to disable a user
+type DisableUserRequest struct {
+	Reason           string `json:"reason"`
+	DisconnectActive bool   `json:"disconnect_active"` // Also disconnect active sessions
+}
+
+// handleDisableUser disables a user account and optionally disconnects their active sessions.
+// This prevents the user from making new connections without affecting other users.
+// POST /api/v1/admin/users/:id/disable
+func (s *Server) handleDisableUser(c *gin.Context) {
+	ctx := c.Request.Context()
+	userID := c.Param("id")
+
+	// Auth check
+	admin, err := s.getAuthenticatedUser(c)
+	if err != nil || admin == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
+		return
+	}
+	if !admin.IsAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+		return
+	}
+
+	var req DisableUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		req.DisconnectActive = true // Default to disconnecting active sessions
+	}
+	if req.Reason == "" {
+		req.Reason = "Disabled by administrator"
+	}
+
+	adminEmail := admin.Email
+	if adminEmail == "" {
+		adminEmail = "admin"
+	}
+
+	// Try to disable SSO user first
+	var userEmail string
+	var userType string
+	result, err := s.db.Pool.Exec(ctx, `
+		UPDATE users SET is_active = false WHERE id = $1 RETURNING email
+	`, userID)
+	if err == nil && result.RowsAffected() > 0 {
+		_ = s.db.Pool.QueryRow(ctx, `SELECT email FROM users WHERE id = $1`, userID).Scan(&userEmail)
+		userType = "sso"
+	} else {
+		// Try local user
+		result, err = s.db.Pool.Exec(ctx, `
+			UPDATE local_users SET is_active = false WHERE id = $1 RETURNING email
+		`, userID)
+		if err != nil || result.RowsAffected() == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
+		}
+		_ = s.db.Pool.QueryRow(ctx, `SELECT email FROM local_users WHERE id = $1`, userID).Scan(&userEmail)
+		userType = "local"
+	}
+
+	disconnectCount := 0
+	if req.DisconnectActive {
+		// Disconnect all active sessions for this user
+		store := db.NewPendingDisconnectStore(s.db)
+		connections, _ := store.GetActiveConnectionsForUser(ctx, userID)
+		for _, conn := range connections {
+			connID := conn["id"].(string)
+			gwID := conn["gateway_id"].(string)
+			nodeType := conn["node_type"].(string)
+			vpnAddr := conn["vpn_address"].(string)
+
+			_, err := store.CreateDisconnectRequest(ctx, &db.DisconnectRequest{
+				UserID:       userID,
+				UserEmail:    userEmail,
+				GatewayID:    &gwID,
+				NodeType:     nodeType,
+				ConnectionID: &connID,
+				VPNAddress:   &vpnAddr,
+				Reason:       req.Reason,
+				RequestedBy:  adminEmail,
+			})
+			if err == nil {
+				disconnectCount++
+			}
+		}
+	}
+
+	s.logger.Info("User disabled",
+		zap.String("userId", userID),
+		zap.String("userEmail", userEmail),
+		zap.String("userType", userType),
+		zap.String("disabledBy", adminEmail),
+		zap.Int("disconnectedSessions", disconnectCount),
+		zap.String("reason", req.Reason))
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":              true,
+		"message":              "User disabled",
+		"userEmail":            userEmail,
+		"userType":             userType,
+		"sessionsDisconnected": disconnectCount,
+	})
+}
+
+// handleEnableUser re-enables a disabled user account.
+// POST /api/v1/admin/users/:id/enable
+func (s *Server) handleEnableUser(c *gin.Context) {
+	ctx := c.Request.Context()
+	userID := c.Param("id")
+
+	// Auth check
+	admin, err := s.getAuthenticatedUser(c)
+	if err != nil || admin == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
+		return
+	}
+	if !admin.IsAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+		return
+	}
+
+	adminEmail := admin.Email
+	if adminEmail == "" {
+		adminEmail = "admin"
+	}
+
+	// Try to enable SSO user first
+	var userEmail string
+	var userType string
+	result, err := s.db.Pool.Exec(ctx, `
+		UPDATE users SET is_active = true WHERE id = $1 RETURNING email
+	`, userID)
+	if err == nil && result.RowsAffected() > 0 {
+		_ = s.db.Pool.QueryRow(ctx, `SELECT email FROM users WHERE id = $1`, userID).Scan(&userEmail)
+		userType = "sso"
+	} else {
+		// Try local user
+		result, err = s.db.Pool.Exec(ctx, `
+			UPDATE local_users SET is_active = true WHERE id = $1 RETURNING email
+		`, userID)
+		if err != nil || result.RowsAffected() == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
+		}
+		_ = s.db.Pool.QueryRow(ctx, `SELECT email FROM local_users WHERE id = $1`, userID).Scan(&userEmail)
+		userType = "local"
+	}
+
+	s.logger.Info("User enabled",
+		zap.String("userId", userID),
+		zap.String("userEmail", userEmail),
+		zap.String("userType", userType),
+		zap.String("enabledBy", adminEmail))
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":   true,
+		"message":   "User enabled",
+		"userEmail": userEmail,
+		"userType":  userType,
+	})
+}
+
+// handleGetUserStatus returns the status of a user (active/disabled, active sessions).
+// GET /api/v1/admin/users/:id/status
+func (s *Server) handleGetUserStatus(c *gin.Context) {
+	ctx := c.Request.Context()
+	userID := c.Param("id")
+
+	// Auth check
+	admin, err := s.getAuthenticatedUser(c)
+	if err != nil || admin == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
+		return
+	}
+	if !admin.IsAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+		return
+	}
+
+	// Try SSO user first
+	var userEmail, userType string
+	var isActive bool
+	err = s.db.Pool.QueryRow(ctx, `
+		SELECT email, is_active FROM users WHERE id = $1
+	`, userID).Scan(&userEmail, &isActive)
+	if err == nil {
+		userType = "sso"
+	} else {
+		// Try local user
+		err = s.db.Pool.QueryRow(ctx, `
+			SELECT email, is_active FROM local_users WHERE id = $1
+		`, userID).Scan(&userEmail, &isActive)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
+		}
+		userType = "local"
+	}
+
+	// Get active session count
+	store := db.NewPendingDisconnectStore(s.db)
+	connections, _ := store.GetActiveConnectionsForUser(ctx, userID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"userId":         userID,
+		"userEmail":      userEmail,
+		"userType":       userType,
+		"isActive":       isActive,
+		"activeSessions": len(connections),
+		"sessions":       connections,
+	})
 }
 
 // calculateServerTunnelIP calculates the server's tunnel IP from a VPN subnet
