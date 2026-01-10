@@ -436,8 +436,10 @@ func TestGetCryptoSettings_Compatible(t *testing.T) {
 	if settings.Cipher != "AES-256-CBC" {
 		t.Errorf("Expected Cipher 'AES-256-CBC' for compatibility, got %q", settings.Cipher)
 	}
-	if settings.TLSVersionMin != "1.0" {
-		t.Errorf("Expected TLSVersionMin '1.0' for compatibility, got %q", settings.TLSVersionMin)
+	// TLS 1.2 minimum enforced for security even in compatible mode
+	// TLS 1.0/1.1 are deprecated and have known vulnerabilities
+	if settings.TLSVersionMin != "1.2" {
+		t.Errorf("Expected TLSVersionMin '1.2' (security requirement), got %q", settings.TLSVersionMin)
 	}
 	// Compatible should include CBC ciphers
 	if !strings.Contains(settings.DataCiphers, "AES-256-CBC") {
@@ -1137,5 +1139,29 @@ func TestGenerateServerConfig_WithClientConfigDir(t *testing.T) {
 
 	if !strings.Contains(content, "client-config-dir /etc/openvpn/ccd") {
 		t.Error("Config should contain client-config-dir directive")
+	}
+}
+
+// TestGetCryptoSettings_TLS12MinimumEnforced verifies that all crypto profiles
+// enforce TLS 1.2 as the minimum version. This is a security requirement since
+// TLS 1.0 and 1.1 have known vulnerabilities and are deprecated.
+func TestGetCryptoSettings_TLS12MinimumEnforced(t *testing.T) {
+	profiles := []string{
+		CryptoProfileModern,
+		CryptoProfileFIPS,
+		CryptoProfileCompatible,
+	}
+
+	for _, profile := range profiles {
+		t.Run(profile, func(t *testing.T) {
+			settings := GetCryptoSettings(profile)
+
+			// All profiles must enforce TLS 1.2 minimum
+			if settings.TLSVersionMin != "1.2" && settings.TLSVersionMin != "1.3" {
+				t.Errorf("Profile %q: TLSVersionMin must be at least '1.2', got %q. "+
+					"TLS 1.0/1.1 are deprecated and have known vulnerabilities.",
+					profile, settings.TLSVersionMin)
+			}
+		})
 	}
 }
