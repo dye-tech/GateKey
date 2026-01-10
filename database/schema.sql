@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
--- (connection info removed)
+\restrict hZ75ChiDw0mfFhJv5aJyWIAYZhVMCB7Gc66K2FXhe2RGBr0LeSdDCx3aU974dia
 
 -- Dumped from database version 16.10
 -- Dumped by pg_dump version 16.10
@@ -382,6 +382,9 @@ CREATE TABLE public.gateways (
     wg_private_key text,
     wg_public_key text,
     wg_listen_port integer DEFAULT 51820,
+    public_ip_v6 inet,
+    internal_ip_v6 inet,
+    vpn_subnet_v6 cidr,
     CONSTRAINT chk_gateway_address CHECK (((hostname IS NOT NULL) OR (public_ip IS NOT NULL))),
     CONSTRAINT valid_gateway_type CHECK (((gateway_type)::text = ANY ((ARRAY['openvpn'::character varying, 'wireguard'::character varying])::text[])))
 );
@@ -394,6 +397,27 @@ ALTER TABLE public.gateways OWNER TO gatekey;
 --
 
 COMMENT ON COLUMN public.gateways.crypto_profile IS 'Cryptographic profile: modern (default), fips (FIPS 140-2 compliant), compatible (legacy support)';
+
+
+--
+-- Name: COLUMN gateways.public_ip_v6; Type: COMMENT; Schema: public; Owner: gatekey
+--
+
+COMMENT ON COLUMN public.gateways.public_ip_v6 IS 'Public IPv6 address of the gateway';
+
+
+--
+-- Name: COLUMN gateways.internal_ip_v6; Type: COMMENT; Schema: public; Owner: gatekey
+--
+
+COMMENT ON COLUMN public.gateways.internal_ip_v6 IS 'Internal IPv6 address of the gateway';
+
+
+--
+-- Name: COLUMN gateways.vpn_subnet_v6; Type: COMMENT; Schema: public; Owner: gatekey
+--
+
+COMMENT ON COLUMN public.gateways.vpn_subnet_v6 IS 'IPv6 VPN subnet for client IP allocation';
 
 
 --
@@ -594,11 +618,27 @@ CREATE TABLE public.mesh_connections (
     disconnect_reason character varying(100),
     user_type character varying(10) DEFAULT 'sso'::character varying NOT NULL,
     last_seen_at timestamp with time zone DEFAULT now(),
+    client_ip_v6 inet,
+    tunnel_ip_v6 inet,
     CONSTRAINT mesh_connections_user_type_check CHECK (((user_type)::text = ANY ((ARRAY['sso'::character varying, 'local'::character varying])::text[])))
 );
 
 
 ALTER TABLE public.mesh_connections OWNER TO gatekey;
+
+--
+-- Name: COLUMN mesh_connections.client_ip_v6; Type: COMMENT; Schema: public; Owner: gatekey
+--
+
+COMMENT ON COLUMN public.mesh_connections.client_ip_v6 IS 'Client IPv6 address';
+
+
+--
+-- Name: COLUMN mesh_connections.tunnel_ip_v6; Type: COMMENT; Schema: public; Owner: gatekey
+--
+
+COMMENT ON COLUMN public.mesh_connections.tunnel_ip_v6 IS 'Tunnel IPv6 address assigned to client';
+
 
 --
 -- Name: mesh_gateway_groups; Type: TABLE; Schema: public; Owner: gatekey
@@ -655,11 +695,27 @@ CREATE TABLE public.mesh_gateways (
     wg_private_key text,
     wg_public_key text,
     wg_preshared_key text,
+    local_networks_v6 text[] DEFAULT '{}'::text[] NOT NULL,
+    tunnel_ip_v6 inet,
     CONSTRAINT valid_mesh_spoke_gateway_type CHECK (((gateway_type)::text = ANY ((ARRAY['openvpn'::character varying, 'wireguard'::character varying])::text[])))
 );
 
 
 ALTER TABLE public.mesh_gateways OWNER TO gatekey;
+
+--
+-- Name: COLUMN mesh_gateways.local_networks_v6; Type: COMMENT; Schema: public; Owner: gatekey
+--
+
+COMMENT ON COLUMN public.mesh_gateways.local_networks_v6 IS 'Array of IPv6 CIDRs for networks behind this gateway';
+
+
+--
+-- Name: COLUMN mesh_gateways.tunnel_ip_v6; Type: COMMENT; Schema: public; Owner: gatekey
+--
+
+COMMENT ON COLUMN public.mesh_gateways.tunnel_ip_v6 IS 'IPv6 tunnel IP assigned by hub';
+
 
 --
 -- Name: mesh_generated_configs; Type: TABLE; Schema: public; Owner: gatekey
@@ -766,11 +822,19 @@ CREATE TABLE public.mesh_hubs (
     wg_private_key text,
     wg_public_key text,
     wg_listen_port integer DEFAULT 51820,
+    vpn_subnet_v6 cidr,
     CONSTRAINT valid_mesh_hub_gateway_type CHECK (((gateway_type)::text = ANY ((ARRAY['openvpn'::character varying, 'wireguard'::character varying])::text[])))
 );
 
 
 ALTER TABLE public.mesh_hubs OWNER TO gatekey;
+
+--
+-- Name: COLUMN mesh_hubs.vpn_subnet_v6; Type: COMMENT; Schema: public; Owner: gatekey
+--
+
+COMMENT ON COLUMN public.mesh_hubs.vpn_subnet_v6 IS 'IPv6 mesh network subnet for dual-stack support';
+
 
 --
 -- Name: networks; Type: TABLE; Schema: public; Owner: gatekey
@@ -789,6 +853,13 @@ CREATE TABLE public.networks (
 
 
 ALTER TABLE public.networks OWNER TO gatekey;
+
+--
+-- Name: COLUMN networks.cidr_v6; Type: COMMENT; Schema: public; Owner: gatekey
+--
+
+COMMENT ON COLUMN public.networks.cidr_v6 IS 'IPv6 network CIDR (optional, for dual-stack support)';
+
 
 --
 -- Name: oauth_states; Type: TABLE; Schema: public; Owner: gatekey
@@ -1968,10 +2039,24 @@ CREATE INDEX idx_gateways_name ON public.gateways USING btree (name);
 
 
 --
+-- Name: idx_gateways_public_ip_v6; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_gateways_public_ip_v6 ON public.gateways USING btree (public_ip_v6) WHERE (public_ip_v6 IS NOT NULL);
+
+
+--
 -- Name: idx_gateways_type; Type: INDEX; Schema: public; Owner: gatekey
 --
 
 CREATE INDEX idx_gateways_type ON public.gateways USING btree (gateway_type);
+
+
+--
+-- Name: idx_gateways_vpn_subnet_v6; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_gateways_vpn_subnet_v6 ON public.gateways USING gist (vpn_subnet_v6 inet_ops) WHERE (vpn_subnet_v6 IS NOT NULL);
 
 
 --
@@ -2266,6 +2351,13 @@ CREATE INDEX idx_mesh_hubs_name ON public.mesh_hubs USING btree (name);
 --
 
 CREATE INDEX idx_mesh_hubs_status ON public.mesh_hubs USING btree (status);
+
+
+--
+-- Name: idx_mesh_hubs_vpn_subnet_v6; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_mesh_hubs_vpn_subnet_v6 ON public.mesh_hubs USING gist (vpn_subnet_v6 inet_ops) WHERE (vpn_subnet_v6 IS NOT NULL);
 
 
 --
@@ -3027,5 +3119,5 @@ ALTER TABLE ONLY public.wireguard_peers
 -- PostgreSQL database dump complete
 --
 
-\unrestrict XEanuRqmcltwxZ2121aCo8HLxhcCIHMmBREL8LOWBR4tqtBXnIIuO9q7y7KEWla
+\unrestrict hZ75ChiDw0mfFhJv5aJyWIAYZhVMCB7Gc66K2FXhe2RGBr0LeSdDCx3aU974dia
 

@@ -213,6 +213,119 @@ func TestGenerateClientConfigDefaultAllowedIPs(t *testing.T) {
 	}
 }
 
+func TestGenerateClientConfigWithIPv6Networks(t *testing.T) {
+	clientKeyPair, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair failed: %v", err)
+	}
+
+	gatewayKeyPair, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair failed: %v", err)
+	}
+
+	psk, err := GeneratePresharedKey()
+	if err != nil {
+		t.Fatalf("GeneratePresharedKey failed: %v", err)
+	}
+
+	// Test with both IPv4 and specific IPv6 networks (split tunnel)
+	req := ClientConfigRequest{
+		GatewayName:         "ipv6-gateway",
+		GatewayEndpoint:     "vpn.example.com:51820",
+		GatewayPublicKey:    gatewayKeyPair.PublicKey,
+		ClientPrivateKey:    clientKeyPair.PrivateKey,
+		ClientAddress:       "10.0.0.2/32",
+		AllowedIPs:          []string{"10.0.0.0/24", "192.168.1.0/24", "2001:db8::/32", "fd00::/8"},
+		DNS:                 []string{"1.1.1.1", "2606:4700:4700::1111"},
+		PresharedKey:        psk,
+		PersistentKeepalive: 25,
+		ExpiresAt:           time.Now().Add(24 * time.Hour),
+		UserEmail:           "test@example.com",
+	}
+
+	config, err := GenerateClientConfig(req)
+	if err != nil {
+		t.Fatalf("GenerateClientConfig failed: %v", err)
+	}
+
+	content := string(config.Content)
+
+	// Verify IPv4 and IPv6 networks are in AllowedIPs
+	if !strings.Contains(content, "10.0.0.0/24") {
+		t.Error("Config should contain IPv4 network 10.0.0.0/24")
+	}
+
+	if !strings.Contains(content, "192.168.1.0/24") {
+		t.Error("Config should contain IPv4 network 192.168.1.0/24")
+	}
+
+	if !strings.Contains(content, "2001:db8::/32") {
+		t.Error("Config should contain IPv6 network 2001:db8::/32")
+	}
+
+	if !strings.Contains(content, "fd00::/8") {
+		t.Error("Config should contain IPv6 network fd00::/8")
+	}
+
+	// Verify IPv6 DNS server
+	if !strings.Contains(content, "2606:4700:4700::1111") {
+		t.Error("Config should contain IPv6 DNS server")
+	}
+}
+
+func TestGenerateClientConfigIPv6Only(t *testing.T) {
+	clientKeyPair, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair failed: %v", err)
+	}
+
+	gatewayKeyPair, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair failed: %v", err)
+	}
+
+	// Test with only IPv6 networks (no IPv4)
+	req := ClientConfigRequest{
+		GatewayName:      "ipv6-only-gateway",
+		GatewayEndpoint:  "[2001:db8::1]:51820", // IPv6 endpoint
+		GatewayPublicKey: gatewayKeyPair.PublicKey,
+		ClientPrivateKey: clientKeyPair.PrivateKey,
+		ClientAddress:    "fd00::2/128", // IPv6 client address
+		AllowedIPs:       []string{"2001:db8::/32", "fd00::/8"},
+		DNS:              []string{"2606:4700:4700::1111"},
+		ExpiresAt:        time.Now().Add(24 * time.Hour),
+		UserEmail:        "test@example.com",
+	}
+
+	config, err := GenerateClientConfig(req)
+	if err != nil {
+		t.Fatalf("GenerateClientConfig failed: %v", err)
+	}
+
+	content := string(config.Content)
+
+	// Verify IPv6 address
+	if !strings.Contains(content, "Address = fd00::2/128") {
+		t.Error("Config should contain IPv6 client address")
+	}
+
+	// Verify IPv6 endpoint
+	if !strings.Contains(content, "Endpoint = [2001:db8::1]:51820") {
+		t.Error("Config should contain IPv6 endpoint")
+	}
+
+	// Verify only IPv6 in AllowedIPs
+	if !strings.Contains(content, "2001:db8::/32") {
+		t.Error("Config should contain IPv6 network")
+	}
+
+	// Verify no IPv4 addresses
+	if strings.Contains(content, "0.0.0.0") {
+		t.Error("Config should not contain IPv4 full tunnel when only IPv6 is specified")
+	}
+}
+
 func TestGenerateServerConfig(t *testing.T) {
 	gatewayKeyPair, err := GenerateKeyPair()
 	if err != nil {

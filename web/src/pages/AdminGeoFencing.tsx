@@ -103,17 +103,25 @@ export default function AdminGeoFencing() {
     }
   }
 
-  async function handleSaveRule(data: { name: string; description: string; ipRange: string; isActive?: boolean }) {
+  async function handleSaveRule(data: { name: string; description: string; ipRange: string; ipv6Range?: string; isActive?: boolean }) {
     try {
       // Normalize CIDRs - trim whitespace and join with comma
       const cidrs = data.ipRange.split(',').map(c => c.trim()).filter(c => c)
       const normalizedIpRange = cidrs.join(', ')
+
+      // Normalize IPv6 CIDRs if provided
+      let normalizedIpv6Range: string | undefined
+      if (data.ipv6Range) {
+        const ipv6Cidrs = data.ipv6Range.split(',').map(c => c.trim()).filter(c => c)
+        normalizedIpv6Range = ipv6Cidrs.length > 0 ? ipv6Cidrs.join(', ') : undefined
+      }
 
       if (editingRule) {
         await updateGeoFenceRule(editingRule.id, {
           name: data.name,
           description: data.description,
           ipRange: normalizedIpRange,
+          ipv6Range: normalizedIpv6Range,
           isActive: data.isActive ?? true,
         })
       } else {
@@ -122,6 +130,7 @@ export default function AdminGeoFencing() {
           name: data.name,
           description: data.description,
           ipRange: normalizedIpRange,
+          ipv6Range: normalizedIpv6Range,
         })
       }
       setShowRuleModal(false)
@@ -443,25 +452,44 @@ export default function AdminGeoFencing() {
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        {rule.ipRange.includes(',') ? (
-                          <div className="flex flex-wrap gap-1 items-center">
-                            {rule.ipRange.split(',').slice(0, 5).map((cidr, idx) => (
-                              <span key={idx} className="inline-block px-2 py-0.5 bg-slate-700 text-slate-200 font-mono text-xs rounded">
-                                {cidr.trim()}
-                              </span>
-                            ))}
-                            {rule.ipRange.split(',').length > 5 && (
-                              <button
-                                onClick={() => setViewingCidrs(rule)}
-                                className="inline-block px-2 py-0.5 bg-slate-600 hover:bg-slate-500 text-slate-100 text-xs rounded cursor-pointer"
-                              >
-                                +{rule.ipRange.split(',').length - 5} more
-                              </button>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="font-mono text-slate-600 dark:text-gray-300">{rule.ipRange}</span>
-                        )}
+                        <div className="space-y-2">
+                          {/* IPv4 Ranges */}
+                          {rule.ipRange.includes(',') ? (
+                            <div className="flex flex-wrap gap-1 items-center">
+                              {rule.ipRange.split(',').slice(0, 5).map((cidr, idx) => (
+                                <span key={idx} className="inline-block px-2 py-0.5 bg-slate-700 text-slate-200 font-mono text-xs rounded">
+                                  {cidr.trim()}
+                                </span>
+                              ))}
+                              {rule.ipRange.split(',').length > 5 && (
+                                <button
+                                  onClick={() => setViewingCidrs(rule)}
+                                  className="inline-block px-2 py-0.5 bg-slate-600 hover:bg-slate-500 text-slate-100 text-xs rounded cursor-pointer"
+                                >
+                                  +{rule.ipRange.split(',').length - 5} more
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="font-mono text-slate-600 dark:text-gray-300">{rule.ipRange}</span>
+                          )}
+                          {/* IPv6 Ranges */}
+                          {rule.ipv6Range && (
+                            <div className="flex flex-wrap gap-1 items-center">
+                              {rule.ipv6Range.split(',').slice(0, 3).map((cidr, idx) => (
+                                <span key={idx} className="inline-block px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-mono text-xs rounded">
+                                  {cidr.trim()}
+                                </span>
+                              ))}
+                              {rule.ipv6Range.split(',').length > 3 && (
+                                <span className="inline-block px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-xs rounded">
+                                  +{rule.ipv6Range.split(',').length - 3} more
+                                </span>
+                              )}
+                              <span className="text-xs text-theme-muted">IPv6</span>
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -524,6 +552,7 @@ export default function AdminGeoFencing() {
                   <div key={rule.id} className="flex items-center justify-between p-3 bg-theme-secondary rounded-lg">
                     <div className="flex-1 min-w-0 mr-4">
                       <div className="font-medium text-theme-primary">{rule.name}</div>
+                      {/* IPv4 Ranges */}
                       {rule.ipRange.includes(',') ? (
                         <div className="flex flex-wrap gap-1 mt-1 items-center">
                           {rule.ipRange.split(',').slice(0, 4).map((cidr, idx) => (
@@ -542,6 +571,22 @@ export default function AdminGeoFencing() {
                         </div>
                       ) : (
                         <div className="text-sm text-slate-600 dark:text-gray-300 font-mono">{rule.ipRange}</div>
+                      )}
+                      {/* IPv6 Ranges */}
+                      {rule.ipv6Range && (
+                        <div className="flex flex-wrap gap-1 mt-1 items-center">
+                          {rule.ipv6Range.split(',').slice(0, 2).map((cidr, idx) => (
+                            <span key={idx} className="inline-block px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-mono text-xs rounded">
+                              {cidr.trim()}
+                            </span>
+                          ))}
+                          {rule.ipv6Range.split(',').length > 2 && (
+                            <span className="inline-block px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-xs rounded">
+                              +{rule.ipv6Range.split(',').length - 2} more
+                            </span>
+                          )}
+                          <span className="text-xs text-theme-muted">IPv6</span>
+                        </div>
                       )}
                     </div>
                     <button
@@ -712,12 +757,13 @@ export default function AdminGeoFencing() {
 // Rule creation/edit modal with country selector
 function RuleModal({ rule, onSave, onClose }: {
   rule: GeoFenceRule | null
-  onSave: (data: { name: string; description: string; ipRange: string; isActive?: boolean }) => void
+  onSave: (data: { name: string; description: string; ipRange: string; ipv6Range?: string; isActive?: boolean }) => void
   onClose: () => void
 }) {
   const [name, setName] = useState(rule?.name || '')
   const [description, setDescription] = useState(rule?.description || '')
   const [ipRange, setIpRange] = useState(rule?.ipRange || '')
+  const [ipv6Range, setIpv6Range] = useState(rule?.ipv6Range || '')
   const [isActive, setIsActive] = useState(rule?.isActive ?? true)
   const [error, setError] = useState<string | null>(null)
 
@@ -774,7 +820,7 @@ function RuleModal({ rule, onSave, onClose }: {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
-    // Validate CIDR(s)
+    // Validate IPv4 CIDR(s)
     const cidrs = ipRange.split(',').map(c => c.trim()).filter(c => c)
     const cidrRegex = /^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/
 
@@ -790,8 +836,25 @@ function RuleModal({ rule, onSave, onClose }: {
       return
     }
 
+    // Validate IPv6 CIDR(s) if provided
+    const ipv6Cidrs = ipv6Range.split(',').map(c => c.trim()).filter(c => c)
+    const ipv6CidrRegex = /^([0-9a-fA-F:]+)\/\d{1,3}$/
+
+    for (const cidr of ipv6Cidrs) {
+      if (!ipv6CidrRegex.test(cidr)) {
+        setError(`Invalid IPv6 CIDR format: ${cidr}. Example: 2001:db8::/32`)
+        return
+      }
+    }
+
     // Pass all CIDRs - the parent handler will create multiple rules if needed
-    onSave({ name, description, ipRange: ipRange, isActive })
+    onSave({
+      name,
+      description,
+      ipRange: ipRange,
+      ipv6Range: ipv6Cidrs.length > 0 ? ipv6Range : undefined,
+      isActive
+    })
   }
 
   return (
@@ -960,6 +1023,23 @@ function RuleModal({ rule, onSave, onClose }: {
               {inputMode === 'country' && !rule
                 ? 'IP ranges are automatically populated from selected countries'
                 : 'Enter an IP range in CIDR notation'}
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-theme-primary mb-1">
+              IPv6 Range (CIDR)
+              <span className="ml-2 text-xs font-normal text-purple-600 dark:text-purple-400">(Optional)</span>
+            </label>
+            <input
+              type="text"
+              value={ipv6Range}
+              onChange={(e) => { setIpv6Range(e.target.value); setError(null); }}
+              className="input w-full font-mono text-sm"
+              placeholder="e.g., 2001:db8::/32"
+            />
+            <p className="text-xs text-theme-tertiary mt-1">
+              Enter IPv6 CIDR range(s). Separate multiple with commas.
             </p>
           </div>
 
