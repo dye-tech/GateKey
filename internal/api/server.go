@@ -226,9 +226,10 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 
 // setupRoutes configures all API routes.
 func (s *Server) setupRoutes() {
-	// Health check
-	s.router.GET("/health", s.healthCheck)
-	s.router.GET("/ready", s.readyCheck)
+	// Health check endpoints for Kubernetes and monitoring
+	s.router.GET("/health", s.healthCheck) // Comprehensive health with dependency checks
+	s.router.GET("/ready", s.readyCheck)   // Kubernetes readiness probe
+	s.router.GET("/live", s.liveCheck)     // Kubernetes liveness probe
 
 	// API v1 routes
 	v1 := s.router.Group("/api/v1")
@@ -874,17 +875,75 @@ func zapLogger(logger *zap.Logger) gin.HandlerFunc {
 }
 
 // Health check handlers
+
+// healthCheck returns overall system health including all dependencies.
+// Use this for comprehensive health monitoring dashboards.
 func (s *Server) healthCheck(c *gin.Context) {
+	ctx := c.Request.Context()
+	status := "healthy"
+	httpStatus := http.StatusOK
+
+	checks := make(map[string]interface{})
+
+	// Check database connectivity
+	if err := s.db.Ping(ctx); err != nil {
+		status = "unhealthy"
+		httpStatus = http.StatusServiceUnavailable
+		checks["database"] = map[string]interface{}{
+			"status": "unhealthy",
+			"error":  err.Error(),
+		}
+	} else {
+		checks["database"] = map[string]interface{}{
+			"status": "healthy",
+		}
+	}
+
+	// Check CA availability
+	if s.ca == nil {
+		checks["ca"] = map[string]interface{}{
+			"status": "unavailable",
+		}
+	} else {
+		checks["ca"] = map[string]interface{}{
+			"status": "healthy",
+		}
+	}
+
+	c.JSON(httpStatus, gin.H{
+		"status":  status,
+		"time":    time.Now().UTC().Format(time.RFC3339),
+		"checks":  checks,
+		"version": "1.0.0",
+	})
+}
+
+// readyCheck indicates if the server is ready to accept traffic.
+// Use this for Kubernetes readiness probes.
+func (s *Server) readyCheck(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Check database connectivity - required for readiness
+	if err := s.db.Ping(ctx); err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"status": "not_ready",
+			"reason": "database unavailable",
+			"time":   time.Now().UTC().Format(time.RFC3339),
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"status": "healthy",
+		"status": "ready",
 		"time":   time.Now().UTC().Format(time.RFC3339),
 	})
 }
 
-func (s *Server) readyCheck(c *gin.Context) {
-	// Basic readiness check - database connectivity is verified on startup
+// liveCheck indicates if the server process is alive.
+// Use this for Kubernetes liveness probes. Should always return 200 if the process is running.
+func (s *Server) liveCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"status": "ready",
+		"status": "alive",
 		"time":   time.Now().UTC().Format(time.RFC3339),
 	})
 }
