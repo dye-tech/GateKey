@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict hZ75ChiDw0mfFhJv5aJyWIAYZhVMCB7Gc66K2FXhe2RGBr0LeSdDCx3aU974dia
+\restrict c0Kt5Dv2P99Ul2T0z7lnjb9koROjk8nbC4wgAV6xgltHJwUBs6Z8mL7NFtttlIg
 
 -- Dumped from database version 16.10
 -- Dumped by pg_dump version 16.10
@@ -1197,7 +1197,8 @@ CREATE TABLE public.wg_mesh_peers (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     last_seen timestamp with time zone,
     is_revoked boolean DEFAULT false NOT NULL,
-    revoked_at timestamp with time zone
+    revoked_at timestamp with time zone,
+    assigned_ip_v6 inet
 );
 
 
@@ -3119,5 +3120,5 @@ ALTER TABLE ONLY public.wireguard_peers
 -- PostgreSQL database dump complete
 --
 
-\unrestrict hZ75ChiDw0mfFhJv5aJyWIAYZhVMCB7Gc66K2FXhe2RGBr0LeSdDCx3aU974dia
+\unrestrict c0Kt5Dv2P99Ul2T0z7lnjb9koROjk8nbC4wgAV6xgltHJwUBs6Z8mL7NFtttlIg
 
