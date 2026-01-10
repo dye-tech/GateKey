@@ -347,7 +347,9 @@ func (s *Server) setupRoutes() {
 			gateway.POST("/provision", s.handleGatewayProvision)
 			gateway.POST("/client-rules", s.handleGatewayClientRules)
 			gateway.POST("/all-rules", s.handleGatewayAllRules)
-			gateway.POST("/client-stats", s.handleGatewayClientStats) // Periodic client stats sync
+			gateway.POST("/client-stats", s.handleGatewayClientStats)      // Periodic client stats sync
+			gateway.POST("/pending-disconnects", s.handleGetPendingDisconnects) // Poll for pending user disconnects
+			gateway.POST("/ack-disconnect", s.handleAckDisconnect)              // Acknowledge disconnect executed
 		}
 
 		// WireGuard Gateway routes (internal - WireGuard gateway agents)
@@ -655,9 +657,17 @@ func (s *Server) setupRoutes() {
 			{
 				toolsRoutes.GET("/topology", s.handleGetTopology)
 				toolsRoutes.GET("/sessions/active", s.handleGetActiveSessions)
+				toolsRoutes.POST("/sessions/:sessionId/disconnect", s.handleDisconnectSession)
 				toolsRoutes.GET("/network-tools", s.handleListNetworkTools)
 				toolsRoutes.POST("/network-tools/execute", s.handleExecuteNetworkTool)
 				toolsRoutes.GET("/remote-session/agents", s.handleGetConnectedAgents)
+
+				// User management (disconnect, disable, status)
+				toolsRoutes.POST("/users/:id/disconnect", s.handleDisconnectUser)
+				toolsRoutes.POST("/users/:id/disable", s.handleDisableUser)
+				toolsRoutes.POST("/users/:id/enable", s.handleEnableUser)
+				toolsRoutes.GET("/users/:id/status", s.handleGetUserStatus)
+				toolsRoutes.GET("/users/:id/sessions", s.handleGetUserActiveSessions)
 			}
 
 			// PKI management (admin scope - certificate revocation)
