@@ -137,9 +137,19 @@ export default function AdminNetworks() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <code className="px-2 py-1 bg-theme-tertiary rounded text-sm font-mono text-theme-secondary">
-                      {network.cidr}
-                    </code>
+                    <div className="space-y-1">
+                      <code className="px-2 py-1 bg-theme-tertiary rounded text-sm font-mono text-theme-secondary">
+                        {network.cidr}
+                      </code>
+                      {network.cidrV6 && (
+                        <div>
+                          <code className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 rounded text-sm font-mono text-purple-700 dark:text-purple-300">
+                            {network.cidrV6}
+                          </code>
+                          <span className="ml-1 text-xs text-theme-muted">IPv6</span>
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -244,6 +254,7 @@ function NetworkModal({ network, onClose, onSuccess }: NetworkModalProps) {
   const [name, setName] = useState(network?.name || '')
   const [description, setDescription] = useState(network?.description || '')
   const [cidr, setCidr] = useState(network?.cidr || '')
+  const [cidrV6, setCidrV6] = useState(network?.cidrV6 || '')
   const [isActive, setIsActive] = useState(network?.isActive ?? true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -254,10 +265,17 @@ function NetworkModal({ network, onClose, onSuccess }: NetworkModalProps) {
     setError(null)
 
     try {
+      const req = {
+        name,
+        description,
+        cidr,
+        cidrV6: cidrV6 || undefined,
+        is_active: isActive
+      }
       if (network) {
-        await updateNetwork(network.id, { name, description, cidr, is_active: isActive })
+        await updateNetwork(network.id, req)
       } else {
-        await createNetwork({ name, description, cidr, is_active: isActive })
+        await createNetwork(req)
       }
       onSuccess()
     } catch (err: unknown) {
@@ -298,7 +316,7 @@ function NetworkModal({ network, onClose, onSuccess }: NetworkModalProps) {
 
           <div>
             <label className="block text-sm font-medium text-theme-secondary mb-1">
-              CIDR Block *
+              IPv4 CIDR Block *
             </label>
             <input
               type="text"
@@ -309,6 +327,21 @@ function NetworkModal({ network, onClose, onSuccess }: NetworkModalProps) {
               required
             />
             <p className="text-xs text-theme-muted mt-1">e.g., 10.0.0.0/24, 192.168.1.0/24</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">
+              IPv6 CIDR Block
+              <span className="ml-2 text-xs font-normal text-purple-600 dark:text-purple-400">(Optional)</span>
+            </label>
+            <input
+              type="text"
+              value={cidrV6}
+              onChange={(e) => setCidrV6(e.target.value)}
+              placeholder="2001:db8::/32"
+              className="input font-mono"
+            />
+            <p className="text-xs text-theme-muted mt-1">e.g., 2001:db8::/32, fd00::/8</p>
           </div>
 
           <div>

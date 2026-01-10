@@ -19,6 +19,7 @@ type Network struct {
 	Name        string
 	Description string
 	CIDR        string
+	CIDRV6      *string // IPv6 CIDR notation (optional)
 	IsActive    bool
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
@@ -37,10 +38,10 @@ func NewNetworkStore(db *DB) *NetworkStore {
 // CreateNetwork creates a new network
 func (s *NetworkStore) CreateNetwork(ctx context.Context, network *Network) error {
 	err := s.db.Pool.QueryRow(ctx, `
-		INSERT INTO networks (name, description, cidr, is_active)
-		VALUES ($1, $2, $3::cidr, $4)
+		INSERT INTO networks (name, description, cidr, cidr_v6, is_active)
+		VALUES ($1, $2, $3::cidr, $4, $5)
 		RETURNING id, created_at, updated_at
-	`, network.Name, network.Description, network.CIDR, network.IsActive).Scan(
+	`, network.Name, network.Description, network.CIDR, network.CIDRV6, network.IsActive).Scan(
 		&network.ID, &network.CreatedAt, &network.UpdatedAt,
 	)
 	if err != nil && err.Error() == "ERROR: duplicate key value violates unique constraint \"networks_name_key\" (SQLSTATE 23505)" {
@@ -53,10 +54,10 @@ func (s *NetworkStore) CreateNetwork(ctx context.Context, network *Network) erro
 func (s *NetworkStore) GetNetwork(ctx context.Context, id string) (*Network, error) {
 	var network Network
 	err := s.db.Pool.QueryRow(ctx, `
-		SELECT id, name, description, cidr::text, is_active, created_at, updated_at
+		SELECT id, name, description, cidr::text, cidr_v6, is_active, created_at, updated_at
 		FROM networks WHERE id = $1
 	`, id).Scan(&network.ID, &network.Name, &network.Description, &network.CIDR,
-		&network.IsActive, &network.CreatedAt, &network.UpdatedAt)
+		&network.CIDRV6, &network.IsActive, &network.CreatedAt, &network.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, ErrNetworkNotFound
 	}
@@ -66,7 +67,7 @@ func (s *NetworkStore) GetNetwork(ctx context.Context, id string) (*Network, err
 // ListNetworks retrieves all networks
 func (s *NetworkStore) ListNetworks(ctx context.Context) ([]*Network, error) {
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT id, name, description, cidr::text, is_active, created_at, updated_at
+		SELECT id, name, description, cidr::text, cidr_v6, is_active, created_at, updated_at
 		FROM networks ORDER BY name
 	`)
 	if err != nil {
@@ -78,7 +79,7 @@ func (s *NetworkStore) ListNetworks(ctx context.Context) ([]*Network, error) {
 	for rows.Next() {
 		var n Network
 		if err := rows.Scan(&n.ID, &n.Name, &n.Description, &n.CIDR,
-			&n.IsActive, &n.CreatedAt, &n.UpdatedAt); err != nil {
+			&n.CIDRV6, &n.IsActive, &n.CreatedAt, &n.UpdatedAt); err != nil {
 			return nil, err
 		}
 		networks = append(networks, &n)
@@ -89,9 +90,9 @@ func (s *NetworkStore) ListNetworks(ctx context.Context) ([]*Network, error) {
 // UpdateNetwork updates a network
 func (s *NetworkStore) UpdateNetwork(ctx context.Context, network *Network) error {
 	result, err := s.db.Pool.Exec(ctx, `
-		UPDATE networks SET name = $2, description = $3, cidr = $4::cidr, is_active = $5
+		UPDATE networks SET name = $2, description = $3, cidr = $4::cidr, cidr_v6 = $5, is_active = $6
 		WHERE id = $1
-	`, network.ID, network.Name, network.Description, network.CIDR, network.IsActive)
+	`, network.ID, network.Name, network.Description, network.CIDR, network.CIDRV6, network.IsActive)
 	if err != nil {
 		return err
 	}
@@ -134,7 +135,7 @@ func (s *NetworkStore) RemoveGatewayFromNetwork(ctx context.Context, gatewayID, 
 // GetGatewayNetworks gets all networks assigned to a gateway
 func (s *NetworkStore) GetGatewayNetworks(ctx context.Context, gatewayID string) ([]*Network, error) {
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT n.id, n.name, n.description, n.cidr::text, n.is_active, n.created_at, n.updated_at
+		SELECT n.id, n.name, n.description, n.cidr::text, n.cidr_v6, n.is_active, n.created_at, n.updated_at
 		FROM networks n
 		JOIN gateway_networks gn ON n.id = gn.network_id
 		WHERE gn.gateway_id = $1
@@ -149,7 +150,7 @@ func (s *NetworkStore) GetGatewayNetworks(ctx context.Context, gatewayID string)
 	for rows.Next() {
 		var n Network
 		if err := rows.Scan(&n.ID, &n.Name, &n.Description, &n.CIDR,
-			&n.IsActive, &n.CreatedAt, &n.UpdatedAt); err != nil {
+			&n.CIDRV6, &n.IsActive, &n.CreatedAt, &n.UpdatedAt); err != nil {
 			return nil, err
 		}
 		networks = append(networks, &n)

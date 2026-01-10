@@ -54,6 +54,7 @@ type GenerateRequest struct {
 	Certificate   *pki.IssuedCertificate
 	ExpiresAt     time.Time
 	Routes        []Route
+	RoutesV6      []RouteV6 // IPv6 routes (optional)
 	DNS           []string
 	Options       map[string]string
 	CryptoProfile string // "modern", "fips", or "compatible"
@@ -65,6 +66,11 @@ type GenerateRequest struct {
 type Route struct {
 	Network string
 	Netmask string
+}
+
+// RouteV6 represents an IPv6 route to push to the client.
+type RouteV6 struct {
+	CIDR string // IPv6 CIDR notation (e.g., "2001:db8::/32")
 }
 
 // GeneratedConfig contains the generated OpenVPN configuration.
@@ -134,6 +140,7 @@ type configData struct {
 	AuthUsername     string // Username for auth-user-pass (user email)
 	AuthPassword     string // Password for auth-user-pass (auth token)
 	Routes           []Route
+	RoutesV6         []RouteV6 // IPv6 routes
 	DNS              []string
 	ExpiresAt        string
 	UserEmail        string
@@ -172,6 +179,7 @@ func (g *ConfigGenerator) Generate(req GenerateRequest) (*GeneratedConfig, error
 		AuthUsername:    req.User.Email, // Use email as username
 		AuthPassword:    req.AuthToken,  // Use unique token as password
 		Routes:          req.Routes,
+		RoutesV6:        req.RoutesV6,
 		DNS:             req.DNS,
 		ExpiresAt:       req.ExpiresAt.UTC().Format(time.RFC3339),
 		UserEmail:       req.User.Email,
@@ -276,6 +284,10 @@ keepalive 10 60
 
 {{- range .Routes }}
 route {{ .Network }} {{ .Netmask }}
+{{- end }}
+
+{{- range .RoutesV6 }}
+route-ipv6 {{ .CIDR }}
 {{- end }}
 
 {{- range .DNS }}

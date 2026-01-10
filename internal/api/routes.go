@@ -1524,19 +1524,29 @@ func (s *Server) handleGenerateConfig(c *gin.Context) {
 		// Continue without routes - not a fatal error
 	}
 
-	// Convert networks to routes
+	// Convert networks to routes (IPv4 and IPv6)
 	var routes []openvpn.Route
+	var routesV6 []openvpn.RouteV6
 	for _, network := range networks {
-		if network.IsActive && network.CIDR != "" {
-			netIP, netmask, err := cidrToNetmask(network.CIDR)
-			if err != nil {
-				s.logger.Warn("Invalid network CIDR", zap.String("cidr", network.CIDR), zap.Error(err))
-				continue
+		if network.IsActive {
+			// IPv4 routes
+			if network.CIDR != "" {
+				netIP, netmask, err := cidrToNetmask(network.CIDR)
+				if err != nil {
+					s.logger.Warn("Invalid network CIDR", zap.String("cidr", network.CIDR), zap.Error(err))
+				} else {
+					routes = append(routes, openvpn.Route{
+						Network: netIP,
+						Netmask: netmask,
+					})
+				}
 			}
-			routes = append(routes, openvpn.Route{
-				Network: netIP,
-				Netmask: netmask,
-			})
+			// IPv6 routes
+			if network.CIDRV6 != nil && *network.CIDRV6 != "" {
+				routesV6 = append(routesV6, openvpn.RouteV6{
+					CIDR: *network.CIDRV6,
+				})
+			}
 		}
 	}
 
@@ -1559,6 +1569,7 @@ func (s *Server) handleGenerateConfig(c *gin.Context) {
 		Certificate:   cert,
 		ExpiresAt:     cert.NotAfter,
 		Routes:        routes,
+		RoutesV6:      routesV6,
 		CryptoProfile: cryptoProfile,
 		TLSAuthKey:    gateway.TLSAuthKey, // Use gateway-specific TLS-Auth key
 		AuthToken:     authToken,          // Unique token for password authentication
@@ -3912,7 +3923,7 @@ func (s *Server) handleListNetworks(c *gin.Context) {
 
 	result := make([]gin.H, 0, len(networks))
 	for _, n := range networks {
-		result = append(result, gin.H{
+		netResult := gin.H{
 			"id":          n.ID,
 			"name":        n.Name,
 			"description": n.Description,
@@ -3920,17 +3931,22 @@ func (s *Server) handleListNetworks(c *gin.Context) {
 			"isActive":    n.IsActive,
 			"createdAt":   n.CreatedAt.Format(time.RFC3339),
 			"updatedAt":   n.UpdatedAt.Format(time.RFC3339),
-		})
+		}
+		if n.CIDRV6 != nil {
+			netResult["cidrV6"] = *n.CIDRV6
+		}
+		result = append(result, netResult)
 	}
 	c.JSON(http.StatusOK, gin.H{"networks": result})
 }
 
 func (s *Server) handleCreateNetwork(c *gin.Context) {
 	var req struct {
-		Name        string `json:"name" binding:"required"`
-		Description string `json:"description"`
-		CIDR        string `json:"cidr" binding:"required"`
-		IsActive    *bool  `json:"is_active"`
+		Name        string  `json:"name" binding:"required"`
+		Description string  `json:"description"`
+		CIDR        string  `json:"cidr" binding:"required"`
+		CIDRV6      *string `json:"cidrV6"` // IPv6 CIDR (optional)
+		IsActive    *bool   `json:"is_active"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -3946,6 +3962,7 @@ func (s *Server) handleCreateNetwork(c *gin.Context) {
 		Name:        req.Name,
 		Description: req.Description,
 		CIDR:        req.CIDR,
+		CIDRV6:      req.CIDRV6,
 		IsActive:    isActive,
 	}
 
@@ -3960,14 +3977,18 @@ func (s *Server) handleCreateNetwork(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
+	response := gin.H{
 		"id":          network.ID,
 		"name":        network.Name,
 		"description": network.Description,
 		"cidr":        network.CIDR,
 		"isActive":    network.IsActive,
 		"createdAt":   network.CreatedAt.Format(time.RFC3339),
-	})
+	}
+	if network.CIDRV6 != nil {
+		response["cidrV6"] = *network.CIDRV6
+	}
+	c.JSON(http.StatusCreated, response)
 }
 
 func (s *Server) handleGetNetwork(c *gin.Context) {
@@ -3984,7 +4005,7 @@ func (s *Server) handleGetNetwork(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response := gin.H{
 		"id":          network.ID,
 		"name":        network.Name,
 		"description": network.Description,
@@ -3992,16 +4013,21 @@ func (s *Server) handleGetNetwork(c *gin.Context) {
 		"isActive":    network.IsActive,
 		"createdAt":   network.CreatedAt.Format(time.RFC3339),
 		"updatedAt":   network.UpdatedAt.Format(time.RFC3339),
-	})
+	}
+	if network.CIDRV6 != nil {
+		response["cidrV6"] = *network.CIDRV6
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 func (s *Server) handleUpdateNetwork(c *gin.Context) {
 	id := c.Param("id")
 	var req struct {
-		Name        string `json:"name" binding:"required"`
-		Description string `json:"description"`
-		CIDR        string `json:"cidr" binding:"required"`
-		IsActive    *bool  `json:"is_active"`
+		Name        string  `json:"name" binding:"required"`
+		Description string  `json:"description"`
+		CIDR        string  `json:"cidr" binding:"required"`
+		CIDRV6      *string `json:"cidrV6"` // IPv6 CIDR (optional)
+		IsActive    *bool   `json:"is_active"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -4022,6 +4048,7 @@ func (s *Server) handleUpdateNetwork(c *gin.Context) {
 	network.Name = req.Name
 	network.Description = req.Description
 	network.CIDR = req.CIDR
+	network.CIDRV6 = req.CIDRV6
 	if req.IsActive != nil {
 		network.IsActive = *req.IsActive
 	}
@@ -4191,6 +4218,9 @@ func (s *Server) handleListAccessRules(c *gin.Context) {
 			"createdAt":   r.CreatedAt.Format(time.RFC3339),
 			"updatedAt":   r.UpdatedAt.Format(time.RFC3339),
 		}
+		if r.ValueV6 != nil {
+			rule["valueV6"] = *r.ValueV6
+		}
 		if r.PortRange != nil {
 			rule["portRange"] = *r.PortRange
 		}
@@ -4211,6 +4241,7 @@ func (s *Server) handleCreateAccessRule(c *gin.Context) {
 		Description string  `json:"description"`
 		RuleType    string  `json:"rule_type" binding:"required"`
 		Value       string  `json:"value" binding:"required"`
+		ValueV6     *string `json:"value_v6"` // IPv6 IP or CIDR (optional)
 		PortRange   *string `json:"port_range"`
 		Protocol    *string `json:"protocol"`
 		NetworkID   *string `json:"network_id"`
@@ -4228,6 +4259,21 @@ func (s *Server) handleCreateAccessRule(c *gin.Context) {
 		return
 	}
 
+	// Validate IPv6 value if provided (for ip/cidr rule types)
+	if req.ValueV6 != nil && *req.ValueV6 != "" && (req.RuleType == "ip" || req.RuleType == "cidr") {
+		if req.RuleType == "cidr" {
+			if _, _, err := net.ParseCIDR(*req.ValueV6); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid IPv6 CIDR format: %s", *req.ValueV6)})
+				return
+			}
+		} else {
+			if ip := net.ParseIP(*req.ValueV6); ip == nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid IPv6 address: %s", *req.ValueV6)})
+				return
+			}
+		}
+	}
+
 	isActive := true
 	if req.IsActive != nil {
 		isActive = *req.IsActive
@@ -4238,6 +4284,7 @@ func (s *Server) handleCreateAccessRule(c *gin.Context) {
 		Description: req.Description,
 		RuleType:    db.AccessRuleType(req.RuleType),
 		Value:       req.Value,
+		ValueV6:     req.ValueV6,
 		PortRange:   req.PortRange,
 		Protocol:    req.Protocol,
 		NetworkID:   req.NetworkID,
@@ -4251,14 +4298,18 @@ func (s *Server) handleCreateAccessRule(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
+	result := gin.H{
 		"id":        rule.ID,
 		"name":      rule.Name,
 		"ruleType":  rule.RuleType,
 		"value":     rule.Value,
 		"isActive":  rule.IsActive,
 		"createdAt": rule.CreatedAt.Format(time.RFC3339),
-	})
+	}
+	if rule.ValueV6 != nil {
+		result["valueV6"] = *rule.ValueV6
+	}
+	c.JSON(http.StatusCreated, result)
 }
 
 func (s *Server) handleGetAccessRule(c *gin.Context) {
@@ -4291,6 +4342,9 @@ func (s *Server) handleGetAccessRule(c *gin.Context) {
 		"users":       users,
 		"groups":      groups,
 	}
+	if rule.ValueV6 != nil {
+		result["valueV6"] = *rule.ValueV6
+	}
 	if rule.PortRange != nil {
 		result["portRange"] = *rule.PortRange
 	}
@@ -4310,6 +4364,7 @@ func (s *Server) handleUpdateAccessRule(c *gin.Context) {
 		Description string  `json:"description"`
 		RuleType    string  `json:"rule_type" binding:"required"`
 		Value       string  `json:"value" binding:"required"`
+		ValueV6     *string `json:"value_v6"` // IPv6 IP or CIDR (optional)
 		PortRange   *string `json:"port_range"`
 		Protocol    *string `json:"protocol"`
 		NetworkID   *string `json:"network_id"`
@@ -4318,6 +4373,21 @@ func (s *Server) handleUpdateAccessRule(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Validate IPv6 value if provided (for ip/cidr rule types)
+	if req.ValueV6 != nil && *req.ValueV6 != "" && (req.RuleType == "ip" || req.RuleType == "cidr") {
+		if req.RuleType == "cidr" {
+			if _, _, err := net.ParseCIDR(*req.ValueV6); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid IPv6 CIDR format: %s", *req.ValueV6)})
+				return
+			}
+		} else {
+			if ip := net.ParseIP(*req.ValueV6); ip == nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid IPv6 address: %s", *req.ValueV6)})
+				return
+			}
+		}
 	}
 
 	ctx := c.Request.Context()
@@ -4335,6 +4405,7 @@ func (s *Server) handleUpdateAccessRule(c *gin.Context) {
 	rule.Description = req.Description
 	rule.RuleType = db.AccessRuleType(req.RuleType)
 	rule.Value = req.Value
+	rule.ValueV6 = req.ValueV6
 	rule.PortRange = req.PortRange
 	rule.Protocol = req.Protocol
 	rule.NetworkID = req.NetworkID
@@ -6247,9 +6318,10 @@ func (s *Server) handleListGeoFenceRules(c *gin.Context) {
 // handleCreateGeoFenceRule creates a new geo-fence rule
 func (s *Server) handleCreateGeoFenceRule(c *gin.Context) {
 	var req struct {
-		Name        string `json:"name" binding:"required"`
-		Description string `json:"description"`
-		IPRange     string `json:"ipRange" binding:"required"`
+		Name        string  `json:"name" binding:"required"`
+		Description string  `json:"description"`
+		IPRange     string  `json:"ipRange" binding:"required"`
+		IPv6Range   *string `json:"ipv6Range"` // IPv6 CIDR ranges (optional)
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -6270,9 +6342,24 @@ func (s *Server) handleCreateGeoFenceRule(c *gin.Context) {
 		}
 	}
 
+	// Validate IPv6 CIDR format(s) if provided
+	if req.IPv6Range != nil && *req.IPv6Range != "" {
+		ipv6Cidrs := strings.Split(*req.IPv6Range, ",")
+		for _, cidr := range ipv6Cidrs {
+			cidr = strings.TrimSpace(cidr)
+			if cidr == "" {
+				continue
+			}
+			if _, _, err := net.ParseCIDR(cidr); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid IPv6 CIDR format: %s", cidr)})
+				return
+			}
+		}
+	}
+
 	ctx := c.Request.Context()
 
-	rule, err := s.geoFenceStore.CreateRule(ctx, req.Name, req.Description, req.IPRange)
+	rule, err := s.geoFenceStore.CreateRule(ctx, req.Name, req.Description, req.IPRange, req.IPv6Range)
 	if err != nil {
 		s.logger.Error("Failed to create geo-fence rule", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create rule"})
@@ -6306,10 +6393,11 @@ func (s *Server) handleUpdateGeoFenceRule(c *gin.Context) {
 	id := c.Param("id")
 
 	var req struct {
-		Name        string `json:"name" binding:"required"`
-		Description string `json:"description"`
-		IPRange     string `json:"ipRange" binding:"required"`
-		IsActive    bool   `json:"isActive"`
+		Name        string  `json:"name" binding:"required"`
+		Description string  `json:"description"`
+		IPRange     string  `json:"ipRange" binding:"required"`
+		IPv6Range   *string `json:"ipv6Range"` // IPv6 CIDR ranges (optional)
+		IsActive    bool    `json:"isActive"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -6330,9 +6418,24 @@ func (s *Server) handleUpdateGeoFenceRule(c *gin.Context) {
 		}
 	}
 
+	// Validate IPv6 CIDR format(s) if provided
+	if req.IPv6Range != nil && *req.IPv6Range != "" {
+		ipv6Cidrs := strings.Split(*req.IPv6Range, ",")
+		for _, cidr := range ipv6Cidrs {
+			cidr = strings.TrimSpace(cidr)
+			if cidr == "" {
+				continue
+			}
+			if _, _, err := net.ParseCIDR(cidr); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid IPv6 CIDR format: %s", cidr)})
+				return
+			}
+		}
+	}
+
 	ctx := c.Request.Context()
 
-	rule, err := s.geoFenceStore.UpdateRule(ctx, id, req.Name, req.Description, req.IPRange, req.IsActive)
+	rule, err := s.geoFenceStore.UpdateRule(ctx, id, req.Name, req.Description, req.IPRange, req.IPv6Range, req.IsActive)
 	if err != nil {
 		if err == db.ErrGeoFenceRuleNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "rule not found"})

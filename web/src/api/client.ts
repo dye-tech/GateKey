@@ -256,6 +256,7 @@ export interface Network {
   name: string
   description: string
   cidr: string
+  cidrV6?: string // IPv6 CIDR (optional)
   isActive: boolean
   createdAt: string
   updatedAt: string
@@ -265,6 +266,7 @@ export interface CreateNetworkRequest {
   name: string
   description?: string
   cidr: string
+  cidrV6?: string // IPv6 CIDR (optional)
   is_active?: boolean
 }
 
@@ -297,6 +299,7 @@ export interface NetworkAccessRule {
   description: string
   ruleType: AccessRuleType
   value: string
+  valueV6?: string // IPv6 IP or CIDR (optional)
   portRange?: string
   protocol?: string
   networkId?: string
@@ -344,6 +347,7 @@ export interface AccessRule {
   description: string
   ruleType: AccessRuleType
   value: string
+  valueV6?: string // IPv6 IP or CIDR (optional)
   portRange?: string
   protocol?: string
   networkId?: string
@@ -359,6 +363,7 @@ export interface CreateAccessRuleRequest {
   description?: string
   rule_type: AccessRuleType
   value: string
+  value_v6?: string // IPv6 IP or CIDR (optional)
   port_range?: string
   protocol?: string
   network_id?: string
@@ -2123,6 +2128,7 @@ export interface GeoFenceRule {
   name: string
   description: string
   ipRange: string
+  ipv6Range?: string // IPv6 CIDR ranges (optional)
   isActive: boolean
   createdAt: string
   updatedAt: string
@@ -2146,7 +2152,7 @@ export async function getGeoFenceRules(): Promise<GeoFenceRule[]> {
   return response.data || []
 }
 
-export async function createGeoFenceRule(data: { name: string; description: string; ipRange: string }): Promise<GeoFenceRule> {
+export async function createGeoFenceRule(data: { name: string; description: string; ipRange: string; ipv6Range?: string }): Promise<GeoFenceRule> {
   const response = await api.post('/api/v1/admin/geo-fence/rules', data)
   return response.data
 }
@@ -2156,7 +2162,7 @@ export async function getGeoFenceRule(id: string): Promise<GeoFenceRule> {
   return response.data
 }
 
-export async function updateGeoFenceRule(id: string, data: { name: string; description: string; ipRange: string; isActive: boolean }): Promise<GeoFenceRule> {
+export async function updateGeoFenceRule(id: string, data: { name: string; description: string; ipRange: string; ipv6Range?: string; isActive: boolean }): Promise<GeoFenceRule> {
   const response = await api.put(`/api/v1/admin/geo-fence/rules/${id}`, data)
   return response.data
 }

@@ -119,7 +119,11 @@ type Gateway struct {
 	Description   string     `json:"description"`
 	Endpoint      string     `json:"endpoint"`
 	PublicIP      string     `json:"public_ip"`
+	PublicIPV6    string     `json:"public_ip_v6,omitempty"`
 	InternalIP    string     `json:"internal_ip,omitempty"`
+	InternalIPV6  string     `json:"internal_ip_v6,omitempty"`
+	VPNSubnet     string     `json:"vpn_subnet,omitempty"`
+	VPNSubnetV6   string     `json:"vpn_subnet_v6,omitempty"`
 	Port          int        `json:"port"`
 	Protocol      string     `json:"protocol"`
 	Status        string     `json:"status"`
@@ -187,6 +191,7 @@ type Network struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	CIDR        string    `json:"cidr"`
+	CIDRV6      string    `json:"cidr_v6,omitempty"`
 	GatewayID   string    `json:"gateway_id"`
 	GatewayName string    `json:"gateway_name,omitempty"`
 	IsDefault   bool      `json:"is_default"`
@@ -539,6 +544,7 @@ type MeshHub struct {
 	GatewayID       string    `json:"gateway_id"`
 	GatewayName     string    `json:"gateway_name,omitempty"`
 	HubNetwork      string    `json:"hub_network"`
+	HubNetworkV6    string    `json:"hub_network_v6,omitempty"`
 	IsProvisioned   bool      `json:"is_provisioned"`
 	ConnectedSpokes int       `json:"connected_spokes"`
 	CreatedAt       time.Time `json:"created_at"`
@@ -583,15 +589,16 @@ func (c *Client) ProvisionMeshHub(ctx context.Context, id string) (*ProvisionRes
 // === Mesh Spoke Operations ===
 
 type MeshSpoke struct {
-	ID            string    `json:"id"`
-	GatewayID     string    `json:"gateway_id"`
-	GatewayName   string    `json:"gateway_name,omitempty"`
-	HubID         string    `json:"hub_id"`
-	HubName       string    `json:"hub_name,omitempty"`
-	SpokeNetwork  string    `json:"spoke_network"`
-	IsProvisioned bool      `json:"is_provisioned"`
-	IsConnected   bool      `json:"is_connected"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID             string    `json:"id"`
+	GatewayID      string    `json:"gateway_id"`
+	GatewayName    string    `json:"gateway_name,omitempty"`
+	HubID          string    `json:"hub_id"`
+	HubName        string    `json:"hub_name,omitempty"`
+	SpokeNetwork   string    `json:"spoke_network"`
+	SpokeNetworkV6 string    `json:"spoke_network_v6,omitempty"`
+	IsProvisioned  bool      `json:"is_provisioned"`
+	IsConnected    bool      `json:"is_connected"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 func (c *Client) ListMeshSpokes(ctx context.Context) ([]MeshSpoke, error) {

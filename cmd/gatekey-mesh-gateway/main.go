@@ -97,7 +97,8 @@ type ProvisionResponse struct {
 	HubEndpoint    string   `json:"hubEndpoint"`
 	HubVPNPort     int      `json:"hubVpnPort"`
 	HubVPNProtocol string   `json:"hubVpnProtocol"`
-	HubVPNSubnet   string   `json:"hubVpnSubnet"` // VPN subnet for NAT setup
+	HubVPNSubnet   string   `json:"hubVpnSubnet"`   // VPN subnet for NAT setup (IPv4)
+	HubVPNSubnetV6 string   `json:"hubVpnSubnetV6"` // VPN subnet for NAT setup (IPv6)
 	CACert         string   `json:"caCert"`
 	ClientCert     string   `json:"clientCert"`
 	ClientKey      string   `json:"clientKey"`
@@ -111,6 +112,7 @@ type ProvisionResponse struct {
 
 // Global state for NAT configuration
 var hubVPNSubnet string
+var hubVPNSubnetV6 string
 
 func loadConfig() (*GatewayConfig, error) {
 	v := viper.New()
@@ -486,14 +488,16 @@ func doProvision(ctx context.Context, cfg *GatewayConfig) error {
 		logger.Info("Gateway name saved from provisioning", zap.String("name", provResp.GatewayName))
 	}
 
-	// Store hub VPN subnet for NAT setup
+	// Store hub VPN subnets for NAT setup (IPv4 and IPv6)
 	hubVPNSubnet = provResp.HubVPNSubnet
+	hubVPNSubnetV6 = provResp.HubVPNSubnetV6
 
 	logger.Info("Gateway provisioned successfully",
 		zap.String("name", provResp.GatewayName),
 		zap.String("hub_endpoint", hubEndpoint),
 		zap.String("tunnel_ip", provResp.TunnelIP),
 		zap.String("hub_vpn_subnet", hubVPNSubnet),
+		zap.String("hub_vpn_subnet_v6", hubVPNSubnetV6),
 		zap.String("config_version", currentConfigVer),
 	)
 
@@ -695,9 +699,10 @@ func isOpenVPN25OrNewer() bool {
 // setupNAT configures NAT/masquerade for VPN traffic to reach local networks
 // Traffic from the VPN subnet (e.g., 172.30.0.0/16) going to local networks needs to be NAT'd
 // so that replies can find their way back through the spoke.
+// Supports both IPv4 and IPv6 subnets.
 func setupNAT(ctx context.Context) error {
-	if hubVPNSubnet == "" {
-		logger.Warn("Hub VPN subnet not set, skipping NAT setup")
+	if hubVPNSubnet == "" && hubVPNSubnetV6 == "" {
+		logger.Warn("Hub VPN subnets not set, skipping NAT setup")
 		return nil
 	}
 
@@ -707,19 +712,47 @@ func setupNAT(ctx context.Context) error {
 		outIface = "eth0" // Fallback
 	}
 
-	logger.Info("Setting up NAT for VPN traffic",
-		zap.String("vpn_subnet", hubVPNSubnet),
-		zap.String("out_interface", outIface))
+	// Get the default IPv6 route interface (may be different)
+	outIfaceV6 := getDefaultRouteInterfaceV6()
+	if outIfaceV6 == "" {
+		outIfaceV6 = outIface // Fallback to IPv4 interface
+	}
 
-	// Try nftables first
-	if err := setupNftablesNAT(ctx, hubVPNSubnet, outIface); err != nil {
-		logger.Debug("nftables NAT setup failed, trying iptables", zap.Error(err))
-		// Fallback to iptables
-		if err := setupIptablesNAT(ctx, hubVPNSubnet, outIface); err != nil {
-			logger.Warn("Failed to setup NAT rule",
-				zap.String("subnet", hubVPNSubnet),
-				zap.Error(err))
-			return err
+	// Setup IPv4 NAT
+	if hubVPNSubnet != "" {
+		logger.Info("Setting up IPv4 NAT for VPN traffic",
+			zap.String("vpn_subnet", hubVPNSubnet),
+			zap.String("out_interface", outIface))
+
+		// Try nftables first
+		if err := setupNftablesNAT(ctx, hubVPNSubnet, outIface); err != nil {
+			logger.Debug("nftables NAT setup failed, trying iptables", zap.Error(err))
+			// Fallback to iptables
+			if err := setupIptablesNAT(ctx, hubVPNSubnet, outIface); err != nil {
+				logger.Warn("Failed to setup IPv4 NAT rule",
+					zap.String("subnet", hubVPNSubnet),
+					zap.Error(err))
+				return err
+			}
+		}
+	}
+
+	// Setup IPv6 NAT
+	if hubVPNSubnetV6 != "" {
+		logger.Info("Setting up IPv6 NAT for VPN traffic",
+			zap.String("vpn_subnet_v6", hubVPNSubnetV6),
+			zap.String("out_interface", outIfaceV6))
+
+		// Try nftables first
+		if err := setupNftablesNATv6(ctx, hubVPNSubnetV6, outIfaceV6); err != nil {
+			logger.Debug("nftables IPv6 NAT setup failed, trying ip6tables", zap.Error(err))
+			// Fallback to ip6tables
+			if err := setupIp6tablesNAT(ctx, hubVPNSubnetV6, outIfaceV6); err != nil {
+				logger.Warn("Failed to setup IPv6 NAT rule",
+					zap.String("subnet", hubVPNSubnetV6),
+					zap.Error(err))
+				return err
+			}
 		}
 	}
 
@@ -786,4 +819,66 @@ func getDefaultRouteInterface() string {
 		}
 	}
 	return ""
+}
+
+func getDefaultRouteInterfaceV6() string {
+	cmd := exec.Command("ip", "-6", "route", "show", "default")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	// Parse "default via xxxx::x dev ethX ..."
+	fields := strings.Fields(string(output))
+	for i, field := range fields {
+		if field == "dev" && i+1 < len(fields) {
+			return fields[i+1]
+		}
+	}
+	return ""
+}
+
+func setupNftablesNATv6(ctx context.Context, vpnSubnet, outIface string) error {
+	// Ensure the IPv6 nat table exists
+	cmd := exec.CommandContext(ctx, "nft", "add", "table", "ip6", "nat")
+	cmd.Run() // Ignore error if table exists
+
+	// Ensure the postrouting chain exists
+	cmd = exec.CommandContext(ctx, "nft", "add", "chain", "ip6", "nat", "postrouting",
+		"{", "type", "nat", "hook", "postrouting", "priority", "100;", "}")
+	cmd.Run() // Ignore error if chain exists
+
+	// Add masquerade rule for IPv6 VPN subnet
+	cmd = exec.CommandContext(ctx, "nft", "add", "rule", "ip6", "nat", "postrouting",
+		"ip6", "saddr", vpnSubnet, "oifname", outIface, "masquerade")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("nftables IPv6 NAT rule failed: %s: %w", string(output), err)
+	}
+
+	logger.Info("Added nftables IPv6 NAT rule",
+		zap.String("subnet", vpnSubnet),
+		zap.String("interface", outIface))
+	return nil
+}
+
+func setupIp6tablesNAT(ctx context.Context, vpnSubnet, outIface string) error {
+	// Check if rule already exists
+	checkCmd := exec.CommandContext(ctx, "ip6tables", "-t", "nat", "-C", "POSTROUTING",
+		"-s", vpnSubnet, "-o", outIface, "-j", "MASQUERADE")
+	if checkCmd.Run() == nil {
+		// Rule already exists
+		return nil
+	}
+
+	// Add ip6tables masquerade rule
+	cmd := exec.CommandContext(ctx, "ip6tables", "-t", "nat", "-A", "POSTROUTING",
+		"-s", vpnSubnet, "-o", outIface, "-j", "MASQUERADE")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("ip6tables NAT rule failed: %s: %w", string(output), err)
+	}
+
+	logger.Info("Added ip6tables NAT rule",
+		zap.String("subnet", vpnSubnet),
+		zap.String("interface", outIface))
+	return nil
 }

@@ -440,6 +440,7 @@ func newNetworkCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name, _ := cmd.Flags().GetString("name")
 			cidr, _ := cmd.Flags().GetString("cidr")
+			cidrV6, _ := cmd.Flags().GetString("cidr-v6")
 			gatewayID, _ := cmd.Flags().GetString("gateway")
 			description, _ := cmd.Flags().GetString("description")
 
@@ -447,13 +448,18 @@ func newNetworkCmd() *cobra.Command {
 				return fmt.Errorf("--name, --cidr, and --gateway are required")
 			}
 
-			ctx := context.Background()
-			net, err := client.CreateNetwork(ctx, map[string]interface{}{
+			req := map[string]interface{}{
 				"name":        name,
 				"cidr":        cidr,
 				"gateway_id":  gatewayID,
 				"description": description,
-			})
+			}
+			if cidrV6 != "" {
+				req["cidr_v6"] = cidrV6
+			}
+
+			ctx := context.Background()
+			net, err := client.CreateNetwork(ctx, req)
 			if err != nil {
 				return err
 			}
@@ -462,7 +468,8 @@ func newNetworkCmd() *cobra.Command {
 		},
 	}
 	createCmd.Flags().String("name", "", "Network name (required)")
-	createCmd.Flags().String("cidr", "", "Network CIDR (required)")
+	createCmd.Flags().String("cidr", "", "Network CIDR IPv4 (required)")
+	createCmd.Flags().String("cidr-v6", "", "Network CIDR IPv6 (optional)")
 	createCmd.Flags().String("gateway", "", "Gateway ID (required)")
 	createCmd.Flags().String("description", "", "Description")
 
@@ -478,6 +485,10 @@ func newNetworkCmd() *cobra.Command {
 			if cidr, _ := cmd.Flags().GetString("cidr"); cidr != "" {
 				req["cidr"] = cidr
 			}
+			if cmd.Flags().Changed("cidr-v6") {
+				cidrV6, _ := cmd.Flags().GetString("cidr-v6")
+				req["cidr_v6"] = cidrV6
+			}
 			if description, _ := cmd.Flags().GetString("description"); description != "" {
 				req["description"] = description
 			}
@@ -492,7 +503,8 @@ func newNetworkCmd() *cobra.Command {
 		},
 	}
 	updateCmd.Flags().String("name", "", "Network name")
-	updateCmd.Flags().String("cidr", "", "Network CIDR")
+	updateCmd.Flags().String("cidr", "", "Network CIDR IPv4")
+	updateCmd.Flags().String("cidr-v6", "", "Network CIDR IPv6")
 	updateCmd.Flags().String("description", "", "Description")
 
 	deleteCmd := &cobra.Command{
@@ -1233,18 +1245,24 @@ func newMeshCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			gatewayID, _ := cmd.Flags().GetString("gateway")
 			network, _ := cmd.Flags().GetString("network")
+			networkV6, _ := cmd.Flags().GetString("network-v6")
 			sessionEnabled, _ := cmd.Flags().GetBool("session")
 
 			if gatewayID == "" || network == "" {
 				return fmt.Errorf("--gateway and --network are required")
 			}
 
-			ctx := context.Background()
-			hub, err := client.CreateMeshHub(ctx, map[string]interface{}{
+			req := map[string]interface{}{
 				"gateway_id":      gatewayID,
 				"hub_network":     network,
 				"session_enabled": sessionEnabled,
-			})
+			}
+			if networkV6 != "" {
+				req["hub_network_v6"] = networkV6
+			}
+
+			ctx := context.Background()
+			hub, err := client.CreateMeshHub(ctx, req)
 			if err != nil {
 				return err
 			}
@@ -1253,7 +1271,8 @@ func newMeshCmd() *cobra.Command {
 		},
 	}
 	hubCreateCmd.Flags().String("gateway", "", "Gateway ID (required)")
-	hubCreateCmd.Flags().String("network", "", "Hub network CIDR (required)")
+	hubCreateCmd.Flags().String("network", "", "Hub network CIDR IPv4 (required)")
+	hubCreateCmd.Flags().String("network-v6", "", "Hub network CIDR IPv6 (optional)")
 	hubCreateCmd.Flags().Bool("session", true, "Enable remote sessions (default: true)")
 
 	hubUpdateCmd := &cobra.Command{
@@ -1265,6 +1284,10 @@ func newMeshCmd() *cobra.Command {
 			if cmd.Flags().Changed("session") {
 				session, _ := cmd.Flags().GetBool("session")
 				req["session_enabled"] = session
+			}
+			if cmd.Flags().Changed("network-v6") {
+				networkV6, _ := cmd.Flags().GetString("network-v6")
+				req["hub_network_v6"] = networkV6
 			}
 			if len(req) == 0 {
 				return fmt.Errorf("no updates specified")
@@ -1280,6 +1303,7 @@ func newMeshCmd() *cobra.Command {
 		},
 	}
 	hubUpdateCmd.Flags().Bool("session", true, "Enable remote sessions")
+	hubUpdateCmd.Flags().String("network-v6", "", "Hub network CIDR IPv6")
 
 	hubDeleteCmd := &cobra.Command{
 		Use:   "delete ID",
@@ -1351,19 +1375,25 @@ func newMeshCmd() *cobra.Command {
 			gatewayID, _ := cmd.Flags().GetString("gateway")
 			hubID, _ := cmd.Flags().GetString("hub")
 			network, _ := cmd.Flags().GetString("network")
+			networkV6, _ := cmd.Flags().GetString("network-v6")
 			sessionEnabled, _ := cmd.Flags().GetBool("session")
 
 			if gatewayID == "" || hubID == "" || network == "" {
 				return fmt.Errorf("--gateway, --hub, and --network are required")
 			}
 
-			ctx := context.Background()
-			spoke, err := client.CreateMeshSpoke(ctx, map[string]interface{}{
+			req := map[string]interface{}{
 				"gateway_id":      gatewayID,
 				"hub_id":          hubID,
 				"spoke_network":   network,
 				"session_enabled": sessionEnabled,
-			})
+			}
+			if networkV6 != "" {
+				req["spoke_network_v6"] = networkV6
+			}
+
+			ctx := context.Background()
+			spoke, err := client.CreateMeshSpoke(ctx, req)
 			if err != nil {
 				return err
 			}
@@ -1373,7 +1403,8 @@ func newMeshCmd() *cobra.Command {
 	}
 	spokeCreateCmd.Flags().String("gateway", "", "Gateway ID (required)")
 	spokeCreateCmd.Flags().String("hub", "", "Hub ID (required)")
-	spokeCreateCmd.Flags().String("network", "", "Spoke network CIDR (required)")
+	spokeCreateCmd.Flags().String("network", "", "Spoke network CIDR IPv4 (required)")
+	spokeCreateCmd.Flags().String("network-v6", "", "Spoke network CIDR IPv6 (optional)")
 	spokeCreateCmd.Flags().Bool("session", true, "Enable remote sessions (default: true)")
 
 	spokeUpdateCmd := &cobra.Command{
@@ -1385,6 +1416,10 @@ func newMeshCmd() *cobra.Command {
 			if cmd.Flags().Changed("session") {
 				session, _ := cmd.Flags().GetBool("session")
 				req["session_enabled"] = session
+			}
+			if cmd.Flags().Changed("network-v6") {
+				networkV6, _ := cmd.Flags().GetString("network-v6")
+				req["spoke_network_v6"] = networkV6
 			}
 			if len(req) == 0 {
 				return fmt.Errorf("no updates specified")
@@ -1400,6 +1435,7 @@ func newMeshCmd() *cobra.Command {
 		},
 	}
 	spokeUpdateCmd.Flags().Bool("session", true, "Enable remote sessions")
+	spokeUpdateCmd.Flags().String("network-v6", "", "Spoke network CIDR IPv6")
 
 	spokeDeleteCmd := &cobra.Command{
 		Use:   "delete ID",
