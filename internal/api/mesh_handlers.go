@@ -2594,10 +2594,33 @@ func generateMeshClientOVPNConfig(hub *db.MeshHub, caChain, clientCert, clientKe
 	} else if len(routes) > 0 {
 		// Split tunnel: add routes only for allowed networks
 		sb.WriteString("# Routes to allowed networks (access rules)\n")
+		var hasIPv4Routes, hasIPv6Routes bool
 		for _, route := range routes {
-			netIP, netmask, err := cidrToNetmask(route)
-			if err == nil {
-				sb.WriteString(fmt.Sprintf("route %s %s\n", netIP, netmask))
+			// Check if this is an IPv6 route (contains ':')
+			if strings.Contains(route, ":") {
+				hasIPv6Routes = true
+			} else {
+				hasIPv4Routes = true
+			}
+		}
+		// Add IPv4 routes
+		if hasIPv4Routes {
+			for _, route := range routes {
+				if !strings.Contains(route, ":") {
+					netIP, netmask, err := cidrToNetmask(route)
+					if err == nil {
+						sb.WriteString(fmt.Sprintf("route %s %s\n", netIP, netmask))
+					}
+				}
+			}
+		}
+		// Add IPv6 routes
+		if hasIPv6Routes {
+			sb.WriteString("# IPv6 routes\n")
+			for _, route := range routes {
+				if strings.Contains(route, ":") {
+					sb.WriteString(fmt.Sprintf("route-ipv6 %s\n", route))
+				}
 			}
 		}
 		sb.WriteString("\n")

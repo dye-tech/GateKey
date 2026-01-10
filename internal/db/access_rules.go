@@ -28,7 +28,8 @@ type AccessRule struct {
 	Name        string
 	Description string
 	RuleType    AccessRuleType
-	Value       string  // IP, CIDR, or hostname
+	Value       string  // IP, CIDR, or hostname (IPv4)
+	ValueV6     *string // IPv6 IP or CIDR (optional)
 	PortRange   *string // Optional: "80", "443", "8000-9000", "*"
 	Protocol    *string // Optional: tcp, udp, icmp, *
 	NetworkID   *string // Optional: restrict to specific network
@@ -50,10 +51,10 @@ func NewAccessRuleStore(db *DB) *AccessRuleStore {
 // CreateAccessRule creates a new access rule
 func (s *AccessRuleStore) CreateAccessRule(ctx context.Context, rule *AccessRule) error {
 	err := s.db.Pool.QueryRow(ctx, `
-		INSERT INTO access_rules (name, description, rule_type, value, port_range, protocol, network_id, is_active)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO access_rules (name, description, rule_type, value, value_v6, port_range, protocol, network_id, is_active)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, created_at, updated_at
-	`, rule.Name, rule.Description, rule.RuleType, rule.Value, rule.PortRange, rule.Protocol, rule.NetworkID, rule.IsActive).Scan(
+	`, rule.Name, rule.Description, rule.RuleType, rule.Value, rule.ValueV6, rule.PortRange, rule.Protocol, rule.NetworkID, rule.IsActive).Scan(
 		&rule.ID, &rule.CreatedAt, &rule.UpdatedAt,
 	)
 	return err
@@ -63,10 +64,10 @@ func (s *AccessRuleStore) CreateAccessRule(ctx context.Context, rule *AccessRule
 func (s *AccessRuleStore) GetAccessRule(ctx context.Context, id string) (*AccessRule, error) {
 	var rule AccessRule
 	err := s.db.Pool.QueryRow(ctx, `
-		SELECT id, name, description, rule_type, value, port_range, protocol, network_id, is_active, created_at, updated_at
+		SELECT id, name, description, rule_type, value, value_v6, port_range, protocol, network_id, is_active, created_at, updated_at
 		FROM access_rules WHERE id = $1
 	`, id).Scan(&rule.ID, &rule.Name, &rule.Description, &rule.RuleType, &rule.Value,
-		&rule.PortRange, &rule.Protocol, &rule.NetworkID, &rule.IsActive, &rule.CreatedAt, &rule.UpdatedAt)
+		&rule.ValueV6, &rule.PortRange, &rule.Protocol, &rule.NetworkID, &rule.IsActive, &rule.CreatedAt, &rule.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, ErrAccessRuleNotFound
 	}
@@ -76,7 +77,7 @@ func (s *AccessRuleStore) GetAccessRule(ctx context.Context, id string) (*Access
 // ListAccessRules retrieves all access rules
 func (s *AccessRuleStore) ListAccessRules(ctx context.Context) ([]*AccessRule, error) {
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT id, name, description, rule_type, value, port_range, protocol, network_id, is_active, created_at, updated_at
+		SELECT id, name, description, rule_type, value, value_v6, port_range, protocol, network_id, is_active, created_at, updated_at
 		FROM access_rules ORDER BY name
 	`)
 	if err != nil {
@@ -88,7 +89,7 @@ func (s *AccessRuleStore) ListAccessRules(ctx context.Context) ([]*AccessRule, e
 	for rows.Next() {
 		var r AccessRule
 		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.RuleType, &r.Value,
-			&r.PortRange, &r.Protocol, &r.NetworkID, &r.IsActive, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			&r.ValueV6, &r.PortRange, &r.Protocol, &r.NetworkID, &r.IsActive, &r.CreatedAt, &r.UpdatedAt); err != nil {
 			return nil, err
 		}
 		rules = append(rules, &r)
@@ -99,7 +100,7 @@ func (s *AccessRuleStore) ListAccessRules(ctx context.Context) ([]*AccessRule, e
 // ListAccessRulesByNetwork retrieves access rules for a specific network
 func (s *AccessRuleStore) ListAccessRulesByNetwork(ctx context.Context, networkID string) ([]*AccessRule, error) {
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT id, name, description, rule_type, value, port_range, protocol, network_id, is_active, created_at, updated_at
+		SELECT id, name, description, rule_type, value, value_v6, port_range, protocol, network_id, is_active, created_at, updated_at
 		FROM access_rules WHERE network_id = $1 OR network_id IS NULL
 		ORDER BY name
 	`, networkID)
@@ -112,7 +113,7 @@ func (s *AccessRuleStore) ListAccessRulesByNetwork(ctx context.Context, networkI
 	for rows.Next() {
 		var r AccessRule
 		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.RuleType, &r.Value,
-			&r.PortRange, &r.Protocol, &r.NetworkID, &r.IsActive, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			&r.ValueV6, &r.PortRange, &r.Protocol, &r.NetworkID, &r.IsActive, &r.CreatedAt, &r.UpdatedAt); err != nil {
 			return nil, err
 		}
 		rules = append(rules, &r)
@@ -124,10 +125,10 @@ func (s *AccessRuleStore) ListAccessRulesByNetwork(ctx context.Context, networkI
 func (s *AccessRuleStore) UpdateAccessRule(ctx context.Context, rule *AccessRule) error {
 	result, err := s.db.Pool.Exec(ctx, `
 		UPDATE access_rules SET name = $2, description = $3, rule_type = $4, value = $5,
-		       port_range = $6, protocol = $7, network_id = $8, is_active = $9
+		       value_v6 = $6, port_range = $7, protocol = $8, network_id = $9, is_active = $10
 		WHERE id = $1
 	`, rule.ID, rule.Name, rule.Description, rule.RuleType, rule.Value,
-		rule.PortRange, rule.Protocol, rule.NetworkID, rule.IsActive)
+		rule.ValueV6, rule.PortRange, rule.Protocol, rule.NetworkID, rule.IsActive)
 	if err != nil {
 		return err
 	}
@@ -189,7 +190,7 @@ func (s *AccessRuleStore) RemoveRuleFromGroup(ctx context.Context, groupName, ru
 func (s *AccessRuleStore) GetUserAccessRules(ctx context.Context, userID string, groups []string) ([]*AccessRule, error) {
 	// Get rules assigned directly to the user and via their groups
 	query := `
-		SELECT DISTINCT ar.id, ar.name, ar.description, ar.rule_type, ar.value,
+		SELECT DISTINCT ar.id, ar.name, ar.description, ar.rule_type, ar.value, ar.value_v6,
 		       ar.port_range, ar.protocol, ar.network_id, ar.is_active, ar.created_at, ar.updated_at
 		FROM access_rules ar
 		LEFT JOIN user_access_rules uar ON ar.id = uar.access_rule_id AND uar.user_id = $1
@@ -206,7 +207,7 @@ func (s *AccessRuleStore) GetUserAccessRules(ctx context.Context, userID string,
 	var rules []*AccessRule
 	for rows.Next() {
 		var r AccessRule
-		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.RuleType, &r.Value,
+		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.RuleType, &r.Value, &r.ValueV6,
 			&r.PortRange, &r.Protocol, &r.NetworkID, &r.IsActive, &r.CreatedAt, &r.UpdatedAt); err != nil {
 			return nil, err
 		}
@@ -305,7 +306,7 @@ func (s *AccessRuleStore) GetUserAccessRulesForGateway(ctx context.Context, user
 	// Get rules assigned to the user (directly or via groups) that belong to networks
 	// assigned to this gateway via gateway_networks
 	query := `
-		SELECT DISTINCT ar.id, ar.name, ar.description, ar.rule_type, ar.value,
+		SELECT DISTINCT ar.id, ar.name, ar.description, ar.rule_type, ar.value, ar.value_v6,
 		       ar.port_range, ar.protocol, ar.network_id, ar.is_active, ar.created_at, ar.updated_at
 		FROM access_rules ar
 		JOIN gateway_networks gn ON ar.network_id = gn.network_id
@@ -325,7 +326,7 @@ func (s *AccessRuleStore) GetUserAccessRulesForGateway(ctx context.Context, user
 	var rules []*AccessRule
 	for rows.Next() {
 		var r AccessRule
-		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.RuleType, &r.Value,
+		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.RuleType, &r.Value, &r.ValueV6,
 			&r.PortRange, &r.Protocol, &r.NetworkID, &r.IsActive, &r.CreatedAt, &r.UpdatedAt); err != nil {
 			return nil, err
 		}

@@ -184,6 +184,158 @@ func TestConfigGenerator_WithRoutes(t *testing.T) {
 	}
 }
 
+func TestConfigGenerator_WithIPv6Routes(t *testing.T) {
+	pkiCfg := config.PKIConfig{
+		KeyAlgorithm: "ecdsa256",
+		Organization: "Test Org",
+		CertValidity: 24 * time.Hour,
+		CAValidity:   365 * 24 * time.Hour,
+	}
+
+	ca, err := pki.NewCA(pkiCfg)
+	if err != nil {
+		t.Fatalf("Failed to create CA: %v", err)
+	}
+
+	generator, err := NewConfigGenerator(ca, nil)
+	if err != nil {
+		t.Fatalf("Failed to create config generator: %v", err)
+	}
+
+	certReq := pki.CertificateRequest{
+		CommonName: "test-user",
+	}
+
+	issued, err := ca.IssueClientCertificate(certReq)
+	if err != nil {
+		t.Fatalf("Failed to issue certificate: %v", err)
+	}
+
+	gateway := &models.Gateway{
+		ID:          uuid.New(),
+		Name:        "test-gateway-ipv6",
+		Hostname:    "vpn.example.com",
+		VPNPort:     1194,
+		VPNProtocol: "udp",
+	}
+
+	user := &models.User{
+		ID:    uuid.New(),
+		Email: "test@example.com",
+	}
+
+	// Test with both IPv4 and IPv6 routes
+	req := GenerateRequest{
+		Gateway:     gateway,
+		User:        user,
+		Certificate: issued,
+		ExpiresAt:   time.Now().Add(24 * time.Hour),
+		Routes: []Route{
+			{Network: "10.0.0.0", Netmask: "255.0.0.0"},
+			{Network: "192.168.1.0", Netmask: "255.255.255.0"},
+		},
+		RoutesV6: []RouteV6{
+			{CIDR: "2001:db8::/32"},
+			{CIDR: "fd00::/8"},
+		},
+	}
+
+	config, err := generator.Generate(req)
+	if err != nil {
+		t.Fatalf("Failed to generate config: %v", err)
+	}
+
+	content := string(config.Content)
+
+	// Verify IPv4 routes
+	if !strings.Contains(content, "route 10.0.0.0 255.0.0.0") {
+		t.Error("Config should contain first IPv4 route")
+	}
+
+	if !strings.Contains(content, "route 192.168.1.0 255.255.255.0") {
+		t.Error("Config should contain second IPv4 route")
+	}
+
+	// Verify IPv6 routes
+	if !strings.Contains(content, "route-ipv6 2001:db8::/32") {
+		t.Error("Config should contain first IPv6 route")
+	}
+
+	if !strings.Contains(content, "route-ipv6 fd00::/8") {
+		t.Error("Config should contain second IPv6 route")
+	}
+}
+
+func TestConfigGenerator_IPv6OnlyRoutes(t *testing.T) {
+	pkiCfg := config.PKIConfig{
+		KeyAlgorithm: "ecdsa256",
+		Organization: "Test Org",
+		CertValidity: 24 * time.Hour,
+		CAValidity:   365 * 24 * time.Hour,
+	}
+
+	ca, err := pki.NewCA(pkiCfg)
+	if err != nil {
+		t.Fatalf("Failed to create CA: %v", err)
+	}
+
+	generator, err := NewConfigGenerator(ca, nil)
+	if err != nil {
+		t.Fatalf("Failed to create config generator: %v", err)
+	}
+
+	certReq := pki.CertificateRequest{
+		CommonName: "test-user",
+	}
+
+	issued, err := ca.IssueClientCertificate(certReq)
+	if err != nil {
+		t.Fatalf("Failed to issue certificate: %v", err)
+	}
+
+	gateway := &models.Gateway{
+		ID:          uuid.New(),
+		Name:        "test-gateway-ipv6-only",
+		Hostname:    "vpn.example.com",
+		VPNPort:     1194,
+		VPNProtocol: "udp",
+	}
+
+	user := &models.User{
+		ID:    uuid.New(),
+		Email: "test@example.com",
+	}
+
+	// Test with only IPv6 routes (no IPv4)
+	req := GenerateRequest{
+		Gateway:     gateway,
+		User:        user,
+		Certificate: issued,
+		ExpiresAt:   time.Now().Add(24 * time.Hour),
+		Routes:      []Route{}, // No IPv4 routes
+		RoutesV6: []RouteV6{
+			{CIDR: "2001:db8:1::/48"},
+		},
+	}
+
+	config, err := generator.Generate(req)
+	if err != nil {
+		t.Fatalf("Failed to generate config: %v", err)
+	}
+
+	content := string(config.Content)
+
+	// Should not contain any IPv4 route directive
+	if strings.Contains(content, "route 10.") || strings.Contains(content, "route 192.") {
+		t.Error("Config should not contain IPv4 routes when only IPv6 routes are provided")
+	}
+
+	// Verify IPv6 route is present
+	if !strings.Contains(content, "route-ipv6 2001:db8:1::/48") {
+		t.Error("Config should contain the IPv6 route")
+	}
+}
+
 func TestSanitizeFileName(t *testing.T) {
 	tests := []struct {
 		input    string
