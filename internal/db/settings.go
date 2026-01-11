@@ -109,6 +109,9 @@ const (
 	// Geo-fencing settings
 	SettingGeoFencingEnabled = "geo_fencing_enabled" // bool: enable/disable geo-fencing
 	SettingGeoFencingEnforce = "geo_fencing_enforce" // "enforce" or "audit"
+
+	// Proxy settings
+	SettingProxyTLSVerify = "proxy_tls_verify" // bool: verify TLS certs for proxied apps (default: false)
 )
 
 // Default crypto profiles (all enabled by default)
