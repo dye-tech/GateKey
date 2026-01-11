@@ -5,6 +5,29 @@ All notable changes to GateKey are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.2] - 2026-01-11
+
+### Added
+- IPv6 support for geo-fencing rules with country-level IP ranges
+- IPv4/IPv6 tab selector for country-based geo-fence rule creation
+- CLI now displays mesh network hubs alongside traditional gateways
+- Comprehensive unit tests for geo-fencing functionality
+
+### Changed
+- Geo-fence rule dropdown now shows CIDR count badges instead of full lists for better readability
+- Gateway admin modals now support scrolling for smaller viewports
+- Database schema updated to make IPv4 ranges optional when IPv6-only rules are needed
+
+### Fixed
+- CLI mesh hub visibility - `gatekey list` now shows both gateways and mesh networks
+- CLI connection to mesh hubs was failing with 403 CSRF error
+- Web UI geo-fence API calls were failing with 403 CSRF errors
+- Gateway admin "Add Gate" modal was cut off on smaller screens
+
+### Security
+- CSRF middleware now correctly exempts all Bearer token authentication (JWT and API keys)
+- Added CSRF token handling to web frontend for state-changing API requests
+
 ## [1.4.1] - 2026-01-10
 
 ### Added
