@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -70,10 +71,12 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	// Add middleware
 	router.Use(gin.Recovery())
 	router.Use(zapLogger(logger))
+	// Request body size limit (10MB default) to prevent DoS attacks
+	router.Use(requestBodyLimitMiddleware(10 * 1024 * 1024))
 
 	// Configure CORS with exception for SAML ACS endpoint
-	// SAML ACS receives cross-origin POSTs from IdPs and has its own cryptographic security
-	// (signature validation, issuer verification) so it doesn't need CORS protection
+	// SAML ACS receives form POSTs from IdPs (not XHR/fetch) so doesn't need CORS headers.
+	// The security comes from cryptographic signature validation, not browser origin checks.
 	if len(cfg.Server.CORSOrigins) > 0 {
 		corsMiddleware := cors.New(cors.Config{
 			AllowOrigins:     cfg.Server.CORSOrigins,
@@ -84,16 +87,19 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 			MaxAge:           12 * time.Hour,
 		})
 		router.Use(func(c *gin.Context) {
-			// Skip CORS for SAML ACS endpoint - it has its own security model
+			// SAML ACS uses browser form POST (not XHR), so no CORS headers needed.
+			// Adding CORS headers would only enable JavaScript from any origin to POST,
+			// which is unnecessary and potentially a security concern.
+			// SAML security is based on cryptographic signature validation of the assertion.
 			if c.Request.URL.Path == "/api/v1/auth/saml/acs" {
-				// Set permissive CORS headers for SAML ACS
-				c.Header("Access-Control-Allow-Origin", "*")
-				c.Header("Access-Control-Allow-Methods", "POST, OPTIONS")
-				c.Header("Access-Control-Allow-Headers", "Content-Type, Origin")
+				// Only allow POST (SAML assertion) and OPTIONS (preflight, though unlikely)
 				if c.Request.Method == "OPTIONS" {
+					// Minimal preflight response - don't allow arbitrary origins
 					c.AbortWithStatus(204)
 					return
 				}
+				// For POST, proceed without adding CORS headers
+				// The SAML handler validates the assertion cryptographically
 				c.Next()
 				return
 			}
@@ -125,6 +131,33 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 		return nil, err
 	}
 
+	// Security warnings for TLS configuration
+	switch cfg.Database.SSLMode {
+	case "disable":
+		logger.Warn("SECURITY WARNING: Database SSL is DISABLED - connections are unencrypted. " +
+			"This is a critical security risk in production. Set database.ssl_mode to 'verify-full' or 'verify-ca'")
+	case "require":
+		logger.Warn("Database SSL mode is 'require' - connections are encrypted but server certificate is NOT verified. " +
+			"For production, use 'verify-full' to prevent MITM attacks")
+	case "verify-ca":
+		logger.Info("Database SSL mode is 'verify-ca' - server certificate verified against CA. " +
+			"Consider 'verify-full' for additional hostname verification")
+	case "verify-full":
+		logger.Info("Database SSL configured with full verification (recommended)")
+	}
+
+	// Warn if proxy TLS verification is disabled
+	if !cfg.Security.ProxyTLSVerify {
+		logger.Warn("SECURITY WARNING: Proxy TLS verification is DISABLED - proxy targets are not verified. " +
+			"This allows MITM attacks on proxied connections. Set security.proxy_tls_verify to true for production")
+	}
+
+	// Warn about deprecated RSA-2048 key algorithm
+	if cfg.PKI.KeyAlgorithm == "rsa2048" {
+		logger.Warn("DEPRECATION WARNING: RSA-2048 key algorithm is deprecated and will be removed in a future version. " +
+			"RSA-2048 provides only 112 bits of security. Migrate to ecdsa256 (128 bits), ecdsa384 (192 bits), or rsa4096 (140 bits)")
+	}
+
 	// Initialize stores
 	userStore := db.NewUserStore(database)
 	providerStore := db.NewProviderStore(database)
@@ -134,7 +167,20 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	networkStore := db.NewNetworkStore(database)
 	accessRuleStore := db.NewAccessRuleStore(database)
 	settingsStore := db.NewSettingsStore(database)
-	pkiStore := db.NewPKIStore(database)
+	// Create PKI store with encryption if configured
+	// CA private keys are encrypted at rest using AES-256-GCM
+	var pkiStore *db.PKIStore
+	if cfg.Security.CAKeyEncryptionKey != "" {
+		var err error
+		pkiStore, err = db.NewPKIStoreWithEncryption(database, cfg.Security.CAKeyEncryptionKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize PKI store with encryption: %w", err)
+		}
+		logger.Info("PKI store initialized with CA private key encryption")
+	} else {
+		pkiStore = db.NewPKIStore(database)
+		logger.Warn("PKI store initialized WITHOUT CA private key encryption - set security.ca_key_encryption_key for production")
+	}
 	proxyAppStore := db.NewProxyApplicationStore(database)
 	loginLogStore := db.NewLoginLogStore(database)
 	meshStore := db.NewMeshStore(database)
@@ -262,18 +308,18 @@ func (s *Server) setupRoutes() {
 		// Authentication routes
 		auth := v1.Group("/auth")
 		{
-			// OIDC
-			auth.GET("/oidc/login", s.handleOIDCLogin)
-			auth.GET("/oidc/callback", s.handleOIDCCallback)
+			// OIDC - rate limited to prevent abuse
+			auth.GET("/oidc/login", s.authRateLimitMiddleware(), s.handleOIDCLogin)
+			auth.GET("/oidc/callback", s.authRateLimitMiddleware(), s.handleOIDCCallback)
 
-			// SAML
-			auth.GET("/saml/login", s.handleSAMLLogin)
-			auth.POST("/saml/acs", s.handleSAMLACS)
+			// SAML - rate limited to prevent abuse
+			auth.GET("/saml/login", s.authRateLimitMiddleware(), s.handleSAMLLogin)
+			auth.POST("/saml/acs", s.authRateLimitMiddleware(), s.handleSAMLACS)
 			auth.OPTIONS("/saml/acs", s.handleSAMLACSOptions) // CORS preflight for IdP POST
-			auth.GET("/saml/metadata", s.handleSAMLMetadata)
+			auth.GET("/saml/metadata", s.handleSAMLMetadata)  // Metadata doesn't need rate limiting
 
-			// CLI authentication (browser-based flow for CLI client)
-			auth.GET("/cli/login", s.handleCLILogin)
+			// CLI authentication (browser-based flow for CLI client) - rate limited
+			auth.GET("/cli/login", s.authRateLimitMiddleware(), s.handleCLILogin)
 			auth.GET("/cli/complete", s.handleCLIComplete)
 			auth.GET("/cli/callback", s.handleCLICallback)
 			auth.POST("/refresh", s.handleTokenRefresh)
@@ -470,6 +516,7 @@ func (s *Server) setupRoutes() {
 				configRead.GET("/networks/:id", s.handleGetNetwork)
 				configRead.GET("/networks/:id/gateways", s.handleGetNetworkGateways)
 				configRead.GET("/networks/:id/access-rules", s.handleGetNetworkAccessRules)
+				configRead.GET("/networks/:id/mesh-hubs", s.handleGetNetworkMeshHubs)
 				configRead.GET("/access-rules", s.handleListAccessRules)
 				configRead.GET("/access-rules/:id", s.handleGetAccessRule)
 			}
@@ -970,6 +1017,10 @@ func (s *Server) adminAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user, err := s.getAuthenticatedUser(c)
 		if err != nil || user == nil {
+			s.logger.Warn("Admin auth failed - no user",
+				zap.Error(err),
+				zap.String("path", c.Request.URL.Path),
+			)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": "Authentication required",
 			})
@@ -977,6 +1028,12 @@ func (s *Server) adminAuthMiddleware() gin.HandlerFunc {
 		}
 
 		if !user.IsAdmin {
+			s.logger.Warn("Admin auth failed - not admin",
+				zap.String("email", user.Email),
+				zap.Bool("isAdmin", user.IsAdmin),
+				zap.String("provider", user.Provider),
+				zap.String("path", c.Request.URL.Path),
+			)
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error": "Admin access required",
 			})
@@ -994,12 +1051,20 @@ func (s *Server) adminAuthMiddleware() gin.HandlerFunc {
 // API key users must have the required scope or the wildcard "*" scope.
 func (s *Server) requireScope(requiredScope string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		user, err := s.getAuthenticatedUser(c)
-		if err != nil || user == nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "Authentication required",
-			})
-			return
+		// First check if user was already authenticated by adminAuthMiddleware
+		var user *authenticatedUser
+		if cachedUser, exists := c.Get("authenticated_user"); exists {
+			user = cachedUser.(*authenticatedUser)
+		} else {
+			var err error
+			user, err = s.getAuthenticatedUser(c)
+			if err != nil || user == nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+					"error": "Authentication required",
+				})
+				return
+			}
+			c.Set("authenticated_user", user)
 		}
 
 		if !user.HasScope(requiredScope) {
@@ -1010,7 +1075,6 @@ func (s *Server) requireScope(requiredScope string) gin.HandlerFunc {
 			return
 		}
 
-		c.Set("authenticated_user", user)
 		c.Next()
 	}
 }
@@ -1018,12 +1082,20 @@ func (s *Server) requireScope(requiredScope string) gin.HandlerFunc {
 // requireAnyScope returns middleware that requires any of the specified scopes.
 func (s *Server) requireAnyScope(requiredScopes ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		user, err := s.getAuthenticatedUser(c)
-		if err != nil || user == nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "Authentication required",
-			})
-			return
+		// First check if user was already authenticated by adminAuthMiddleware
+		var user *authenticatedUser
+		if cachedUser, exists := c.Get("authenticated_user"); exists {
+			user = cachedUser.(*authenticatedUser)
+		} else {
+			var err error
+			user, err = s.getAuthenticatedUser(c)
+			if err != nil || user == nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+					"error": "Authentication required",
+				})
+				return
+			}
+			c.Set("authenticated_user", user)
 		}
 
 		if !user.HasAnyScope(requiredScopes...) {
@@ -1034,7 +1106,6 @@ func (s *Server) requireAnyScope(requiredScopes ...string) gin.HandlerFunc {
 			return
 		}
 
-		c.Set("authenticated_user", user)
 		c.Next()
 	}
 }
@@ -1071,7 +1142,20 @@ func (s *Server) csrfMiddleware() gin.HandlerFunc {
 		}
 
 		// Skip CSRF for gateway-to-server communication
+		// Check for gateway token header
 		if c.GetHeader("X-Gateway-Token") != "" || strings.HasPrefix(authHeader, "Gateway ") {
+			c.Next()
+			return
+		}
+		// Skip CSRF for gateway internal routes (they use body-based token auth)
+		path := c.Request.URL.Path
+		if strings.HasPrefix(path, "/api/v1/gateway/") ||
+			strings.HasPrefix(path, "/api/v1/wireguard-gateway/") ||
+			strings.HasPrefix(path, "/api/v1/mesh-hub/") ||
+			strings.HasPrefix(path, "/api/v1/mesh-spoke/") ||
+			strings.HasPrefix(path, "/api/v1/mesh-gateway/") ||
+			strings.HasPrefix(path, "/api/v1/wg-mesh-hub/") ||
+			strings.HasPrefix(path, "/api/v1/wg-mesh-spoke/") {
 			c.Next()
 			return
 		}
@@ -1085,6 +1169,10 @@ func (s *Server) csrfMiddleware() gin.HandlerFunc {
 		// Validate CSRF token for state-changing requests with session auth (cookie-based)
 		cookieToken, err := c.Cookie(csrfCookieName)
 		if err != nil || cookieToken == "" {
+			s.logger.Warn("CSRF validation failed - cookie missing",
+				zap.String("path", c.Request.URL.Path),
+				zap.String("method", c.Request.Method),
+			)
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error": "CSRF token missing",
 			})
@@ -1093,6 +1181,10 @@ func (s *Server) csrfMiddleware() gin.HandlerFunc {
 
 		headerToken := c.GetHeader(csrfHeaderName)
 		if headerToken == "" {
+			s.logger.Warn("CSRF validation failed - header missing",
+				zap.String("path", c.Request.URL.Path),
+				zap.String("method", c.Request.Method),
+			)
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error": "CSRF token header missing",
 			})
@@ -1101,6 +1193,10 @@ func (s *Server) csrfMiddleware() gin.HandlerFunc {
 
 		// Validate tokens match
 		if headerToken != cookieToken {
+			s.logger.Warn("CSRF validation failed - token mismatch",
+				zap.String("path", c.Request.URL.Path),
+				zap.String("method", c.Request.Method),
+			)
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error": "CSRF token mismatch",
 			})
@@ -1114,17 +1210,41 @@ func (s *Server) csrfMiddleware() gin.HandlerFunc {
 // ensureCSRFCookie sets a CSRF token cookie if not present.
 func (s *Server) ensureCSRFCookie(c *gin.Context) {
 	if _, err := c.Cookie(csrfCookieName); err != nil {
-		token := generateCSRFToken()
-		// Cookie settings: accessible to JS for header inclusion, SameSite for CSRF
-		c.SetCookie(csrfCookieName, token, 86400, "/", "", s.config.Server.TLSEnabled, false)
+		token, err := generateCSRFToken()
+		if err != nil {
+			// Critical security failure - log and don't set cookie
+			// The middleware will reject state-changing requests without a valid token
+			s.logger.Error("Failed to generate CSRF token", zap.Error(err))
+			return
+		}
+		// Set cookie with SameSite=Lax for CSRF protection
+		// HttpOnly=false because JavaScript needs to read the token for header inclusion
+		// Secure=true when TLS is enabled
+		cookie := &http.Cookie{
+			Name:     csrfCookieName,
+			Value:    token,
+			MaxAge:   86400,
+			Path:     "/",
+			Secure:   s.config.Server.TLSEnabled,
+			HttpOnly: false, // Must be false so JS can read and include in header
+			SameSite: http.SameSiteLaxMode,
+		}
+		http.SetCookie(c.Writer, cookie)
+		s.logger.Debug("CSRF cookie set",
+			zap.String("path", c.Request.URL.Path),
+			zap.Bool("secure", s.config.Server.TLSEnabled),
+		)
 	}
 }
 
 // generateCSRFToken creates a cryptographically secure random token.
-func generateCSRFToken() string {
+// Returns an error if random generation fails - this is a critical security function.
+func generateCSRFToken() (string, error) {
 	b := make([]byte, csrfTokenLen)
-	rand.Read(b)
-	return base64.URLEncoding.EncodeToString(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
 }
 
 // rateLimiter implements a sliding window rate limiter for auth endpoints.
@@ -1301,6 +1421,17 @@ func buildHSTSHeader(maxAge int, includeSubdomains, preload bool) string {
 		header += "; preload"
 	}
 	return header
+}
+
+// requestBodyLimitMiddleware limits the size of request bodies to prevent DoS attacks.
+// Default limit is 10MB which is sufficient for most API operations.
+func requestBodyLimitMiddleware(maxBytes int64) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.Body != nil {
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBytes)
+		}
+		c.Next()
+	}
 }
 
 // zapLogger returns a Gin middleware that logs requests using zap.

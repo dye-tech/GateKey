@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -414,7 +415,7 @@ func TestManager_Shutdown_Empty(t *testing.T) {
 	manager := NewManager(logger)
 
 	// Shutdown with no connections should not panic
-	manager.Shutdown(nil)
+	manager.Shutdown(context.TODO())
 
 	// Verify maps are reset
 	if len(manager.agents) != 0 {

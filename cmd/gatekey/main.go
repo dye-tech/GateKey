@@ -121,23 +121,24 @@ func connectCmd() *cobra.Command {
 	var mesh string
 
 	cmd := &cobra.Command{
-		Use:   "connect [gateway]",
+		Use:   "connect [name]",
 		Short: "Connect to VPN",
 		Long: `Connects to a VPN gateway or mesh hub.
 
-For gateways:
-  gatekey connect <gateway>
-  gatekey connect --gateway <gateway>
+Examples:
+  gatekey connect <name>         # Auto-detects gateway or mesh hub
+  gatekey connect --gateway <gw> # Explicitly connect to gateway
+  gatekey connect --mesh <hub>   # Explicitly connect to mesh hub
 
-For mesh hubs:
-  gatekey connect --mesh <hub>
+The command automatically detects whether the name refers to a gateway
+or a mesh hub and connects accordingly.
 
-If no gateway is specified and only one is available, it connects to that one.
+If no name is specified and only one gateway is available, it connects to that one.
 
 This command:
 1. Checks your authentication status
 2. Downloads a fresh VPN configuration
-3. Starts OpenVPN with the configuration`,
+3. Starts the appropriate VPN client (OpenVPN or WireGuard)`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := client.LoadConfig(cfgFile)

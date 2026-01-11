@@ -760,7 +760,7 @@ func setupNAT(ctx context.Context) error {
 		if err := setupNftablesNATv6(ctx, hubVPNSubnetV6, outIfaceV6); err != nil {
 			logger.Debug("nftables IPv6 NAT setup failed, trying ip6tables", zap.Error(err))
 			// Fallback to ip6tables
-			if err := setupIp6tablesNAT(ctx, hubVPNSubnetV6, outIfaceV6); err != nil {
+			if err := setupIP6tablesNAT(ctx, hubVPNSubnetV6, outIfaceV6); err != nil {
 				logger.Warn("Failed to setup IPv6 NAT rule",
 					zap.String("subnet", hubVPNSubnetV6),
 					zap.Error(err))
@@ -874,7 +874,7 @@ func setupNftablesNATv6(ctx context.Context, vpnSubnet, outIface string) error {
 	return nil
 }
 
-func setupIp6tablesNAT(ctx context.Context, vpnSubnet, outIface string) error {
+func setupIP6tablesNAT(ctx context.Context, vpnSubnet, outIface string) error {
 	// Check if rule already exists
 	checkCmd := exec.CommandContext(ctx, "ip6tables", "-t", "nat", "-C", "POSTROUTING",
 		"-s", vpnSubnet, "-o", outIface, "-j", "MASQUERADE")
