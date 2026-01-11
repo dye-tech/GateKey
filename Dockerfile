@@ -97,6 +97,9 @@ COPY --from=builder /wireguard-gateway-binaries /app/bin
 COPY --from=builder /wireguard-hub-binaries /app/bin
 COPY --from=builder /wireguard-mesh-gateway-binaries /app/bin
 
+# Copy Android APK for mobile downloads
+COPY bin/gatekey-android.apk /app/bin/gatekey-android.apk
+
 # Copy frontend assets
 COPY web/dist /app/web/dist
 

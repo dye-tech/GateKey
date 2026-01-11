@@ -11,9 +11,9 @@ func TestNewUserStore(t *testing.T) {
 	if store == nil {
 		t.Fatal("Expected non-nil store")
 	}
-	// Verify Argon2 parameters are set
-	if store.time != 1 {
-		t.Errorf("Expected time=1, got %d", store.time)
+	// Verify Argon2 parameters are set (time=3 per OWASP recommendation)
+	if store.time != 3 {
+		t.Errorf("Expected time=3, got %d", store.time)
 	}
 	if store.memory != 64*1024 {
 		t.Errorf("Expected memory=64*1024, got %d", store.memory)

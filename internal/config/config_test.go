@@ -594,3 +594,102 @@ pki:
 		t.Errorf("Expected default ssl_mode 'require', got '%s'", cfg.Database.SSLMode)
 	}
 }
+
+func TestLoad_SecurityDefaults(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "security_defaults.yaml")
+
+	configContent := `
+database:
+  url: postgres://localhost/gatekey
+pki:
+  key_algorithm: ecdsa256
+`
+	err := os.WriteFile(tmpFile, []byte(configContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	cfg, err := Load(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	// SSRF protection should be enabled by default
+	if !cfg.Security.ProxySSRFProtection {
+		t.Error("Expected ProxySSRFProtection to be true by default")
+	}
+
+	// DNS rebinding protection should be enabled by default
+	if !cfg.Security.ProxyDNSRebindingProtection {
+		t.Error("Expected ProxyDNSRebindingProtection to be true by default")
+	}
+
+	// TLS verification should be enabled by default
+	if !cfg.Security.ProxyTLSVerify {
+		t.Error("Expected ProxyTLSVerify to be true by default")
+	}
+
+	// Security headers should be enabled by default
+	if !cfg.Security.SecurityHeadersEnabled {
+		t.Error("Expected SecurityHeadersEnabled to be true by default")
+	}
+
+	// HSTS should be enabled by default
+	if !cfg.Security.HSTSEnabled {
+		t.Error("Expected HSTSEnabled to be true by default")
+	}
+
+	// HSTS max-age should be 1 year by default
+	if cfg.Security.HSTSMaxAge != 31536000 {
+		t.Errorf("Expected HSTSMaxAge to be 31536000, got %d", cfg.Security.HSTSMaxAge)
+	}
+
+	// Frame ancestors should be dynamic by default (for multi-tenant)
+	if cfg.Security.FrameAncestors != "dynamic" {
+		t.Errorf("Expected FrameAncestors to be 'dynamic', got '%s'", cfg.Security.FrameAncestors)
+	}
+
+	// TLS min version should be 1.2 by default
+	if cfg.Security.ProxyTLSMinVersion != "1.2" {
+		t.Errorf("Expected ProxyTLSMinVersion to be '1.2', got '%s'", cfg.Security.ProxyTLSMinVersion)
+	}
+}
+
+func TestLoad_SecurityCanBeDisabled(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "security_disabled.yaml")
+
+	configContent := `
+database:
+  url: postgres://localhost/gatekey
+pki:
+  key_algorithm: ecdsa256
+security:
+  proxy_ssrf_protection: false
+  security_headers_enabled: false
+  hsts_enabled: false
+`
+	err := os.WriteFile(tmpFile, []byte(configContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	cfg, err := Load(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	// Verify security can be disabled via config
+	if cfg.Security.ProxySSRFProtection {
+		t.Error("Expected ProxySSRFProtection to be false when explicitly disabled")
+	}
+
+	if cfg.Security.SecurityHeadersEnabled {
+		t.Error("Expected SecurityHeadersEnabled to be false when explicitly disabled")
+	}
+
+	if cfg.Security.HSTSEnabled {
+		t.Error("Expected HSTSEnabled to be false when explicitly disabled")
+	}
+}

@@ -4863,6 +4863,8 @@ func (s *Server) handleDownloadBinary(c *gin.Context) {
 		// WireGuard mesh gateway binaries
 		"gatekey-wireguard-mesh-gateway-linux-amd64": true,
 		"gatekey-wireguard-mesh-gateway-linux-arm64": true,
+		// Android APK
+		"gatekey-android.apk": true,
 	}
 
 	if !allowedBinaries[filename] {

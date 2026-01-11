@@ -67,6 +67,17 @@ func NewHookClient(baseURL, token string) *HookClient {
 	}
 }
 
+// newRequest creates an HTTP request with the X-Gateway-Token header for CSRF bypass.
+func (c *HookClient) newRequest(method, url string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Gateway-Token", c.token)
+	return req, nil
+}
+
 // Verify sends a verification request to the control plane.
 func (c *HookClient) Verify(req HookRequest) (*HookResponse, error) {
 	// Add token to request
@@ -91,12 +102,10 @@ func (c *HookClient) Verify(req HookRequest) (*HookResponse, error) {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequest("POST", c.baseURL+"/api/v1/gateway/verify", strings.NewReader(string(body)))
+	httpReq, err := c.newRequest("POST", c.baseURL+"/api/v1/gateway/verify", strings.NewReader(string(body)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -143,12 +152,10 @@ func (c *HookClient) Connect(req HookRequest) (*HookResponse, error) {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequest("POST", c.baseURL+"/api/v1/gateway/connect", strings.NewReader(string(body)))
+	httpReq, err := c.newRequest("POST", c.baseURL+"/api/v1/gateway/connect", strings.NewReader(string(body)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -187,12 +194,10 @@ func (c *HookClient) Disconnect(req HookRequest) error {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequest("POST", c.baseURL+"/api/v1/gateway/disconnect", strings.NewReader(string(body)))
+	httpReq, err := c.newRequest("POST", c.baseURL+"/api/v1/gateway/disconnect", strings.NewReader(string(body)))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -238,12 +243,10 @@ func (c *HookClient) Heartbeat(publicIP string, activeClients int, openvpnRunnin
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequest("POST", c.baseURL+"/api/v1/gateway/heartbeat", strings.NewReader(string(body)))
+	httpReq, err := c.newRequest("POST", c.baseURL+"/api/v1/gateway/heartbeat", strings.NewReader(string(body)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -293,12 +296,10 @@ func (c *HookClient) Provision() (*ProvisionResponse, error) {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequest("POST", c.baseURL+"/api/v1/gateway/provision", strings.NewReader(string(body)))
+	httpReq, err := c.newRequest("POST", c.baseURL+"/api/v1/gateway/provision", strings.NewReader(string(body)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {

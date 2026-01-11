@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -104,6 +105,11 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	// Configure trusted proxies
 	if len(cfg.Server.TrustedProxies) > 0 {
 		_ = router.SetTrustedProxies(cfg.Server.TrustedProxies) // Ignore error, will use defaults
+	}
+
+	// Add security headers middleware (multi-tenant aware)
+	if cfg.Security.SecurityHeadersEnabled {
+		router.Use(securityHeadersMiddleware(cfg))
 	}
 
 	// Initialize database connection with TLS configuration
@@ -1224,6 +1230,82 @@ func (s *Server) authRateLimitMiddleware() gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+// securityHeadersMiddleware returns a Gin middleware that adds security headers to all responses.
+// It is multi-tenant aware and can dynamically set frame-ancestors based on the Host header.
+func securityHeadersMiddleware(cfg *config.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// X-Content-Type-Options: Prevents MIME type sniffing
+		c.Header("X-Content-Type-Options", "nosniff")
+
+		// X-Frame-Options: Legacy clickjacking protection (CSP frame-ancestors is preferred)
+		c.Header("X-Frame-Options", "SAMEORIGIN")
+
+		// X-XSS-Protection: Legacy XSS protection (modern browsers use CSP)
+		c.Header("X-XSS-Protection", "1; mode=block")
+
+		// Referrer-Policy: Controls how much referrer info is sent
+		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+
+		// Permissions-Policy: Restrict browser features
+		if cfg.Security.PermissionsPolicy != "" {
+			c.Header("Permissions-Policy", cfg.Security.PermissionsPolicy)
+		}
+
+		// HSTS: HTTP Strict Transport Security (only when TLS is enabled)
+		if cfg.Security.HSTSEnabled && cfg.Server.TLSEnabled {
+			hstsValue := buildHSTSHeader(cfg.Security.HSTSMaxAge, cfg.Security.HSTSIncludeSubdomains, cfg.Security.HSTSPreload)
+			c.Header("Strict-Transport-Security", hstsValue)
+		}
+
+		// Content-Security-Policy: Main defense against XSS and injection attacks
+		csp := cfg.Security.ContentSecurityPolicy
+		if csp == "" {
+			// Build dynamic CSP for multi-tenant deployments
+			frameAncestors := "'self'"
+			if cfg.Security.FrameAncestors == "dynamic" {
+				// Use the Host header for multi-tenant frame-ancestors
+				// This allows vpn.companya.com to frame itself but not others
+				host := c.Request.Host
+				if host != "" {
+					// Extract just the hostname without port
+					if idx := strings.Index(host, ":"); idx != -1 {
+						host = host[:idx]
+					}
+					frameAncestors = "'self' https://" + host
+				}
+			} else if cfg.Security.FrameAncestors != "" && cfg.Security.FrameAncestors != "self" {
+				frameAncestors = cfg.Security.FrameAncestors
+			}
+
+			// Secure default CSP
+			csp = "default-src 'self'; " +
+				"script-src 'self' 'unsafe-inline' 'unsafe-eval'; " + // React needs unsafe-inline/eval
+				"style-src 'self' 'unsafe-inline'; " + // Inline styles for React
+				"img-src 'self' data: https:; " + // Allow data URIs and HTTPS images
+				"font-src 'self' data:; " + // Allow data URI fonts
+				"connect-src 'self' wss: https:; " + // WebSocket and API connections
+				"frame-ancestors " + frameAncestors + "; " +
+				"base-uri 'self'; " +
+				"form-action 'self'"
+		}
+		c.Header("Content-Security-Policy", csp)
+
+		c.Next()
+	}
+}
+
+// buildHSTSHeader constructs the HSTS header value
+func buildHSTSHeader(maxAge int, includeSubdomains, preload bool) string {
+	header := "max-age=" + strconv.Itoa(maxAge)
+	if includeSubdomains {
+		header += "; includeSubDomains"
+	}
+	if preload {
+		header += "; preload"
+	}
+	return header
 }
 
 // zapLogger returns a Gin middleware that logs requests using zap.
