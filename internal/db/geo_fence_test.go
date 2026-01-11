@@ -266,12 +266,12 @@ func TestMultipleCIDRParsing(t *testing.T) {
 func TestInvalidCIDR(t *testing.T) {
 	invalidCIDRs := []string{
 		"not-a-cidr",
-		"192.168.1.1",         // missing prefix
-		"192.168.1.0/33",      // invalid prefix for IPv4
-		"2001:db8::/129",      // invalid prefix for IPv6
-		"192.168.1.256/24",    // invalid IP
-		"",                    // empty
-		"   ",                 // whitespace only
+		"192.168.1.1",      // missing prefix
+		"192.168.1.0/33",   // invalid prefix for IPv4
+		"2001:db8::/129",   // invalid prefix for IPv6
+		"192.168.1.256/24", // invalid IP
+		"",                 // empty
+		"   ",              // whitespace only
 	}
 
 	for _, cidr := range invalidCIDRs {
