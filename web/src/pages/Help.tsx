@@ -126,6 +126,15 @@ const sections: Section[] = [
     ),
   },
   {
+    id: 'user-management',
+    title: 'User Management',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+      </svg>
+    ),
+  },
+  {
     id: 'admin-configs',
     title: 'Config Management',
     icon: (
@@ -1469,8 +1478,30 @@ cat /proc/sys/net/ipv4/ip_forward`}</pre>
                     <td className="px-4 py-3 font-medium">Traffic</td>
                     <td className="px-4 py-3">Bytes sent and received</td>
                   </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Actions</td>
+                    <td className="px-4 py-3">Disconnect individual session or all sessions for a user</td>
+                  </tr>
                 </tbody>
               </table>
+            </div>
+
+            {/* Disconnecting Users */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Disconnecting Users</h3>
+            <p className="text-theme-secondary mb-4">
+              Administrators can immediately disconnect active VPN sessions directly from the monitoring dashboard.
+            </p>
+            <div className="info-box mb-6">
+              <ul className="space-y-2 info-box-text">
+                <li>• <strong>Disconnect:</strong> Terminates a specific VPN session immediately</li>
+                <li>• <strong>Disconnect All:</strong> Terminates all active sessions for a user (shown when user has multiple sessions)</li>
+              </ul>
+            </div>
+            <div className="warning-box mb-6">
+              <p className="warning-box-text">
+                <strong>Note:</strong> Disconnecting a session does not prevent the user from reconnecting.
+                To fully revoke access, use the <strong>Disable User</strong> action from the Users & Groups page (/admin/users).
+              </p>
             </div>
 
             {/* Use Cases */}
@@ -1482,6 +1513,114 @@ cat /proc/sys/net/ipv4/ip_forward`}</pre>
                 <li>• <strong>Troubleshooting:</strong> Identify offline nodes or connection issues</li>
                 <li>• <strong>Capacity Planning:</strong> Monitor user distribution across nodes</li>
               </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* User Management Section */}
+        <section id="user-management" className="scroll-mt-24">
+          <div className="card">
+            <h1 className="text-2xl font-bold text-theme-primary mb-2">User Management</h1>
+            <p className="text-theme-secondary mb-6">
+              Manage user access, disable accounts, and control VPN sessions from the Users & Groups page.
+            </p>
+
+            {/* Disabling Users */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Disabling Users</h3>
+            <p className="text-theme-secondary mb-4">
+              Administrators can immediately revoke a user's access by disabling their account. This is the recommended way to handle security incidents, offboarding, or access revocation.
+            </p>
+            <div className="info-box mb-6">
+              <p className="info-box-text mb-2"><strong>When you disable a user:</strong></p>
+              <ul className="space-y-1 info-box-text">
+                <li>• All active VPN sessions are immediately terminated</li>
+                <li>• All VPN configurations are revoked</li>
+                <li>• The user cannot log in or access VPN resources</li>
+                <li>• The user can be re-enabled later if needed</li>
+              </ul>
+            </div>
+
+            <h4 className="font-medium text-theme-primary mb-2">How to Disable a User</h4>
+            <ol className="list-decimal list-inside space-y-2 text-theme-secondary mb-6">
+              <li>Navigate to <strong>Admin → Users & Groups</strong> (/admin/users)</li>
+              <li>Find the user in the SSO Users tab</li>
+              <li>Click the <strong>Actions</strong> dropdown</li>
+              <li>Select <strong>Disable User</strong></li>
+              <li>Confirm the action in the dialog</li>
+            </ol>
+
+            <div className="warning-box mb-6">
+              <p className="warning-box-text">
+                <strong>Important:</strong> Disabling a user only affects that specific user - it does not affect other users in their groups.
+                This ensures minimal disruption when revoking access for a single user.
+              </p>
+            </div>
+
+            {/* Enabling Users */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Re-Enabling Users</h3>
+            <p className="text-theme-secondary mb-4">
+              Previously disabled users can be re-enabled to restore their access.
+            </p>
+            <ol className="list-decimal list-inside space-y-2 text-theme-secondary mb-6">
+              <li>Navigate to <strong>Admin → Users & Groups</strong> (/admin/users)</li>
+              <li>Find the disabled user (shows "Inactive" status)</li>
+              <li>Click the <strong>Actions</strong> dropdown</li>
+              <li>Select <strong>Enable User</strong></li>
+            </ol>
+            <div className="info-box mb-6">
+              <p className="info-box-text">
+                <strong>Note:</strong> Re-enabled users will need to generate new VPN configurations as their previous configs were revoked.
+              </p>
+            </div>
+
+            {/* CLI Commands */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">CLI Commands</h3>
+            <p className="text-theme-secondary mb-4">
+              User management is also available via the Admin CLI for automation and scripting.
+            </p>
+            <div className="bg-slate-900 rounded-lg p-4 mb-6 overflow-x-auto">
+              <pre className="text-sm text-slate-100"><code>{`# Disable a user (disconnects sessions, revokes configs)
+gatekey-admin user disable USER_ID --reason "Security concern"
+
+# Re-enable a user
+gatekey-admin user enable USER_ID
+
+# View a user's active sessions
+gatekey-admin user sessions USER_ID
+
+# Disconnect sessions without disabling account
+gatekey-admin user disconnect USER_ID`}</code></pre>
+            </div>
+
+            {/* Use Cases */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Common Scenarios</h3>
+            <div className="overflow-x-auto mb-6">
+              <table className="min-w-full divide-y divide-theme">
+                <thead className="bg-theme-tertiary">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Scenario</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Recommended Action</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-theme-card divide-y divide-theme text-sm">
+                  <tr>
+                    <td className="px-4 py-3">Employee offboarding</td>
+                    <td className="px-4 py-3">Use <strong>Disable User</strong> to immediately revoke all access</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3">Security incident / compromised account</td>
+                    <td className="px-4 py-3">Use <strong>Disable User</strong> to terminate sessions and prevent reconnection</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3">Temporary maintenance</td>
+                    <td className="px-4 py-3">Use <strong>Disconnect</strong> from Monitoring to end session without disabling</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3">Access policy violation</td>
+                    <td className="px-4 py-3">Use <strong>Disable User</strong>, investigate, then <strong>Enable User</strong> if appropriate</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </section>

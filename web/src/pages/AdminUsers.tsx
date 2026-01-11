@@ -28,6 +28,8 @@ import {
   getLocalGroupMembers,
   addLocalGroupMember,
   removeLocalGroupMember,
+  disableUser,
+  enableUser,
   SSOUser,
   LocalUser,
   Group,
@@ -60,6 +62,7 @@ export default function AdminUsers() {
   const [selectedLocalGroup, setSelectedLocalGroup] = useState<LocalGroup | null>(null)
   const [showCreateUserModal, setShowCreateUserModal] = useState(false)
   const [showCreateLocalGroupModal, setShowCreateLocalGroupModal] = useState(false)
+  const [disablingUserId, setDisablingUserId] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
@@ -83,6 +86,36 @@ export default function AdminUsers() {
       setError('Failed to load user data')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleDisableUser(user: SSOUser) {
+    if (!confirm(`Are you sure you want to disable ${user.name || user.email}?\n\nThis will:\n• Immediately disconnect all active VPN sessions\n• Revoke all VPN configs\n• Prevent future logins and VPN access\n\nThe user can be re-enabled later.`)) {
+      return
+    }
+    setDisablingUserId(user.id)
+    try {
+      await disableUser(user.id, 'Disabled by administrator', true)
+      await loadData()
+    } catch (err) {
+      setError('Failed to disable user')
+    } finally {
+      setDisablingUserId(null)
+    }
+  }
+
+  async function handleEnableUser(user: SSOUser) {
+    if (!confirm(`Are you sure you want to re-enable ${user.name || user.email}?\n\nThis will allow them to log in and access VPN resources again.`)) {
+      return
+    }
+    setDisablingUserId(user.id)
+    try {
+      await enableUser(user.id)
+      await loadData()
+    } catch (err) {
+      setError('Failed to enable user')
+    } finally {
+      setDisablingUserId(null)
     }
   }
 
@@ -160,6 +193,9 @@ export default function AdminUsers() {
             <SSOUsersTab
               users={ssoUsers}
               onViewUser={setSelectedUser}
+              onDisableUser={handleDisableUser}
+              onEnableUser={handleEnableUser}
+              disablingUserId={disablingUserId}
             />
           )}
 
@@ -250,9 +286,12 @@ export default function AdminUsers() {
 interface SSOUsersTabProps {
   users: SSOUser[]
   onViewUser: (user: SSOUser) => void
+  onDisableUser: (user: SSOUser) => void
+  onEnableUser: (user: SSOUser) => void
+  disablingUserId: string | null
 }
 
-function SSOUsersTab({ users, onViewUser }: SSOUsersTabProps) {
+function SSOUsersTab({ users, onViewUser, onDisableUser, onEnableUser, disablingUserId }: SSOUsersTabProps) {
   if (users.length === 0) {
     return (
       <div className="card text-center py-12">
@@ -354,6 +393,21 @@ function SSOUsersTab({ users, onViewUser }: SSOUsersTabProps) {
                 <ActionDropdown
                   actions={[
                     { label: 'View Details', icon: 'view', onClick: () => onViewUser(user), color: 'primary' },
+                    user.isActive
+                      ? {
+                          label: disablingUserId === user.id ? 'Disabling...' : 'Disable User',
+                          icon: 'delete',
+                          onClick: () => onDisableUser(user),
+                          color: 'red',
+                          disabled: disablingUserId === user.id,
+                        }
+                      : {
+                          label: disablingUserId === user.id ? 'Enabling...' : 'Enable User',
+                          icon: 'view',
+                          onClick: () => onEnableUser(user),
+                          color: 'primary',
+                          disabled: disablingUserId === user.id,
+                        },
                   ] as ActionItem[]}
                 />
               </td>

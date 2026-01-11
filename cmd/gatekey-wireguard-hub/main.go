@@ -145,7 +145,20 @@ var (
 	interfaceName string
 	activePeers   map[string]*ActivePeer // publicKey -> peer
 	interfaceMgr  *wireguard.InterfaceManager
+	httpClient    = &http.Client{Timeout: 30 * time.Second}
 )
+
+// postWithGatewayToken sends a POST request with the X-Gateway-Token header
+// to bypass CSRF protection for gateway-to-server communication
+func postWithGatewayToken(url string, token string, body []byte) (*http.Response, error) {
+	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Gateway-Token", token)
+	return httpClient.Do(req)
+}
 
 func loadConfig() (*HubConfig, error) {
 	v := viper.New()
@@ -361,7 +374,7 @@ func provision(ctx context.Context, cfg *HubConfig) error {
 	}
 
 	url := strings.TrimSuffix(cfg.ControlPlaneURL, "/") + "/api/v1/wg-mesh-hub/provision"
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	resp, err := postWithGatewayToken(url, cfg.APIToken, body)
 	if err != nil {
 		return fmt.Errorf("failed to send provision request: %w", err)
 	}
@@ -534,7 +547,7 @@ func sendHeartbeat(cfg *HubConfig) {
 	}
 
 	url := strings.TrimSuffix(cfg.ControlPlaneURL, "/") + "/api/v1/wg-mesh-hub/heartbeat"
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	resp, err := postWithGatewayToken(url, cfg.APIToken, body)
 	if err != nil {
 		logger.Warn("Heartbeat failed", zap.Error(err))
 		return
@@ -578,7 +591,7 @@ func syncPeers(ctx context.Context, cfg *HubConfig) {
 	}
 
 	url := strings.TrimSuffix(cfg.ControlPlaneURL, "/") + "/api/v1/wg-mesh-hub/sync-peers"
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	resp, err := postWithGatewayToken(url, cfg.APIToken, body)
 	if err != nil {
 		logger.Warn("Peer sync failed", zap.Error(err))
 		return
@@ -732,7 +745,7 @@ func syncStats(ctx context.Context, cfg *HubConfig) {
 	}
 
 	url := strings.TrimSuffix(cfg.ControlPlaneURL, "/") + "/api/v1/wg-mesh-hub/peer-stats"
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	resp, err := postWithGatewayToken(url, cfg.APIToken, body)
 	if err != nil {
 		logger.Debug("Failed to send stats", zap.Error(err))
 		return
