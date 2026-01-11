@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"github.com/gatekey-project/gatekey/internal/db"
 	"github.com/gatekey-project/gatekey/internal/session"
 )
 
@@ -83,7 +84,7 @@ func (s *Server) validateAgentToken(nodeType, nodeID, token string) bool {
 		return hub != nil && hub.APIToken == token
 
 	case "gateway":
-		// Validate gateway token
+		// Validate gateway token (tokens are stored hashed in the database)
 		gw, err := s.gatewayStore.GetGatewayByName(ctx, nodeID)
 		if err != nil {
 			s.logger.Warn("Failed to get gateway for session auth",
@@ -91,7 +92,8 @@ func (s *Server) validateAgentToken(nodeType, nodeID, token string) bool {
 				zap.Error(err))
 			return false
 		}
-		return gw != nil && gw.Token == token
+		// Hash the incoming token to compare with the stored hash
+		return gw != nil && gw.Token == db.HashGatewayToken(token)
 
 	case "spoke":
 		// Validate spoke token
