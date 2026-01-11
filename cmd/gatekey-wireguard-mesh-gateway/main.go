@@ -32,12 +32,41 @@ var (
 	logger           *zap.Logger
 	currentConfigVer string
 	provisionedName  string // Name from control plane provisioning
+	httpClient       = &http.Client{Timeout: 30 * time.Second}
 )
+
+// postWithGatewayToken sends a POST request with the X-Gateway-Token header
+// to bypass CSRF protection for gateway-to-server communication
+func postWithGatewayToken(url string, token string, body []byte) (*http.Response, error) {
+	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Gateway-Token", token)
+	return httpClient.Do(req)
+}
 
 const (
 	configVersionFile = "/etc/gatekey-wireguard-mesh/.config_version"
 	gatewayNameFile   = "/etc/gatekey-wireguard-mesh/.gateway_name"
+	tunnelConfigFile  = "/etc/gatekey-wireguard-mesh/.tunnel_config"
 )
+
+// PersistedTunnelConfig holds the WireGuard tunnel configuration that persists across restarts
+type PersistedTunnelConfig struct {
+	SpokeID       string   `json:"spoke_id"`
+	SpokeName     string   `json:"spoke_name"`
+	PrivateKey    string   `json:"private_key"`
+	PublicKey     string   `json:"public_key"`
+	PresharedKey  string   `json:"preshared_key,omitempty"`
+	TunnelIP      string   `json:"tunnel_ip"`
+	HubEndpoint   string   `json:"hub_endpoint"`
+	HubPublicKey  string   `json:"hub_public_key"`
+	HubAllowedIPs []string `json:"hub_allowed_ips"`
+	LocalNetworks []string `json:"local_networks"`
+	PersistentKA  int      `json:"persistent_keepalive"`
+}
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -192,6 +221,57 @@ func saveGatewayName(name string) error {
 	return os.WriteFile(gatewayNameFile, []byte(name), 0600)
 }
 
+func loadTunnelConfig() (*PersistedTunnelConfig, error) {
+	data, err := os.ReadFile(tunnelConfigFile)
+	if err != nil {
+		return nil, err
+	}
+	var cfg PersistedTunnelConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+func saveTunnelConfig() error {
+	dir := "/etc/gatekey-wireguard-mesh"
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	cfg := PersistedTunnelConfig{
+		SpokeID:       spokeID,
+		SpokeName:     spokeName,
+		PrivateKey:    privateKey,
+		PublicKey:     publicKey,
+		PresharedKey:  presharedKey,
+		TunnelIP:      tunnelIP,
+		HubEndpoint:   hubEndpoint,
+		HubPublicKey:  hubPublicKey,
+		HubAllowedIPs: hubAllowedIPs,
+		LocalNetworks: localNetworks,
+		PersistentKA:  persistentKA,
+	}
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(tunnelConfigFile, data, 0600)
+}
+
+func restoreTunnelConfig(cfg *PersistedTunnelConfig) {
+	spokeID = cfg.SpokeID
+	spokeName = cfg.SpokeName
+	privateKey = cfg.PrivateKey
+	publicKey = cfg.PublicKey
+	presharedKey = cfg.PresharedKey
+	tunnelIP = cfg.TunnelIP
+	hubEndpoint = cfg.HubEndpoint
+	hubPublicKey = cfg.HubPublicKey
+	hubAllowedIPs = cfg.HubAllowedIPs
+	localNetworks = cfg.LocalNetworks
+	persistentKA = cfg.PersistentKA
+}
+
 func runGateway(cmd *cobra.Command, args []string) error {
 	cfg, err := loadConfig()
 	if err != nil {
@@ -222,7 +302,7 @@ func runGateway(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Initial provision if no config exists
+	// Initial provision if no config exists, otherwise load persisted tunnel config
 	if currentConfigVer == "" {
 		logger.Info("No configuration found, running initial provision...")
 		if err := doProvision(ctx, cfg); err != nil {
@@ -231,6 +311,24 @@ func runGateway(cmd *cobra.Command, args []string) error {
 		}
 		// Reload provisioned name after provisioning
 		provisionedName = loadGatewayName()
+	} else {
+		// Load persisted tunnel configuration
+		tunnelCfg, err := loadTunnelConfig()
+		if err != nil {
+			logger.Warn("Failed to load persisted tunnel config, will re-provision", zap.Error(err))
+			// Clear config version to force re-provision
+			os.Remove(configVersionFile)
+			if err := doProvision(ctx, cfg); err != nil {
+				logger.Error("Re-provision failed", zap.Error(err))
+				return fmt.Errorf("re-provision failed: %w", err)
+			}
+			provisionedName = loadGatewayName()
+		} else {
+			restoreTunnelConfig(tunnelCfg)
+			logger.Info("Restored persisted tunnel configuration",
+				zap.String("tunnel_ip", tunnelIP),
+				zap.String("hub_endpoint", hubEndpoint))
+		}
 	}
 
 	// Determine effective name: prefer config, fallback to provisioned name
@@ -349,7 +447,7 @@ func sendHeartbeat(ctx context.Context, cfg *GatewayConfig) {
 	}
 
 	url := strings.TrimSuffix(cfg.ControlPlaneURL, "/") + "/api/v1/wg-mesh-spoke/heartbeat"
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	resp, err := postWithGatewayToken(url, cfg.GatewayToken, body)
 	if err != nil {
 		logger.Warn("Heartbeat failed", zap.Error(err))
 		return
@@ -455,7 +553,7 @@ func doProvision(ctx context.Context, cfg *GatewayConfig) error {
 	}
 
 	url := strings.TrimSuffix(cfg.ControlPlaneURL, "/") + "/api/v1/wg-mesh-spoke/provision"
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	resp, err := postWithGatewayToken(url, cfg.GatewayToken, body)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
@@ -503,6 +601,11 @@ func doProvision(ctx context.Context, cfg *GatewayConfig) error {
 			logger.Warn("Failed to save gateway name", zap.Error(err))
 		}
 		logger.Info("Gateway name saved from provisioning", zap.String("name", provResp.SpokeName))
+	}
+
+	// Save tunnel configuration for persistence across restarts
+	if err := saveTunnelConfig(); err != nil {
+		logger.Warn("Failed to save tunnel config", zap.Error(err))
 	}
 
 	logger.Info("Gateway provisioned successfully",

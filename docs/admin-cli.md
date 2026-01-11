@@ -324,7 +324,68 @@ Revoke all VPN configurations for a user:
 gatekey-admin user revoke-configs <user-id>
 ```
 
-This invalidates all active VPN sessions for the user.
+This invalidates all VPN configs but does not disable the account.
+
+### user disable
+
+Disable a user account and immediately terminate all VPN sessions:
+
+```bash
+gatekey-admin user disable <user-id>
+gatekey-admin user disable <user-id> --reason "Security concern"
+gatekey-admin user disable <user-id> --disconnect=false  # Disable without disconnecting
+```
+
+**This command will:**
+- Mark the user account as disabled (inactive)
+- Immediately disconnect all active VPN sessions
+- Revoke all VPN configs
+- Prevent future logins and VPN access
+
+The user can be re-enabled later with `user enable`.
+
+**Options:**
+| Flag | Description |
+|------|-------------|
+| `--reason` | Reason for disabling (default: "Disabled by administrator") |
+| `--disconnect` | Disconnect active sessions (default: true) |
+
+### user enable
+
+Re-enable a previously disabled user account:
+
+```bash
+gatekey-admin user enable <user-id>
+```
+
+This allows the user to log in and access VPN resources again. The user will need to generate new VPN configs.
+
+### user sessions
+
+List active VPN sessions for a specific user:
+
+```bash
+gatekey-admin user sessions <user-id>
+gatekey-admin user sessions <user-id> -o json
+```
+
+Shows all currently active VPN connections for the user across all gateways and mesh hubs.
+
+### user disconnect
+
+Disconnect all active VPN sessions for a user without disabling the account:
+
+```bash
+gatekey-admin user disconnect <user-id>
+gatekey-admin user disconnect <user-id> --reason "Maintenance"
+```
+
+**Note:** This only disconnects the sessions - it does not disable the user account. The user can reconnect if they have valid configs. Use `user disable` to prevent reconnection.
+
+**Options:**
+| Flag | Description |
+|------|-------------|
+| `--reason` | Reason for disconnecting (default: "Disconnected by administrator") |
 
 ## Local User Management
 

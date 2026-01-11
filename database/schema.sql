@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict c0Kt5Dv2P99Ul2T0z7lnjb9koROjk8nbC4wgAV6xgltHJwUBs6Z8mL7NFtttlIg
+\restrict x7Mq94Wl0CprUzMTGSyVcveESCIGpm1pZ8fITEPRohMdywteHCOM6uxtaq2hr30
 
 -- Dumped from database version 16.10
 -- Dumped by pg_dump version 16.10
@@ -253,6 +253,25 @@ CREATE TABLE public.ca_rotation_events (
 ALTER TABLE public.ca_rotation_events OWNER TO gatekey;
 
 --
+-- Name: certificate_revocations; Type: TABLE; Schema: public; Owner: gatekey
+--
+
+CREATE TABLE public.certificate_revocations (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    serial_number character varying(64) NOT NULL,
+    ca_id character varying(255) NOT NULL,
+    common_name character varying(255),
+    revoked_at timestamp with time zone DEFAULT now() NOT NULL,
+    reason integer DEFAULT 0 NOT NULL,
+    revoked_by character varying(255),
+    notes text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.certificate_revocations OWNER TO gatekey;
+
+--
 -- Name: certificates; Type: TABLE; Schema: public; Owner: gatekey
 --
 
@@ -315,6 +334,23 @@ CREATE TABLE public.connections (
 
 
 ALTER TABLE public.connections OWNER TO gatekey;
+
+--
+-- Name: crl_cache; Type: TABLE; Schema: public; Owner: gatekey
+--
+
+CREATE TABLE public.crl_cache (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    ca_id character varying(255) NOT NULL,
+    crl_der bytea NOT NULL,
+    this_update timestamp with time zone NOT NULL,
+    next_update timestamp with time zone NOT NULL,
+    crl_number bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.crl_cache OWNER TO gatekey;
 
 --
 -- Name: gateway_connections; Type: TABLE; Schema: public; Owner: gatekey
@@ -1312,6 +1348,22 @@ ALTER TABLE ONLY public.ca_rotation_events
 
 
 --
+-- Name: certificate_revocations certificate_revocations_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+--
+
+ALTER TABLE ONLY public.certificate_revocations
+    ADD CONSTRAINT certificate_revocations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: certificate_revocations certificate_revocations_serial_number_key; Type: CONSTRAINT; Schema: public; Owner: gatekey
+--
+
+ALTER TABLE ONLY public.certificate_revocations
+    ADD CONSTRAINT certificate_revocations_serial_number_key UNIQUE (serial_number);
+
+
+--
 -- Name: certificates certificates_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
 --
 
@@ -1341,6 +1393,22 @@ ALTER TABLE ONLY public.configs
 
 ALTER TABLE ONLY public.connections
     ADD CONSTRAINT connections_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: crl_cache crl_cache_ca_id_key; Type: CONSTRAINT; Schema: public; Owner: gatekey
+--
+
+ALTER TABLE ONLY public.crl_cache
+    ADD CONSTRAINT crl_cache_ca_id_key UNIQUE (ca_id);
+
+
+--
+-- Name: crl_cache crl_cache_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+--
+
+ALTER TABLE ONLY public.crl_cache
+    ADD CONSTRAINT crl_cache_pkey PRIMARY KEY (id);
 
 
 --
@@ -1904,6 +1972,27 @@ CREATE INDEX idx_audit_logs_timestamp ON public.audit_logs USING btree ("timesta
 --
 
 CREATE INDEX idx_ca_rotation_events_created ON public.ca_rotation_events USING btree (created_at DESC);
+
+
+--
+-- Name: idx_certificate_revocations_ca_id; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_certificate_revocations_ca_id ON public.certificate_revocations USING btree (ca_id);
+
+
+--
+-- Name: idx_certificate_revocations_revoked_at; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_certificate_revocations_revoked_at ON public.certificate_revocations USING btree (revoked_at);
+
+
+--
+-- Name: idx_certificate_revocations_serial; Type: INDEX; Schema: public; Owner: gatekey
+--
+
+CREATE INDEX idx_certificate_revocations_serial ON public.certificate_revocations USING btree (serial_number);
 
 
 --
@@ -3120,5 +3209,5 @@ ALTER TABLE ONLY public.wireguard_peers
 -- PostgreSQL database dump complete
 --
 
-\unrestrict c0Kt5Dv2P99Ul2T0z7lnjb9koROjk8nbC4wgAV6xgltHJwUBs6Z8mL7NFtttlIg
+\unrestrict x7Mq94Wl0CprUzMTGSyVcveESCIGpm1pZ8fITEPRohMdywteHCOM6uxtaq2hr30
 

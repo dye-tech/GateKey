@@ -8,6 +8,8 @@ import {
   getActiveSessions,
   getAdminGateways,
   getMeshHubs,
+  disconnectSession,
+  disconnectUser,
   LoginLog,
   LoginLogStats,
   ActiveSession,
@@ -96,6 +98,9 @@ export default function AdminMonitoring() {
   // Settings
   const [retentionDays, setRetentionDays] = useState(30)
   const [purgeDays, setPurgeDays] = useState(30)
+
+  // Disconnect state
+  const [disconnecting, setDisconnecting] = useState<string | null>(null)
 
   // Load real-time data
   const loadRealtimeData = useCallback(async () => {
@@ -202,6 +207,46 @@ export default function AdminMonitoring() {
     setFilterProvider('')
     setFilterSuccess('')
     setPage(0)
+  }
+
+  // Handle disconnecting a single session
+  async function handleDisconnectSession(session: ActiveSession) {
+    if (!confirm(`Disconnect ${session.userEmail} from ${session.gatewayName}?\n\nThis will terminate their VPN connection immediately.`)) {
+      return
+    }
+    try {
+      setDisconnecting(session.id)
+      await disconnectSession(session.id, 'Disconnected by administrator')
+      setSuccess(`Disconnect request sent for ${session.userEmail}`)
+      setTimeout(() => setSuccess(null), 3000)
+      // Refresh the sessions list
+      await loadRealtimeData()
+    } catch (err) {
+      setError('Failed to disconnect session')
+      setTimeout(() => setError(null), 3000)
+    } finally {
+      setDisconnecting(null)
+    }
+  }
+
+  // Handle disconnecting all sessions for a user
+  async function handleDisconnectUser(session: ActiveSession) {
+    const userSessions = sessions.filter(s => s.userId === session.userId)
+    if (!confirm(`Disconnect ALL ${userSessions.length} session(s) for ${session.userEmail}?\n\nThis will terminate all their VPN connections immediately.`)) {
+      return
+    }
+    try {
+      setDisconnecting(session.userId)
+      await disconnectUser(session.userId, 'Disconnected by administrator')
+      setSuccess(`Disconnect request sent for all sessions of ${session.userEmail}`)
+      setTimeout(() => setSuccess(null), 3000)
+      await loadRealtimeData()
+    } catch (err) {
+      setError('Failed to disconnect user')
+      setTimeout(() => setError(null), 3000)
+    } finally {
+      setDisconnecting(null)
+    }
   }
 
   // Calculate totals for real-time stats
@@ -427,12 +472,13 @@ export default function AdminMonitoring() {
                         <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Duration</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Last Seen</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Traffic</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="bg-theme-card divide-y divide-theme">
                       {sessions.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="px-4 py-8 text-center text-theme-tertiary">
+                          <td colSpan={8} className="px-4 py-8 text-center text-theme-tertiary">
                             No active VPN sessions
                           </td>
                         </tr>
@@ -493,6 +539,38 @@ export default function AdminMonitoring() {
                                   </svg>
                                   {formatBytes(session.bytesSent)}
                                 </span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleDisconnectSession(session)}
+                                  disabled={disconnecting === session.id}
+                                  className="px-2 py-1 text-xs font-medium text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50"
+                                  title="Disconnect this session"
+                                >
+                                  {disconnecting === session.id ? (
+                                    <span className="flex items-center gap-1">
+                                      <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                      </svg>
+                                      ...
+                                    </span>
+                                  ) : (
+                                    'Disconnect'
+                                  )}
+                                </button>
+                                {sessions.filter(s => s.userId === session.userId).length > 1 && (
+                                  <button
+                                    onClick={() => handleDisconnectUser(session)}
+                                    disabled={disconnecting === session.userId}
+                                    className="px-2 py-1 text-xs font-medium text-orange-600 hover:text-orange-800 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded transition-colors disabled:opacity-50"
+                                    title="Disconnect all sessions for this user"
+                                  >
+                                    {disconnecting === session.userId ? '...' : 'Disconnect All'}
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>

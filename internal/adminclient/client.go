@@ -314,6 +314,78 @@ func (c *Client) RevokeUserConfigs(ctx context.Context, id string) error {
 	return c.doJSON(ctx, http.MethodPost, "/api/v1/admin/users/"+id+"/revoke-configs", nil, nil)
 }
 
+// DisableUserResponse is returned when disabling a user
+type DisableUserResponse struct {
+	Success            bool   `json:"success"`
+	Message            string `json:"message"`
+	UserEmail          string `json:"user_email"`
+	UserType           string `json:"user_type"`
+	SessionsTerminated int    `json:"sessions_terminated"`
+	ConfigsRevoked     int    `json:"configs_revoked"`
+}
+
+// EnableUserResponse is returned when enabling a user
+type EnableUserResponse struct {
+	Success  bool   `json:"success"`
+	Message  string `json:"message"`
+	UserEmail string `json:"user_email"`
+	UserType  string `json:"user_type"`
+}
+
+// UserSession represents an active VPN session for a user
+type UserSession struct {
+	ID          string    `json:"id"`
+	GatewayID   string    `json:"gateway_id"`
+	GatewayName string    `json:"gateway_name"`
+	ClientIP    string    `json:"client_ip"`
+	VPNAddress  string    `json:"vpn_address"`
+	NodeType    string    `json:"node_type"`
+	ConnectedAt time.Time `json:"connected_at"`
+}
+
+// DisableUser disables a user account and optionally disconnects their active sessions
+func (c *Client) DisableUser(ctx context.Context, id string, reason string, disconnectActive bool) (*DisableUserResponse, error) {
+	req := map[string]interface{}{
+		"reason":            reason,
+		"disconnect_active": disconnectActive,
+	}
+	var resp DisableUserResponse
+	err := c.doJSON(ctx, http.MethodPost, "/api/v1/admin/users/"+id+"/disable", req, &resp)
+	return &resp, err
+}
+
+// EnableUser re-enables a disabled user account
+func (c *Client) EnableUser(ctx context.Context, id string) (*EnableUserResponse, error) {
+	var resp EnableUserResponse
+	err := c.doJSON(ctx, http.MethodPost, "/api/v1/admin/users/"+id+"/enable", nil, &resp)
+	return &resp, err
+}
+
+// GetUserSessions retrieves active VPN sessions for a user
+func (c *Client) GetUserSessions(ctx context.Context, id string) ([]UserSession, error) {
+	var result struct {
+		Sessions []UserSession `json:"sessions"`
+	}
+	err := c.doJSON(ctx, http.MethodGet, "/api/v1/admin/users/"+id+"/sessions", nil, &result)
+	return result.Sessions, err
+}
+
+// DisconnectUserSessions disconnects all active sessions for a user
+func (c *Client) DisconnectUserSessions(ctx context.Context, id string, reason string) error {
+	req := map[string]interface{}{
+		"reason": reason,
+	}
+	return c.doJSON(ctx, http.MethodPost, "/api/v1/admin/users/"+id+"/disconnect", req, nil)
+}
+
+// DisconnectSession disconnects a specific session
+func (c *Client) DisconnectSession(ctx context.Context, sessionID string, reason string) error {
+	req := map[string]interface{}{
+		"reason": reason,
+	}
+	return c.doJSON(ctx, http.MethodPost, "/api/v1/admin/sessions/"+sessionID+"/disconnect", req, nil)
+}
+
 // === Local User Operations ===
 
 type LocalUser struct {

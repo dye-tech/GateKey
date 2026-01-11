@@ -35,7 +35,20 @@ var (
 	firewallMgr      *firewall.Manager
 	connectedUsers   map[string]ConnectedClient // VPN IP -> client info
 	currentConfigVer string                     // Current config version from control plane
+	httpClient       = &http.Client{Timeout: 30 * time.Second}
 )
+
+// postWithGatewayToken sends a POST request with the X-Gateway-Token header
+// to bypass CSRF protection for gateway-to-server communication
+func postWithGatewayToken(url string, token string, body []byte) (*http.Response, error) {
+	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Gateway-Token", token)
+	return httpClient.Do(req)
+}
 
 const configVersionFile = "/etc/gatekey/.config_version"
 
@@ -512,7 +525,7 @@ func fetchClientRules(cfg *GatewayConfig, userID, userEmail string, userGroups [
 	}
 
 	url := strings.TrimSuffix(cfg.ControlPlaneURL, "/") + "/api/v1/gateway/client-rules"
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	resp, err := postWithGatewayToken(url, cfg.Token, body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
@@ -956,7 +969,7 @@ func syncClientStats(ctx context.Context, cfg *GatewayConfig) {
 	}
 
 	url := strings.TrimSuffix(cfg.ControlPlaneURL, "/") + "/api/v1/gateway/client-stats"
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	resp, err := postWithGatewayToken(url, cfg.Token, body)
 	if err != nil {
 		logger.Debug("Failed to sync client stats", zap.Error(err))
 		return
