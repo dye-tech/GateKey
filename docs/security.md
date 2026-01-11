@@ -842,10 +842,130 @@ env:
 | Certificates | ECDSA P-256 / RSA 2048+ | NIST FIPS 186-4 |
 | Random Generation | crypto/rand | OS CSPRNG |
 
+### Security Headers (Multi-Tenant Support)
+
+GateKey includes comprehensive security headers that are **enabled by default** and designed for multi-tenant deployments (e.g., `vpn.companya.com`, `vpn.companyb.com`).
+
+#### Headers Applied
+
+| Header | Value | Purpose |
+|--------|-------|---------|
+| `X-Content-Type-Options` | `nosniff` | Prevents MIME type sniffing |
+| `X-Frame-Options` | `SAMEORIGIN` | Legacy clickjacking protection |
+| `X-XSS-Protection` | `1; mode=block` | Legacy XSS protection |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Controls referrer info |
+| `Permissions-Policy` | `geolocation=(), camera=(), microphone=(), payment=()` | Restricts browser features |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | Enforces HTTPS (when TLS enabled) |
+| `Content-Security-Policy` | Dynamic (see below) | Main XSS/injection defense |
+
+#### Multi-Tenant CSP Configuration
+
+For multi-tenant deployments, the `frame-ancestors` directive is dynamically set based on the request's `Host` header:
+
+```yaml
+security:
+  security_headers_enabled: true
+  frame_ancestors: "dynamic"  # Automatically uses Host header
+```
+
+This allows:
+- `vpn.companya.com` can only be framed by `vpn.companya.com`
+- `vpn.companyb.com` can only be framed by `vpn.companyb.com`
+- Prevents cross-tenant clickjacking attacks
+
+#### Configuration Options
+
+**Environment Variables:**
+
+```bash
+# Enable/disable security headers (default: true)
+export GATEX_SECURITY_SECURITY_HEADERS_ENABLED=true
+
+# HSTS settings (only applied when TLS is enabled)
+export GATEX_SECURITY_HSTS_ENABLED=true
+export GATEX_SECURITY_HSTS_MAX_AGE=31536000
+export GATEX_SECURITY_HSTS_INCLUDE_SUBDOMAINS=true
+export GATEX_SECURITY_HSTS_PRELOAD=false
+
+# Frame ancestors: "self", "dynamic", or specific domains
+export GATEX_SECURITY_FRAME_ANCESTORS=dynamic
+
+# Custom CSP (overrides default if set)
+export GATEX_SECURITY_CONTENT_SECURITY_POLICY=""
+
+# Permissions policy
+export GATEX_SECURITY_PERMISSIONS_POLICY="geolocation=(), camera=(), microphone=(), payment=()"
+```
+
+**Config File:**
+
+```yaml
+security:
+  security_headers_enabled: true
+  hsts_enabled: true
+  hsts_max_age: 31536000
+  hsts_include_subdomains: true
+  hsts_preload: false
+  frame_ancestors: "dynamic"  # or "'self'" or "https://allowed.domain.com"
+  content_security_policy: ""  # Empty = use secure defaults
+  permissions_policy: "geolocation=(), camera=(), microphone=(), payment=()"
+```
+
+#### Frame Ancestors Modes
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| `dynamic` | Uses request `Host` header | Multi-tenant SaaS deployments |
+| `self` | Only same-origin allowed | Single-tenant deployments |
+| `https://example.com` | Specific domain(s) | Embedding in known parent app |
+
+### SSRF Protection
+
+Server-Side Request Forgery (SSRF) protection is **enabled by default** to prevent the reverse proxy from being abused to access internal networks.
+
+#### Protected IP Ranges
+
+When enabled, requests to these ranges are blocked:
+- RFC 1918: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`
+- RFC 3927: `169.254.0.0/16` (includes AWS metadata endpoint)
+- Loopback: `127.0.0.0/8`, `::1`
+- IPv6 ULA: `fc00::/7`
+- IPv6 Link-Local: `fe80::/10`
+
+#### Configuration
+
+```yaml
+security:
+  # SSRF protection (default: true)
+  proxy_ssrf_protection: true
+
+  # DNS rebinding protection (default: true)
+  proxy_dns_rebinding_protection: true
+
+  # TLS verification for proxy targets (default: true)
+  proxy_tls_verify: true
+
+  # Custom CA bundle for proxy TLS verification
+  proxy_ca_bundle: "/path/to/ca-bundle.crt"
+
+  # Minimum TLS version for proxy connections
+  proxy_tls_min_version: "1.2"
+```
+
+**Note:** If you need to proxy to internal RFC1918 addresses (legitimate VPN use case), you can disable SSRF protection:
+
+```yaml
+security:
+  proxy_ssrf_protection: false  # Only disable if proxying to internal networks
+```
+
 ### Security Checklist
 
 #### Deployment
 
+- [x] SSRF protection enabled (default)
+- [x] Security headers enabled (default)
+- [x] TLS verification for proxy targets enabled (default)
 - [ ] Set `CA_KEY_ENCRYPTION_KEY` environment variable
 - [ ] Configure `PROXY_CA_BUNDLE` if using HTTPS proxy
 - [ ] Enable TLS for database connections

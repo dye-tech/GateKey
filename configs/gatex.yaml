@@ -169,3 +169,47 @@ audit:
     - "policy.delete"
     - "gateway.connect"
     - "gateway.disconnect"
+
+# Security configuration
+security:
+  # SSRF protection blocks proxy requests to private/internal IP addresses
+  # Enabled by default. Disable only if you need to proxy to RFC1918 addresses.
+  proxy_ssrf_protection: true
+
+  # DNS rebinding protection validates IPs at connection time
+  proxy_dns_rebinding_protection: true
+
+  # TLS verification for proxy targets (enabled by default)
+  proxy_tls_verify: true
+
+  # Custom CA bundle for proxy TLS verification (empty = use system CA)
+  # proxy_ca_bundle: "/path/to/ca-bundle.crt"
+
+  # Minimum TLS version for proxy connections
+  proxy_tls_min_version: "1.2"
+
+  # Security headers configuration (multi-tenant aware)
+  security_headers_enabled: true
+
+  # HSTS settings (only applied when TLS is enabled)
+  hsts_enabled: true
+  hsts_max_age: 31536000  # 1 year
+  hsts_include_subdomains: true
+  hsts_preload: false  # Requires manual submission to browser preload lists
+
+  # Frame ancestors for CSP
+  # Options:
+  #   "dynamic" - Uses Host header (for multi-tenant: vpn.companya.com, vpn.companyb.com)
+  #   "self"    - Same-origin only
+  #   Custom    - Specific domains like "https://example.com https://other.com"
+  frame_ancestors: "dynamic"
+
+  # Custom CSP (empty = use secure defaults with dynamic frame-ancestors)
+  content_security_policy: ""
+
+  # Permissions policy to restrict browser features
+  permissions_policy: "geolocation=(), camera=(), microphone=(), payment=()"
+
+  # CA key encryption key (32-byte base64-encoded, use env var in production)
+  # Generate with: openssl rand -base64 32
+  # ca_key_encryption_key: "${CA_KEY_ENCRYPTION_KEY}"

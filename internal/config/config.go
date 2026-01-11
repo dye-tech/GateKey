@@ -148,8 +148,8 @@ type AuditConfig struct {
 // SecurityConfig holds security-related configuration.
 type SecurityConfig struct {
 	// ProxySSRFProtection blocks proxy requests to private/internal IP addresses.
-	// Set to true for strict SSRF protection, but this may block legitimate
-	// internal proxying for VPN use cases. Default is false for backward compatibility.
+	// This prevents Server-Side Request Forgery attacks. Default is true.
+	// Set to false only if you need to proxy to internal RFC1918 addresses.
 	ProxySSRFProtection bool `mapstructure:"proxy_ssrf_protection"`
 	// ProxyDNSRebindingProtection validates IPs at connection time to prevent
 	// DNS rebinding attacks. This is always enabled by default and should remain so.
@@ -169,6 +169,29 @@ type SecurityConfig struct {
 	// If empty, CA keys are stored unencrypted (for backward compatibility).
 	// Generate with: openssl rand -base64 32
 	CAKeyEncryptionKey string `mapstructure:"ca_key_encryption_key"`
+
+	// Security Headers Configuration (for multi-tenant deployments)
+	// SecurityHeadersEnabled enables security headers on all responses.
+	SecurityHeadersEnabled bool `mapstructure:"security_headers_enabled"`
+	// HSTSEnabled enables HTTP Strict Transport Security header.
+	// Only enable if all tenants use HTTPS exclusively.
+	HSTSEnabled bool `mapstructure:"hsts_enabled"`
+	// HSTSMaxAge is the max-age value for HSTS in seconds. Default is 31536000 (1 year).
+	HSTSMaxAge int `mapstructure:"hsts_max_age"`
+	// HSTSIncludeSubdomains includes subdomains in HSTS policy.
+	HSTSIncludeSubdomains bool `mapstructure:"hsts_include_subdomains"`
+	// HSTSPreload enables HSTS preload flag (requires domain submission to browsers).
+	HSTSPreload bool `mapstructure:"hsts_preload"`
+	// FrameAncestors controls which domains can embed this site in iframes.
+	// Use "self" for same-origin only, or specify allowed domains.
+	// For multi-tenant: use "dynamic" to allow the request's Host header origin.
+	// Default is "self" (same-origin only).
+	FrameAncestors string `mapstructure:"frame_ancestors"`
+	// ContentSecurityPolicy is the full CSP header value. If empty, a secure default is used.
+	// For multi-tenant with dynamic frame-ancestors, leave empty to use automatic policy.
+	ContentSecurityPolicy string `mapstructure:"content_security_policy"`
+	// PermissionsPolicy restricts browser features. Default denies geolocation, camera, microphone.
+	PermissionsPolicy string `mapstructure:"permissions_policy"`
 }
 
 // Load reads configuration from the specified file and environment variables.
@@ -260,11 +283,21 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("audit.destination", "database")
 
 	// Security defaults
-	v.SetDefault("security.proxy_ssrf_protection", false)            // Off by default for backward compat with VPN use cases
+	v.SetDefault("security.proxy_ssrf_protection", true)             // Enabled by default to prevent SSRF attacks
 	v.SetDefault("security.proxy_dns_rebinding_protection", true)    // Always on by default for safety
-	v.SetDefault("security.proxy_tls_verify", false)                 // Off by default for backward compat (internal self-signed certs)
+	v.SetDefault("security.proxy_tls_verify", true)                  // Enabled by default for secure proxy connections
 	v.SetDefault("security.proxy_ca_bundle", "")                     // Empty means use system CA bundle
 	v.SetDefault("security.proxy_tls_min_version", "1.2")            // TLS 1.2 minimum
+
+	// Security headers defaults (multi-tenant aware)
+	v.SetDefault("security.security_headers_enabled", true)          // Enabled by default
+	v.SetDefault("security.hsts_enabled", true)                      // HSTS enabled by default
+	v.SetDefault("security.hsts_max_age", 31536000)                  // 1 year
+	v.SetDefault("security.hsts_include_subdomains", true)           // Include subdomains
+	v.SetDefault("security.hsts_preload", false)                     // Preload disabled (requires manual submission)
+	v.SetDefault("security.frame_ancestors", "dynamic")              // Dynamic for multi-tenant (uses Host header)
+	v.SetDefault("security.content_security_policy", "")             // Empty = use secure defaults with dynamic frame-ancestors
+	v.SetDefault("security.permissions_policy", "geolocation=(), camera=(), microphone=(), payment=()")
 }
 
 // Validate checks the configuration for errors.
