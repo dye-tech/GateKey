@@ -1,6 +1,7 @@
 package saml
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -70,7 +71,7 @@ func TestProvider_AttributeMapping(t *testing.T) {
 }
 
 func TestFetchIDPMetadata_InvalidFile(t *testing.T) {
-	_, err := fetchIDPMetadata(nil, "/nonexistent/path/metadata.xml")
+	_, err := fetchIDPMetadata(context.TODO(), "/nonexistent/path/metadata.xml")
 	if err == nil {
 		t.Error("Expected error for non-existent file")
 	}
@@ -85,7 +86,7 @@ func TestFetchIDPMetadata_InvalidXML(t *testing.T) {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 
-	_, err = fetchIDPMetadata(nil, tmpFile)
+	_, err = fetchIDPMetadata(context.TODO(), tmpFile)
 	if err == nil {
 		t.Error("Expected error for invalid XML")
 	}
@@ -108,7 +109,7 @@ func TestFetchIDPMetadata_ValidEntityDescriptor(t *testing.T) {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 
-	result, err := fetchIDPMetadata(nil, tmpFile)
+	result, err := fetchIDPMetadata(context.TODO(), tmpFile)
 	if err != nil {
 		t.Fatalf("Expected no error for valid metadata, got: %v", err)
 	}
@@ -144,7 +145,7 @@ func TestFetchIDPMetadata_EntitiesDescriptor(t *testing.T) {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 
-	result, err := fetchIDPMetadata(nil, tmpFile)
+	result, err := fetchIDPMetadata(context.TODO(), tmpFile)
 	if err != nil {
 		t.Fatalf("Expected no error for EntitiesDescriptor, got: %v", err)
 	}
@@ -171,7 +172,7 @@ func TestFetchIDPMetadata_EmptyEntitiesDescriptor(t *testing.T) {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 
-	_, err = fetchIDPMetadata(nil, tmpFile)
+	_, err = fetchIDPMetadata(context.TODO(), tmpFile)
 	if err == nil {
 		t.Error("Expected error for empty EntitiesDescriptor")
 	}
@@ -189,7 +190,7 @@ func TestFetchIDPMetadata_FilePaths(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := fetchIDPMetadata(nil, tt.input)
+			_, err := fetchIDPMetadata(context.TODO(), tt.input)
 			// Files will fail with not found
 			if err == nil {
 				t.Error("Expected error for non-existent file")

@@ -6,13 +6,19 @@ import {
   updateNetwork,
   getNetworkGateways,
   getNetworkAccessRules,
+  getNetworkMeshHubs,
   getAdminGateways,
   assignGatewayToNetwork,
   removeGatewayFromNetwork,
+  getMeshHubs,
+  assignMeshHubNetwork,
+  removeMeshHubNetwork,
   Network,
   Gateway,
   AdminGateway,
   NetworkAccessRule,
+  NetworkMeshHub,
+  MeshHub,
 } from '../api/client'
 import ActionDropdown, { ActionItem } from '../components/ActionDropdown'
 
@@ -24,6 +30,7 @@ export default function AdminNetworks() {
   const [editingNetwork, setEditingNetwork] = useState<Network | null>(null)
   const [showGatewaysModal, setShowGatewaysModal] = useState(false)
   const [showAccessRulesModal, setShowAccessRulesModal] = useState(false)
+  const [showMeshModal, setShowMeshModal] = useState(false)
   const [selectedNetwork, setSelectedNetwork] = useState<Network | null>(null)
 
   useEffect(() => {
@@ -64,6 +71,11 @@ export default function AdminNetworks() {
   function handleManageAccessRules(network: Network) {
     setSelectedNetwork(network)
     setShowAccessRulesModal(true)
+  }
+
+  function handleManageMesh(network: Network) {
+    setSelectedNetwork(network)
+    setShowMeshModal(true)
   }
 
   return (
@@ -172,6 +184,7 @@ export default function AdminNetworks() {
                     <ActionDropdown
                       actions={[
                         { label: 'Gateways', icon: 'gateway', onClick: () => handleManageGateways(network), color: 'primary' },
+                        { label: 'Mesh Hubs', icon: 'mesh', onClick: () => handleManageMesh(network), color: 'purple' },
                         { label: 'Access Rules', icon: 'rules', onClick: () => handleManageAccessRules(network), color: 'green' },
                         { label: 'Edit', icon: 'edit', onClick: () => setEditingNetwork(network), color: 'gray' },
                         { label: 'Delete', icon: 'delete', onClick: () => handleDelete(network), color: 'red' },
@@ -241,6 +254,17 @@ export default function AdminNetworks() {
           network={selectedNetwork}
           onClose={() => {
             setShowAccessRulesModal(false)
+            setSelectedNetwork(null)
+          }}
+        />
+      )}
+
+      {/* Mesh Hubs Modal */}
+      {showMeshModal && selectedNetwork && (
+        <MeshHubsModal
+          network={selectedNetwork}
+          onClose={() => {
+            setShowMeshModal(false)
             setSelectedNetwork(null)
           }}
         />
@@ -703,6 +727,175 @@ function RuleItem({ rule }: { rule: NetworkAccessRule }) {
         }`}>
           {rule.isActive ? 'Active' : 'Inactive'}
         </span>
+      </div>
+    </div>
+  )
+}
+
+interface MeshHubsModalProps {
+  network: Network
+  onClose: () => void
+}
+
+function MeshHubsModal({ network, onClose }: MeshHubsModalProps) {
+  const [assignedHubs, setAssignedHubs] = useState<NetworkMeshHub[]>([])
+  const [allHubs, setAllHubs] = useState<MeshHub[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [selectedHub, setSelectedHub] = useState('')
+
+  useEffect(() => {
+    loadData()
+  }, [network.id])
+
+  async function loadData() {
+    try {
+      setLoading(true)
+      const [assigned, all] = await Promise.all([
+        getNetworkMeshHubs(network.id),
+        getMeshHubs(),
+      ])
+      setAssignedHubs(assigned)
+      setAllHubs(all)
+      setError(null)
+    } catch (err) {
+      setError('Failed to load mesh hubs')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleAssign() {
+    if (!selectedHub) return
+
+    try {
+      await assignMeshHubNetwork(selectedHub, network.id)
+      setSelectedHub('')
+      await loadData()
+    } catch (err) {
+      setError('Failed to assign hub to network')
+    }
+  }
+
+  async function handleRemove(hubId: string) {
+    try {
+      await removeMeshHubNetwork(hubId, network.id)
+      await loadData()
+    } catch (err) {
+      setError('Failed to remove hub from network')
+    }
+  }
+
+  const assignedIds = new Set(assignedHubs.map((h) => h.id))
+  const availableHubs = allHubs.filter((h) => !assignedIds.has(h.id))
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+      <div className="bg-theme-card rounded-lg shadow-xl max-w-lg w-full mx-4 p-6 border border-theme">
+        <h2 className="text-xl font-semibold text-theme-primary mb-2">
+          Manage Mesh Hubs
+        </h2>
+        <p className="text-sm text-theme-tertiary mb-4">
+          Network: <span className="font-medium">{network.name}</span> ({network.cidr})
+        </p>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
+        <div className="info-box mb-4">
+          <div className="flex">
+            <svg className="h-5 w-5 info-box-icon flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div className="ml-3 text-sm info-box-text">
+              <strong className="text-theme-primary">Zero-Trust Model:</strong>{' '}
+              Assigning a network to a mesh hub allows users with access rules to route traffic through that hub.
+            </div>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+          </div>
+        ) : (
+          <>
+            {/* Assign new hub */}
+            {availableHubs.length > 0 && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-theme-secondary mb-1">
+                  Add Mesh Hub
+                </label>
+                <div className="flex space-x-2">
+                  <select
+                    value={selectedHub}
+                    onChange={(e) => setSelectedHub(e.target.value)}
+                    className="input flex-1"
+                  >
+                    <option value="">Select a hub...</option>
+                    {availableHubs.map((h) => (
+                      <option key={h.id} value={h.id}>
+                        {h.name} ({h.gatewayType === 'wireguard' ? 'WireGuard' : 'OpenVPN'})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleAssign}
+                    disabled={!selectedHub}
+                    className="btn btn-primary"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Assigned hubs list */}
+            <div>
+              <h3 className="text-sm font-medium text-theme-secondary mb-2">
+                Assigned Mesh Hubs ({assignedHubs.length})
+              </h3>
+              {assignedHubs.length > 0 ? (
+                <div className="border border-theme rounded-lg divide-y divide-theme">
+                  {assignedHubs.map((hub) => (
+                    <div key={hub.id} className="flex items-center justify-between p-3">
+                      <div>
+                        <div className="text-sm font-medium text-theme-primary flex items-center">
+                          {hub.name}
+                          <span className={`ml-2 px-1.5 py-0.5 rounded text-xs font-medium ${
+                            hub.gatewayType === 'wireguard'
+                              ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+                              : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                          }`}>
+                            {hub.gatewayType === 'wireguard' ? 'WireGuard' : 'OpenVPN'}
+                          </span>
+                        </div>
+                        <div className="text-xs text-theme-tertiary">{hub.publicEndpoint}</div>
+                      </div>
+                      <button
+                        onClick={() => handleRemove(hub.id)}
+                        className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-theme-tertiary italic">No mesh hubs assigned to this network</p>
+              )}
+            </div>
+          </>
+        )}
+
+        <div className="mt-6 flex justify-end">
+          <button onClick={onClose} className="btn btn-secondary">
+            Close
+          </button>
+        </div>
       </div>
     </div>
   )

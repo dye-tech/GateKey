@@ -64,6 +64,7 @@ func (s *Server) handleListMeshHubs(c *gin.Context) {
 			"fullTunnelMode":   hub.FullTunnelMode,
 			"pushDns":          hub.PushDNS,
 			"dnsServers":       hub.DNSServers,
+			"localNetworks":    hub.LocalNetworks,
 			"status":           status,
 			"statusMessage":    hub.StatusMessage,
 			"connectedSpokes":  hub.ConnectedSpokes,
@@ -192,6 +193,7 @@ func (s *Server) handleCreateMeshHub(c *gin.Context) {
 			"tlsAuthEnabled":  hub.TLSAuthEnabled,
 			"wgPublicKey":     hub.WGPublicKey,
 			"wgListenPort":    hub.WGListenPort,
+			"localNetworks":   hub.LocalNetworks,
 			"apiToken":        apiToken, // Only shown once at creation
 			"controlPlaneUrl": controlPlaneURL,
 			"status":          hub.Status,
@@ -618,6 +620,33 @@ func (s *Server) handleRemoveMeshHubNetwork(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "network removed from hub"})
+}
+
+// handleGetNetworkMeshHubs returns all mesh hubs that have a specific network assigned
+func (s *Server) handleGetNetworkMeshHubs(c *gin.Context) {
+	ctx := c.Request.Context()
+	networkID := c.Param("id")
+
+	hubs, err := s.meshStore.GetNetworkMeshHubs(ctx, networkID)
+	if err != nil {
+		s.logger.Error("Failed to get network mesh hubs", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get network mesh hubs"})
+		return
+	}
+
+	result := make([]gin.H, 0, len(hubs))
+	for _, hub := range hubs {
+		result = append(result, gin.H{
+			"id":             hub.ID,
+			"name":           hub.Name,
+			"description":    hub.Description,
+			"gatewayType":    hub.GatewayType,
+			"publicEndpoint": hub.PublicEndpoint,
+			"status":         hub.Status,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"hubs": result})
 }
 
 // ==================== Admin Mesh Spoke Management ====================

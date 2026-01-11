@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime"
 	"strings"
 )
 
@@ -143,8 +144,12 @@ func IsEncrypted(value string) bool {
 }
 
 // SecureWipe overwrites a byte slice with zeros to prevent memory recovery.
+// Uses volatile write pattern to prevent compiler optimization from removing the wipe.
 func SecureWipe(data []byte) {
 	for i := range data {
 		data[i] = 0
 	}
+	// Use runtime.KeepAlive to ensure the wipe isn't optimized away
+	// The compiler cannot prove the data is unused after this call
+	runtime.KeepAlive(&data)
 }

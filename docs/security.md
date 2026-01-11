@@ -959,6 +959,93 @@ security:
   proxy_ssrf_protection: false  # Only disable if proxying to internal networks
 ```
 
+### Recent Security Hardening (v1.2+)
+
+The following security improvements were added to address common attack vectors:
+
+#### CLI Callback URL Validation
+
+CLI authentication flows now validate callback URLs to prevent SSRF and open redirect attacks. Only the following callback URL schemes are allowed:
+
+| Scheme | Example | Purpose |
+|--------|---------|---------|
+| `http://localhost:*` | `http://localhost:8080/callback` | Desktop CLI clients |
+| `http://127.0.0.1:*` | `http://127.0.0.1:8080/callback` | Desktop CLI clients |
+| `http://[::1]:*` | `http://[::1]:8080/callback` | IPv6 localhost |
+| `gatekey://` | `gatekey://callback` | Mobile apps (custom scheme) |
+
+External URLs (e.g., `https://evil.com/steal-token`) are rejected with a `400 Bad Request` error.
+
+#### Rate Limiting for SSO Endpoints
+
+OIDC and SAML authentication endpoints are now rate-limited to prevent abuse:
+
+| Endpoint | Rate Limit | Purpose |
+|----------|------------|---------|
+| `/auth/oidc/login` | 50/min per IP | Prevent login flood attacks |
+| `/auth/oidc/callback` | 50/min per IP | Prevent callback abuse |
+| `/auth/saml/login` | 50/min per IP | Prevent login flood attacks |
+| `/auth/saml/acs` | 50/min per IP | Prevent assertion replay attacks |
+| `/auth/cli/login` | 50/min per IP | Prevent CLI abuse |
+
+Requests exceeding the limit receive `429 Too Many Requests`.
+
+#### Default API Key Expiration
+
+API keys now have a default expiration of **90 days** if no expiration is specified. This follows the principle of least privilege and limits exposure from compromised keys.
+
+To create a non-expiring key, explicitly set `"expires_in": "never"`:
+
+```json
+{
+  "name": "service-key",
+  "expires_in": "never"  // Required for non-expiring keys
+}
+```
+
+#### Role-Based API Key Scopes
+
+API keys now receive role-appropriate default scopes:
+
+| User Role | Default Scopes | Purpose |
+|-----------|----------------|---------|
+| Admin | `["admin"]` | Full administrative access |
+| Regular User | `["vpn:connect", "gateways:read", "mesh:read"]` | VPN access only |
+
+This replaces the previous default of `["*"]` which granted excessive permissions.
+
+#### SAML ACS CORS Hardening
+
+The SAML Assertion Consumer Service (ACS) endpoint no longer includes permissive CORS headers (`Access-Control-Allow-Origin: *`). SAML IdPs use browser form POSTs which don't require CORS, so removing these headers prevents unnecessary exposure.
+
+#### TLS Configuration Warnings
+
+The server now logs warnings for insecure TLS configurations at startup:
+
+| Configuration | Log Level | Message |
+|---------------|-----------|---------|
+| `ssl_mode=disable` | WARN | Database connections are unencrypted |
+| `ssl_mode=require` | WARN | Server certificate is not verified |
+| `proxy_tls_verify=false` | WARN | Proxy targets are not verified |
+
+#### RSA-2048 Deprecation
+
+RSA-2048 keys are deprecated for new CA generation. A warning is logged if `key_algorithm: rsa2048` is configured:
+
+```
+DEPRECATION WARNING: RSA-2048 key algorithm is deprecated and will be removed
+in a future version. Migrate to ecdsa256, ecdsa384, or rsa4096.
+```
+
+**Recommended key algorithms:**
+- `ecdsa256` - 128 bits of security (default, recommended)
+- `ecdsa384` - 192 bits of security (high security)
+- `rsa4096` - 140 bits of security (legacy compatibility)
+
+#### Reduced Sensitive Data in Logs
+
+Redirect URLs containing tokens are no longer logged in full. Instead, only the callback base URL and user email are logged, preventing token exposure in log files.
+
 ### Security Checklist
 
 #### Deployment
