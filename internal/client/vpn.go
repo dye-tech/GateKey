@@ -1067,6 +1067,27 @@ func (v *VPNManager) ListGateways(ctx context.Context) error {
 		return fmt.Errorf("failed to fetch gateways: %w", err)
 	}
 
+	// Also fetch mesh hubs
+	meshHubs, err := v.fetchMeshHubs(ctx, authHeader)
+	if err != nil {
+		// Don't fail if mesh hubs can't be fetched, just log it
+		// This allows backwards compatibility with older servers
+		meshHubs = nil
+	}
+
+	// Convert mesh hubs to gateway format for display
+	for _, hub := range meshHubs {
+		gateways = append(gateways, Gateway{
+			ID:          hub.ID,
+			Name:        hub.Name,
+			PublicIP:    hub.PublicEndpoint,
+			Description: hub.Description,
+			Status:      hub.Status,
+			IsActive:    hub.Status == "online",
+			GatewayType: hub.HubType + "-mesh",
+		})
+	}
+
 	if len(gateways) == 0 {
 		fmt.Println("No gateways available.")
 		return nil

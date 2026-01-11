@@ -97,14 +97,14 @@ func TestValidateHostname(t *testing.T) {
 
 func TestValidatePorts_Valid(t *testing.T) {
 	validPorts := []string{
-		"",           // empty is allowed (uses defaults)
-		"80",         // single port
-		"443",        // single port
-		"22,80,443",  // multiple ports
-		"1-1000",     // port range
-		"22,80-443",  // mixed
-		"1,2,3,4,5",  // multiple single ports
-		"1-65535",    // full range
+		"",          // empty is allowed (uses defaults)
+		"80",        // single port
+		"443",       // single port
+		"22,80,443", // multiple ports
+		"1-1000",    // port range
+		"22,80-443", // mixed
+		"1,2,3,4,5", // multiple single ports
+		"1-65535",   // full range
 	}
 
 	for _, ports := range validPorts {

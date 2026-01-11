@@ -353,7 +353,7 @@ func (s *Server) setupRoutes() {
 			gateway.POST("/provision", s.handleGatewayProvision)
 			gateway.POST("/client-rules", s.handleGatewayClientRules)
 			gateway.POST("/all-rules", s.handleGatewayAllRules)
-			gateway.POST("/client-stats", s.handleGatewayClientStats)      // Periodic client stats sync
+			gateway.POST("/client-stats", s.handleGatewayClientStats)           // Periodic client stats sync
 			gateway.POST("/pending-disconnects", s.handleGetPendingDisconnects) // Poll for pending user disconnects
 			gateway.POST("/ack-disconnect", s.handleAckDisconnect)              // Acknowledge disconnect executed
 		}
@@ -757,8 +757,8 @@ func (s *Server) setupRoutes() {
 	// Public PKI endpoints (no authentication required)
 	pki := s.router.Group("/pki")
 	{
-		pki.GET("/crl", s.handleGetCRL)           // CRL in DER format
-		pki.GET("/crl.pem", s.handleGetCRLPEM)    // CRL in PEM format
+		pki.GET("/crl", s.handleGetCRL)                    // CRL in DER format
+		pki.GET("/crl.pem", s.handleGetCRLPEM)             // CRL in PEM format
 		pki.GET("/check/:serial", s.handleCheckRevocation) // Check if certificate is revoked
 	}
 }
@@ -1061,9 +1061,11 @@ func (s *Server) csrfMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Skip CSRF for API key authentication (not vulnerable to CSRF)
+		// Skip CSRF for Bearer token authentication (not vulnerable to CSRF)
+		// This includes API keys (gk_*) and JWT tokens from CLI/mobile clients
+		// CSRF attacks can only exploit session cookies, not Authorization headers
 		authHeader := c.GetHeader("Authorization")
-		if strings.HasPrefix(authHeader, "Bearer gk_") {
+		if strings.HasPrefix(authHeader, "Bearer ") {
 			c.Next()
 			return
 		}
@@ -1080,14 +1082,7 @@ func (s *Server) csrfMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Skip CSRF for mobile clients (not vulnerable to CSRF - no browser cookies)
-		// Mobile apps use JWT tokens in Authorization header, not session cookies
-		if c.GetHeader("X-Mobile-Client") != "" && strings.HasPrefix(authHeader, "Bearer ") {
-			c.Next()
-			return
-		}
-
-		// Validate CSRF token for state-changing requests with session auth
+		// Validate CSRF token for state-changing requests with session auth (cookie-based)
 		cookieToken, err := c.Cookie(csrfCookieName)
 		if err != nil || cookieToken == "" {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{

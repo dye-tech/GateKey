@@ -24,10 +24,10 @@ const (
 )
 
 var (
-	ErrInvalidKey        = errors.New("encryption key must be 32 bytes (256 bits)")
-	ErrDecryptionFailed  = errors.New("decryption failed: invalid ciphertext or key")
-	ErrNotEncrypted      = errors.New("value is not encrypted")
-	ErrEmptyValue        = errors.New("cannot encrypt empty value")
+	ErrInvalidKey       = errors.New("encryption key must be 32 bytes (256 bits)")
+	ErrDecryptionFailed = errors.New("decryption failed: invalid ciphertext or key")
+	ErrNotEncrypted     = errors.New("value is not encrypted")
+	ErrEmptyValue       = errors.New("cannot encrypt empty value")
 )
 
 // KeyEncryptor handles encryption and decryption of sensitive data.

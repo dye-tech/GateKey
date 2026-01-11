@@ -11,17 +11,17 @@ import (
 
 // mockBackend implements Backend for testing.
 type mockBackend struct {
-	mu              sync.Mutex
-	rules           []Rule
-	initialized     bool
-	initErr         error
-	addErr          error
-	removeErr       error
-	listErr         error
-	cleanupErr      error
-	flushErr        error
-	dropRuleAdded   bool
-	dropSourceIP    net.IP
+	mu            sync.Mutex
+	rules         []Rule
+	initialized   bool
+	initErr       error
+	addErr        error
+	removeErr     error
+	listErr       error
+	cleanupErr    error
+	flushErr      error
+	dropRuleAdded bool
+	dropSourceIP  net.IP
 }
 
 func (m *mockBackend) Initialize(ctx context.Context) error {
