@@ -785,6 +785,7 @@ export interface ProxyApplication {
   allowedHeaders: string[]
   websocketEnabled: boolean
   timeoutSeconds: number
+  skipTlsVerify: boolean
   createdAt: string
   updatedAt: string
 }
@@ -812,6 +813,7 @@ export interface CreateProxyAppRequest {
   allowed_headers?: string[]
   websocket_enabled?: boolean
   timeout_seconds?: number
+  skip_tls_verify?: boolean
 }
 
 export interface UpdateProxyAppRequest {
@@ -827,6 +829,7 @@ export interface UpdateProxyAppRequest {
   allowed_headers?: string[]
   websocket_enabled?: boolean
   timeout_seconds?: number
+  skip_tls_verify?: boolean
 }
 
 export interface ProxyAccessLog {
@@ -860,6 +863,7 @@ export async function getProxyApps(): Promise<ProxyApplication[]> {
     allowedHeaders: app.allowed_headers || ['*'],
     websocketEnabled: app.websocket_enabled,
     timeoutSeconds: app.timeout_seconds,
+    skipTlsVerify: (app.skip_tls_verify as boolean) ?? false,
     createdAt: app.created_at,
     updatedAt: app.updated_at,
   }))
@@ -882,6 +886,7 @@ export async function getProxyApp(id: string): Promise<ProxyApplication> {
     allowedHeaders: app.allowed_headers || ['*'],
     websocketEnabled: app.websocket_enabled,
     timeoutSeconds: app.timeout_seconds,
+    skipTlsVerify: app.skip_tls_verify ?? false,
     createdAt: app.created_at,
     updatedAt: app.updated_at,
   }
@@ -904,6 +909,7 @@ export async function createProxyApp(req: CreateProxyAppRequest): Promise<ProxyA
     allowedHeaders: app.allowed_headers || ['*'],
     websocketEnabled: app.websocket_enabled,
     timeoutSeconds: app.timeout_seconds,
+    skipTlsVerify: app.skip_tls_verify ?? false,
     createdAt: app.created_at,
     updatedAt: app.updated_at,
   }

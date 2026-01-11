@@ -625,9 +625,9 @@ pki:
 		t.Error("Expected ProxyDNSRebindingProtection to be false by default")
 	}
 
-	// TLS verification should be enabled by default
-	if !cfg.Security.ProxyTLSVerify {
-		t.Error("Expected ProxyTLSVerify to be true by default")
+	// TLS verification should be disabled by default (internal services often lack proper certs)
+	if cfg.Security.ProxyTLSVerify {
+		t.Error("Expected ProxyTLSVerify to be false by default")
 	}
 
 	// Security headers should be enabled by default
