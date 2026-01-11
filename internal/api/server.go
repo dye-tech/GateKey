@@ -1074,6 +1074,13 @@ func (s *Server) csrfMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		// Skip CSRF for mobile clients (not vulnerable to CSRF - no browser cookies)
+		// Mobile apps use JWT tokens in Authorization header, not session cookies
+		if c.GetHeader("X-Mobile-Client") != "" && strings.HasPrefix(authHeader, "Bearer ") {
+			c.Next()
+			return
+		}
+
 		// Validate CSRF token for state-changing requests with session auth
 		cookieToken, err := c.Cookie(csrfCookieName)
 		if err != nil || cookieToken == "" {

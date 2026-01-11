@@ -747,7 +747,105 @@ func newUserCmd() *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(listCmd, getCmd, updateCmd, revokeConfigsCmd)
+	// Disable user command
+	var disableReason string
+	var disableDisconnect bool
+	disableCmd := &cobra.Command{
+		Use:   "disable ID",
+		Short: "Disable a user account and disconnect their VPN sessions",
+		Long: `Disable a user account, preventing further logins and VPN access.
+
+This will:
+  - Mark the user account as disabled (inactive)
+  - Optionally disconnect all active VPN sessions (default: yes)
+  - Revoke all VPN configs
+
+The user can be re-enabled later with 'user enable'.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			resp, err := client.DisableUser(ctx, args[0], disableReason, disableDisconnect)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("User disabled: %s\n", resp.UserEmail)
+			fmt.Printf("  Sessions terminated: %d\n", resp.SessionsTerminated)
+			fmt.Printf("  Configs revoked: %d\n", resp.ConfigsRevoked)
+			return nil
+		},
+	}
+	disableCmd.Flags().StringVar(&disableReason, "reason", "Disabled by administrator", "Reason for disabling the user")
+	disableCmd.Flags().BoolVar(&disableDisconnect, "disconnect", true, "Disconnect active VPN sessions")
+
+	// Enable user command
+	enableCmd := &cobra.Command{
+		Use:   "enable ID",
+		Short: "Re-enable a disabled user account",
+		Long:  `Re-enable a previously disabled user account, allowing them to log in and access VPN resources again.`,
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			resp, err := client.EnableUser(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			fmt.Printf("User enabled: %s\n", resp.UserEmail)
+			return nil
+		},
+	}
+
+	// List sessions command
+	sessionsCmd := &cobra.Command{
+		Use:   "sessions ID",
+		Short: "List active VPN sessions for a user",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			sessions, err := client.GetUserSessions(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			if len(sessions) == 0 {
+				fmt.Println("No active sessions for this user")
+				return nil
+			}
+			return outputResult(sessions, []string{"ID", "Gateway", "Node Type", "Client IP", "VPN Address", "Connected At"}, func(item interface{}) []string {
+				s := item.(adminclient.UserSession)
+				return []string{
+					s.ID,
+					s.GatewayName,
+					s.NodeType,
+					s.ClientIP,
+					s.VPNAddress,
+					s.ConnectedAt.Format("2006-01-02 15:04:05"),
+				}
+			})
+		},
+	}
+
+	// Disconnect user sessions command
+	var disconnectReason string
+	disconnectCmd := &cobra.Command{
+		Use:   "disconnect ID",
+		Short: "Disconnect all active VPN sessions for a user",
+		Long: `Disconnect all active VPN sessions for a specific user.
+
+This only disconnects the sessions - it does not disable the user account.
+The user can reconnect if they have valid configs.
+Use 'user disable' to prevent reconnection.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			if err := client.DisconnectUserSessions(ctx, args[0], disconnectReason); err != nil {
+				return err
+			}
+			fmt.Println("User sessions disconnected")
+			return nil
+		},
+	}
+	disconnectCmd.Flags().StringVar(&disconnectReason, "reason", "Disconnected by administrator", "Reason for disconnecting")
+
+	cmd.AddCommand(listCmd, getCmd, updateCmd, revokeConfigsCmd, disableCmd, enableCmd, sessionsCmd, disconnectCmd)
 	return cmd
 }
 

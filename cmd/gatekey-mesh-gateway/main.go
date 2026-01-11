@@ -29,7 +29,20 @@ var (
 	logger           *zap.Logger
 	currentConfigVer string
 	provisionedName  string // Name from control plane provisioning
+	httpClient       = &http.Client{Timeout: 30 * time.Second}
 )
+
+// postWithGatewayToken sends a POST request with the X-Gateway-Token header
+// to bypass CSRF protection for gateway-to-server communication
+func postWithGatewayToken(url string, token string, body []byte) (*http.Response, error) {
+	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Gateway-Token", token)
+	return httpClient.Do(req)
+}
 
 const (
 	configVersionFile = "/etc/gatekey-mesh/.config_version"
@@ -319,7 +332,7 @@ func sendHeartbeat(ctx context.Context, cfg *GatewayConfig) {
 	}
 
 	url := strings.TrimSuffix(cfg.ControlPlaneURL, "/") + "/api/v1/mesh-gateway/heartbeat"
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	resp, err := postWithGatewayToken(url, cfg.GatewayToken, body)
 	if err != nil {
 		logger.Warn("Heartbeat failed", zap.Error(err))
 		return
@@ -417,7 +430,7 @@ func doProvision(ctx context.Context, cfg *GatewayConfig) error {
 	}
 
 	url := strings.TrimSuffix(cfg.ControlPlaneURL, "/") + "/api/v1/mesh-gateway/provision"
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	resp, err := postWithGatewayToken(url, cfg.GatewayToken, body)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}

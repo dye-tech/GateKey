@@ -312,6 +312,19 @@ func (m *InterfaceManager) AddPeer(ctx context.Context, peer PeerConfig) error {
 		return fmt.Errorf("wg set peer failed: %s: %w", string(output), err)
 	}
 
+	// Add routes for AllowedIPs that are networks (not just single hosts)
+	// This is necessary because WireGuard's wg tool doesn't add routes automatically
+	for _, allowedIP := range peer.AllowedIPs {
+		if err := m.addRouteForAllowedIP(ctx, allowedIP); err != nil {
+			if m.logger != nil {
+				m.logger.Warn("Failed to add route for allowed IP",
+					zap.String("allowed_ip", allowedIP),
+					zap.Error(err))
+			}
+			// Don't fail the peer addition if route add fails
+		}
+	}
+
 	if m.logger != nil {
 		m.logger.Info("Added WireGuard peer",
 			zap.String("interface", m.name),
@@ -319,6 +332,34 @@ func (m *InterfaceManager) AddPeer(ctx context.Context, peer PeerConfig) error {
 			zap.Strings("allowed_ips", peer.AllowedIPs),
 			zap.String("endpoint", peer.Endpoint),
 			zap.Int("persistent_keepalive", peer.PersistentKeepalive))
+	}
+
+	return nil
+}
+
+// addRouteForAllowedIP adds a route for an AllowedIP if it's a network range
+func (m *InterfaceManager) addRouteForAllowedIP(ctx context.Context, allowedIP string) error {
+	// Skip single host addresses (/32 for IPv4, /128 for IPv6) that are in the VPN subnet
+	// These are typically peer tunnel IPs and don't need explicit routes
+	if strings.HasSuffix(allowedIP, "/32") || strings.HasSuffix(allowedIP, "/128") {
+		return nil
+	}
+
+	// Try to add the route - ignore "File exists" errors (route already exists)
+	output, err := m.executor.Output(ctx, "ip", "route", "add", allowedIP, "dev", m.name)
+	if err != nil {
+		outputStr := string(output)
+		// Ignore "RTNETLINK answers: File exists" - route already present
+		if strings.Contains(outputStr, "File exists") {
+			return nil
+		}
+		return fmt.Errorf("ip route add failed: %s: %w", outputStr, err)
+	}
+
+	if m.logger != nil {
+		m.logger.Debug("Added route for peer network",
+			zap.String("network", allowedIP),
+			zap.String("interface", m.name))
 	}
 
 	return nil

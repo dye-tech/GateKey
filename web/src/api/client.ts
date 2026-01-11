@@ -2057,6 +2057,81 @@ export async function getActiveSessions(): Promise<{ sessions: ActiveSession[]; 
   return response.data
 }
 
+// Session Disconnect API
+export interface DisconnectResponse {
+  success: boolean
+  message: string
+  sessionId?: string
+  userEmail?: string
+  gatewayId?: string
+  nodeType?: string
+  vpnAddress?: string
+  disconnects?: number
+}
+
+export async function disconnectSession(sessionId: string, reason?: string): Promise<DisconnectResponse> {
+  const response = await api.post(`/api/v1/admin/sessions/${sessionId}/disconnect`, {
+    reason: reason || 'Disconnected by administrator'
+  })
+  return response.data
+}
+
+export async function disconnectUser(userId: string, reason?: string): Promise<DisconnectResponse> {
+  const response = await api.post(`/api/v1/admin/users/${userId}/disconnect`, {
+    reason: reason || 'Disconnected by administrator'
+  })
+  return response.data
+}
+
+// User Status & Management API
+export interface UserStatus {
+  userId: string
+  userEmail: string
+  userType: string
+  isActive: boolean
+  activeSessions: number
+  sessions: Array<{
+    id: string
+    gateway_id: string
+    gateway_name: string
+    client_ip: string
+    vpn_address: string
+    connected_at: string
+    node_type: string
+  }>
+}
+
+export async function getUserStatus(userId: string): Promise<UserStatus> {
+  const response = await api.get(`/api/v1/admin/users/${userId}/status`)
+  return response.data
+}
+
+export async function getUserActiveSessions(userId: string): Promise<{ sessions: Array<Record<string, unknown>>; count: number }> {
+  const response = await api.get(`/api/v1/admin/users/${userId}/sessions`)
+  return response.data
+}
+
+export interface DisableUserResponse {
+  success: boolean
+  message: string
+  userEmail: string
+  userType: string
+  sessionsDisconnected: number
+}
+
+export async function disableUser(userId: string, reason?: string, disconnectActive = true): Promise<DisableUserResponse> {
+  const response = await api.post(`/api/v1/admin/users/${userId}/disable`, {
+    reason: reason || 'Disabled by administrator',
+    disconnect_active: disconnectActive
+  })
+  return response.data
+}
+
+export async function enableUser(userId: string): Promise<{ success: boolean; message: string; userEmail: string; userType: string }> {
+  const response = await api.post(`/api/v1/admin/users/${userId}/enable`, {})
+  return response.data
+}
+
 // Network Tools API
 export interface NetworkToolInfo {
   name: string
