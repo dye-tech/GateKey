@@ -407,6 +407,7 @@ func (s *MeshStore) ListHubs(ctx context.Context) ([]*MeshHub, error) {
 			crypto_profile, tls_auth_enabled,
 			COALESCE(wg_public_key, ''), wg_listen_port,
 			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
+			COALESCE(local_networks, '{}'),
 			status, COALESCE(status_message, ''), last_heartbeat, connected_gateways, connected_clients,
 			created_at, updated_at
 		FROM mesh_hubs
@@ -430,6 +431,7 @@ func (s *MeshStore) ListHubs(ctx context.Context) ([]*MeshHub, error) {
 			&hub.CryptoProfile, &hub.TLSAuthEnabled,
 			&hub.WGPublicKey, &wgListenPort,
 			&hub.FullTunnelMode, &hub.PushDNS, &hub.DNSServers,
+			&hub.LocalNetworks,
 			&hub.Status, &hub.StatusMessage, &hub.LastHeartbeat, &hub.ConnectedSpokes, &hub.ConnectedClients,
 			&hub.CreatedAt, &hub.UpdatedAt,
 		); err != nil {
@@ -1212,6 +1214,37 @@ func (s *MeshStore) GetHubNetworks(ctx context.Context, hubID string) ([]*Networ
 		networks = append(networks, &n)
 	}
 	return networks, rows.Err()
+}
+
+// GetNetworkMeshHubs returns all mesh hubs that have a specific network assigned
+func (s *MeshStore) GetNetworkMeshHubs(ctx context.Context, networkID string) ([]*MeshHub, error) {
+	rows, err := s.db.Pool.Query(ctx, `
+		SELECT h.id, h.name, h.description, h.gateway_type, h.public_endpoint, h.vpn_port,
+			h.vpn_protocol, h.vpn_subnet, h.crypto_profile, h.tls_auth_enabled,
+			h.status, h.status_message, h.connected_spokes, h.connected_clients,
+			h.created_at, h.updated_at
+		FROM mesh_hubs h
+		JOIN mesh_hub_networks hn ON h.id = hn.hub_id
+		WHERE hn.network_id = $1
+		ORDER BY h.name
+	`, networkID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var hubs []*MeshHub
+	for rows.Next() {
+		var h MeshHub
+		if err := rows.Scan(&h.ID, &h.Name, &h.Description, &h.GatewayType, &h.PublicEndpoint,
+			&h.VPNPort, &h.VPNProtocol, &h.VPNSubnet, &h.CryptoProfile, &h.TLSAuthEnabled,
+			&h.Status, &h.StatusMessage, &h.ConnectedSpokes, &h.ConnectedClients,
+			&h.CreatedAt, &h.UpdatedAt); err != nil {
+			return nil, err
+		}
+		hubs = append(hubs, &h)
+	}
+	return hubs, rows.Err()
 }
 
 // GetUserMeshAccessRules returns access rules a user has through hub networks

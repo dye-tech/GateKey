@@ -120,7 +120,18 @@ func (v *VPNManager) Connect(ctx context.Context, gatewayName string) error {
 			}
 		}
 		if selectedGateway == nil {
-			return fmt.Errorf("gateway '%s' not found", gatewayName)
+			// Gateway not found - check if it's a mesh hub instead
+			meshHubs, err := v.fetchMeshHubs(ctx, authHeader)
+			if err == nil {
+				for _, hub := range meshHubs {
+					if strings.EqualFold(hub.Name, gatewayName) || hub.ID == gatewayName {
+						// Found a mesh hub with this name - connect to it
+						fmt.Printf("Found mesh hub '%s', connecting...\n", hub.Name)
+						return v.ConnectMesh(ctx, hub.Name)
+					}
+				}
+			}
+			return fmt.Errorf("gateway or mesh hub '%s' not found. Run 'gatekey list' to see available options", gatewayName)
 		}
 	}
 
@@ -1072,6 +1083,9 @@ func (v *VPNManager) ListGateways(ctx context.Context) error {
 	if err != nil {
 		// Don't fail if mesh hubs can't be fetched, just log it
 		// This allows backwards compatibility with older servers
+		if os.Getenv("GATEKEY_DEBUG") != "" {
+			fmt.Fprintf(os.Stderr, "Debug: failed to fetch mesh hubs: %v\n", err)
+		}
 		meshHubs = nil
 	}
 
@@ -1519,9 +1533,9 @@ type MeshHub struct {
 	ID             string `json:"id"`
 	Name           string `json:"name"`
 	Description    string `json:"description,omitempty"`
-	PublicEndpoint string `json:"public_endpoint"`
+	PublicEndpoint string `json:"publicEndpoint"`
 	Status         string `json:"status"`
-	SpokeCount     int    `json:"spoke_count"`
+	SpokeCount     int    `json:"connectedspokes"`
 	HubType        string `json:"hubType"` // "openvpn" or "wireguard"
 }
 
@@ -1557,7 +1571,9 @@ func (v *VPNManager) ListMeshHubs(ctx context.Context) error {
 		if hub.Description != "" {
 			fmt.Printf("  Description: %s\n", hub.Description)
 		}
-		fmt.Printf("  Endpoint:    %s\n", hub.PublicEndpoint)
+		if hub.PublicEndpoint != "" {
+			fmt.Printf("  Public IP:   %s\n", hub.PublicEndpoint)
+		}
 		fmt.Printf("  Status:      %s\n", hub.Status)
 		fmt.Printf("  Spokes:      %d\n", hub.SpokeCount)
 		fmt.Println()

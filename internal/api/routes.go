@@ -204,6 +204,14 @@ func (s *Server) handleOIDCLogin(c *gin.Context) {
 		s.logger.Info("OIDC login with CLI state", zap.String("cli_state", cliState))
 		// First check if callback URL was provided directly (mobile app flow)
 		if cliCallback != "" {
+			// Validate callback URL to prevent SSRF/open redirect attacks
+			if !isValidCLICallbackURL(cliCallback) {
+				s.logger.Warn("Invalid CLI callback URL rejected in OIDC flow",
+					zap.String("callback_url", cliCallback),
+					zap.String("client_ip", c.ClientIP()))
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid callback URL - must be localhost or gatekey:// scheme"})
+				return
+			}
 			// Store the callback URL with the provided state
 			if err := s.stateStore.SaveCLICallback(c.Request.Context(), cliState, cliCallback); err != nil {
 				s.logger.Error("Failed to save CLI callback for mobile flow", zap.Error(err))
@@ -419,7 +427,8 @@ func (s *Server) handleOIDCCallback(c *gin.Context) {
 		s.logger.Info("OIDC callback with CLI callback URL", zap.String("callback_url", stateData.CLICallbackURL))
 		// Redirect to CLI callback with token using HTML page (Chrome blocks 302 to custom schemes)
 		redirectURL := stateData.CLICallbackURL + "?token=" + token + "&email=" + url.QueryEscape(email) + "&name=" + url.QueryEscape(name) + "&expires_in=86400"
-		s.logger.Info("Redirecting to CLI", zap.String("redirect_url", redirectURL))
+		// Log without the token to avoid sensitive data in logs
+		s.logger.Info("Redirecting to CLI", zap.String("callback_base", stateData.CLICallbackURL), zap.String("email", email))
 		renderCLIRedirectPage(c, redirectURL)
 		return
 	} else {
@@ -497,6 +506,14 @@ func (s *Server) handleSAMLLogin(c *gin.Context) {
 		s.logger.Info("SAML login with CLI state", zap.String("cli_state", cliState))
 		// First check if callback URL was provided directly (mobile app flow)
 		if cliCallback != "" {
+			// Validate callback URL to prevent SSRF/open redirect attacks
+			if !isValidCLICallbackURL(cliCallback) {
+				s.logger.Warn("Invalid CLI callback URL rejected in SAML flow",
+					zap.String("callback_url", cliCallback),
+					zap.String("client_ip", c.ClientIP()))
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid callback URL - must be localhost or gatekey:// scheme"})
+				return
+			}
 			// Store the callback URL with the provided state
 			if err := s.stateStore.SaveCLICallback(c.Request.Context(), cliState, cliCallback); err != nil {
 				s.logger.Error("Failed to save CLI callback for mobile flow", zap.Error(err))
@@ -694,20 +711,62 @@ func (s *Server) handleSAMLACS(c *gin.Context) {
 		return
 	}
 
+	// Determine if this is an IDP-initiated flow
+	// IDP-initiated means we didn't have valid state from SP (cliState would be set for SP-initiated)
+	isIDPInitiated := cliState == "" && (relayState == "" || providerConfig != nil)
+
+	// Security: Log IDP-initiated flows as they bypass some CSRF-like protections
+	// Consider disabling IDP-initiated SSO in high-security environments
+	if isIDPInitiated && providerConfig != nil {
+		s.logger.Warn("IDP-initiated SAML flow detected",
+			zap.String("client_ip", c.ClientIP()),
+			zap.String("provider", providerConfig.Name),
+			zap.String("note", "IDP-initiated flows have weaker security guarantees"))
+	}
+
 	// Create SP
 	sp := &saml.ServiceProvider{
 		EntityID:          providerConfig.EntityID,
 		AcsURL:            *acsURL,
 		IDPMetadata:       idpMetadata,
-		AllowIDPInitiated: true,
+		AllowIDPInitiated: true, // TODO: Make configurable per provider
 	}
 
 	// Parse and validate the assertion
-	assertion, err := sp.ParseResponse(c.Request, []string{})
+	// For SP-initiated flows, pass the expected request IDs for InResponseTo validation
+	var possibleRequestIDs []string
+	if !isIDPInitiated && relayState != "" {
+		// In SP-initiated flow, we should validate InResponseTo matches our request
+		possibleRequestIDs = []string{relayState}
+	}
+	assertion, err := sp.ParseResponse(c.Request, possibleRequestIDs)
 	if err != nil {
-		s.logger.Error("Failed to parse SAML response", zap.Error(err))
+		s.logger.Error("Failed to parse SAML response",
+			zap.Error(err),
+			zap.Bool("idp_initiated", isIDPInitiated))
 		c.Redirect(http.StatusFound, "/login?error=invalid_response")
 		return
+	}
+
+	// Additional security validation for assertion
+	now := time.Now()
+
+	// Validate assertion conditions (time bounds)
+	if assertion.Conditions != nil {
+		if !assertion.Conditions.NotBefore.IsZero() && now.Before(assertion.Conditions.NotBefore) {
+			s.logger.Error("SAML assertion not yet valid",
+				zap.Time("not_before", assertion.Conditions.NotBefore),
+				zap.Time("now", now))
+			c.Redirect(http.StatusFound, "/login?error=invalid_response")
+			return
+		}
+		if !assertion.Conditions.NotOnOrAfter.IsZero() && now.After(assertion.Conditions.NotOnOrAfter) {
+			s.logger.Error("SAML assertion expired",
+				zap.Time("not_on_or_after", assertion.Conditions.NotOnOrAfter),
+				zap.Time("now", now))
+			c.Redirect(http.StatusFound, "/login?error=invalid_response")
+			return
+		}
 	}
 
 	// Extract user info from assertion
@@ -819,7 +878,8 @@ func (s *Server) handleSAMLACS(c *gin.Context) {
 		s.logger.Info("SAML callback with CLI callback URL", zap.String("callback_url", cliCallbackURL))
 		// Redirect to CLI callback with token using HTML page (Chrome blocks 302 to custom schemes)
 		redirectURL := cliCallbackURL + "?token=" + token + "&email=" + url.QueryEscape(email) + "&name=" + url.QueryEscape(name) + "&expires_in=86400"
-		s.logger.Info("Redirecting to CLI", zap.String("redirect_url", redirectURL))
+		// Log without the token to avoid sensitive data in logs
+		s.logger.Info("Redirecting to CLI", zap.String("callback_base", cliCallbackURL), zap.String("email", email))
 		renderCLIRedirectPage(c, redirectURL)
 		return
 	} else if cliState != "" {
@@ -1293,10 +1353,54 @@ func (s *Server) handleChangePassword(c *gin.Context) {
 
 // CLI authentication handlers
 
+// isValidCLICallbackURL validates that a CLI callback URL is safe to redirect to.
+// Only allows localhost URLs (for desktop CLI) and the gatekey:// scheme (for mobile apps).
+// This prevents SSRF and open redirect attacks where an attacker could steal tokens.
+func isValidCLICallbackURL(callbackURL string) bool {
+	if callbackURL == "" {
+		return false
+	}
+
+	parsed, err := url.Parse(callbackURL)
+	if err != nil {
+		return false
+	}
+
+	// Allow custom scheme for mobile apps
+	if parsed.Scheme == "gatekey" {
+		return true
+	}
+
+	// Only allow http for localhost (no https needed for local connections)
+	if parsed.Scheme != "http" {
+		return false
+	}
+
+	// Extract hostname (without port)
+	hostname := parsed.Hostname()
+
+	// Allow localhost variations
+	switch hostname {
+	case "localhost", "127.0.0.1", "::1", "[::1]":
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *Server) handleCLILogin(c *gin.Context) {
 	callbackURL := c.Query("callback")
 	if callbackURL == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "callback parameter required"})
+		return
+	}
+
+	// Validate callback URL to prevent SSRF/open redirect attacks
+	if !isValidCLICallbackURL(callbackURL) {
+		s.logger.Warn("Invalid CLI callback URL rejected",
+			zap.String("callback_url", callbackURL),
+			zap.String("client_ip", c.ClientIP()))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid callback URL - must be localhost or gatekey:// scheme"})
 		return
 	}
 
@@ -1454,6 +1558,15 @@ func (s *Server) handleGenerateConfig(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "gateway_id is required"})
+		return
+	}
+
+	// Validate CLI callback URL if provided to prevent SSRF/open redirect attacks
+	if req.CLICallbackURL != "" && !isValidCLICallbackURL(req.CLICallbackURL) {
+		s.logger.Warn("Invalid CLI callback URL rejected in config generation",
+			zap.String("callback_url", req.CLICallbackURL),
+			zap.String("client_ip", c.ClientIP()))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid callback URL - must be localhost or gatekey:// scheme"})
 		return
 	}
 

@@ -20,7 +20,8 @@ api.interceptors.request.use(
     const method = config.method?.toUpperCase()
     // For POST, PUT, DELETE, PATCH - include CSRF token
     if (method && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
-      const csrfToken = getCookie('gk_csrf')
+      const csrfToken = getCookie('gatekey_csrf')
+      console.debug('CSRF token for request:', csrfToken ? 'found' : 'NOT FOUND', 'cookies:', document.cookie)
       if (csrfToken) {
         config.headers['X-CSRF-Token'] = csrfToken
       }
@@ -350,6 +351,28 @@ export async function getNetworkAccessRules(networkId: string): Promise<NetworkA
     isActive: r.is_active,
     users: r.users || [],
     groups: r.groups || [],
+  }))
+}
+
+// Network Mesh Hub associations
+export interface NetworkMeshHub {
+  id: string
+  name: string
+  description: string
+  gatewayType: GatewayType
+  publicEndpoint: string
+  status: MeshHubStatus
+}
+
+export async function getNetworkMeshHubs(networkId: string): Promise<NetworkMeshHub[]> {
+  const response = await api.get(`/api/v1/admin/networks/${networkId}/mesh-hubs`)
+  return (response.data.hubs || []).map((h: Record<string, unknown>) => ({
+    id: h.id,
+    name: h.name,
+    description: h.description || '',
+    gatewayType: (h.gatewayType as GatewayType) || 'openvpn',
+    publicEndpoint: h.publicEndpoint,
+    status: h.status as MeshHubStatus,
   }))
 }
 

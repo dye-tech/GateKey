@@ -180,13 +180,27 @@ func (s *Server) handleCreateUserAPIKey(c *gin.Context) {
 		return
 	}
 
-	// Parse expiration
+	// Parse expiration - default to 90 days if not specified
+	// Never-expiring keys are a security risk; use explicit "never" to override
 	expiresAt := parseExpiration(req.ExpiresIn)
+	if expiresAt == nil && req.ExpiresIn != "never" {
+		defaultExpiry := time.Now().Add(90 * 24 * time.Hour)
+		expiresAt = &defaultExpiry
+		s.logger.Info("API key created with default 90-day expiration",
+			zap.String("user_id", user.UserID),
+			zap.String("key_name", req.Name))
+	}
 
-	// Set default scopes if none provided
+	// Set default scopes if none provided - principle of least privilege
+	// Admins get admin scope, regular users get VPN access scopes
 	scopes := req.Scopes
 	if len(scopes) == 0 {
-		scopes = []string{"*"} // Full access by default for user-created keys
+		if user.IsAdmin {
+			scopes = []string{"admin"} // Full admin access
+		} else {
+			// Regular users get read access to gateways/mesh and VPN connect
+			scopes = []string{"vpn:connect", "gateways:read", "mesh:read"}
+		}
 	}
 
 	apiKey := &db.APIKey{
@@ -330,13 +344,29 @@ func (s *Server) handleAdminCreateAPIKey(c *gin.Context) {
 		return
 	}
 
-	// Parse expiration
+	// Parse expiration - default to 90 days if not specified
+	// Never-expiring keys are a security risk; use explicit "never" to override
 	expiresAt := parseExpiration(req.ExpiresIn)
+	if expiresAt == nil && req.ExpiresIn != "never" {
+		defaultExpiry := time.Now().Add(90 * 24 * time.Hour)
+		expiresAt = &defaultExpiry
+		s.logger.Info("Admin-provisioned API key created with default 90-day expiration",
+			zap.String("admin_id", admin.UserID),
+			zap.String("user_id", req.UserID),
+			zap.String("key_name", req.Name))
+	}
 
-	// Set default scopes
+	// Set default scopes - principle of least privilege
+	// Look up target user to determine their admin status
 	scopes := req.Scopes
 	if len(scopes) == 0 {
-		scopes = []string{"*"}
+		targetUser, err := s.userStore.GetSSOUser(c.Request.Context(), req.UserID)
+		if err == nil && targetUser != nil && targetUser.IsAdmin {
+			scopes = []string{"admin"} // Admin user gets admin scope
+		} else {
+			// Regular users get read access to gateways/mesh and VPN connect
+			scopes = []string{"vpn:connect", "gateways:read", "mesh:read"}
+		}
 	}
 
 	adminIDStr := admin.UserID
@@ -469,13 +499,29 @@ func (s *Server) handleAdminCreateUserAPIKey(c *gin.Context) {
 		return
 	}
 
-	// Parse expiration
+	// Parse expiration - default to 90 days if not specified
+	// Never-expiring keys are a security risk; use explicit "never" to override
 	expiresAt := parseExpiration(req.ExpiresIn)
+	if expiresAt == nil && req.ExpiresIn != "never" {
+		defaultExpiry := time.Now().Add(90 * 24 * time.Hour)
+		expiresAt = &defaultExpiry
+		s.logger.Info("Admin-provisioned API key created with default 90-day expiration",
+			zap.String("admin_id", admin.UserID),
+			zap.String("user_id", userID),
+			zap.String("key_name", req.Name))
+	}
 
-	// Set default scopes
+	// Set default scopes - principle of least privilege
+	// Look up target user to determine their admin status
 	scopes := req.Scopes
 	if len(scopes) == 0 {
-		scopes = []string{"*"}
+		targetUser, err := s.userStore.GetSSOUser(c.Request.Context(), userID)
+		if err == nil && targetUser != nil && targetUser.IsAdmin {
+			scopes = []string{"admin"} // Admin user gets admin scope
+		} else {
+			// Regular users get read access to gateways/mesh and VPN connect
+			scopes = []string{"vpn:connect", "gateways:read", "mesh:read"}
+		}
 	}
 
 	adminIDStr := admin.UserID
@@ -582,19 +628,16 @@ func (s *Server) handleValidateAPIKey(c *gin.Context) {
 	keyHash := db.HashAPIKey(apiKeyRaw)
 	apiKey, user, err := s.apiKeyStore.ValidateKey(c.Request.Context(), keyHash)
 	if err != nil {
-		if err == db.ErrAPIKeyRevoked {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "API key has been revoked"})
-			return
-		}
-		if err == db.ErrAPIKeyExpired {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "API key has expired"})
-			return
-		}
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid API key"})
+		// Use generic error message to prevent information leakage about key state
+		// Log the actual error for debugging/audit purposes
+		s.logger.Debug("API key validation failed",
+			zap.String("key_prefix", apiKeyRaw[:min(10, len(apiKeyRaw))]),
+			zap.Error(err))
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired API key"})
 		return
 	}
 	if apiKey == nil || user == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid API key"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired API key"})
 		return
 	}
 
