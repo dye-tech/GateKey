@@ -290,6 +290,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	go srv.runGatewayHealthCheck(bgCtx)
 	go srv.runConfigCleanup(bgCtx)
 	go srv.runLoginLogCleanup(bgCtx)
+	go srv.runMeshHealthCheck(bgCtx)
 
 	return srv, nil
 }
@@ -1008,6 +1009,51 @@ func (s *Server) cleanupOldLoginLogs(ctx context.Context) {
 		s.logger.Info("Cleaned up old login logs",
 			zap.Int64("deleted", count),
 			zap.Int("retention_days", retentionDays))
+	}
+}
+
+// runMeshHealthCheck periodically marks mesh spokes as inactive and syncs hub connection counts
+func (s *Server) runMeshHealthCheck(ctx context.Context) {
+	// Run every minute to keep spoke status and counts accurate
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	threshold := 2 * time.Minute // Mark offline after 2 minutes of no heartbeat
+
+	s.logger.Info("Started mesh health check background task",
+		zap.Duration("interval", 1*time.Minute),
+		zap.Duration("threshold", threshold))
+
+	// Run once at startup
+	s.syncMeshSpokeHealth(ctx, threshold)
+
+	for {
+		select {
+		case <-ctx.Done():
+			s.logger.Info("Mesh health check stopped")
+			return
+		case <-ticker.C:
+			s.syncMeshSpokeHealth(ctx, threshold)
+		}
+	}
+}
+
+// syncMeshSpokeHealth marks inactive spokes and syncs hub connection counts
+func (s *Server) syncMeshSpokeHealth(ctx context.Context, threshold time.Duration) {
+	// Mark inactive spokes
+	inactiveCount, err := s.meshStore.MarkInactiveMeshSpokes(ctx, threshold)
+	if err != nil {
+		s.logger.Error("Failed to mark inactive mesh spokes", zap.Error(err))
+	} else if inactiveCount > 0 {
+		s.logger.Info("Marked mesh spokes as offline", zap.Int64("count", inactiveCount))
+	}
+
+	// Sync hub connection counts
+	syncCount, err := s.meshStore.SyncHubConnectionCounts(ctx)
+	if err != nil {
+		s.logger.Error("Failed to sync hub connection counts", zap.Error(err))
+	} else if syncCount > 0 {
+		s.logger.Info("Synced hub connection counts", zap.Int64("hubs_updated", syncCount))
 	}
 }
 
