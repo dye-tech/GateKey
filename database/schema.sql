@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict x7Mq94Wl0CprUzMTGSyVcveESCIGpm1pZ8fITEPRohMdywteHCOM6uxtaq2hr30
+\restrict N4OPo4xE8WIX3xdVKdzaJmuyYytOchindcwgcdQZIqN4tl5DQM4XmFdTBlwZ1BP
 
 -- Dumped from database version 16.10
 -- Dumped by pg_dump version 16.10
@@ -3209,5 +3209,5 @@ ALTER TABLE ONLY public.wireguard_peers
 -- PostgreSQL database dump complete
 --
 
-\unrestrict x7Mq94Wl0CprUzMTGSyVcveESCIGpm1pZ8fITEPRohMdywteHCOM6uxtaq2hr30
+\unrestrict N4OPo4xE8WIX3xdVKdzaJmuyYytOchindcwgcdQZIqN4tl5DQM4XmFdTBlwZ1BP
 
