@@ -74,12 +74,13 @@ func (s *ProxyApplicationStore) CreateProxyApplication(ctx context.Context, app 
 
 	err = s.db.Pool.QueryRow(ctx, `
 		INSERT INTO proxy_applications (name, slug, description, internal_url, icon_url, is_active,
-			preserve_host_header, strip_prefix, inject_headers, allowed_headers, websocket_enabled, timeout_seconds)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			preserve_host_header, strip_prefix, inject_headers, allowed_headers, websocket_enabled, timeout_seconds,
+			skip_tls_verify, custom_ca_cert)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING id, created_at, updated_at
 	`, app.Name, app.Slug, app.Description, app.InternalURL, app.IconURL, app.IsActive,
 		app.PreserveHostHeader, app.StripPrefix, injectHeaders, allowedHeaders,
-		app.WebsocketEnabled, app.TimeoutSeconds).Scan(&app.ID, &app.CreatedAt, &app.UpdatedAt)
+		app.WebsocketEnabled, app.TimeoutSeconds, app.SkipTLSVerify, app.CustomCACert).Scan(&app.ID, &app.CreatedAt, &app.UpdatedAt)
 
 	if err != nil && isUniqueViolation(err) {
 		return ErrProxyAppExists
@@ -92,7 +93,7 @@ func (s *ProxyApplicationStore) GetProxyApplication(ctx context.Context, id stri
 	return s.scanProxyApp(s.db.Pool.QueryRow(ctx, `
 		SELECT id, name, slug, description, internal_url, icon_url, is_active,
 			preserve_host_header, strip_prefix, inject_headers, allowed_headers,
-			websocket_enabled, timeout_seconds, created_at, updated_at
+			websocket_enabled, timeout_seconds, skip_tls_verify, custom_ca_cert, created_at, updated_at
 		FROM proxy_applications WHERE id = $1
 	`, id))
 }
@@ -102,7 +103,7 @@ func (s *ProxyApplicationStore) GetProxyApplicationBySlug(ctx context.Context, s
 	return s.scanProxyApp(s.db.Pool.QueryRow(ctx, `
 		SELECT id, name, slug, description, internal_url, icon_url, is_active,
 			preserve_host_header, strip_prefix, inject_headers, allowed_headers,
-			websocket_enabled, timeout_seconds, created_at, updated_at
+			websocket_enabled, timeout_seconds, skip_tls_verify, custom_ca_cert, created_at, updated_at
 		FROM proxy_applications WHERE slug = $1
 	`, slug))
 }
@@ -114,7 +115,7 @@ func (s *ProxyApplicationStore) scanProxyApp(row pgx.Row) (*ProxyApplication, er
 	err := row.Scan(&app.ID, &app.Name, &app.Slug, &app.Description, &app.InternalURL,
 		&app.IconURL, &app.IsActive, &app.PreserveHostHeader, &app.StripPrefix,
 		&injectHeaders, &allowedHeaders, &app.WebsocketEnabled, &app.TimeoutSeconds,
-		&app.CreatedAt, &app.UpdatedAt)
+		&app.SkipTLSVerify, &app.CustomCACert, &app.CreatedAt, &app.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, ErrProxyAppNotFound
 	}
@@ -137,7 +138,7 @@ func (s *ProxyApplicationStore) ListProxyApplications(ctx context.Context) ([]*P
 	rows, err := s.db.Pool.Query(ctx, `
 		SELECT id, name, slug, description, internal_url, icon_url, is_active,
 			preserve_host_header, strip_prefix, inject_headers, allowed_headers,
-			websocket_enabled, timeout_seconds, created_at, updated_at
+			websocket_enabled, timeout_seconds, skip_tls_verify, custom_ca_cert, created_at, updated_at
 		FROM proxy_applications ORDER BY name
 	`)
 	if err != nil {
@@ -153,7 +154,7 @@ func (s *ProxyApplicationStore) ListActiveProxyApplications(ctx context.Context)
 	rows, err := s.db.Pool.Query(ctx, `
 		SELECT id, name, slug, description, internal_url, icon_url, is_active,
 			preserve_host_header, strip_prefix, inject_headers, allowed_headers,
-			websocket_enabled, timeout_seconds, created_at, updated_at
+			websocket_enabled, timeout_seconds, skip_tls_verify, custom_ca_cert, created_at, updated_at
 		FROM proxy_applications WHERE is_active = true ORDER BY name
 	`)
 	if err != nil {
@@ -173,7 +174,7 @@ func (s *ProxyApplicationStore) scanProxyApps(rows pgx.Rows) ([]*ProxyApplicatio
 		if err := rows.Scan(&app.ID, &app.Name, &app.Slug, &app.Description, &app.InternalURL,
 			&app.IconURL, &app.IsActive, &app.PreserveHostHeader, &app.StripPrefix,
 			&injectHeaders, &allowedHeaders, &app.WebsocketEnabled, &app.TimeoutSeconds,
-			&app.CreatedAt, &app.UpdatedAt); err != nil {
+			&app.SkipTLSVerify, &app.CustomCACert, &app.CreatedAt, &app.UpdatedAt); err != nil {
 			return nil, err
 		}
 
@@ -203,11 +204,12 @@ func (s *ProxyApplicationStore) UpdateProxyApplication(ctx context.Context, app 
 	result, err := s.db.Pool.Exec(ctx, `
 		UPDATE proxy_applications SET name = $2, slug = $3, description = $4, internal_url = $5,
 			icon_url = $6, is_active = $7, preserve_host_header = $8, strip_prefix = $9,
-			inject_headers = $10, allowed_headers = $11, websocket_enabled = $12, timeout_seconds = $13
+			inject_headers = $10, allowed_headers = $11, websocket_enabled = $12, timeout_seconds = $13,
+			skip_tls_verify = $14, custom_ca_cert = $15
 		WHERE id = $1
 	`, app.ID, app.Name, app.Slug, app.Description, app.InternalURL, app.IconURL, app.IsActive,
 		app.PreserveHostHeader, app.StripPrefix, injectHeaders, allowedHeaders,
-		app.WebsocketEnabled, app.TimeoutSeconds)
+		app.WebsocketEnabled, app.TimeoutSeconds, app.SkipTLSVerify, app.CustomCACert)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return ErrProxyAppExists
@@ -322,7 +324,8 @@ func (s *ProxyApplicationStore) GetUserProxyApplications(ctx context.Context, us
 	query := `
 		SELECT DISTINCT pa.id, pa.name, pa.slug, pa.description, pa.internal_url, pa.icon_url,
 			pa.is_active, pa.preserve_host_header, pa.strip_prefix, pa.inject_headers,
-			pa.allowed_headers, pa.websocket_enabled, pa.timeout_seconds, pa.created_at, pa.updated_at
+			pa.allowed_headers, pa.websocket_enabled, pa.timeout_seconds,
+			pa.skip_tls_verify, pa.custom_ca_cert, pa.created_at, pa.updated_at
 		FROM proxy_applications pa
 		LEFT JOIN user_proxy_applications upa ON pa.id = upa.proxy_app_id AND upa.user_id = $1
 		LEFT JOIN group_proxy_applications gpa ON pa.id = gpa.proxy_app_id
@@ -349,7 +352,8 @@ func (s *ProxyApplicationStore) CanUserAccessApp(ctx context.Context, userID str
 	query := `
 		SELECT DISTINCT pa.id, pa.name, pa.slug, pa.description, pa.internal_url, pa.icon_url,
 			pa.is_active, pa.preserve_host_header, pa.strip_prefix, pa.inject_headers,
-			pa.allowed_headers, pa.websocket_enabled, pa.timeout_seconds, pa.created_at, pa.updated_at
+			pa.allowed_headers, pa.websocket_enabled, pa.timeout_seconds,
+			pa.skip_tls_verify, pa.custom_ca_cert, pa.created_at, pa.updated_at
 		FROM proxy_applications pa
 		LEFT JOIN user_proxy_applications upa ON pa.id = upa.proxy_app_id AND upa.user_id = $1
 		LEFT JOIN group_proxy_applications gpa ON pa.id = gpa.proxy_app_id
