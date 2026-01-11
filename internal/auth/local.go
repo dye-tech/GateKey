@@ -45,8 +45,8 @@ type LocalAuthProvider struct {
 func NewLocalAuthProvider() *LocalAuthProvider {
 	return &LocalAuthProvider{
 		users:   make(map[string]*LocalUser),
-		time:    3,             // Increased from 1 for better security (OWASP recommendation: 2-3)
-		memory:  64 * 1024,     // 64MB
+		time:    3,         // Increased from 1 for better security (OWASP recommendation: 2-3)
+		memory:  64 * 1024, // 64MB
 		threads: 4,
 		keyLen:  32,
 	}

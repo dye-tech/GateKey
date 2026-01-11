@@ -182,9 +182,9 @@ func TestSecurityHeadersMiddleware_DynamicFrameAncestors(t *testing.T) {
 	})
 
 	tests := []struct {
-		name           string
-		host           string
-		expectedInCSP  string
+		name          string
+		host          string
+		expectedInCSP string
 	}{
 		{
 			name:          "company A tenant",
@@ -262,8 +262,8 @@ func TestSecurityHeadersMiddleware_CustomCSP(t *testing.T) {
 			TLSEnabled: false,
 		},
 		Security: config.SecurityConfig{
-			SecurityHeadersEnabled:  true,
-			ContentSecurityPolicy:   customCSP,
+			SecurityHeadersEnabled: true,
+			ContentSecurityPolicy:  customCSP,
 		},
 	}
 

@@ -103,11 +103,14 @@ export default function AdminGeoFencing() {
     }
   }
 
-  async function handleSaveRule(data: { name: string; description: string; ipRange: string; ipv6Range?: string; isActive?: boolean }) {
+  async function handleSaveRule(data: { name: string; description: string; ipRange?: string; ipv6Range?: string; isActive?: boolean }) {
     try {
-      // Normalize CIDRs - trim whitespace and join with comma
-      const cidrs = data.ipRange.split(',').map(c => c.trim()).filter(c => c)
-      const normalizedIpRange = cidrs.join(', ')
+      // Normalize IPv4 CIDRs - trim whitespace and join with comma
+      let normalizedIpRange: string | undefined
+      if (data.ipRange) {
+        const cidrs = data.ipRange.split(',').map(c => c.trim()).filter(c => c)
+        normalizedIpRange = cidrs.length > 0 ? cidrs.join(', ') : undefined
+      }
 
       // Normalize IPv6 CIDRs if provided
       let normalizedIpv6Range: string | undefined
@@ -436,7 +439,7 @@ export default function AdminGeoFencing() {
                 <thead className="bg-theme-tertiary">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">IP Range (CIDR)</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">IPv4/IPv6 Range (CIDR)</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Assignments</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-theme-tertiary uppercase">Actions</th>
@@ -454,7 +457,7 @@ export default function AdminGeoFencing() {
                       <td className="px-6 py-4">
                         <div className="space-y-2">
                           {/* IPv4 Ranges */}
-                          {rule.ipRange.includes(',') ? (
+                          {rule.ipRange && (rule.ipRange.includes(',') ? (
                             <div className="flex flex-wrap gap-1 items-center">
                               {rule.ipRange.split(',').slice(0, 5).map((cidr, idx) => (
                                 <span key={idx} className="inline-block px-2 py-0.5 bg-slate-700 text-slate-200 font-mono text-xs rounded">
@@ -472,7 +475,7 @@ export default function AdminGeoFencing() {
                             </div>
                           ) : (
                             <span className="font-mono text-slate-600 dark:text-gray-300">{rule.ipRange}</span>
-                          )}
+                          ))}
                           {/* IPv6 Ranges */}
                           {rule.ipv6Range && (
                             <div className="flex flex-wrap gap-1 items-center">
@@ -553,7 +556,7 @@ export default function AdminGeoFencing() {
                     <div className="flex-1 min-w-0 mr-4">
                       <div className="font-medium text-theme-primary">{rule.name}</div>
                       {/* IPv4 Ranges */}
-                      {rule.ipRange.includes(',') ? (
+                      {rule.ipRange && (rule.ipRange.includes(',') ? (
                         <div className="flex flex-wrap gap-1 mt-1 items-center">
                           {rule.ipRange.split(',').slice(0, 4).map((cidr, idx) => (
                             <span key={idx} className="inline-block px-2 py-0.5 bg-slate-700 text-slate-200 font-mono text-xs rounded">
@@ -571,7 +574,7 @@ export default function AdminGeoFencing() {
                         </div>
                       ) : (
                         <div className="text-sm text-slate-600 dark:text-gray-300 font-mono">{rule.ipRange}</div>
-                      )}
+                      ))}
                       {/* IPv6 Ranges */}
                       {rule.ipv6Range && (
                         <div className="flex flex-wrap gap-1 mt-1 items-center">
@@ -718,7 +721,7 @@ export default function AdminGeoFencing() {
               <div>
                 <h2 className="text-xl font-bold text-theme-primary">{viewingCidrs.name}</h2>
                 <p className="text-sm text-theme-tertiary">
-                  {viewingCidrs.ipRange.split(',').length} IP ranges
+                  {(viewingCidrs.ipRange?.split(',').length || 0) + (viewingCidrs.ipv6Range?.split(',').length || 0)} IP ranges
                 </p>
               </div>
               <button
@@ -730,17 +733,37 @@ export default function AdminGeoFencing() {
                 </svg>
               </button>
             </div>
-            <div className="overflow-y-auto flex-1 border border-theme rounded-lg p-3">
-              <div className="flex flex-wrap gap-2">
-                {viewingCidrs.ipRange.split(',').map((cidr, idx) => (
-                  <span
-                    key={idx}
-                    className="inline-block px-2 py-1 bg-slate-700 text-slate-200 font-mono text-sm rounded"
-                  >
-                    {cidr.trim()}
-                  </span>
-                ))}
-              </div>
+            <div className="overflow-y-auto flex-1 border border-theme rounded-lg p-3 space-y-3">
+              {viewingCidrs.ipRange && (
+                <div>
+                  <div className="text-xs text-theme-tertiary mb-2">IPv4 Ranges</div>
+                  <div className="flex flex-wrap gap-2">
+                    {viewingCidrs.ipRange.split(',').map((cidr, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-block px-2 py-1 bg-slate-700 text-slate-200 font-mono text-sm rounded"
+                      >
+                        {cidr.trim()}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {viewingCidrs.ipv6Range && (
+                <div>
+                  <div className="text-xs text-theme-tertiary mb-2">IPv6 Ranges</div>
+                  <div className="flex flex-wrap gap-2">
+                    {viewingCidrs.ipv6Range.split(',').map((cidr, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-block px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-mono text-sm rounded"
+                      >
+                        {cidr.trim()}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex justify-end mt-4">
               <button onClick={() => setViewingCidrs(null)} className="btn btn-secondary">
@@ -757,7 +780,7 @@ export default function AdminGeoFencing() {
 // Rule creation/edit modal with country selector
 function RuleModal({ rule, onSave, onClose }: {
   rule: GeoFenceRule | null
-  onSave: (data: { name: string; description: string; ipRange: string; ipv6Range?: string; isActive?: boolean }) => void
+  onSave: (data: { name: string; description: string; ipRange?: string; ipv6Range?: string; isActive?: boolean }) => void
   onClose: () => void
 }) {
   const [name, setName] = useState(rule?.name || '')
@@ -772,6 +795,7 @@ function RuleModal({ rule, onSave, onClose }: {
   const [selectedCountries, setSelectedCountries] = useState<CountryIpData[]>([])
   const [countrySearch, setCountrySearch] = useState('')
   const [showCountryDropdown, setShowCountryDropdown] = useState(false)
+  const [ipVersionTab, setIpVersionTab] = useState<'ipv4' | 'ipv6'>('ipv4')
   const countryDropdownRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
@@ -793,18 +817,27 @@ function RuleModal({ rule, onSave, onClose }: {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Update ipRange when countries are selected
+  // Update ipRange/ipv6Range when countries are selected based on IP version tab
   useEffect(() => {
     if (inputMode === 'country' && selectedCountries.length > 0) {
-      // Combine all CIDRs from selected countries
-      const allCidrs = selectedCountries.flatMap(c => c.cidrs)
-      setIpRange(allCidrs.join(', '))
+      if (ipVersionTab === 'ipv4') {
+        // Combine all IPv4 CIDRs from selected countries
+        const allCidrs = selectedCountries.flatMap(c => c.cidrs)
+        setIpRange(allCidrs.join(', '))
+        setIpv6Range('') // Clear IPv6 when using IPv4 countries
+      } else {
+        // Combine all IPv6 CIDRs from selected countries
+        const allIpv6Cidrs = selectedCountries.flatMap(c => c.ipv6Cidrs || [])
+        setIpv6Range(allIpv6Cidrs.join(', '))
+        setIpRange('') // Clear IPv4 when using IPv6 countries
+      }
       // Auto-generate name from countries if name is empty
       if (!name || selectedCountries.length > 1) {
-        setName(selectedCountries.map(c => c.name).join(', '))
+        const suffix = ipVersionTab === 'ipv6' ? ' (IPv6)' : ''
+        setName(selectedCountries.map(c => c.name).join(', ') + suffix)
       }
     }
-  }, [selectedCountries, inputMode])
+  }, [selectedCountries, inputMode, ipVersionTab])
 
   function handleAddCountry(country: CountryIpData) {
     setSelectedCountries(prev => [...prev, country])
@@ -820,23 +853,18 @@ function RuleModal({ rule, onSave, onClose }: {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
-    // Validate IPv4 CIDR(s)
+    // Parse and validate IPv4 CIDR(s)
     const cidrs = ipRange.split(',').map(c => c.trim()).filter(c => c)
     const cidrRegex = /^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/
 
     for (const cidr of cidrs) {
       if (!cidrRegex.test(cidr)) {
-        setError(`Invalid CIDR format: ${cidr}. Example: 192.168.0.0/24`)
+        setError(`Invalid IPv4 CIDR format: ${cidr}. Example: 192.168.0.0/24`)
         return
       }
     }
 
-    if (cidrs.length === 0) {
-      setError('At least one CIDR is required')
-      return
-    }
-
-    // Validate IPv6 CIDR(s) if provided
+    // Parse and validate IPv6 CIDR(s)
     const ipv6Cidrs = ipv6Range.split(',').map(c => c.trim()).filter(c => c)
     const ipv6CidrRegex = /^([0-9a-fA-F:]+)\/\d{1,3}$/
 
@@ -847,11 +875,17 @@ function RuleModal({ rule, onSave, onClose }: {
       }
     }
 
-    // Pass all CIDRs - the parent handler will create multiple rules if needed
+    // At least one of IPv4 or IPv6 must be provided
+    if (cidrs.length === 0 && ipv6Cidrs.length === 0) {
+      setError('At least one IPv4 or IPv6 CIDR range is required')
+      return
+    }
+
+    // Pass CIDRs - only include if not empty
     onSave({
       name,
       description,
-      ipRange: ipRange,
+      ipRange: cidrs.length > 0 ? ipRange : undefined,
       ipv6Range: ipv6Cidrs.length > 0 ? ipv6Range : undefined,
       isActive
     })
@@ -905,6 +939,32 @@ function RuleModal({ rule, onSave, onClose }: {
               <label className="block text-sm font-medium text-theme-primary">
                 Select Countries
               </label>
+
+              {/* IPv4/IPv6 Toggle Tabs */}
+              <div className="flex gap-1 p-1 bg-theme-tertiary rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setIpVersionTab('ipv4')}
+                  className={`flex-1 py-1.5 px-3 rounded-md text-sm font-medium transition-colors ${
+                    ipVersionTab === 'ipv4'
+                      ? 'bg-slate-700 text-white'
+                      : 'text-theme-secondary hover:text-theme-primary'
+                  }`}
+                >
+                  IPv4 Ranges
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIpVersionTab('ipv6')}
+                  className={`flex-1 py-1.5 px-3 rounded-md text-sm font-medium transition-colors ${
+                    ipVersionTab === 'ipv6'
+                      ? 'bg-purple-600 text-white'
+                      : 'text-theme-secondary hover:text-theme-primary'
+                  }`}
+                >
+                  IPv6 Ranges
+                </button>
+              </div>
 
               {/* Selected Countries */}
               {selectedCountries.length > 0 && (
@@ -972,7 +1032,11 @@ function RuleModal({ rule, onSave, onClose }: {
                           <span className="text-xl">{country.flag}</span>
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-theme-primary truncate">{country.name}</div>
-                            <div className="text-xs text-theme-tertiary">{country.cidrs.length} IP ranges</div>
+                            <div className="text-xs text-theme-tertiary">
+                              {ipVersionTab === 'ipv4'
+                                ? `${country.cidrs.length} IPv4 ranges`
+                                : `${(country.ipv6Cidrs || []).length} IPv6 ranges`}
+                            </div>
                           </div>
                           <span className="text-xs text-theme-tertiary">{country.code}</span>
                         </button>
@@ -985,7 +1049,7 @@ function RuleModal({ rule, onSave, onClose }: {
               {selectedCountries.length > 0 && (
                 <p className="text-xs text-theme-tertiary">
                   {selectedCountries.length} countr{selectedCountries.length === 1 ? 'y' : 'ies'} selected.
-                  Will create rule with representative IP ranges.
+                  Will populate {ipVersionTab === 'ipv4' ? 'IPv4' : 'IPv6'} ranges from selected countries.
                 </p>
               )}
             </div>
@@ -1005,9 +1069,11 @@ function RuleModal({ rule, onSave, onClose }: {
 
           <div>
             <label className="block text-sm font-medium text-theme-primary mb-1">
-              IP Range (CIDR)
-              {inputMode === 'country' && !rule && (
+              IPv4 Range (CIDR)
+              {inputMode === 'country' && !rule ? (
                 <span className="text-theme-tertiary font-normal ml-2">Auto-filled from selected countries</span>
+              ) : (
+                <span className="ml-2 text-xs font-normal text-theme-tertiary">(Required if no IPv6)</span>
               )}
             </label>
             <input
@@ -1016,20 +1082,19 @@ function RuleModal({ rule, onSave, onClose }: {
               onChange={(e) => { setIpRange(e.target.value); setError(null); }}
               className="input w-full font-mono text-sm"
               placeholder="e.g., 192.168.0.0/24"
-              required
               readOnly={inputMode === 'country' && !rule}
             />
             <p className="text-xs text-theme-tertiary mt-1">
               {inputMode === 'country' && !rule
                 ? 'IP ranges are automatically populated from selected countries'
-                : 'Enter an IP range in CIDR notation'}
+                : 'Enter IPv4 CIDR range(s). Separate multiple with commas.'}
             </p>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-theme-primary mb-1">
               IPv6 Range (CIDR)
-              <span className="ml-2 text-xs font-normal text-purple-600 dark:text-purple-400">(Optional)</span>
+              <span className="ml-2 text-xs font-normal text-theme-tertiary">(Required if no IPv4)</span>
             </label>
             <input
               type="text"
@@ -1097,7 +1162,8 @@ function AssignRuleModal({ title, rules, onAssign, onClose }: {
 
   const filteredRules = rules.filter(rule =>
     rule.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    rule.ipRange.toLowerCase().includes(searchQuery.toLowerCase())
+    (rule.ipRange?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
+    (rule.ipv6Range?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
   )
 
   function toggleRule(ruleId: string) {
@@ -1167,27 +1233,42 @@ function AssignRuleModal({ title, rules, onAssign, onClose }: {
 
             {/* Rules list with checkboxes */}
             <div className="space-y-2 max-h-64 overflow-y-auto border border-theme rounded-lg p-2">
-              {filteredRules.map((rule) => (
-                <label
-                  key={rule.id}
-                  className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
-                    selectedIds.includes(rule.id)
-                      ? 'bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800'
-                      : 'bg-theme-secondary hover:bg-theme-tertiary border border-transparent'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(rule.id)}
-                    onChange={() => toggleRule(rule.id)}
-                    className="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-theme-primary">{rule.name}</div>
-                    <div className="text-sm text-theme-tertiary font-mono truncate">{rule.ipRange}</div>
-                  </div>
-                </label>
-              ))}
+              {filteredRules.map((rule) => {
+                const ipv4Count = rule.ipRange ? rule.ipRange.split(',').length : 0
+                const ipv6Count = rule.ipv6Range ? rule.ipv6Range.split(',').length : 0
+                return (
+                  <label
+                    key={rule.id}
+                    className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                      selectedIds.includes(rule.id)
+                        ? 'bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800'
+                        : 'bg-theme-secondary hover:bg-theme-tertiary border border-transparent'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(rule.id)}
+                      onChange={() => toggleRule(rule.id)}
+                      className="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-theme-primary">{rule.name}</div>
+                      <div className="text-sm text-theme-tertiary">
+                        {ipv4Count > 0 && (
+                          <span className="inline-block px-2 py-0.5 bg-slate-700 text-slate-200 text-xs rounded mr-1">
+                            {ipv4Count} IPv4
+                          </span>
+                        )}
+                        {ipv6Count > 0 && (
+                          <span className="inline-block px-2 py-0.5 bg-purple-900/30 text-purple-300 text-xs rounded">
+                            {ipv6Count} IPv6
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </label>
+                )
+              })}
             </div>
           </>
         )}
@@ -1239,16 +1320,31 @@ function ManageRulesModal({ title, assignedRules, allRules, onAdd, onRemove, onC
               </button>
               {showAddDropdown && availableRules.length > 0 && (
                 <div className="absolute right-0 mt-1 w-64 dropdown-menu max-h-48 overflow-y-auto">
-                  {availableRules.map((rule) => (
-                    <button
-                      key={rule.id}
-                      onClick={() => { onAdd(rule.id); setShowAddDropdown(false); }}
-                      className="w-full text-left p-3 dropdown-item"
-                    >
-                      <div className="font-medium text-theme-primary">{rule.name}</div>
-                      <div className="text-sm text-theme-tertiary font-mono">{rule.ipRange}</div>
-                    </button>
-                  ))}
+                  {availableRules.map((rule) => {
+                    const ipv4Count = rule.ipRange ? rule.ipRange.split(',').length : 0
+                    const ipv6Count = rule.ipv6Range ? rule.ipv6Range.split(',').length : 0
+                    return (
+                      <button
+                        key={rule.id}
+                        onClick={() => { onAdd(rule.id); setShowAddDropdown(false); }}
+                        className="w-full text-left p-3 dropdown-item"
+                      >
+                        <div className="font-medium text-theme-primary">{rule.name}</div>
+                        <div className="text-sm text-theme-tertiary">
+                          {ipv4Count > 0 && (
+                            <span className="inline-block px-2 py-0.5 bg-slate-700 text-slate-200 text-xs rounded mr-1">
+                              {ipv4Count} IPv4
+                            </span>
+                          )}
+                          {ipv6Count > 0 && (
+                            <span className="inline-block px-2 py-0.5 bg-purple-900/30 text-purple-300 text-xs rounded">
+                              {ipv6Count} IPv6
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -1260,22 +1356,39 @@ function ManageRulesModal({ title, assignedRules, allRules, onAdd, onRemove, onC
             </p>
           ) : (
             <div className="space-y-2 max-h-64 overflow-y-auto">
-              {assignedRules.map((rule) => (
-                <div key={rule.id} className="flex items-center justify-between p-3 bg-theme-secondary rounded-lg">
-                  <div>
-                    <div className="font-medium text-theme-primary">{rule.name}</div>
-                    <div className="text-sm text-theme-tertiary font-mono">{rule.ipRange}</div>
+              {assignedRules.map((rule) => {
+                const ipv4Count = rule.ipRange ? rule.ipRange.split(',').length : 0
+                const ipv6Count = rule.ipv6Range ? rule.ipv6Range.split(',').length : 0
+                const totalCount = ipv4Count + ipv6Count
+                return (
+                  <div key={rule.id} className="flex items-center justify-between p-3 bg-theme-secondary rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-theme-primary">{rule.name}</div>
+                      <div className="text-sm text-theme-tertiary">
+                        {ipv4Count > 0 && (
+                          <span className="inline-block px-2 py-0.5 bg-slate-700 text-slate-200 text-xs rounded mr-1">
+                            {ipv4Count} IPv4
+                          </span>
+                        )}
+                        {ipv6Count > 0 && (
+                          <span className="inline-block px-2 py-0.5 bg-purple-900/30 text-purple-300 text-xs rounded">
+                            {ipv6Count} IPv6
+                          </span>
+                        )}
+                        {totalCount === 0 && <span className="text-xs">No ranges</span>}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => onRemove(rule.id)}
+                      className="text-red-600 hover:text-red-800 dark:text-red-400 flex-shrink-0 ml-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
-                  <button
-                    onClick={() => onRemove(rule.id)}
-                    className="text-red-600 hover:text-red-800 dark:text-red-400"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

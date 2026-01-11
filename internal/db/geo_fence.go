@@ -19,8 +19,8 @@ type GeoFenceRule struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
-	IPRange     string    `json:"ipRange"`
-	IPv6Range   *string   `json:"ipv6Range,omitempty"` // IPv6 CIDR ranges (optional)
+	IPRange     *string   `json:"ipRange,omitempty"`   // IPv4 CIDR ranges (optional if IPv6 provided)
+	IPv6Range   *string   `json:"ipv6Range,omitempty"` // IPv6 CIDR ranges (optional if IPv4 provided)
 	IsActive    bool      `json:"isActive"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
@@ -36,13 +36,13 @@ func NewGeoFenceStore(db *DB) *GeoFenceStore {
 	return &GeoFenceStore{db: db}
 }
 
-// CreateRule creates a new geo-fence rule
-func (s *GeoFenceStore) CreateRule(ctx context.Context, name, description, ipRange string, ipv6Range *string) (*GeoFenceRule, error) {
+// CreateRule creates a new geo-fence rule (at least one of ipRange or ipv6Range must be provided)
+func (s *GeoFenceStore) CreateRule(ctx context.Context, name, description string, ipRange, ipv6Range *string) (*GeoFenceRule, error) {
 	var rule GeoFenceRule
 	err := s.db.Pool.QueryRow(ctx, `
 		INSERT INTO geo_fence_rules (name, description, ip_range, ipv6_range, is_active)
 		VALUES ($1, $2, $3, $4, true)
-		RETURNING id, name, description, ip_range::text, ipv6_range, is_active, created_at, updated_at
+		RETURNING id, name, description, ip_range, ipv6_range, is_active, created_at, updated_at
 	`, name, description, ipRange, ipv6Range).Scan(
 		&rule.ID, &rule.Name, &rule.Description, &rule.IPRange, &rule.IPv6Range, &rule.IsActive, &rule.CreatedAt, &rule.UpdatedAt,
 	)
@@ -53,7 +53,7 @@ func (s *GeoFenceStore) CreateRule(ctx context.Context, name, description, ipRan
 func (s *GeoFenceStore) GetRule(ctx context.Context, id string) (*GeoFenceRule, error) {
 	var rule GeoFenceRule
 	err := s.db.Pool.QueryRow(ctx, `
-		SELECT id, name, description, ip_range::text, ipv6_range, is_active, created_at, updated_at
+		SELECT id, name, description, ip_range, ipv6_range, is_active, created_at, updated_at
 		FROM geo_fence_rules WHERE id = $1
 	`, id).Scan(&rule.ID, &rule.Name, &rule.Description, &rule.IPRange, &rule.IPv6Range, &rule.IsActive, &rule.CreatedAt, &rule.UpdatedAt)
 	if err == pgx.ErrNoRows {
@@ -65,7 +65,7 @@ func (s *GeoFenceStore) GetRule(ctx context.Context, id string) (*GeoFenceRule, 
 // ListRules retrieves all geo-fence rules
 func (s *GeoFenceStore) ListRules(ctx context.Context) ([]*GeoFenceRule, error) {
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT id, name, description, ip_range::text, ipv6_range, is_active, created_at, updated_at
+		SELECT id, name, description, ip_range, ipv6_range, is_active, created_at, updated_at
 		FROM geo_fence_rules ORDER BY name
 	`)
 	if err != nil {
@@ -84,14 +84,14 @@ func (s *GeoFenceStore) ListRules(ctx context.Context) ([]*GeoFenceRule, error) 
 	return rules, rows.Err()
 }
 
-// UpdateRule updates a geo-fence rule
-func (s *GeoFenceStore) UpdateRule(ctx context.Context, id, name, description, ipRange string, ipv6Range *string, isActive bool) (*GeoFenceRule, error) {
+// UpdateRule updates a geo-fence rule (at least one of ipRange or ipv6Range must be provided)
+func (s *GeoFenceStore) UpdateRule(ctx context.Context, id, name, description string, ipRange, ipv6Range *string, isActive bool) (*GeoFenceRule, error) {
 	var rule GeoFenceRule
 	err := s.db.Pool.QueryRow(ctx, `
 		UPDATE geo_fence_rules
 		SET name = $2, description = $3, ip_range = $4, ipv6_range = $5, is_active = $6, updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, name, description, ip_range::text, ipv6_range, is_active, created_at, updated_at
+		RETURNING id, name, description, ip_range, ipv6_range, is_active, created_at, updated_at
 	`, id, name, description, ipRange, ipv6Range, isActive).Scan(
 		&rule.ID, &rule.Name, &rule.Description, &rule.IPRange, &rule.IPv6Range, &rule.IsActive, &rule.CreatedAt, &rule.UpdatedAt,
 	)
@@ -133,7 +133,7 @@ func (s *GeoFenceStore) RemoveGlobalRule(ctx context.Context, ruleID string) err
 // ListGlobalRules lists all global geo-fence rules
 func (s *GeoFenceStore) ListGlobalRules(ctx context.Context) ([]*GeoFenceRule, error) {
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT r.id, r.name, r.description, r.ip_range::text, r.ipv6_range, r.is_active, r.created_at, r.updated_at
+		SELECT r.id, r.name, r.description, r.ip_range, r.ipv6_range, r.is_active, r.created_at, r.updated_at
 		FROM geo_fence_rules r
 		JOIN geo_fence_global g ON r.id = g.rule_id
 		ORDER BY r.name
@@ -174,7 +174,7 @@ func (s *GeoFenceStore) RemoveUserRule(ctx context.Context, userID, ruleID strin
 // ListUserRules lists all geo-fence rules for a user
 func (s *GeoFenceStore) ListUserRules(ctx context.Context, userID string) ([]*GeoFenceRule, error) {
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT r.id, r.name, r.description, r.ip_range::text, r.ipv6_range, r.is_active, r.created_at, r.updated_at
+		SELECT r.id, r.name, r.description, r.ip_range, r.ipv6_range, r.is_active, r.created_at, r.updated_at
 		FROM geo_fence_rules r
 		JOIN user_geo_fence_rules u ON r.id = u.rule_id
 		WHERE u.user_id = $1
@@ -216,7 +216,7 @@ func (s *GeoFenceStore) RemoveGroupRule(ctx context.Context, groupName, ruleID s
 // ListGroupRules lists all geo-fence rules for a group
 func (s *GeoFenceStore) ListGroupRules(ctx context.Context, groupName string) ([]*GeoFenceRule, error) {
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT r.id, r.name, r.description, r.ip_range::text, r.ipv6_range, r.is_active, r.created_at, r.updated_at
+		SELECT r.id, r.name, r.description, r.ip_range, r.ipv6_range, r.is_active, r.created_at, r.updated_at
 		FROM geo_fence_rules r
 		JOIN group_geo_fence_rules g ON r.id = g.rule_id
 		WHERE g.group_name = $1
@@ -327,18 +327,20 @@ func (s *GeoFenceStore) IsIPAllowed(ctx context.Context, clientIP, userID string
 		}
 
 		// Check IPv4 ranges (also handles IPv4-mapped IPv6 addresses)
-		cidrs := strings.Split(rule.IPRange, ",")
-		for _, cidr := range cidrs {
-			cidr = strings.TrimSpace(cidr)
-			if cidr == "" {
-				continue
-			}
-			_, ipNet, err := net.ParseCIDR(cidr)
-			if err != nil {
-				continue
-			}
-			if ipNet.Contains(ip) {
-				return true, nil
+		if rule.IPRange != nil && *rule.IPRange != "" {
+			cidrs := strings.Split(*rule.IPRange, ",")
+			for _, cidr := range cidrs {
+				cidr = strings.TrimSpace(cidr)
+				if cidr == "" {
+					continue
+				}
+				_, ipNet, err := net.ParseCIDR(cidr)
+				if err != nil {
+					continue
+				}
+				if ipNet.Contains(ip) {
+					return true, nil
+				}
 			}
 		}
 	}

@@ -427,7 +427,7 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
-      <div className="bg-theme-card rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+      <div className="bg-theme-card rounded-lg shadow-xl max-w-md w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-semibold text-theme-primary mb-4">Register New Gateway</h2>
 
         {error && (
@@ -1041,7 +1041,7 @@ function EditGatewayModal({ gateway, onClose, onSuccess }: EditGatewayModalProps
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
-      <div className="bg-theme-card rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+      <div className="bg-theme-card rounded-lg shadow-xl max-w-md w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-semibold text-theme-primary mb-4">Edit Gateway</h2>
 
         {error && (

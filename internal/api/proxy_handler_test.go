@@ -7,13 +7,13 @@ import (
 
 func TestIsPrivateIP_PrivateIPv4(t *testing.T) {
 	privateIPs := []string{
-		"127.0.0.1",      // Loopback
+		"127.0.0.1", // Loopback
 		"127.255.255.254",
-		"10.0.0.1",       // Class A private
+		"10.0.0.1", // Class A private
 		"10.255.255.255",
-		"172.16.0.1",     // Class B private
+		"172.16.0.1", // Class B private
 		"172.31.255.255",
-		"192.168.0.1",    // Class C private
+		"192.168.0.1", // Class C private
 		"192.168.255.255",
 		"169.254.169.254", // AWS metadata endpoint (link-local)
 		"169.254.0.1",
@@ -32,11 +32,11 @@ func TestIsPrivateIP_PrivateIPv4(t *testing.T) {
 
 func TestIsPrivateIP_PublicIPv4(t *testing.T) {
 	publicIPs := []string{
-		"8.8.8.8",        // Google DNS
-		"1.1.1.1",        // Cloudflare DNS
-		"142.250.80.46",  // google.com
-		"151.101.1.140",  // reddit.com
-		"13.107.42.14",   // microsoft.com
+		"8.8.8.8",       // Google DNS
+		"1.1.1.1",       // Cloudflare DNS
+		"142.250.80.46", // google.com
+		"151.101.1.140", // reddit.com
+		"13.107.42.14",  // microsoft.com
 	}
 
 	for _, ipStr := range publicIPs {
@@ -52,12 +52,12 @@ func TestIsPrivateIP_PublicIPv4(t *testing.T) {
 
 func TestIsPrivateIP_PrivateIPv6(t *testing.T) {
 	privateIPs := []string{
-		"::1",                    // IPv6 loopback
-		"fe80::1",                // Link-local
-		"fc00::1",                // Unique local
-		"fd00::1",                // Unique local
-		"::ffff:192.168.1.1",     // IPv4-mapped IPv6 (private IPv4)
-		"::ffff:10.0.0.1",        // IPv4-mapped IPv6 (private IPv4)
+		"::1",                // IPv6 loopback
+		"fe80::1",            // Link-local
+		"fc00::1",            // Unique local
+		"fd00::1",            // Unique local
+		"::ffff:192.168.1.1", // IPv4-mapped IPv6 (private IPv4)
+		"::ffff:10.0.0.1",    // IPv4-mapped IPv6 (private IPv4)
 	}
 
 	for _, ipStr := range privateIPs {

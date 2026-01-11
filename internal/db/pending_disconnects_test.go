@@ -116,20 +116,20 @@ func TestPendingDisconnect_NilOptionalFields(t *testing.T) {
 
 	// Test with nil optional fields
 	pd := PendingDisconnect{
-		ID:          "pd-123",
-		UserID:      "user-123",
-		UserEmail:   "test@example.com",
-		GatewayID:   nil, // nil = all gateways
-		NodeType:    "gateway",
+		ID:           "pd-123",
+		UserID:       "user-123",
+		UserEmail:    "test@example.com",
+		GatewayID:    nil, // nil = all gateways
+		NodeType:     "gateway",
 		ConnectionID: nil,
-		VPNAddress:  nil,
-		Reason:      "Test disconnect",
-		RequestedBy: "admin@example.com",
-		RequestedAt: now,
-		ExecutedAt:  nil, // not yet executed
-		ExecutedBy:  nil,
-		ExpiresAt:   now.Add(5 * time.Minute),
-		CreatedAt:   now,
+		VPNAddress:   nil,
+		Reason:       "Test disconnect",
+		RequestedBy:  "admin@example.com",
+		RequestedAt:  now,
+		ExecutedAt:   nil, // not yet executed
+		ExecutedBy:   nil,
+		ExpiresAt:    now.Add(5 * time.Minute),
+		CreatedAt:    now,
 	}
 
 	if pd.GatewayID != nil {

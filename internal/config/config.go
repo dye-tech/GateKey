@@ -283,20 +283,20 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("audit.destination", "database")
 
 	// Security defaults
-	v.SetDefault("security.proxy_ssrf_protection", true)             // Enabled by default to prevent SSRF attacks
-	v.SetDefault("security.proxy_dns_rebinding_protection", true)    // Always on by default for safety
-	v.SetDefault("security.proxy_tls_verify", true)                  // Enabled by default for secure proxy connections
-	v.SetDefault("security.proxy_ca_bundle", "")                     // Empty means use system CA bundle
-	v.SetDefault("security.proxy_tls_min_version", "1.2")            // TLS 1.2 minimum
+	v.SetDefault("security.proxy_ssrf_protection", true)          // Enabled by default to prevent SSRF attacks
+	v.SetDefault("security.proxy_dns_rebinding_protection", true) // Always on by default for safety
+	v.SetDefault("security.proxy_tls_verify", true)               // Enabled by default for secure proxy connections
+	v.SetDefault("security.proxy_ca_bundle", "")                  // Empty means use system CA bundle
+	v.SetDefault("security.proxy_tls_min_version", "1.2")         // TLS 1.2 minimum
 
 	// Security headers defaults (multi-tenant aware)
-	v.SetDefault("security.security_headers_enabled", true)          // Enabled by default
-	v.SetDefault("security.hsts_enabled", true)                      // HSTS enabled by default
-	v.SetDefault("security.hsts_max_age", 31536000)                  // 1 year
-	v.SetDefault("security.hsts_include_subdomains", true)           // Include subdomains
-	v.SetDefault("security.hsts_preload", false)                     // Preload disabled (requires manual submission)
-	v.SetDefault("security.frame_ancestors", "dynamic")              // Dynamic for multi-tenant (uses Host header)
-	v.SetDefault("security.content_security_policy", "")             // Empty = use secure defaults with dynamic frame-ancestors
+	v.SetDefault("security.security_headers_enabled", true) // Enabled by default
+	v.SetDefault("security.hsts_enabled", true)             // HSTS enabled by default
+	v.SetDefault("security.hsts_max_age", 31536000)         // 1 year
+	v.SetDefault("security.hsts_include_subdomains", true)  // Include subdomains
+	v.SetDefault("security.hsts_preload", false)            // Preload disabled (requires manual submission)
+	v.SetDefault("security.frame_ancestors", "dynamic")     // Dynamic for multi-tenant (uses Host header)
+	v.SetDefault("security.content_security_policy", "")    // Empty = use secure defaults with dynamic frame-ancestors
 	v.SetDefault("security.permissions_policy", "geolocation=(), camera=(), microphone=(), payment=()")
 }
 

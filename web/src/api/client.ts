@@ -8,6 +8,28 @@ export const api = axios.create({
   },
 })
 
+// Helper to read a cookie value by name
+function getCookie(name: string): string | null {
+  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'))
+  return match ? decodeURIComponent(match[2]) : null
+}
+
+// Add request interceptor to include CSRF token for state-changing requests
+api.interceptors.request.use(
+  (config) => {
+    const method = config.method?.toUpperCase()
+    // For POST, PUT, DELETE, PATCH - include CSRF token
+    if (method && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+      const csrfToken = getCookie('gk_csrf')
+      if (csrfToken) {
+        config.headers['X-CSRF-Token'] = csrfToken
+      }
+    }
+    return config
+  },
+  (error) => Promise.reject(error)
+)
+
 // Add response interceptor for handling auth errors
 api.interceptors.response.use(
   (response) => response,
@@ -2226,8 +2248,8 @@ export interface GeoFenceRule {
   id: string
   name: string
   description: string
-  ipRange: string
-  ipv6Range?: string // IPv6 CIDR ranges (optional)
+  ipRange?: string    // IPv4 CIDR ranges (optional if IPv6 provided)
+  ipv6Range?: string  // IPv6 CIDR ranges (optional if IPv4 provided)
   isActive: boolean
   createdAt: string
   updatedAt: string
@@ -2251,7 +2273,7 @@ export async function getGeoFenceRules(): Promise<GeoFenceRule[]> {
   return response.data || []
 }
 
-export async function createGeoFenceRule(data: { name: string; description: string; ipRange: string; ipv6Range?: string }): Promise<GeoFenceRule> {
+export async function createGeoFenceRule(data: { name: string; description: string; ipRange?: string; ipv6Range?: string }): Promise<GeoFenceRule> {
   const response = await api.post('/api/v1/admin/geo-fence/rules', data)
   return response.data
 }
@@ -2261,7 +2283,7 @@ export async function getGeoFenceRule(id: string): Promise<GeoFenceRule> {
   return response.data
 }
 
-export async function updateGeoFenceRule(id: string, data: { name: string; description: string; ipRange: string; ipv6Range?: string; isActive: boolean }): Promise<GeoFenceRule> {
+export async function updateGeoFenceRule(id: string, data: { name: string; description: string; ipRange?: string; ipv6Range?: string; isActive: boolean }): Promise<GeoFenceRule> {
   const response = await api.put(`/api/v1/admin/geo-fence/rules/${id}`, data)
   return response.data
 }
