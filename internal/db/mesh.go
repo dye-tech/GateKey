@@ -870,8 +870,8 @@ func (s *MeshStore) RotateSpokeToken(ctx context.Context, id string) (string, er
 // MarkInactiveGateways marks mesh gateways as disconnected if they haven't reported recently
 func (s *MeshStore) MarkInactiveMeshSpokes(ctx context.Context, threshold time.Duration) (int64, error) {
 	result, err := s.db.Pool.Exec(ctx, `
-		UPDATE mesh_gateways SET status = 'disconnected'
-		WHERE status = 'connected' AND (last_seen IS NULL OR last_seen < NOW() - $1::interval)
+		UPDATE mesh_gateways SET status = 'offline', status_message = 'No heartbeat received'
+		WHERE status IN ('connected', 'online') AND (last_seen IS NULL OR last_seen < NOW() - $1::interval)
 	`, threshold.String())
 	if err != nil {
 		return 0, err
@@ -1645,3 +1645,24 @@ func (s *MeshStore) CleanupExpiredWGMeshPeers(ctx context.Context, olderThan tim
 	}
 	return result.RowsAffected(), nil
 }
+
+// SyncHubConnectionCounts updates connected_gateways count on all hubs to match actual online spokes
+// Returns the number of hubs that had their counts updated
+func (s *MeshStore) SyncHubConnectionCounts(ctx context.Context) (int64, error) {
+	result, err := s.db.Pool.Exec(ctx, `
+		UPDATE mesh_hubs h
+		SET connected_gateways = (
+			SELECT COUNT(*) FROM mesh_gateways g
+			WHERE g.hub_id = h.id AND g.status IN ('online', 'connected')
+		)
+		WHERE connected_gateways != (
+			SELECT COUNT(*) FROM mesh_gateways g
+			WHERE g.hub_id = h.id AND g.status IN ('online', 'connected')
+		)
+	`)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+

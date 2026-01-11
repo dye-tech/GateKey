@@ -283,8 +283,10 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("audit.destination", "database")
 
 	// Security defaults
-	v.SetDefault("security.proxy_ssrf_protection", true)          // Enabled by default to prevent SSRF attacks
-	v.SetDefault("security.proxy_dns_rebinding_protection", true) // Always on by default for safety
+	// SSRF/DNS rebinding protection disabled by default since the proxy feature
+	// is specifically designed to access internal services behind the gateway
+	v.SetDefault("security.proxy_ssrf_protection", false)
+	v.SetDefault("security.proxy_dns_rebinding_protection", false)
 	v.SetDefault("security.proxy_tls_verify", true)               // Enabled by default for secure proxy connections
 	v.SetDefault("security.proxy_ca_bundle", "")                  // Empty means use system CA bundle
 	v.SetDefault("security.proxy_tls_min_version", "1.2")         // TLS 1.2 minimum
