@@ -615,14 +615,14 @@ pki:
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	// SSRF protection should be enabled by default
-	if !cfg.Security.ProxySSRFProtection {
-		t.Error("Expected ProxySSRFProtection to be true by default")
+	// SSRF protection should be disabled by default (proxy is for internal services)
+	if cfg.Security.ProxySSRFProtection {
+		t.Error("Expected ProxySSRFProtection to be false by default")
 	}
 
-	// DNS rebinding protection should be enabled by default
-	if !cfg.Security.ProxyDNSRebindingProtection {
-		t.Error("Expected ProxyDNSRebindingProtection to be true by default")
+	// DNS rebinding protection should be disabled by default (proxy is for internal services)
+	if cfg.Security.ProxyDNSRebindingProtection {
+		t.Error("Expected ProxyDNSRebindingProtection to be false by default")
 	}
 
 	// TLS verification should be enabled by default
