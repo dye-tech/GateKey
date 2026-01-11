@@ -64,6 +64,8 @@ func (s *Server) handleCreateProxyApp(c *gin.Context) {
 		AllowedHeaders     []string          `json:"allowed_headers"`
 		WebsocketEnabled   *bool             `json:"websocket_enabled"`
 		TimeoutSeconds     *int              `json:"timeout_seconds"`
+		SkipTLSVerify      *bool             `json:"skip_tls_verify"`
+		CustomCACert       *string           `json:"custom_ca_cert"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -122,6 +124,11 @@ func (s *Server) handleCreateProxyApp(c *gin.Context) {
 		req.AllowedHeaders = []string{"*"}
 	}
 
+	skipTLSVerify := false
+	if req.SkipTLSVerify != nil {
+		skipTLSVerify = *req.SkipTLSVerify
+	}
+
 	app := &db.ProxyApplication{
 		Name:               strings.TrimSpace(req.Name),
 		Slug:               slug,
@@ -135,6 +142,8 @@ func (s *Server) handleCreateProxyApp(c *gin.Context) {
 		AllowedHeaders:     req.AllowedHeaders,
 		WebsocketEnabled:   websocketEnabled,
 		TimeoutSeconds:     timeoutSeconds,
+		SkipTLSVerify:      skipTLSVerify,
+		CustomCACert:       req.CustomCACert,
 	}
 
 	if err := s.proxyAppStore.CreateProxyApplication(c.Request.Context(), app); err != nil {
@@ -221,6 +230,8 @@ func (s *Server) handleUpdateProxyApp(c *gin.Context) {
 		AllowedHeaders     []string          `json:"allowed_headers"`
 		WebsocketEnabled   *bool             `json:"websocket_enabled"`
 		TimeoutSeconds     *int              `json:"timeout_seconds"`
+		SkipTLSVerify      *bool             `json:"skip_tls_verify"`
+		CustomCACert       *string           `json:"custom_ca_cert"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -274,6 +285,12 @@ func (s *Server) handleUpdateProxyApp(c *gin.Context) {
 	}
 	if req.TimeoutSeconds != nil && *req.TimeoutSeconds > 0 {
 		app.TimeoutSeconds = *req.TimeoutSeconds
+	}
+	if req.SkipTLSVerify != nil {
+		app.SkipTLSVerify = *req.SkipTLSVerify
+	}
+	if req.CustomCACert != nil {
+		app.CustomCACert = req.CustomCACert
 	}
 
 	if err := s.proxyAppStore.UpdateProxyApplication(c.Request.Context(), app); err != nil {
