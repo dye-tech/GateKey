@@ -171,6 +171,10 @@ func (s *Server) handleGenerateWireGuardConfig(c *gin.Context) {
 			case db.AccessRuleTypeIP:
 				// Convert single IP to /32 CIDR for WireGuard
 				allowedIPs = append(allowedIPs, rule.Value+"/32")
+			case db.AccessRuleTypeHostname, db.AccessRuleTypeHostnameWildcard:
+				// Hostname rules are not directly usable in WireGuard allowed-ips
+				// These would need DNS resolution which is not supported here
+				continue
 			}
 		}
 

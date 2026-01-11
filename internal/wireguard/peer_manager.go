@@ -112,7 +112,7 @@ func (m *PeerManager) AddPeer(ctx context.Context, peer *Peer) error {
 		}
 		tmpFileName := tmpFile.Name()
 		// Ensure secure cleanup: overwrite with random data before removal
-		defer secureWipeAndRemove(tmpFileName)
+		defer func() { _ = secureWipeAndRemove(tmpFileName) }()
 
 		// Set restrictive permissions (owner read/write only)
 		if err := os.Chmod(tmpFileName, 0600); err != nil {
@@ -203,14 +203,14 @@ func (m *PeerManager) SyncPeers(ctx context.Context, authorizedPeers []*Peer) er
 				// Set restrictive permissions (owner read/write only)
 				if err := os.Chmod(tmpFileName, 0600); err != nil {
 					tmpFile.Close()
-					secureWipeAndRemove(tmpFileName)
+					_ = secureWipeAndRemove(tmpFileName)
 					fmt.Printf("warning: failed to set PSK file permissions: %v\n", err)
 					continue
 				}
 
 				if _, err := tmpFile.WriteString(peer.PresharedKey); err != nil {
 					tmpFile.Close()
-					secureWipeAndRemove(tmpFileName)
+					_ = secureWipeAndRemove(tmpFileName)
 					fmt.Printf("warning: failed to write PSK: %v\n", err)
 					continue
 				}
@@ -218,7 +218,7 @@ func (m *PeerManager) SyncPeers(ctx context.Context, authorizedPeers []*Peer) er
 
 				args = append(args, "preshared-key", tmpFileName)
 				// Ensure secure cleanup: overwrite with random data before removal
-				defer secureWipeAndRemove(tmpFileName)
+				defer func() { _ = secureWipeAndRemove(tmpFileName) }()
 			}
 
 			if output, err := m.executor.Output(ctx, "wg", args...); err != nil {

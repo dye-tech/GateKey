@@ -123,6 +123,12 @@ linters:
           - errcheck
           - gosec
 
+      # Exclude unusedwrite from test files - false positives for test struct literals
+      - path: _test\.go
+        text: "unusedwrite:"
+        linters:
+          - govet
+
       # Exclude some linters from running on generated files
       - path: generated
         linters:
