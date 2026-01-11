@@ -233,6 +233,7 @@ function AddEditModal({ app, onClose, onSuccess }: AddEditModalProps) {
   const [stripPrefix, setStripPrefix] = useState(app?.stripPrefix ?? true)
   const [websocketEnabled, setWebsocketEnabled] = useState(app?.websocketEnabled ?? true)
   const [timeoutSeconds, setTimeoutSeconds] = useState(app?.timeoutSeconds ?? 30)
+  const [skipTlsVerify, setSkipTlsVerify] = useState(app?.skipTlsVerify ?? false)
 
   function generateSlug(text: string) {
     return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -254,6 +255,7 @@ function AddEditModal({ app, onClose, onSuccess }: AddEditModalProps) {
       strip_prefix: stripPrefix,
       websocket_enabled: websocketEnabled,
       timeout_seconds: timeoutSeconds,
+      skip_tls_verify: skipTlsVerify,
     }
 
     try {
@@ -412,6 +414,19 @@ function AddEditModal({ app, onClose, onSuccess }: AddEditModalProps) {
                   />
                   <label htmlFor="websocketEnabled" className="ml-2 text-sm text-theme-secondary">
                     Enable WebSocket support
+                  </label>
+                </div>
+
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="skipTlsVerify"
+                    checked={skipTlsVerify}
+                    onChange={(e) => setSkipTlsVerify(e.target.checked)}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-theme rounded"
+                  />
+                  <label htmlFor="skipTlsVerify" className="ml-2 text-sm text-theme-secondary">
+                    Skip TLS certificate verification (for self-signed certs)
                   </label>
                 </div>
 
