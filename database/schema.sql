@@ -2,7 +2,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict N4OPo4xE8WIX3xdVKdzaJmuyYytOchindcwgcdQZIqN4tl5DQM4XmFdTBlwZ1BP
 
 -- Dumped from database version 16.10
 -- Dumped by pg_dump version 16.10
@@ -26,7 +25,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
 
 
 --
--- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: 
+-- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: -
 --
 
 COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
@@ -40,14 +39,14 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
 
 
 --
--- Name: EXTENSION "uuid-ossp"; Type: COMMENT; Schema: -; Owner: 
+-- Name: EXTENSION "uuid-ossp"; Type: COMMENT; Schema: -; Owner: -
 --
 
 COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
 
 
 --
--- Name: compute_gateway_config_version(character varying, integer, character varying, cidr, boolean, text); Type: FUNCTION; Schema: public; Owner: gatekey
+-- Name: compute_gateway_config_version(character varying, integer, character varying, cidr, boolean, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.compute_gateway_config_version(p_crypto_profile character varying, p_vpn_port integer, p_vpn_protocol character varying, p_vpn_subnet cidr, p_tls_auth_enabled boolean, p_tls_auth_key text) RETURNS character varying
@@ -69,10 +68,8 @@ END;
 $$;
 
 
-ALTER FUNCTION public.compute_gateway_config_version(p_crypto_profile character varying, p_vpn_port integer, p_vpn_protocol character varying, p_vpn_subnet cidr, p_tls_auth_enabled boolean, p_tls_auth_key text) OWNER TO gatekey;
-
 --
--- Name: update_gateway_config_version(); Type: FUNCTION; Schema: public; Owner: gatekey
+-- Name: update_gateway_config_version(); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.update_gateway_config_version() RETURNS trigger
@@ -92,10 +89,8 @@ END;
 $$;
 
 
-ALTER FUNCTION public.update_gateway_config_version() OWNER TO gatekey;
-
 --
--- Name: update_local_groups_updated_at(); Type: FUNCTION; Schema: public; Owner: gatekey
+-- Name: update_local_groups_updated_at(); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.update_local_groups_updated_at() RETURNS trigger
@@ -108,10 +103,8 @@ END;
 $$;
 
 
-ALTER FUNCTION public.update_local_groups_updated_at() OWNER TO gatekey;
-
 --
--- Name: update_networks_updated_at(); Type: FUNCTION; Schema: public; Owner: gatekey
+-- Name: update_networks_updated_at(); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.update_networks_updated_at() RETURNS trigger
@@ -124,10 +117,8 @@ END;
 $$;
 
 
-ALTER FUNCTION public.update_networks_updated_at() OWNER TO gatekey;
-
 --
--- Name: update_updated_at_column(); Type: FUNCTION; Schema: public; Owner: gatekey
+-- Name: update_updated_at_column(); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.update_updated_at_column() RETURNS trigger
@@ -140,14 +131,12 @@ END;
 $$;
 
 
-ALTER FUNCTION public.update_updated_at_column() OWNER TO gatekey;
-
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
 
 --
--- Name: access_rules; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: access_rules; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.access_rules (
@@ -167,10 +156,8 @@ CREATE TABLE public.access_rules (
 );
 
 
-ALTER TABLE public.access_rules OWNER TO gatekey;
-
 --
--- Name: admin_sessions; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: admin_sessions; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.admin_sessions (
@@ -184,10 +171,8 @@ CREATE TABLE public.admin_sessions (
 );
 
 
-ALTER TABLE public.admin_sessions OWNER TO gatekey;
-
 --
--- Name: api_keys; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: api_keys; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.api_keys (
@@ -212,10 +197,8 @@ CREATE TABLE public.api_keys (
 );
 
 
-ALTER TABLE public.api_keys OWNER TO gatekey;
-
 --
--- Name: audit_logs; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: audit_logs; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.audit_logs (
@@ -232,10 +215,8 @@ CREATE TABLE public.audit_logs (
 );
 
 
-ALTER TABLE public.audit_logs OWNER TO gatekey;
-
 --
--- Name: ca_rotation_events; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: ca_rotation_events; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.ca_rotation_events (
@@ -250,10 +231,8 @@ CREATE TABLE public.ca_rotation_events (
 );
 
 
-ALTER TABLE public.ca_rotation_events OWNER TO gatekey;
-
 --
--- Name: certificate_revocations; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: certificate_revocations; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.certificate_revocations (
@@ -269,10 +248,8 @@ CREATE TABLE public.certificate_revocations (
 );
 
 
-ALTER TABLE public.certificate_revocations OWNER TO gatekey;
-
 --
--- Name: certificates; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: certificates; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.certificates (
@@ -291,10 +268,8 @@ CREATE TABLE public.certificates (
 );
 
 
-ALTER TABLE public.certificates OWNER TO gatekey;
-
 --
--- Name: configs; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: configs; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.configs (
@@ -310,10 +285,8 @@ CREATE TABLE public.configs (
 );
 
 
-ALTER TABLE public.configs OWNER TO gatekey;
-
 --
--- Name: connections; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: connections; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.connections (
@@ -333,10 +306,8 @@ CREATE TABLE public.connections (
 );
 
 
-ALTER TABLE public.connections OWNER TO gatekey;
-
 --
--- Name: crl_cache; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: crl_cache; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.crl_cache (
@@ -350,10 +321,8 @@ CREATE TABLE public.crl_cache (
 );
 
 
-ALTER TABLE public.crl_cache OWNER TO gatekey;
-
 --
--- Name: gateway_connections; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: gateway_connections; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.gateway_connections (
@@ -373,10 +342,8 @@ CREATE TABLE public.gateway_connections (
 );
 
 
-ALTER TABLE public.gateway_connections OWNER TO gatekey;
-
 --
--- Name: gateway_networks; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: gateway_networks; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.gateway_networks (
@@ -386,10 +353,8 @@ CREATE TABLE public.gateway_networks (
 );
 
 
-ALTER TABLE public.gateway_networks OWNER TO gatekey;
-
 --
--- Name: gateways; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: gateways; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.gateways (
@@ -426,38 +391,36 @@ CREATE TABLE public.gateways (
 );
 
 
-ALTER TABLE public.gateways OWNER TO gatekey;
-
 --
--- Name: COLUMN gateways.crypto_profile; Type: COMMENT; Schema: public; Owner: gatekey
+-- Name: COLUMN gateways.crypto_profile; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public.gateways.crypto_profile IS 'Cryptographic profile: modern (default), fips (FIPS 140-2 compliant), compatible (legacy support)';
 
 
 --
--- Name: COLUMN gateways.public_ip_v6; Type: COMMENT; Schema: public; Owner: gatekey
+-- Name: COLUMN gateways.public_ip_v6; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public.gateways.public_ip_v6 IS 'Public IPv6 address of the gateway';
 
 
 --
--- Name: COLUMN gateways.internal_ip_v6; Type: COMMENT; Schema: public; Owner: gatekey
+-- Name: COLUMN gateways.internal_ip_v6; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public.gateways.internal_ip_v6 IS 'Internal IPv6 address of the gateway';
 
 
 --
--- Name: COLUMN gateways.vpn_subnet_v6; Type: COMMENT; Schema: public; Owner: gatekey
+-- Name: COLUMN gateways.vpn_subnet_v6; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public.gateways.vpn_subnet_v6 IS 'IPv6 VPN subnet for client IP allocation';
 
 
 --
--- Name: generated_configs; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: generated_configs; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.generated_configs (
@@ -480,10 +443,8 @@ CREATE TABLE public.generated_configs (
 );
 
 
-ALTER TABLE public.generated_configs OWNER TO gatekey;
-
 --
--- Name: geo_fence_global; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: geo_fence_global; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.geo_fence_global (
@@ -492,28 +453,25 @@ CREATE TABLE public.geo_fence_global (
 );
 
 
-ALTER TABLE public.geo_fence_global OWNER TO gatekey;
-
 --
--- Name: geo_fence_rules; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: geo_fence_rules; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.geo_fence_rules (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     name character varying(255) NOT NULL,
     description text,
-    ip_range text NOT NULL,
+    ip_range text,
     is_active boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now(),
-    ipv6_range text
+    ipv6_range text,
+    CONSTRAINT geo_fence_rules_at_least_one_range CHECK (((ip_range IS NOT NULL) OR (ipv6_range IS NOT NULL)))
 );
 
 
-ALTER TABLE public.geo_fence_rules OWNER TO gatekey;
-
 --
--- Name: group_access_rules; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: group_access_rules; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.group_access_rules (
@@ -523,10 +481,8 @@ CREATE TABLE public.group_access_rules (
 );
 
 
-ALTER TABLE public.group_access_rules OWNER TO gatekey;
-
 --
--- Name: group_gateways; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: group_gateways; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.group_gateways (
@@ -536,10 +492,8 @@ CREATE TABLE public.group_gateways (
 );
 
 
-ALTER TABLE public.group_gateways OWNER TO gatekey;
-
 --
--- Name: group_geo_fence_rules; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: group_geo_fence_rules; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.group_geo_fence_rules (
@@ -549,10 +503,8 @@ CREATE TABLE public.group_geo_fence_rules (
 );
 
 
-ALTER TABLE public.group_geo_fence_rules OWNER TO gatekey;
-
 --
--- Name: group_proxy_applications; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: group_proxy_applications; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.group_proxy_applications (
@@ -562,10 +514,8 @@ CREATE TABLE public.group_proxy_applications (
 );
 
 
-ALTER TABLE public.group_proxy_applications OWNER TO gatekey;
-
 --
--- Name: local_group_members; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: local_group_members; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.local_group_members (
@@ -577,10 +527,8 @@ CREATE TABLE public.local_group_members (
 );
 
 
-ALTER TABLE public.local_group_members OWNER TO gatekey;
-
 --
--- Name: local_groups; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: local_groups; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.local_groups (
@@ -592,10 +540,8 @@ CREATE TABLE public.local_groups (
 );
 
 
-ALTER TABLE public.local_groups OWNER TO gatekey;
-
 --
--- Name: local_users; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: local_users; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.local_users (
@@ -610,10 +556,8 @@ CREATE TABLE public.local_users (
 );
 
 
-ALTER TABLE public.local_users OWNER TO gatekey;
-
 --
--- Name: login_logs; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: login_logs; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.login_logs (
@@ -635,10 +579,8 @@ CREATE TABLE public.login_logs (
 );
 
 
-ALTER TABLE public.login_logs OWNER TO gatekey;
-
 --
--- Name: mesh_connections; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: mesh_connections; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.mesh_connections (
@@ -660,24 +602,22 @@ CREATE TABLE public.mesh_connections (
 );
 
 
-ALTER TABLE public.mesh_connections OWNER TO gatekey;
-
 --
--- Name: COLUMN mesh_connections.client_ip_v6; Type: COMMENT; Schema: public; Owner: gatekey
+-- Name: COLUMN mesh_connections.client_ip_v6; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public.mesh_connections.client_ip_v6 IS 'Client IPv6 address';
 
 
 --
--- Name: COLUMN mesh_connections.tunnel_ip_v6; Type: COMMENT; Schema: public; Owner: gatekey
+-- Name: COLUMN mesh_connections.tunnel_ip_v6; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public.mesh_connections.tunnel_ip_v6 IS 'Tunnel IPv6 address assigned to client';
 
 
 --
--- Name: mesh_gateway_groups; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: mesh_gateway_groups; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.mesh_gateway_groups (
@@ -687,10 +627,8 @@ CREATE TABLE public.mesh_gateway_groups (
 );
 
 
-ALTER TABLE public.mesh_gateway_groups OWNER TO gatekey;
-
 --
--- Name: mesh_gateway_users; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: mesh_gateway_users; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.mesh_gateway_users (
@@ -700,10 +638,8 @@ CREATE TABLE public.mesh_gateway_users (
 );
 
 
-ALTER TABLE public.mesh_gateway_users OWNER TO gatekey;
-
 --
--- Name: mesh_gateways; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: mesh_gateways; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.mesh_gateways (
@@ -737,24 +673,22 @@ CREATE TABLE public.mesh_gateways (
 );
 
 
-ALTER TABLE public.mesh_gateways OWNER TO gatekey;
-
 --
--- Name: COLUMN mesh_gateways.local_networks_v6; Type: COMMENT; Schema: public; Owner: gatekey
+-- Name: COLUMN mesh_gateways.local_networks_v6; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public.mesh_gateways.local_networks_v6 IS 'Array of IPv6 CIDRs for networks behind this gateway';
 
 
 --
--- Name: COLUMN mesh_gateways.tunnel_ip_v6; Type: COMMENT; Schema: public; Owner: gatekey
+-- Name: COLUMN mesh_gateways.tunnel_ip_v6; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public.mesh_gateways.tunnel_ip_v6 IS 'IPv6 tunnel IP assigned by hub';
 
 
 --
--- Name: mesh_generated_configs; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: mesh_generated_configs; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.mesh_generated_configs (
@@ -779,10 +713,8 @@ CREATE TABLE public.mesh_generated_configs (
 );
 
 
-ALTER TABLE public.mesh_generated_configs OWNER TO gatekey;
-
 --
--- Name: mesh_hub_groups; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: mesh_hub_groups; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.mesh_hub_groups (
@@ -792,10 +724,8 @@ CREATE TABLE public.mesh_hub_groups (
 );
 
 
-ALTER TABLE public.mesh_hub_groups OWNER TO gatekey;
-
 --
--- Name: mesh_hub_networks; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: mesh_hub_networks; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.mesh_hub_networks (
@@ -805,10 +735,8 @@ CREATE TABLE public.mesh_hub_networks (
 );
 
 
-ALTER TABLE public.mesh_hub_networks OWNER TO gatekey;
-
 --
--- Name: mesh_hub_users; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: mesh_hub_users; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.mesh_hub_users (
@@ -818,10 +746,8 @@ CREATE TABLE public.mesh_hub_users (
 );
 
 
-ALTER TABLE public.mesh_hub_users OWNER TO gatekey;
-
 --
--- Name: mesh_hubs; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: mesh_hubs; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.mesh_hubs (
@@ -863,17 +789,15 @@ CREATE TABLE public.mesh_hubs (
 );
 
 
-ALTER TABLE public.mesh_hubs OWNER TO gatekey;
-
 --
--- Name: COLUMN mesh_hubs.vpn_subnet_v6; Type: COMMENT; Schema: public; Owner: gatekey
+-- Name: COLUMN mesh_hubs.vpn_subnet_v6; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public.mesh_hubs.vpn_subnet_v6 IS 'IPv6 mesh network subnet for dual-stack support';
 
 
 --
--- Name: networks; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: networks; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.networks (
@@ -888,17 +812,15 @@ CREATE TABLE public.networks (
 );
 
 
-ALTER TABLE public.networks OWNER TO gatekey;
-
 --
--- Name: COLUMN networks.cidr_v6; Type: COMMENT; Schema: public; Owner: gatekey
+-- Name: COLUMN networks.cidr_v6; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public.networks.cidr_v6 IS 'IPv6 network CIDR (optional, for dual-stack support)';
 
 
 --
--- Name: oauth_states; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: oauth_states; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.oauth_states (
@@ -913,10 +835,8 @@ CREATE TABLE public.oauth_states (
 );
 
 
-ALTER TABLE public.oauth_states OWNER TO gatekey;
-
 --
--- Name: oidc_providers; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: oidc_providers; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.oidc_providers (
@@ -936,17 +856,15 @@ CREATE TABLE public.oidc_providers (
 );
 
 
-ALTER TABLE public.oidc_providers OWNER TO gatekey;
-
 --
--- Name: COLUMN oidc_providers.claim_mappings; Type: COMMENT; Schema: public; Owner: gatekey
+-- Name: COLUMN oidc_providers.claim_mappings; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public.oidc_providers.claim_mappings IS 'Maps GateKey fields to OIDC claim names from the IdP';
 
 
 --
--- Name: pki_ca; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: pki_ca; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.pki_ca (
@@ -964,10 +882,8 @@ CREATE TABLE public.pki_ca (
 );
 
 
-ALTER TABLE public.pki_ca OWNER TO gatekey;
-
 --
--- Name: policies; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: policies; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.policies (
@@ -982,10 +898,8 @@ CREATE TABLE public.policies (
 );
 
 
-ALTER TABLE public.policies OWNER TO gatekey;
-
 --
--- Name: policy_rules; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: policy_rules; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.policy_rules (
@@ -1001,10 +915,8 @@ CREATE TABLE public.policy_rules (
 );
 
 
-ALTER TABLE public.policy_rules OWNER TO gatekey;
-
 --
--- Name: proxy_access_logs; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: proxy_access_logs; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.proxy_access_logs (
@@ -1022,10 +934,8 @@ CREATE TABLE public.proxy_access_logs (
 );
 
 
-ALTER TABLE public.proxy_access_logs OWNER TO gatekey;
-
 --
--- Name: proxy_applications; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: proxy_applications; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.proxy_applications (
@@ -1047,10 +957,8 @@ CREATE TABLE public.proxy_applications (
 );
 
 
-ALTER TABLE public.proxy_applications OWNER TO gatekey;
-
 --
--- Name: saml_providers; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: saml_providers; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.saml_providers (
@@ -1068,17 +976,15 @@ CREATE TABLE public.saml_providers (
 );
 
 
-ALTER TABLE public.saml_providers OWNER TO gatekey;
-
 --
--- Name: COLUMN saml_providers.attribute_mappings; Type: COMMENT; Schema: public; Owner: gatekey
+-- Name: COLUMN saml_providers.attribute_mappings; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public.saml_providers.attribute_mappings IS 'Maps GateKey fields to SAML attribute names from the IdP';
 
 
 --
--- Name: schema_migrations; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: schema_migrations; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.schema_migrations (
@@ -1087,10 +993,8 @@ CREATE TABLE public.schema_migrations (
 );
 
 
-ALTER TABLE public.schema_migrations OWNER TO gatekey;
-
 --
--- Name: sessions; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: sessions; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.sessions (
@@ -1105,10 +1009,8 @@ CREATE TABLE public.sessions (
 );
 
 
-ALTER TABLE public.sessions OWNER TO gatekey;
-
 --
--- Name: sso_sessions; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: sso_sessions; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.sso_sessions (
@@ -1125,10 +1027,8 @@ CREATE TABLE public.sso_sessions (
 );
 
 
-ALTER TABLE public.sso_sessions OWNER TO gatekey;
-
 --
--- Name: system_settings; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: system_settings; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.system_settings (
@@ -1139,10 +1039,8 @@ CREATE TABLE public.system_settings (
 );
 
 
-ALTER TABLE public.system_settings OWNER TO gatekey;
-
 --
--- Name: user_access_rules; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: user_access_rules; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.user_access_rules (
@@ -1152,10 +1050,8 @@ CREATE TABLE public.user_access_rules (
 );
 
 
-ALTER TABLE public.user_access_rules OWNER TO gatekey;
-
 --
--- Name: user_gateways; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: user_gateways; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.user_gateways (
@@ -1165,10 +1061,8 @@ CREATE TABLE public.user_gateways (
 );
 
 
-ALTER TABLE public.user_gateways OWNER TO gatekey;
-
 --
--- Name: user_geo_fence_rules; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: user_geo_fence_rules; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.user_geo_fence_rules (
@@ -1178,10 +1072,8 @@ CREATE TABLE public.user_geo_fence_rules (
 );
 
 
-ALTER TABLE public.user_geo_fence_rules OWNER TO gatekey;
-
 --
--- Name: user_proxy_applications; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: user_proxy_applications; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.user_proxy_applications (
@@ -1191,10 +1083,8 @@ CREATE TABLE public.user_proxy_applications (
 );
 
 
-ALTER TABLE public.user_proxy_applications OWNER TO gatekey;
-
 --
--- Name: users; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: users; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.users (
@@ -1213,10 +1103,8 @@ CREATE TABLE public.users (
 );
 
 
-ALTER TABLE public.users OWNER TO gatekey;
-
 --
--- Name: wg_mesh_peers; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: wg_mesh_peers; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.wg_mesh_peers (
@@ -1238,10 +1126,8 @@ CREATE TABLE public.wg_mesh_peers (
 );
 
 
-ALTER TABLE public.wg_mesh_peers OWNER TO gatekey;
-
 --
--- Name: wireguard_configs; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: wireguard_configs; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.wireguard_configs (
@@ -1263,10 +1149,8 @@ CREATE TABLE public.wireguard_configs (
 );
 
 
-ALTER TABLE public.wireguard_configs OWNER TO gatekey;
-
 --
--- Name: wireguard_peers; Type: TABLE; Schema: public; Owner: gatekey
+-- Name: wireguard_peers; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.wireguard_peers (
@@ -1289,10 +1173,8 @@ CREATE TABLE public.wireguard_peers (
 );
 
 
-ALTER TABLE public.wireguard_peers OWNER TO gatekey;
-
 --
--- Name: access_rules access_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: access_rules access_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.access_rules
@@ -1300,7 +1182,7 @@ ALTER TABLE ONLY public.access_rules
 
 
 --
--- Name: admin_sessions admin_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: admin_sessions admin_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.admin_sessions
@@ -1308,7 +1190,7 @@ ALTER TABLE ONLY public.admin_sessions
 
 
 --
--- Name: admin_sessions admin_sessions_token_key; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: admin_sessions admin_sessions_token_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.admin_sessions
@@ -1316,7 +1198,7 @@ ALTER TABLE ONLY public.admin_sessions
 
 
 --
--- Name: api_keys api_keys_key_hash_key; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: api_keys api_keys_key_hash_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.api_keys
@@ -1324,7 +1206,7 @@ ALTER TABLE ONLY public.api_keys
 
 
 --
--- Name: api_keys api_keys_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: api_keys api_keys_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.api_keys
@@ -1332,7 +1214,7 @@ ALTER TABLE ONLY public.api_keys
 
 
 --
--- Name: audit_logs audit_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: audit_logs audit_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.audit_logs
@@ -1340,7 +1222,7 @@ ALTER TABLE ONLY public.audit_logs
 
 
 --
--- Name: ca_rotation_events ca_rotation_events_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: ca_rotation_events ca_rotation_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.ca_rotation_events
@@ -1348,7 +1230,7 @@ ALTER TABLE ONLY public.ca_rotation_events
 
 
 --
--- Name: certificate_revocations certificate_revocations_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: certificate_revocations certificate_revocations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.certificate_revocations
@@ -1356,7 +1238,7 @@ ALTER TABLE ONLY public.certificate_revocations
 
 
 --
--- Name: certificate_revocations certificate_revocations_serial_number_key; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: certificate_revocations certificate_revocations_serial_number_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.certificate_revocations
@@ -1364,7 +1246,7 @@ ALTER TABLE ONLY public.certificate_revocations
 
 
 --
--- Name: certificates certificates_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: certificates certificates_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.certificates
@@ -1372,7 +1254,7 @@ ALTER TABLE ONLY public.certificates
 
 
 --
--- Name: certificates certificates_serial_number_key; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: certificates certificates_serial_number_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.certificates
@@ -1380,7 +1262,7 @@ ALTER TABLE ONLY public.certificates
 
 
 --
--- Name: configs configs_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: configs configs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.configs
@@ -1388,7 +1270,7 @@ ALTER TABLE ONLY public.configs
 
 
 --
--- Name: connections connections_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: connections connections_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.connections
@@ -1396,7 +1278,7 @@ ALTER TABLE ONLY public.connections
 
 
 --
--- Name: crl_cache crl_cache_ca_id_key; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: crl_cache crl_cache_ca_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.crl_cache
@@ -1404,7 +1286,7 @@ ALTER TABLE ONLY public.crl_cache
 
 
 --
--- Name: crl_cache crl_cache_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: crl_cache crl_cache_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.crl_cache
@@ -1412,7 +1294,7 @@ ALTER TABLE ONLY public.crl_cache
 
 
 --
--- Name: gateway_connections gateway_connections_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: gateway_connections gateway_connections_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.gateway_connections
@@ -1420,7 +1302,7 @@ ALTER TABLE ONLY public.gateway_connections
 
 
 --
--- Name: gateway_networks gateway_networks_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: gateway_networks gateway_networks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.gateway_networks
@@ -1428,7 +1310,7 @@ ALTER TABLE ONLY public.gateway_networks
 
 
 --
--- Name: gateways gateways_name_key; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: gateways gateways_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.gateways
@@ -1436,7 +1318,7 @@ ALTER TABLE ONLY public.gateways
 
 
 --
--- Name: gateways gateways_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: gateways gateways_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.gateways
@@ -1444,7 +1326,7 @@ ALTER TABLE ONLY public.gateways
 
 
 --
--- Name: generated_configs generated_configs_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: generated_configs generated_configs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.generated_configs
@@ -1452,7 +1334,7 @@ ALTER TABLE ONLY public.generated_configs
 
 
 --
--- Name: geo_fence_global geo_fence_global_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: geo_fence_global geo_fence_global_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.geo_fence_global
@@ -1460,7 +1342,7 @@ ALTER TABLE ONLY public.geo_fence_global
 
 
 --
--- Name: geo_fence_rules geo_fence_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: geo_fence_rules geo_fence_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.geo_fence_rules
@@ -1468,7 +1350,7 @@ ALTER TABLE ONLY public.geo_fence_rules
 
 
 --
--- Name: group_access_rules group_access_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: group_access_rules group_access_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.group_access_rules
@@ -1476,7 +1358,7 @@ ALTER TABLE ONLY public.group_access_rules
 
 
 --
--- Name: group_gateways group_gateways_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: group_gateways group_gateways_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.group_gateways
@@ -1484,7 +1366,7 @@ ALTER TABLE ONLY public.group_gateways
 
 
 --
--- Name: group_geo_fence_rules group_geo_fence_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: group_geo_fence_rules group_geo_fence_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.group_geo_fence_rules
@@ -1492,7 +1374,7 @@ ALTER TABLE ONLY public.group_geo_fence_rules
 
 
 --
--- Name: group_proxy_applications group_proxy_applications_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: group_proxy_applications group_proxy_applications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.group_proxy_applications
@@ -1500,7 +1382,7 @@ ALTER TABLE ONLY public.group_proxy_applications
 
 
 --
--- Name: local_group_members local_group_members_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: local_group_members local_group_members_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.local_group_members
@@ -1508,7 +1390,7 @@ ALTER TABLE ONLY public.local_group_members
 
 
 --
--- Name: local_groups local_groups_name_key; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: local_groups local_groups_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.local_groups
@@ -1516,7 +1398,7 @@ ALTER TABLE ONLY public.local_groups
 
 
 --
--- Name: local_groups local_groups_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: local_groups local_groups_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.local_groups
@@ -1524,7 +1406,7 @@ ALTER TABLE ONLY public.local_groups
 
 
 --
--- Name: local_users local_users_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: local_users local_users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.local_users
@@ -1532,7 +1414,7 @@ ALTER TABLE ONLY public.local_users
 
 
 --
--- Name: local_users local_users_username_key; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: local_users local_users_username_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.local_users
@@ -1540,7 +1422,7 @@ ALTER TABLE ONLY public.local_users
 
 
 --
--- Name: login_logs login_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: login_logs login_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.login_logs
@@ -1548,7 +1430,7 @@ ALTER TABLE ONLY public.login_logs
 
 
 --
--- Name: mesh_connections mesh_connections_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: mesh_connections mesh_connections_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mesh_connections
@@ -1556,7 +1438,7 @@ ALTER TABLE ONLY public.mesh_connections
 
 
 --
--- Name: mesh_gateway_groups mesh_gateway_groups_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: mesh_gateway_groups mesh_gateway_groups_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mesh_gateway_groups
@@ -1564,7 +1446,7 @@ ALTER TABLE ONLY public.mesh_gateway_groups
 
 
 --
--- Name: mesh_gateway_users mesh_gateway_users_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: mesh_gateway_users mesh_gateway_users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mesh_gateway_users
@@ -1572,7 +1454,7 @@ ALTER TABLE ONLY public.mesh_gateway_users
 
 
 --
--- Name: mesh_gateways mesh_gateways_hub_id_name_key; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: mesh_gateways mesh_gateways_hub_id_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mesh_gateways
@@ -1580,7 +1462,7 @@ ALTER TABLE ONLY public.mesh_gateways
 
 
 --
--- Name: mesh_gateways mesh_gateways_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: mesh_gateways mesh_gateways_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mesh_gateways
@@ -1588,7 +1470,7 @@ ALTER TABLE ONLY public.mesh_gateways
 
 
 --
--- Name: mesh_generated_configs mesh_generated_configs_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: mesh_generated_configs mesh_generated_configs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mesh_generated_configs
@@ -1596,7 +1478,7 @@ ALTER TABLE ONLY public.mesh_generated_configs
 
 
 --
--- Name: mesh_hub_groups mesh_hub_groups_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: mesh_hub_groups mesh_hub_groups_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mesh_hub_groups
@@ -1604,7 +1486,7 @@ ALTER TABLE ONLY public.mesh_hub_groups
 
 
 --
--- Name: mesh_hub_networks mesh_hub_networks_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: mesh_hub_networks mesh_hub_networks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mesh_hub_networks
@@ -1612,7 +1494,7 @@ ALTER TABLE ONLY public.mesh_hub_networks
 
 
 --
--- Name: mesh_hub_users mesh_hub_users_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: mesh_hub_users mesh_hub_users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mesh_hub_users
@@ -1620,7 +1502,7 @@ ALTER TABLE ONLY public.mesh_hub_users
 
 
 --
--- Name: mesh_hubs mesh_hubs_name_key; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: mesh_hubs mesh_hubs_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mesh_hubs
@@ -1628,7 +1510,7 @@ ALTER TABLE ONLY public.mesh_hubs
 
 
 --
--- Name: mesh_hubs mesh_hubs_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: mesh_hubs mesh_hubs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mesh_hubs
@@ -1636,7 +1518,7 @@ ALTER TABLE ONLY public.mesh_hubs
 
 
 --
--- Name: networks networks_name_key; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: networks networks_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.networks
@@ -1644,7 +1526,7 @@ ALTER TABLE ONLY public.networks
 
 
 --
--- Name: networks networks_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: networks networks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.networks
@@ -1652,7 +1534,7 @@ ALTER TABLE ONLY public.networks
 
 
 --
--- Name: oauth_states oauth_states_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: oauth_states oauth_states_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.oauth_states
@@ -1660,7 +1542,7 @@ ALTER TABLE ONLY public.oauth_states
 
 
 --
--- Name: oidc_providers oidc_providers_name_key; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: oidc_providers oidc_providers_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.oidc_providers
@@ -1668,7 +1550,7 @@ ALTER TABLE ONLY public.oidc_providers
 
 
 --
--- Name: oidc_providers oidc_providers_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: oidc_providers oidc_providers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.oidc_providers
@@ -1676,7 +1558,7 @@ ALTER TABLE ONLY public.oidc_providers
 
 
 --
--- Name: pki_ca pki_ca_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: pki_ca pki_ca_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.pki_ca
@@ -1684,7 +1566,7 @@ ALTER TABLE ONLY public.pki_ca
 
 
 --
--- Name: policies policies_name_key; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: policies policies_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.policies
@@ -1692,7 +1574,7 @@ ALTER TABLE ONLY public.policies
 
 
 --
--- Name: policies policies_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: policies policies_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.policies
@@ -1700,7 +1582,7 @@ ALTER TABLE ONLY public.policies
 
 
 --
--- Name: policy_rules policy_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: policy_rules policy_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.policy_rules
@@ -1708,7 +1590,7 @@ ALTER TABLE ONLY public.policy_rules
 
 
 --
--- Name: proxy_access_logs proxy_access_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: proxy_access_logs proxy_access_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.proxy_access_logs
@@ -1716,7 +1598,7 @@ ALTER TABLE ONLY public.proxy_access_logs
 
 
 --
--- Name: proxy_applications proxy_applications_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: proxy_applications proxy_applications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.proxy_applications
@@ -1724,7 +1606,7 @@ ALTER TABLE ONLY public.proxy_applications
 
 
 --
--- Name: proxy_applications proxy_applications_slug_key; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: proxy_applications proxy_applications_slug_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.proxy_applications
@@ -1732,7 +1614,7 @@ ALTER TABLE ONLY public.proxy_applications
 
 
 --
--- Name: saml_providers saml_providers_name_key; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: saml_providers saml_providers_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.saml_providers
@@ -1740,7 +1622,7 @@ ALTER TABLE ONLY public.saml_providers
 
 
 --
--- Name: saml_providers saml_providers_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: saml_providers saml_providers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.saml_providers
@@ -1748,7 +1630,7 @@ ALTER TABLE ONLY public.saml_providers
 
 
 --
--- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.schema_migrations
@@ -1756,7 +1638,7 @@ ALTER TABLE ONLY public.schema_migrations
 
 
 --
--- Name: sessions sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: sessions sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.sessions
@@ -1764,7 +1646,7 @@ ALTER TABLE ONLY public.sessions
 
 
 --
--- Name: sessions sessions_token_key; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: sessions sessions_token_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.sessions
@@ -1772,7 +1654,7 @@ ALTER TABLE ONLY public.sessions
 
 
 --
--- Name: sso_sessions sso_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: sso_sessions sso_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.sso_sessions
@@ -1780,7 +1662,7 @@ ALTER TABLE ONLY public.sso_sessions
 
 
 --
--- Name: system_settings system_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: system_settings system_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.system_settings
@@ -1788,7 +1670,7 @@ ALTER TABLE ONLY public.system_settings
 
 
 --
--- Name: wg_mesh_peers unique_wg_mesh_peer_pubkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: wg_mesh_peers unique_wg_mesh_peer_pubkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.wg_mesh_peers
@@ -1796,7 +1678,7 @@ ALTER TABLE ONLY public.wg_mesh_peers
 
 
 --
--- Name: user_access_rules user_access_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: user_access_rules user_access_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_access_rules
@@ -1804,7 +1686,7 @@ ALTER TABLE ONLY public.user_access_rules
 
 
 --
--- Name: user_gateways user_gateways_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: user_gateways user_gateways_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_gateways
@@ -1812,7 +1694,7 @@ ALTER TABLE ONLY public.user_gateways
 
 
 --
--- Name: user_geo_fence_rules user_geo_fence_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: user_geo_fence_rules user_geo_fence_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_geo_fence_rules
@@ -1820,7 +1702,7 @@ ALTER TABLE ONLY public.user_geo_fence_rules
 
 
 --
--- Name: user_proxy_applications user_proxy_applications_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: user_proxy_applications user_proxy_applications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_proxy_applications
@@ -1828,7 +1710,7 @@ ALTER TABLE ONLY public.user_proxy_applications
 
 
 --
--- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.users
@@ -1836,7 +1718,7 @@ ALTER TABLE ONLY public.users
 
 
 --
--- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.users
@@ -1844,7 +1726,7 @@ ALTER TABLE ONLY public.users
 
 
 --
--- Name: users users_provider_external_id_key; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: users users_provider_external_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.users
@@ -1852,7 +1734,7 @@ ALTER TABLE ONLY public.users
 
 
 --
--- Name: wg_mesh_peers wg_mesh_peers_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: wg_mesh_peers wg_mesh_peers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.wg_mesh_peers
@@ -1860,7 +1742,7 @@ ALTER TABLE ONLY public.wg_mesh_peers
 
 
 --
--- Name: wireguard_configs wireguard_configs_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: wireguard_configs wireguard_configs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.wireguard_configs
@@ -1868,7 +1750,7 @@ ALTER TABLE ONLY public.wireguard_configs
 
 
 --
--- Name: wireguard_peers wireguard_peers_gateway_public_key_unique; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: wireguard_peers wireguard_peers_gateway_public_key_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.wireguard_peers
@@ -1876,7 +1758,7 @@ ALTER TABLE ONLY public.wireguard_peers
 
 
 --
--- Name: wireguard_peers wireguard_peers_pkey; Type: CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: wireguard_peers wireguard_peers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.wireguard_peers
@@ -1884,945 +1766,945 @@ ALTER TABLE ONLY public.wireguard_peers
 
 
 --
--- Name: idx_access_rules_network; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_access_rules_network; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_access_rules_network ON public.access_rules USING btree (network_id);
 
 
 --
--- Name: idx_access_rules_type; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_access_rules_type; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_access_rules_type ON public.access_rules USING btree (rule_type);
 
 
 --
--- Name: idx_admin_sessions_expires_at; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_admin_sessions_expires_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_admin_sessions_expires_at ON public.admin_sessions USING btree (expires_at);
 
 
 --
--- Name: idx_admin_sessions_token; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_admin_sessions_token; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_admin_sessions_token ON public.admin_sessions USING btree (token);
 
 
 --
--- Name: idx_admin_sessions_user_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_admin_sessions_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_admin_sessions_user_id ON public.admin_sessions USING btree (user_id);
 
 
 --
--- Name: idx_api_keys_is_revoked; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_api_keys_is_revoked; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_api_keys_is_revoked ON public.api_keys USING btree (is_revoked);
 
 
 --
--- Name: idx_api_keys_key_hash; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_api_keys_key_hash; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_api_keys_key_hash ON public.api_keys USING btree (key_hash);
 
 
 --
--- Name: idx_api_keys_user_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_api_keys_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_api_keys_user_id ON public.api_keys USING btree (user_id);
 
 
 --
--- Name: idx_audit_logs_actor_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_audit_logs_actor_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_audit_logs_actor_id ON public.audit_logs USING btree (actor_id);
 
 
 --
--- Name: idx_audit_logs_event; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_audit_logs_event; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_audit_logs_event ON public.audit_logs USING btree (event);
 
 
 --
--- Name: idx_audit_logs_resource; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_audit_logs_resource; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_audit_logs_resource ON public.audit_logs USING btree (resource_type, resource_id);
 
 
 --
--- Name: idx_audit_logs_timestamp; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_audit_logs_timestamp; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_audit_logs_timestamp ON public.audit_logs USING btree ("timestamp");
 
 
 --
--- Name: idx_ca_rotation_events_created; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_ca_rotation_events_created; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_ca_rotation_events_created ON public.ca_rotation_events USING btree (created_at DESC);
 
 
 --
--- Name: idx_certificate_revocations_ca_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_certificate_revocations_ca_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_certificate_revocations_ca_id ON public.certificate_revocations USING btree (ca_id);
 
 
 --
--- Name: idx_certificate_revocations_revoked_at; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_certificate_revocations_revoked_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_certificate_revocations_revoked_at ON public.certificate_revocations USING btree (revoked_at);
 
 
 --
--- Name: idx_certificate_revocations_serial; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_certificate_revocations_serial; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_certificate_revocations_serial ON public.certificate_revocations USING btree (serial_number);
 
 
 --
--- Name: idx_certificates_fingerprint; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_certificates_fingerprint; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_certificates_fingerprint ON public.certificates USING btree (fingerprint);
 
 
 --
--- Name: idx_certificates_is_revoked; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_certificates_is_revoked; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_certificates_is_revoked ON public.certificates USING btree (is_revoked);
 
 
 --
--- Name: idx_certificates_not_after; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_certificates_not_after; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_certificates_not_after ON public.certificates USING btree (not_after);
 
 
 --
--- Name: idx_certificates_serial_number; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_certificates_serial_number; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_certificates_serial_number ON public.certificates USING btree (serial_number);
 
 
 --
--- Name: idx_certificates_user_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_certificates_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_certificates_user_id ON public.certificates USING btree (user_id);
 
 
 --
--- Name: idx_configs_expires_at; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_configs_expires_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_configs_expires_at ON public.configs USING btree (expires_at);
 
 
 --
--- Name: idx_configs_user_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_configs_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_configs_user_id ON public.configs USING btree (user_id);
 
 
 --
--- Name: idx_connections_active; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_connections_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_connections_active ON public.connections USING btree (disconnected_at) WHERE (disconnected_at IS NULL);
 
 
 --
--- Name: idx_connections_connected_at; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_connections_connected_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_connections_connected_at ON public.connections USING btree (connected_at);
 
 
 --
--- Name: idx_connections_gateway_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_connections_gateway_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_connections_gateway_id ON public.connections USING btree (gateway_id);
 
 
 --
--- Name: idx_connections_user_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_connections_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_connections_user_id ON public.connections USING btree (user_id);
 
 
 --
--- Name: idx_gateway_connections_active; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_gateway_connections_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_gateway_connections_active ON public.gateway_connections USING btree (disconnected_at) WHERE (disconnected_at IS NULL);
 
 
 --
--- Name: idx_gateway_connections_gateway_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_gateway_connections_gateway_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_gateway_connections_gateway_id ON public.gateway_connections USING btree (gateway_id);
 
 
 --
--- Name: idx_gateway_connections_last_seen; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_gateway_connections_last_seen; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_gateway_connections_last_seen ON public.gateway_connections USING btree (last_seen_at) WHERE (disconnected_at IS NULL);
 
 
 --
--- Name: idx_gateway_connections_user_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_gateway_connections_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_gateway_connections_user_id ON public.gateway_connections USING btree (user_id);
 
 
 --
--- Name: idx_gateway_networks_gateway; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_gateway_networks_gateway; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_gateway_networks_gateway ON public.gateway_networks USING btree (gateway_id);
 
 
 --
--- Name: idx_gateway_networks_network; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_gateway_networks_network; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_gateway_networks_network ON public.gateway_networks USING btree (network_id);
 
 
 --
--- Name: idx_gateways_is_active; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_gateways_is_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_gateways_is_active ON public.gateways USING btree (is_active);
 
 
 --
--- Name: idx_gateways_name; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_gateways_name; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_gateways_name ON public.gateways USING btree (name);
 
 
 --
--- Name: idx_gateways_public_ip_v6; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_gateways_public_ip_v6; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_gateways_public_ip_v6 ON public.gateways USING btree (public_ip_v6) WHERE (public_ip_v6 IS NOT NULL);
 
 
 --
--- Name: idx_gateways_type; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_gateways_type; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_gateways_type ON public.gateways USING btree (gateway_type);
 
 
 --
--- Name: idx_gateways_vpn_subnet_v6; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_gateways_vpn_subnet_v6; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_gateways_vpn_subnet_v6 ON public.gateways USING gist (vpn_subnet_v6 inet_ops) WHERE (vpn_subnet_v6 IS NOT NULL);
 
 
 --
--- Name: idx_generated_configs_active; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_generated_configs_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_generated_configs_active ON public.generated_configs USING btree (user_id, is_revoked) WHERE (is_revoked = false);
 
 
 --
--- Name: idx_generated_configs_auth_token; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_generated_configs_auth_token; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_generated_configs_auth_token ON public.generated_configs USING btree (auth_token) WHERE ((auth_token)::text <> ''::text);
 
 
 --
--- Name: idx_generated_configs_expires_at; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_generated_configs_expires_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_generated_configs_expires_at ON public.generated_configs USING btree (expires_at);
 
 
 --
--- Name: idx_generated_configs_gateway_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_generated_configs_gateway_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_generated_configs_gateway_id ON public.generated_configs USING btree (gateway_id);
 
 
 --
--- Name: idx_generated_configs_serial_number; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_generated_configs_serial_number; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_generated_configs_serial_number ON public.generated_configs USING btree (serial_number);
 
 
 --
--- Name: idx_generated_configs_user_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_generated_configs_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_generated_configs_user_id ON public.generated_configs USING btree (user_id);
 
 
 --
--- Name: idx_geo_fence_rules_active; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_geo_fence_rules_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_geo_fence_rules_active ON public.geo_fence_rules USING btree (is_active);
 
 
 --
--- Name: idx_group_access_rules_group; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_group_access_rules_group; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_group_access_rules_group ON public.group_access_rules USING btree (group_name);
 
 
 --
--- Name: idx_group_gateways_gateway; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_group_gateways_gateway; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_group_gateways_gateway ON public.group_gateways USING btree (gateway_id);
 
 
 --
--- Name: idx_group_gateways_group; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_group_gateways_group; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_group_gateways_group ON public.group_gateways USING btree (group_name);
 
 
 --
--- Name: idx_group_geo_fence_group; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_group_geo_fence_group; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_group_geo_fence_group ON public.group_geo_fence_rules USING btree (group_name);
 
 
 --
--- Name: idx_group_proxy_apps_app; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_group_proxy_apps_app; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_group_proxy_apps_app ON public.group_proxy_applications USING btree (proxy_app_id);
 
 
 --
--- Name: idx_group_proxy_apps_group; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_group_proxy_apps_group; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_group_proxy_apps_group ON public.group_proxy_applications USING btree (group_name);
 
 
 --
--- Name: idx_local_group_members_group; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_local_group_members_group; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_local_group_members_group ON public.local_group_members USING btree (group_id);
 
 
 --
--- Name: idx_local_group_members_user; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_local_group_members_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_local_group_members_user ON public.local_group_members USING btree (user_id, member_type);
 
 
 --
--- Name: idx_local_groups_name; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_local_groups_name; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_local_groups_name ON public.local_groups USING btree (name);
 
 
 --
--- Name: idx_local_users_username; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_local_users_username; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_local_users_username ON public.local_users USING btree (username);
 
 
 --
--- Name: idx_login_logs_created_at; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_login_logs_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_login_logs_created_at ON public.login_logs USING btree (created_at DESC);
 
 
 --
--- Name: idx_login_logs_ip_address; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_login_logs_ip_address; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_login_logs_ip_address ON public.login_logs USING btree (ip_address);
 
 
 --
--- Name: idx_login_logs_success; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_login_logs_success; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_login_logs_success ON public.login_logs USING btree (success);
 
 
 --
--- Name: idx_login_logs_user_email; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_login_logs_user_email; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_login_logs_user_email ON public.login_logs USING btree (user_email);
 
 
 --
--- Name: idx_login_logs_user_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_login_logs_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_login_logs_user_id ON public.login_logs USING btree (user_id);
 
 
 --
--- Name: idx_mesh_connections_active; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_connections_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_connections_active ON public.mesh_connections USING btree (disconnected_at) WHERE (disconnected_at IS NULL);
 
 
 --
--- Name: idx_mesh_connections_hub_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_connections_hub_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_connections_hub_id ON public.mesh_connections USING btree (hub_id);
 
 
 --
--- Name: idx_mesh_connections_last_seen; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_connections_last_seen; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_connections_last_seen ON public.mesh_connections USING btree (last_seen_at) WHERE (disconnected_at IS NULL);
 
 
 --
--- Name: idx_mesh_connections_user_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_connections_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_connections_user_id ON public.mesh_connections USING btree (user_id);
 
 
 --
--- Name: idx_mesh_gateways_gateway_type; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_gateways_gateway_type; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_gateways_gateway_type ON public.mesh_gateways USING btree (gateway_type);
 
 
 --
--- Name: idx_mesh_gateways_hub_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_gateways_hub_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_gateways_hub_id ON public.mesh_gateways USING btree (hub_id);
 
 
 --
--- Name: idx_mesh_gateways_status; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_gateways_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_gateways_status ON public.mesh_gateways USING btree (status);
 
 
 --
--- Name: idx_mesh_gateways_token; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_gateways_token; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_gateways_token ON public.mesh_gateways USING btree (token);
 
 
 --
--- Name: idx_mesh_generated_configs_active; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_generated_configs_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_generated_configs_active ON public.mesh_generated_configs USING btree (user_id, is_revoked) WHERE (is_revoked = false);
 
 
 --
--- Name: idx_mesh_generated_configs_assigned_ip; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_generated_configs_assigned_ip; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_generated_configs_assigned_ip ON public.mesh_generated_configs USING btree (hub_id, assigned_ip) WHERE (assigned_ip IS NOT NULL);
 
 
 --
--- Name: idx_mesh_generated_configs_expires_at; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_generated_configs_expires_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_generated_configs_expires_at ON public.mesh_generated_configs USING btree (expires_at);
 
 
 --
--- Name: idx_mesh_generated_configs_hub_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_generated_configs_hub_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_generated_configs_hub_id ON public.mesh_generated_configs USING btree (hub_id);
 
 
 --
--- Name: idx_mesh_generated_configs_serial_number; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_generated_configs_serial_number; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_generated_configs_serial_number ON public.mesh_generated_configs USING btree (serial_number);
 
 
 --
--- Name: idx_mesh_generated_configs_user_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_generated_configs_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_generated_configs_user_id ON public.mesh_generated_configs USING btree (user_id);
 
 
 --
--- Name: idx_mesh_generated_configs_wg_hub; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_generated_configs_wg_hub; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_generated_configs_wg_hub ON public.mesh_generated_configs USING btree (hub_id, is_wireguard) WHERE (is_wireguard = true);
 
 
 --
--- Name: idx_mesh_hub_networks_hub; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_hub_networks_hub; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_hub_networks_hub ON public.mesh_hub_networks USING btree (hub_id);
 
 
 --
--- Name: idx_mesh_hub_networks_network; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_hub_networks_network; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_hub_networks_network ON public.mesh_hub_networks USING btree (network_id);
 
 
 --
--- Name: idx_mesh_hubs_gateway_type; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_hubs_gateway_type; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_hubs_gateway_type ON public.mesh_hubs USING btree (gateway_type);
 
 
 --
--- Name: idx_mesh_hubs_name; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_hubs_name; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_hubs_name ON public.mesh_hubs USING btree (name);
 
 
 --
--- Name: idx_mesh_hubs_status; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_hubs_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_hubs_status ON public.mesh_hubs USING btree (status);
 
 
 --
--- Name: idx_mesh_hubs_vpn_subnet_v6; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_mesh_hubs_vpn_subnet_v6; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_mesh_hubs_vpn_subnet_v6 ON public.mesh_hubs USING gist (vpn_subnet_v6 inet_ops) WHERE (vpn_subnet_v6 IS NOT NULL);
 
 
 --
--- Name: idx_networks_cidr; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_networks_cidr; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_networks_cidr ON public.networks USING gist (cidr inet_ops);
 
 
 --
--- Name: idx_oauth_states_expires; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_oauth_states_expires; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_oauth_states_expires ON public.oauth_states USING btree (expires_at);
 
 
 --
--- Name: idx_oidc_providers_enabled; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_oidc_providers_enabled; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_oidc_providers_enabled ON public.oidc_providers USING btree (is_enabled);
 
 
 --
--- Name: idx_oidc_providers_name; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_oidc_providers_name; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_oidc_providers_name ON public.oidc_providers USING btree (name);
 
 
 --
--- Name: idx_policies_is_enabled; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_policies_is_enabled; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_policies_is_enabled ON public.policies USING btree (is_enabled);
 
 
 --
--- Name: idx_policies_priority; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_policies_priority; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_policies_priority ON public.policies USING btree (priority);
 
 
 --
--- Name: idx_policy_rules_policy_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_policy_rules_policy_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_policy_rules_policy_id ON public.policy_rules USING btree (policy_id);
 
 
 --
--- Name: idx_policy_rules_priority; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_policy_rules_priority; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_policy_rules_priority ON public.policy_rules USING btree (priority);
 
 
 --
--- Name: idx_proxy_access_logs_app; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_proxy_access_logs_app; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_proxy_access_logs_app ON public.proxy_access_logs USING btree (proxy_app_id);
 
 
 --
--- Name: idx_proxy_access_logs_time; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_proxy_access_logs_time; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_proxy_access_logs_time ON public.proxy_access_logs USING btree (created_at);
 
 
 --
--- Name: idx_proxy_access_logs_user; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_proxy_access_logs_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_proxy_access_logs_user ON public.proxy_access_logs USING btree (user_id);
 
 
 --
--- Name: idx_proxy_applications_active; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_proxy_applications_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_proxy_applications_active ON public.proxy_applications USING btree (is_active) WHERE (is_active = true);
 
 
 --
--- Name: idx_proxy_applications_slug; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_proxy_applications_slug; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_proxy_applications_slug ON public.proxy_applications USING btree (slug);
 
 
 --
--- Name: idx_saml_providers_enabled; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_saml_providers_enabled; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_saml_providers_enabled ON public.saml_providers USING btree (is_enabled);
 
 
 --
--- Name: idx_saml_providers_name; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_saml_providers_name; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_saml_providers_name ON public.saml_providers USING btree (name);
 
 
 --
--- Name: idx_sessions_expires_at; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_sessions_expires_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_sessions_expires_at ON public.sessions USING btree (expires_at);
 
 
 --
--- Name: idx_sessions_token; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_sessions_token; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_sessions_token ON public.sessions USING btree (token);
 
 
 --
--- Name: idx_sessions_user_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_sessions_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_sessions_user_id ON public.sessions USING btree (user_id);
 
 
 --
--- Name: idx_sso_sessions_expires; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_sso_sessions_expires; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_sso_sessions_expires ON public.sso_sessions USING btree (expires_at);
 
 
 --
--- Name: idx_sso_sessions_user; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_sso_sessions_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_sso_sessions_user ON public.sso_sessions USING btree (user_id);
 
 
 --
--- Name: idx_user_access_rules_user; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_user_access_rules_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_user_access_rules_user ON public.user_access_rules USING btree (user_id);
 
 
 --
--- Name: idx_user_gateways_gateway; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_user_gateways_gateway; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_user_gateways_gateway ON public.user_gateways USING btree (gateway_id);
 
 
 --
--- Name: idx_user_gateways_user; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_user_gateways_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_user_gateways_user ON public.user_gateways USING btree (user_id);
 
 
 --
--- Name: idx_user_geo_fence_user; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_user_geo_fence_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_user_geo_fence_user ON public.user_geo_fence_rules USING btree (user_id);
 
 
 --
--- Name: idx_user_proxy_apps_app; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_user_proxy_apps_app; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_user_proxy_apps_app ON public.user_proxy_applications USING btree (proxy_app_id);
 
 
 --
--- Name: idx_user_proxy_apps_user; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_user_proxy_apps_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_user_proxy_apps_user ON public.user_proxy_applications USING btree (user_id);
 
 
 --
--- Name: idx_users_email; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_users_email; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_users_email ON public.users USING btree (email);
 
 
 --
--- Name: idx_users_groups; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_users_groups; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_users_groups ON public.users USING gin (groups);
 
 
 --
--- Name: idx_users_provider; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_users_provider; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_users_provider ON public.users USING btree (provider);
 
 
 --
--- Name: idx_wg_peers_user_id; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_wg_peers_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_wg_peers_user_id ON public.wireguard_peers USING btree (user_id);
 
 
 --
--- Name: idx_wireguard_configs_expires; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_wireguard_configs_expires; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_wireguard_configs_expires ON public.wireguard_configs USING btree (expires_at);
 
 
 --
--- Name: idx_wireguard_configs_gateway; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_wireguard_configs_gateway; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_wireguard_configs_gateway ON public.wireguard_configs USING btree (gateway_id);
 
 
 --
--- Name: idx_wireguard_configs_public_key; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_wireguard_configs_public_key; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_wireguard_configs_public_key ON public.wireguard_configs USING btree (client_public_key);
 
 
 --
--- Name: idx_wireguard_configs_revoked; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_wireguard_configs_revoked; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_wireguard_configs_revoked ON public.wireguard_configs USING btree (revoked_at);
 
 
 --
--- Name: idx_wireguard_configs_user; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_wireguard_configs_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_wireguard_configs_user ON public.wireguard_configs USING btree (user_id);
 
 
 --
--- Name: idx_wireguard_peers_config; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_wireguard_peers_config; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_wireguard_peers_config ON public.wireguard_peers USING btree (config_id);
 
 
 --
--- Name: idx_wireguard_peers_gateway; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_wireguard_peers_gateway; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_wireguard_peers_gateway ON public.wireguard_peers USING btree (gateway_id);
 
 
 --
--- Name: idx_wireguard_peers_public_key; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_wireguard_peers_public_key; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_wireguard_peers_public_key ON public.wireguard_peers USING btree (public_key);
 
 
 --
--- Name: idx_wireguard_peers_removed; Type: INDEX; Schema: public; Owner: gatekey
+-- Name: idx_wireguard_peers_removed; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_wireguard_peers_removed ON public.wireguard_peers USING btree (disconnected_at);
 
 
 --
--- Name: access_rules access_rules_updated_at; Type: TRIGGER; Schema: public; Owner: gatekey
+-- Name: access_rules access_rules_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER access_rules_updated_at BEFORE UPDATE ON public.access_rules FOR EACH ROW EXECUTE FUNCTION public.update_networks_updated_at();
 
 
 --
--- Name: local_groups local_groups_updated_at; Type: TRIGGER; Schema: public; Owner: gatekey
+-- Name: local_groups local_groups_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER local_groups_updated_at BEFORE UPDATE ON public.local_groups FOR EACH ROW EXECUTE FUNCTION public.update_local_groups_updated_at();
 
 
 --
--- Name: networks networks_updated_at; Type: TRIGGER; Schema: public; Owner: gatekey
+-- Name: networks networks_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER networks_updated_at BEFORE UPDATE ON public.networks FOR EACH ROW EXECUTE FUNCTION public.update_networks_updated_at();
 
 
 --
--- Name: proxy_applications proxy_applications_updated_at; Type: TRIGGER; Schema: public; Owner: gatekey
+-- Name: proxy_applications proxy_applications_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER proxy_applications_updated_at BEFORE UPDATE ON public.proxy_applications FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
--- Name: gateways trigger_gateway_config_version; Type: TRIGGER; Schema: public; Owner: gatekey
+-- Name: gateways trigger_gateway_config_version; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trigger_gateway_config_version BEFORE INSERT OR UPDATE ON public.gateways FOR EACH ROW EXECUTE FUNCTION public.update_gateway_config_version();
 
 
 --
--- Name: gateways update_gateways_updated_at; Type: TRIGGER; Schema: public; Owner: gatekey
+-- Name: gateways update_gateways_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER update_gateways_updated_at BEFORE UPDATE ON public.gateways FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
--- Name: geo_fence_rules update_geo_fence_rules_updated_at; Type: TRIGGER; Schema: public; Owner: gatekey
+-- Name: geo_fence_rules update_geo_fence_rules_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER update_geo_fence_rules_updated_at BEFORE UPDATE ON public.geo_fence_rules FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
--- Name: local_users update_local_users_updated_at; Type: TRIGGER; Schema: public; Owner: gatekey
+-- Name: local_users update_local_users_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER update_local_users_updated_at BEFORE UPDATE ON public.local_users FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
--- Name: mesh_gateways update_mesh_gateways_updated_at; Type: TRIGGER; Schema: public; Owner: gatekey
+-- Name: mesh_gateways update_mesh_gateways_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER update_mesh_gateways_updated_at BEFORE UPDATE ON public.mesh_gateways FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
--- Name: mesh_hubs update_mesh_hubs_updated_at; Type: TRIGGER; Schema: public; Owner: gatekey
+-- Name: mesh_hubs update_mesh_hubs_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER update_mesh_hubs_updated_at BEFORE UPDATE ON public.mesh_hubs FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
--- Name: oidc_providers update_oidc_providers_updated_at; Type: TRIGGER; Schema: public; Owner: gatekey
+-- Name: oidc_providers update_oidc_providers_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER update_oidc_providers_updated_at BEFORE UPDATE ON public.oidc_providers FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
--- Name: policies update_policies_updated_at; Type: TRIGGER; Schema: public; Owner: gatekey
+-- Name: policies update_policies_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER update_policies_updated_at BEFORE UPDATE ON public.policies FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
--- Name: saml_providers update_saml_providers_updated_at; Type: TRIGGER; Schema: public; Owner: gatekey
+-- Name: saml_providers update_saml_providers_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER update_saml_providers_updated_at BEFORE UPDATE ON public.saml_providers FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
--- Name: users update_users_updated_at; Type: TRIGGER; Schema: public; Owner: gatekey
+-- Name: users update_users_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
--- Name: access_rules access_rules_network_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: access_rules access_rules_network_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.access_rules
@@ -2830,7 +2712,7 @@ ALTER TABLE ONLY public.access_rules
 
 
 --
--- Name: admin_sessions admin_sessions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: admin_sessions admin_sessions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.admin_sessions
@@ -2838,7 +2720,7 @@ ALTER TABLE ONLY public.admin_sessions
 
 
 --
--- Name: api_keys api_keys_provisioned_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: api_keys api_keys_provisioned_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.api_keys
@@ -2846,7 +2728,7 @@ ALTER TABLE ONLY public.api_keys
 
 
 --
--- Name: api_keys api_keys_revoked_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: api_keys api_keys_revoked_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.api_keys
@@ -2854,7 +2736,7 @@ ALTER TABLE ONLY public.api_keys
 
 
 --
--- Name: api_keys api_keys_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: api_keys api_keys_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.api_keys
@@ -2862,7 +2744,7 @@ ALTER TABLE ONLY public.api_keys
 
 
 --
--- Name: audit_logs audit_logs_actor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: audit_logs audit_logs_actor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.audit_logs
@@ -2870,7 +2752,7 @@ ALTER TABLE ONLY public.audit_logs
 
 
 --
--- Name: certificates certificates_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: certificates certificates_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.certificates
@@ -2878,7 +2760,7 @@ ALTER TABLE ONLY public.certificates
 
 
 --
--- Name: certificates certificates_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: certificates certificates_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.certificates
@@ -2886,7 +2768,7 @@ ALTER TABLE ONLY public.certificates
 
 
 --
--- Name: configs configs_certificate_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: configs configs_certificate_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.configs
@@ -2894,7 +2776,7 @@ ALTER TABLE ONLY public.configs
 
 
 --
--- Name: configs configs_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: configs configs_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.configs
@@ -2902,7 +2784,7 @@ ALTER TABLE ONLY public.configs
 
 
 --
--- Name: configs configs_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: configs configs_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.configs
@@ -2910,7 +2792,7 @@ ALTER TABLE ONLY public.configs
 
 
 --
--- Name: configs configs_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: configs configs_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.configs
@@ -2918,7 +2800,7 @@ ALTER TABLE ONLY public.configs
 
 
 --
--- Name: connections connections_certificate_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: connections connections_certificate_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.connections
@@ -2926,7 +2808,7 @@ ALTER TABLE ONLY public.connections
 
 
 --
--- Name: connections connections_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: connections connections_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.connections
@@ -2934,7 +2816,7 @@ ALTER TABLE ONLY public.connections
 
 
 --
--- Name: connections connections_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: connections connections_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.connections
@@ -2942,7 +2824,7 @@ ALTER TABLE ONLY public.connections
 
 
 --
--- Name: connections connections_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: connections connections_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.connections
@@ -2950,7 +2832,7 @@ ALTER TABLE ONLY public.connections
 
 
 --
--- Name: gateway_connections gateway_connections_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: gateway_connections gateway_connections_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.gateway_connections
@@ -2958,7 +2840,7 @@ ALTER TABLE ONLY public.gateway_connections
 
 
 --
--- Name: gateway_networks gateway_networks_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: gateway_networks gateway_networks_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.gateway_networks
@@ -2966,7 +2848,7 @@ ALTER TABLE ONLY public.gateway_networks
 
 
 --
--- Name: gateway_networks gateway_networks_network_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: gateway_networks gateway_networks_network_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.gateway_networks
@@ -2974,7 +2856,7 @@ ALTER TABLE ONLY public.gateway_networks
 
 
 --
--- Name: generated_configs generated_configs_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: generated_configs generated_configs_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.generated_configs
@@ -2982,7 +2864,7 @@ ALTER TABLE ONLY public.generated_configs
 
 
 --
--- Name: geo_fence_global geo_fence_global_rule_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: geo_fence_global geo_fence_global_rule_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.geo_fence_global
@@ -2990,7 +2872,7 @@ ALTER TABLE ONLY public.geo_fence_global
 
 
 --
--- Name: group_access_rules group_access_rules_access_rule_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: group_access_rules group_access_rules_access_rule_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.group_access_rules
@@ -2998,7 +2880,7 @@ ALTER TABLE ONLY public.group_access_rules
 
 
 --
--- Name: group_gateways group_gateways_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: group_gateways group_gateways_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.group_gateways
@@ -3006,7 +2888,7 @@ ALTER TABLE ONLY public.group_gateways
 
 
 --
--- Name: group_geo_fence_rules group_geo_fence_rules_rule_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: group_geo_fence_rules group_geo_fence_rules_rule_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.group_geo_fence_rules
@@ -3014,7 +2896,7 @@ ALTER TABLE ONLY public.group_geo_fence_rules
 
 
 --
--- Name: group_proxy_applications group_proxy_applications_proxy_app_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: group_proxy_applications group_proxy_applications_proxy_app_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.group_proxy_applications
@@ -3022,7 +2904,7 @@ ALTER TABLE ONLY public.group_proxy_applications
 
 
 --
--- Name: local_group_members local_group_members_group_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: local_group_members local_group_members_group_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.local_group_members
@@ -3030,7 +2912,7 @@ ALTER TABLE ONLY public.local_group_members
 
 
 --
--- Name: mesh_connections mesh_connections_hub_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: mesh_connections mesh_connections_hub_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mesh_connections
@@ -3038,7 +2920,7 @@ ALTER TABLE ONLY public.mesh_connections
 
 
 --
--- Name: mesh_gateway_groups mesh_gateway_groups_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: mesh_gateway_groups mesh_gateway_groups_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mesh_gateway_groups
@@ -3046,7 +2928,7 @@ ALTER TABLE ONLY public.mesh_gateway_groups
 
 
 --
--- Name: mesh_gateway_users mesh_gateway_users_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: mesh_gateway_users mesh_gateway_users_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mesh_gateway_users
@@ -3054,7 +2936,7 @@ ALTER TABLE ONLY public.mesh_gateway_users
 
 
 --
--- Name: mesh_gateways mesh_gateways_hub_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: mesh_gateways mesh_gateways_hub_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mesh_gateways
@@ -3062,7 +2944,7 @@ ALTER TABLE ONLY public.mesh_gateways
 
 
 --
--- Name: mesh_generated_configs mesh_generated_configs_hub_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: mesh_generated_configs mesh_generated_configs_hub_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mesh_generated_configs
@@ -3070,7 +2952,7 @@ ALTER TABLE ONLY public.mesh_generated_configs
 
 
 --
--- Name: mesh_hub_groups mesh_hub_groups_hub_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: mesh_hub_groups mesh_hub_groups_hub_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mesh_hub_groups
@@ -3078,7 +2960,7 @@ ALTER TABLE ONLY public.mesh_hub_groups
 
 
 --
--- Name: mesh_hub_networks mesh_hub_networks_hub_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: mesh_hub_networks mesh_hub_networks_hub_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mesh_hub_networks
@@ -3086,7 +2968,7 @@ ALTER TABLE ONLY public.mesh_hub_networks
 
 
 --
--- Name: mesh_hub_networks mesh_hub_networks_network_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: mesh_hub_networks mesh_hub_networks_network_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mesh_hub_networks
@@ -3094,7 +2976,7 @@ ALTER TABLE ONLY public.mesh_hub_networks
 
 
 --
--- Name: mesh_hub_users mesh_hub_users_hub_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: mesh_hub_users mesh_hub_users_hub_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mesh_hub_users
@@ -3102,7 +2984,7 @@ ALTER TABLE ONLY public.mesh_hub_users
 
 
 --
--- Name: policies policies_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: policies policies_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.policies
@@ -3110,7 +2992,7 @@ ALTER TABLE ONLY public.policies
 
 
 --
--- Name: policy_rules policy_rules_policy_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: policy_rules policy_rules_policy_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.policy_rules
@@ -3118,7 +3000,7 @@ ALTER TABLE ONLY public.policy_rules
 
 
 --
--- Name: proxy_access_logs proxy_access_logs_proxy_app_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: proxy_access_logs proxy_access_logs_proxy_app_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.proxy_access_logs
@@ -3126,7 +3008,7 @@ ALTER TABLE ONLY public.proxy_access_logs
 
 
 --
--- Name: sessions sessions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: sessions sessions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.sessions
@@ -3134,7 +3016,7 @@ ALTER TABLE ONLY public.sessions
 
 
 --
--- Name: user_access_rules user_access_rules_access_rule_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: user_access_rules user_access_rules_access_rule_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_access_rules
@@ -3142,7 +3024,7 @@ ALTER TABLE ONLY public.user_access_rules
 
 
 --
--- Name: user_gateways user_gateways_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: user_gateways user_gateways_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_gateways
@@ -3150,7 +3032,7 @@ ALTER TABLE ONLY public.user_gateways
 
 
 --
--- Name: user_geo_fence_rules user_geo_fence_rules_rule_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: user_geo_fence_rules user_geo_fence_rules_rule_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_geo_fence_rules
@@ -3158,7 +3040,7 @@ ALTER TABLE ONLY public.user_geo_fence_rules
 
 
 --
--- Name: user_proxy_applications user_proxy_applications_proxy_app_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: user_proxy_applications user_proxy_applications_proxy_app_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_proxy_applications
@@ -3166,7 +3048,7 @@ ALTER TABLE ONLY public.user_proxy_applications
 
 
 --
--- Name: wg_mesh_peers wg_mesh_peers_config_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: wg_mesh_peers wg_mesh_peers_config_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.wg_mesh_peers
@@ -3174,7 +3056,7 @@ ALTER TABLE ONLY public.wg_mesh_peers
 
 
 --
--- Name: wg_mesh_peers wg_mesh_peers_hub_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: wg_mesh_peers wg_mesh_peers_hub_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.wg_mesh_peers
@@ -3182,7 +3064,7 @@ ALTER TABLE ONLY public.wg_mesh_peers
 
 
 --
--- Name: wireguard_configs wireguard_configs_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: wireguard_configs wireguard_configs_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.wireguard_configs
@@ -3190,7 +3072,7 @@ ALTER TABLE ONLY public.wireguard_configs
 
 
 --
--- Name: wireguard_peers wireguard_peers_config_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: wireguard_peers wireguard_peers_config_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.wireguard_peers
@@ -3198,7 +3080,7 @@ ALTER TABLE ONLY public.wireguard_peers
 
 
 --
--- Name: wireguard_peers wireguard_peers_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gatekey
+-- Name: wireguard_peers wireguard_peers_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.wireguard_peers
@@ -3209,5 +3091,5 @@ ALTER TABLE ONLY public.wireguard_peers
 -- PostgreSQL database dump complete
 --
 
-\unrestrict N4OPo4xE8WIX3xdVKdzaJmuyYytOchindcwgcdQZIqN4tl5DQM4XmFdTBlwZ1BP
+\unrestrict 4HJJr8dwfCzuisPqIEhgLQmp9rhP9Cicg1Ucr04Nkp7gJizZq9Jj1wkZxom51Xc
 
