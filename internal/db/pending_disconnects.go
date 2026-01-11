@@ -9,20 +9,20 @@ import (
 // This targets individual users only - NOT groups. Gateway agents poll for these
 // and execute the disconnect while keeping the gateway running for other users.
 type PendingDisconnect struct {
-	ID          string     `json:"id"`
-	UserID      string     `json:"user_id"`
-	UserEmail   string     `json:"user_email"`
-	GatewayID   *string    `json:"gateway_id,omitempty"`   // nil = all gateways
-	NodeType    string     `json:"node_type"`              // "gateway" or "hub"
-	ConnectionID *string   `json:"connection_id,omitempty"` // specific connection
-	VPNAddress  *string    `json:"vpn_address,omitempty"`  // for identification
-	Reason      string     `json:"reason"`
-	RequestedBy string     `json:"requested_by"`
-	RequestedAt time.Time  `json:"requested_at"`
-	ExecutedAt  *time.Time `json:"executed_at,omitempty"`
-	ExecutedBy  *string    `json:"executed_by_gateway,omitempty"`
-	ExpiresAt   time.Time  `json:"expires_at"`
-	CreatedAt   time.Time  `json:"created_at"`
+	ID           string     `json:"id"`
+	UserID       string     `json:"user_id"`
+	UserEmail    string     `json:"user_email"`
+	GatewayID    *string    `json:"gateway_id,omitempty"`    // nil = all gateways
+	NodeType     string     `json:"node_type"`               // "gateway" or "hub"
+	ConnectionID *string    `json:"connection_id,omitempty"` // specific connection
+	VPNAddress   *string    `json:"vpn_address,omitempty"`   // for identification
+	Reason       string     `json:"reason"`
+	RequestedBy  string     `json:"requested_by"`
+	RequestedAt  time.Time  `json:"requested_at"`
+	ExecutedAt   *time.Time `json:"executed_at,omitempty"`
+	ExecutedBy   *string    `json:"executed_by_gateway,omitempty"`
+	ExpiresAt    time.Time  `json:"expires_at"`
+	CreatedAt    time.Time  `json:"created_at"`
 }
 
 // DisconnectRequest is used to create a new pending disconnect.

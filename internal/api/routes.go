@@ -1740,19 +1740,19 @@ type authenticatedUser struct {
 
 // Common API key scope constants
 const (
-	ScopeAll          = "*"
-	ScopeRead         = "read"
-	ScopeWrite        = "write"
-	ScopeAdmin        = "admin"
-	ScopeVPNConnect   = "vpn:connect"
-	ScopeGatewaysRead = "gateways:read"
+	ScopeAll           = "*"
+	ScopeRead          = "read"
+	ScopeWrite         = "write"
+	ScopeAdmin         = "admin"
+	ScopeVPNConnect    = "vpn:connect"
+	ScopeGatewaysRead  = "gateways:read"
 	ScopeGatewaysWrite = "gateways:write"
-	ScopeUsersRead    = "users:read"
-	ScopeUsersWrite   = "users:write"
-	ScopeMeshRead     = "mesh:read"
-	ScopeMeshWrite    = "mesh:write"
-	ScopeConfigRead   = "config:read"
-	ScopeConfigWrite  = "config:write"
+	ScopeUsersRead     = "users:read"
+	ScopeUsersWrite    = "users:write"
+	ScopeMeshRead      = "mesh:read"
+	ScopeMeshWrite     = "mesh:write"
+	ScopeConfigRead    = "config:read"
+	ScopeConfigWrite   = "config:write"
 )
 
 // HasScope checks if the user has the required scope.
@@ -6394,30 +6394,40 @@ func (s *Server) handleCreateGeoFenceRule(c *gin.Context) {
 	var req struct {
 		Name        string  `json:"name" binding:"required"`
 		Description string  `json:"description"`
-		IPRange     string  `json:"ipRange" binding:"required"`
-		IPv6Range   *string `json:"ipv6Range"` // IPv6 CIDR ranges (optional)
+		IPRange     *string `json:"ipRange"`   // IPv4 CIDR ranges (optional if IPv6 provided)
+		IPv6Range   *string `json:"ipv6Range"` // IPv6 CIDR ranges (optional if IPv4 provided)
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name and ipRange are required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
 		return
 	}
 
-	// Validate CIDR format(s) - supports multiple comma-separated CIDRs
-	cidrs := strings.Split(req.IPRange, ",")
-	for _, cidr := range cidrs {
-		cidr = strings.TrimSpace(cidr)
-		if cidr == "" {
-			continue
-		}
-		if _, _, err := net.ParseCIDR(cidr); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid CIDR format: %s", cidr)})
-			return
+	// Check that at least one IP range is provided
+	hasIPv4 := req.IPRange != nil && strings.TrimSpace(*req.IPRange) != ""
+	hasIPv6 := req.IPv6Range != nil && strings.TrimSpace(*req.IPv6Range) != ""
+	if !hasIPv4 && !hasIPv6 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one of ipRange (IPv4) or ipv6Range (IPv6) is required"})
+		return
+	}
+
+	// Validate IPv4 CIDR format(s) if provided
+	if hasIPv4 {
+		cidrs := strings.Split(*req.IPRange, ",")
+		for _, cidr := range cidrs {
+			cidr = strings.TrimSpace(cidr)
+			if cidr == "" {
+				continue
+			}
+			if _, _, err := net.ParseCIDR(cidr); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid IPv4 CIDR format: %s", cidr)})
+				return
+			}
 		}
 	}
 
 	// Validate IPv6 CIDR format(s) if provided
-	if req.IPv6Range != nil && *req.IPv6Range != "" {
+	if hasIPv6 {
 		ipv6Cidrs := strings.Split(*req.IPv6Range, ",")
 		for _, cidr := range ipv6Cidrs {
 			cidr = strings.TrimSpace(cidr)
@@ -6469,31 +6479,41 @@ func (s *Server) handleUpdateGeoFenceRule(c *gin.Context) {
 	var req struct {
 		Name        string  `json:"name" binding:"required"`
 		Description string  `json:"description"`
-		IPRange     string  `json:"ipRange" binding:"required"`
-		IPv6Range   *string `json:"ipv6Range"` // IPv6 CIDR ranges (optional)
+		IPRange     *string `json:"ipRange"`   // IPv4 CIDR ranges (optional if IPv6 provided)
+		IPv6Range   *string `json:"ipv6Range"` // IPv6 CIDR ranges (optional if IPv4 provided)
 		IsActive    bool    `json:"isActive"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name and ipRange are required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
 		return
 	}
 
-	// Validate CIDR format(s) - supports multiple comma-separated CIDRs
-	cidrs := strings.Split(req.IPRange, ",")
-	for _, cidr := range cidrs {
-		cidr = strings.TrimSpace(cidr)
-		if cidr == "" {
-			continue
-		}
-		if _, _, err := net.ParseCIDR(cidr); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid CIDR format: %s", cidr)})
-			return
+	// Check that at least one IP range is provided
+	hasIPv4 := req.IPRange != nil && strings.TrimSpace(*req.IPRange) != ""
+	hasIPv6 := req.IPv6Range != nil && strings.TrimSpace(*req.IPv6Range) != ""
+	if !hasIPv4 && !hasIPv6 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one of ipRange (IPv4) or ipv6Range (IPv6) is required"})
+		return
+	}
+
+	// Validate IPv4 CIDR format(s) if provided
+	if hasIPv4 {
+		cidrs := strings.Split(*req.IPRange, ",")
+		for _, cidr := range cidrs {
+			cidr = strings.TrimSpace(cidr)
+			if cidr == "" {
+				continue
+			}
+			if _, _, err := net.ParseCIDR(cidr); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid IPv4 CIDR format: %s", cidr)})
+				return
+			}
 		}
 	}
 
 	// Validate IPv6 CIDR format(s) if provided
-	if req.IPv6Range != nil && *req.IPv6Range != "" {
+	if hasIPv6 {
 		ipv6Cidrs := strings.Split(*req.IPv6Range, ",")
 		for _, cidr := range ipv6Cidrs {
 			cidr = strings.TrimSpace(cidr)

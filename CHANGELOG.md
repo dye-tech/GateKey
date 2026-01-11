@@ -5,6 +5,52 @@ All notable changes to GateKey are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-01-10
+
+### Added
+- Unit tests for core functionality
+- Database TLS documentation
+
+### Changed
+- UI improvements and fixes
+- Database migration updates
+
+### Security
+- Enforce TLS 1.2 minimum for all connections
+- Security hardening across API endpoints
+- Fixed route parameter conflict (`:userId` to `:id`)
+
+## [1.4.0] - 2026-01-09
+
+### Added
+- IPv6 support for VPN tunnels and gateways
+- Dual-stack networking capability
+
+## [1.3.2] - 2026-01-07
+
+### Changed
+- Database schema updates for new features
+
+## [1.3.1] - 2026-01-07
+
+### Added
+- SAML authentication compatibility
+- Comprehensive CHANGELOG.md
+- Latest Android APK distribution via web UI
+
+### Changed
+- WireGuard mesh compatibility improvements
+- Updated CSS styling
+- Updated README with enhanced intro and WireGuard documentation
+- Updated golangci-lint to v2 config format
+
+### Security
+- Bumped golangci/golangci-lint-action from 6 to 9
+- Bumped codecov/codecov-action from 4 to 5
+
+### Fixed
+- golangci-lint configuration errors
+
 ## [1.3.0] - 2026-01-06
 
 ### Added

@@ -326,8 +326,8 @@ type DisableUserResponse struct {
 
 // EnableUserResponse is returned when enabling a user
 type EnableUserResponse struct {
-	Success  bool   `json:"success"`
-	Message  string `json:"message"`
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
 	UserEmail string `json:"user_email"`
 	UserType  string `json:"user_type"`
 }

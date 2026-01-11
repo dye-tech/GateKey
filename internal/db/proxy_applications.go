@@ -30,8 +30,8 @@ type ProxyApplication struct {
 	WebsocketEnabled   bool              `json:"websocket_enabled"`
 	TimeoutSeconds     int               `json:"timeout_seconds"`
 	// TLS verification settings (per-app override)
-	SkipTLSVerify bool    `json:"skip_tls_verify"` // If true, skip TLS verification for this app (overrides global setting)
-	CustomCACert  *string `json:"custom_ca_cert"`  // Custom CA certificate PEM for this app (optional)
+	SkipTLSVerify bool      `json:"skip_tls_verify"` // If true, skip TLS verification for this app (overrides global setting)
+	CustomCACert  *string   `json:"custom_ca_cert"`  // Custom CA certificate PEM for this app (optional)
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }

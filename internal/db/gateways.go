@@ -25,7 +25,7 @@ type Gateway struct {
 	GatewayType    string // "openvpn" or "wireguard"
 	Hostname       string
 	PublicIP       string
-	PublicIPv6     *string  // IPv6 public IP (optional)
+	PublicIPv6     *string // IPv6 public IP (optional)
 	VPNPort        int
 	VPNProtocol    string
 	CryptoProfile  string   // "modern", "fips", or "compatible" (OpenVPN only)
