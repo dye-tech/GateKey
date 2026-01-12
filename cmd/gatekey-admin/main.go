@@ -82,6 +82,7 @@ Configuration:
 		newTopologyCmd(),
 		newSessionCmd(),
 		newProviderCmd(),
+		newSettingsCmd(),
 		newVersionCmd(),
 	)
 
@@ -2868,4 +2869,212 @@ func parseDuration(s string) (time.Duration, error) {
 	}
 
 	return time.Duration(num) * multiplier, nil
+}
+
+// === Settings Commands ===
+
+func newSettingsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "settings",
+		Short: "Manage system settings (proxy security, VPN, etc.)",
+	}
+
+	cmd.AddCommand(newSettingsListCmd(), newSettingsGetCmd(), newSettingsSetCmd(), newSecuritySettingsCmd())
+	return cmd
+}
+
+func newSettingsListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List all system settings",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			settings, err := client.GetSettings(ctx)
+			if err != nil {
+				return err
+			}
+
+			// Convert to slice for output
+			var items []struct {
+				Key   string
+				Value string
+			}
+			for k, v := range settings {
+				items = append(items, struct {
+					Key   string
+					Value string
+				}{k, v})
+			}
+
+			return outputResult(items, []string{"Key", "Value"}, func(item interface{}) []string {
+				s := item.(struct {
+					Key   string
+					Value string
+				})
+				return []string{s.Key, s.Value}
+			})
+		},
+	}
+}
+
+func newSettingsGetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "get KEY",
+		Short: "Get a specific setting value",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			value, err := client.GetSetting(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			if value == "" {
+				fmt.Printf("%s: (not set)\n", args[0])
+			} else {
+				fmt.Printf("%s: %s\n", args[0], value)
+			}
+			return nil
+		},
+	}
+}
+
+func newSettingsSetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "set KEY VALUE",
+		Short: "Set a setting value",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			if err := client.SetSetting(ctx, args[0], args[1]); err != nil {
+				return err
+			}
+			fmt.Printf("Setting %s updated to: %s\n", args[0], args[1])
+			return nil
+		},
+	}
+}
+
+func newSecuritySettingsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "security",
+		Short: "Manage proxy security settings",
+	}
+
+	// Show security settings
+	showCmd := &cobra.Command{
+		Use:   "show",
+		Short: "Show current proxy security settings",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			settings, err := client.GetSettings(ctx)
+			if err != nil {
+				return err
+			}
+
+			fmt.Println("Proxy Security Settings")
+			fmt.Println("=======================")
+			fmt.Printf("TLS Verification:           %s\n", boolDisplay(settings["proxy_tls_verify"]))
+			fmt.Printf("SSRF Protection:            %s\n", boolDisplay(settings["proxy_ssrf_protection"]))
+			fmt.Printf("DNS Rebinding Protection:   %s\n", boolDisplay(settings["proxy_dns_rebinding_protection"]))
+			return nil
+		},
+	}
+
+	// Enable TLS verification
+	tlsVerifyEnableCmd := &cobra.Command{
+		Use:   "tls-verify-enable",
+		Short: "Enable TLS certificate verification for proxy targets",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			if err := client.SetSetting(ctx, "proxy_tls_verify", "true"); err != nil {
+				return err
+			}
+			fmt.Println("TLS verification enabled for proxy targets")
+			return nil
+		},
+	}
+
+	// Disable TLS verification
+	tlsVerifyDisableCmd := &cobra.Command{
+		Use:   "tls-verify-disable",
+		Short: "Disable TLS certificate verification for proxy targets",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			if err := client.SetSetting(ctx, "proxy_tls_verify", "false"); err != nil {
+				return err
+			}
+			fmt.Println("TLS verification disabled for proxy targets (warning: security risk)")
+			return nil
+		},
+	}
+
+	// Enable SSRF protection
+	ssrfEnableCmd := &cobra.Command{
+		Use:   "ssrf-enable",
+		Short: "Enable SSRF protection (block requests to private IPs)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			if err := client.SetSetting(ctx, "proxy_ssrf_protection", "true"); err != nil {
+				return err
+			}
+			fmt.Println("SSRF protection enabled - requests to private IPs will be blocked")
+			return nil
+		},
+	}
+
+	// Disable SSRF protection
+	ssrfDisableCmd := &cobra.Command{
+		Use:   "ssrf-disable",
+		Short: "Disable SSRF protection",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			if err := client.SetSetting(ctx, "proxy_ssrf_protection", "false"); err != nil {
+				return err
+			}
+			fmt.Println("SSRF protection disabled - requests to private IPs allowed")
+			return nil
+		},
+	}
+
+	// Enable DNS rebinding protection
+	dnsRebindEnableCmd := &cobra.Command{
+		Use:   "dns-rebind-enable",
+		Short: "Enable DNS rebinding protection",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			if err := client.SetSetting(ctx, "proxy_dns_rebinding_protection", "true"); err != nil {
+				return err
+			}
+			fmt.Println("DNS rebinding protection enabled")
+			return nil
+		},
+	}
+
+	// Disable DNS rebinding protection
+	dnsRebindDisableCmd := &cobra.Command{
+		Use:   "dns-rebind-disable",
+		Short: "Disable DNS rebinding protection",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			if err := client.SetSetting(ctx, "proxy_dns_rebinding_protection", "false"); err != nil {
+				return err
+			}
+			fmt.Println("DNS rebinding protection disabled")
+			return nil
+		},
+	}
+
+	cmd.AddCommand(showCmd, tlsVerifyEnableCmd, tlsVerifyDisableCmd, ssrfEnableCmd, ssrfDisableCmd, dnsRebindEnableCmd, dnsRebindDisableCmd)
+	return cmd
+}
+
+// boolDisplay converts a string bool value to a display string
+func boolDisplay(value string) string {
+	if value == "true" {
+		return "Enabled"
+	}
+	if value == "false" {
+		return "Disabled"
+	}
+	return "(not set - using config default)"
 }

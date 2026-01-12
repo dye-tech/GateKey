@@ -1072,3 +1072,33 @@ func (c *Client) UpdateSAMLProvider(ctx context.Context, name string, req interf
 func (c *Client) DeleteSAMLProvider(ctx context.Context, name string) error {
 	return c.doJSON(ctx, http.MethodDelete, "/api/v1/admin/providers/saml/"+url.PathEscape(name), nil, nil)
 }
+
+// === Settings Operations ===
+
+// GetSettings retrieves all system settings.
+func (c *Client) GetSettings(ctx context.Context) (map[string]string, error) {
+	var result struct {
+		Settings map[string]string `json:"settings"`
+	}
+	err := c.doJSON(ctx, http.MethodGet, "/api/v1/admin/settings", nil, &result)
+	return result.Settings, err
+}
+
+// UpdateSettings updates system settings.
+func (c *Client) UpdateSettings(ctx context.Context, settings map[string]string) error {
+	return c.doJSON(ctx, http.MethodPut, "/api/v1/admin/settings", settings, nil)
+}
+
+// GetSetting retrieves a single setting by key.
+func (c *Client) GetSetting(ctx context.Context, key string) (string, error) {
+	settings, err := c.GetSettings(ctx)
+	if err != nil {
+		return "", err
+	}
+	return settings[key], nil
+}
+
+// SetSetting updates a single setting.
+func (c *Client) SetSetting(ctx context.Context, key, value string) error {
+	return c.UpdateSettings(ctx, map[string]string{key: value})
+}

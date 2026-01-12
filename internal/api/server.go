@@ -1610,3 +1610,23 @@ func (a *pkiStoreAdapter) SaveCA(ctx context.Context, ca *pki.StoredCA) error {
 	}
 	return a.store.SaveCA(ctx, dbCA)
 }
+
+// Security settings helpers - check database first, fall back to config
+
+// GetProxySSRFProtection returns whether SSRF protection is enabled for proxied requests.
+// Checks database setting first, falls back to config file setting.
+func (s *Server) GetProxySSRFProtection(ctx context.Context) bool {
+	return s.settingsStore.GetBool(ctx, db.SettingProxySSRFProtection, s.config.Security.ProxySSRFProtection)
+}
+
+// GetProxyDNSRebindingProtection returns whether DNS rebinding protection is enabled.
+// Checks database setting first, falls back to config file setting.
+func (s *Server) GetProxyDNSRebindingProtection(ctx context.Context) bool {
+	return s.settingsStore.GetBool(ctx, db.SettingProxyDNSRebindingProtection, s.config.Security.ProxyDNSRebindingProtection)
+}
+
+// GetProxyTLSVerify returns whether TLS certificate verification is enabled for proxied requests.
+// Checks database setting first, falls back to config file setting.
+func (s *Server) GetProxyTLSVerify(ctx context.Context) bool {
+	return s.settingsStore.GetBool(ctx, db.SettingProxyTLSVerify, s.config.Security.ProxyTLSVerify)
+}
