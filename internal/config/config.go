@@ -287,9 +287,9 @@ func setDefaults(v *viper.Viper) {
 	// is specifically designed to access internal services behind the gateway
 	v.SetDefault("security.proxy_ssrf_protection", false)
 	v.SetDefault("security.proxy_dns_rebinding_protection", false)
-	v.SetDefault("security.proxy_tls_verify", false)              // Disabled by default for internal services without proper certs
-	v.SetDefault("security.proxy_ca_bundle", "")                  // Empty means use system CA bundle
-	v.SetDefault("security.proxy_tls_min_version", "1.2")         // TLS 1.2 minimum
+	v.SetDefault("security.proxy_tls_verify", false)      // Disabled by default for internal services without proper certs
+	v.SetDefault("security.proxy_ca_bundle", "")          // Empty means use system CA bundle
+	v.SetDefault("security.proxy_tls_min_version", "1.2") // TLS 1.2 minimum
 
 	// Security headers defaults (multi-tenant aware)
 	v.SetDefault("security.security_headers_enabled", true) // Enabled by default
