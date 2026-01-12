@@ -1,0 +1,39 @@
+# Build outputs
+/bin/
+/gatekey
+/gatekey-*
+!gatekey-*.rb
+
+# Test outputs
+/coverage.out
+*.test
+*.out
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Go
+vendor/
+
+# Node.js (web frontend)
+web/node_modules/
+web/.env.local
+web/.env.*.local
+
+# Environment files
+.env
+.env.local
+*.env
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# OS files
+Thumbs.db
