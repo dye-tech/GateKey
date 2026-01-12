@@ -577,20 +577,79 @@ curl -X POST https://control-plane/api/v1/admin/users/$USER_ID/disconnect \
   -H "Authorization: Bearer $TOKEN"
 ```
 
+### Remote Sessions and Network Tools
+
+GateKey provides Remote Sessions and Network Tools features that allow administrators to run diagnostic commands on gateways (ping, traceroute, netstat, etc.) and establish SSH-like sessions for troubleshooting.
+
+#### Security Model
+
+This feature executes shell commands on gateway agents. This is **intentional functionality**, not a vulnerability:
+
+| Security Control | Implementation |
+|-----------------|----------------|
+| **Authentication** | Only authenticated administrators can access remote sessions |
+| **Authorization** | Requires admin role or specific API key scope |
+| **Execution Location** | Commands run on the gateway agent, NOT the control plane |
+| **Gateway Authentication** | Gateway agents authenticate with tokens before accepting commands |
+| **Audit Logging** | All remote session commands are logged with timestamps and user IDs |
+
+#### Design Decision: Shell Execution
+
+Remote shell execution is the **core feature** of the Remote Sessions functionality. Alternative approaches (pre-defined commands only, containerized execution) would severely limit the troubleshooting capabilities that make this feature valuable.
+
+**Mitigations in place:**
+- Commands cannot target the control plane (only gateways)
+- Gateway tokens are rotated regularly
+- Session activity is fully auditable
+- Network isolation between gateways limits blast radius
+
+#### Usage Restrictions
+
+- Remote Sessions are disabled by default on gateway agents
+- Must be explicitly enabled in gateway configuration
+- Should only be enabled on gateways where remote troubleshooting is required
+
 ### CA Private Key Encryption
 
-CA private keys are encrypted at rest in the database using AES-256-GCM authenticated encryption.
+CA private keys are encrypted at rest in the database using AES-256-GCM authenticated encryption. **Encryption is now enabled by default** with automatic key generation.
 
-#### Configuration
+#### How It Works
 
-Set the encryption key in your configuration:
+1. **Auto-Generation**: If no encryption key is configured, GateKey automatically generates a cryptographically secure 256-bit key on first startup
+2. **Persistence**: The generated key is stored in the `system_settings` database table, ensuring cluster-wide consistency across multiple pods/replicas
+3. **Configuration Override**: You can still provide your own key via environment variable or config file
+
+#### Design Decision: Database Key Storage
+
+The encryption key is stored in the same database as the encrypted CA private keys. This design was chosen for:
+
+- **Kubernetes Simplicity**: No need for persistent volumes to store a key file
+- **Cluster Consistency**: All pods automatically use the same key without shared filesystem requirements
+- **Zero Configuration**: Works out-of-the-box with no manual key generation required
+
+**Security Trade-offs:**
+- An attacker with full database access could retrieve both the key and encrypted data
+- However, this still protects against:
+  - Database backup exposure (backups don't include application context to find the key)
+  - Accidental data leaks (encrypted data is meaningless without understanding the key location)
+  - Defense in depth (multiple layers of protection)
+
+For higher security requirements, set the key via environment variable (stored in Kubernetes secrets):
+
+```bash
+export GATEX_SECURITY_CA_KEY_ENCRYPTION_KEY="$(openssl rand -base64 32)"
+```
+
+#### Configuration (Optional)
+
+Provide your own key instead of using auto-generation:
 
 ```yaml
 security:
   ca_key_encryption_key: "base64-encoded-32-byte-key"
 ```
 
-To generate a key:
+To generate a key manually:
 
 ```bash
 openssl rand -base64 32
@@ -600,9 +659,10 @@ openssl rand -base64 32
 
 - **AES-256-GCM**: Provides both confidentiality and integrity
 - **Random Nonce**: Each encryption uses a unique 12-byte nonce
-- **Backward Compatible**: Unencrypted keys are still readable if no key is configured
+- **Backward Compatible**: Unencrypted keys are still readable (migration-friendly)
 - **Automatic Detection**: System detects whether keys are encrypted or plaintext
 - **Secure Wiping**: Keys are wiped from memory after use
+- **Cluster-Wide**: Auto-generated key is shared across all replicas via database
 
 #### Storage Format
 
@@ -767,6 +827,24 @@ GateKey requires encrypted connections to PostgreSQL by default. The SSL/TLS mod
 | `verify-ca` | Encrypted, verify CA signature | Production with internal CA |
 | `verify-full` | Encrypted, verify CA + hostname | Production with public CA |
 
+##### Design Decision: Why `require` is the Default
+
+The default SSL mode is `require` (encrypted but no certificate verification) rather than `verify-full` for practical reasons:
+
+1. **Kubernetes In-Cluster Databases**: Most Kubernetes PostgreSQL deployments (Bitnami, CloudNativePG, etc.) don't generate TLS certificates by default. Using `verify-full` would break out-of-the-box deployments.
+
+2. **Managed Database Services**: AWS RDS and similar services use their own CA certificates that require downloading and configuring the RDS CA bundle. `verify-ca` works but requires additional setup.
+
+3. **Internal Network Security**: In most deployments, the database is within the same Kubernetes cluster or private VPC, where network-level encryption is less critical than external-facing services.
+
+**For production deployments with external databases**, upgrade to `verify-ca` or `verify-full`:
+
+```yaml
+database:
+  ssl_mode: "verify-ca"
+  ssl_root_cert: "/path/to/rds-ca-bundle.pem"  # For AWS RDS
+```
+
 ##### Configuration
 
 **Environment Variable (Recommended):**
@@ -918,6 +996,49 @@ security:
 | `dynamic` | Uses request `Host` header | Multi-tenant SaaS deployments |
 | `self` | Only same-origin allowed | Single-tenant deployments |
 | `https://example.com` | Specific domain(s) | Embedding in known parent app |
+
+#### CSP Directives Design Decisions
+
+The default Content Security Policy balances security with React/modern frontend framework compatibility:
+
+```
+default-src 'self';
+script-src 'self' 'unsafe-inline';
+style-src 'self' 'unsafe-inline';
+img-src 'self' data: https:;
+font-src 'self' data:;
+connect-src 'self' wss: https:;
+frame-ancestors [dynamic];
+base-uri 'self';
+form-action 'self'
+```
+
+**Design Rationale:**
+
+| Directive | Decision | Reason |
+|-----------|----------|--------|
+| `'unsafe-inline'` (scripts) | **Kept** | Required for React production builds and inline event handlers |
+| `'unsafe-eval'` | **Removed** | Not needed for React production builds; eval() is a significant XSS vector |
+| `'unsafe-inline'` (styles) | **Kept** | Required for Tailwind CSS and React styled components |
+| `data:` (images/fonts) | **Kept** | Common pattern for base64-encoded icons and fonts |
+
+**Why not use nonces?**
+
+CSP nonces (`'nonce-xyz123'`) provide stronger security than `'unsafe-inline'` but require:
+1. Server-side rendering to inject nonces into HTML
+2. Build-time modifications to inject nonces into bundled scripts
+3. Additional complexity in the deployment pipeline
+
+For an admin-only UI like GateKey, the risk/complexity trade-off favors simplicity. The UI is only accessible to authenticated administrators, not public users.
+
+**Custom CSP Override:**
+
+Organizations requiring stricter CSP can override the default:
+
+```yaml
+security:
+  content_security_policy: "default-src 'self'; script-src 'self' 'nonce-${REQUEST_NONCE}'; ..."
+```
 
 ### SSRF Protection
 

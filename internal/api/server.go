@@ -167,20 +167,42 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	networkStore := db.NewNetworkStore(database)
 	accessRuleStore := db.NewAccessRuleStore(database)
 	settingsStore := db.NewSettingsStore(database)
-	// Create PKI store with encryption if configured
+
+	// Create PKI store with encryption - key is auto-generated and persisted if not provided
 	// CA private keys are encrypted at rest using AES-256-GCM
 	var pkiStore *db.PKIStore
-	if cfg.Security.CAKeyEncryptionKey != "" {
-		var err error
-		pkiStore, err = db.NewPKIStoreWithEncryption(database, cfg.Security.CAKeyEncryptionKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize PKI store with encryption: %w", err)
+	encryptionKey := cfg.Security.CAKeyEncryptionKey
+
+	// If no key in config, check database settings
+	if encryptionKey == "" {
+		storedKey := settingsStore.GetString(ctx, db.SettingCAKeyEncryptionKey, "")
+		if storedKey != "" {
+			encryptionKey = storedKey
+			logger.Info("Using CA key encryption key from database settings")
 		}
-		logger.Info("PKI store initialized with CA private key encryption")
-	} else {
-		pkiStore = db.NewPKIStore(database)
-		logger.Warn("PKI store initialized WITHOUT CA private key encryption - set security.ca_key_encryption_key for production")
 	}
+
+	// If still no key, auto-generate and persist to database
+	if encryptionKey == "" {
+		keyBytes := make([]byte, 32) // 256-bit key for AES-256-GCM
+		if _, err := rand.Read(keyBytes); err != nil {
+			return nil, fmt.Errorf("failed to generate CA encryption key: %w", err)
+		}
+		encryptionKey = base64.StdEncoding.EncodeToString(keyBytes)
+
+		// Persist to database for cluster-wide consistency
+		if err := settingsStore.Set(ctx, db.SettingCAKeyEncryptionKey, encryptionKey); err != nil {
+			return nil, fmt.Errorf("failed to persist CA encryption key: %w", err)
+		}
+		logger.Info("Generated and stored new CA key encryption key in database")
+	}
+
+	// Initialize PKI store with encryption
+	pkiStore, err = db.NewPKIStoreWithEncryption(database, encryptionKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize PKI store with encryption: %w", err)
+	}
+	logger.Info("PKI store initialized with CA private key encryption (AES-256-GCM)")
 	proxyAppStore := db.NewProxyApplicationStore(database)
 	loginLogStore := db.NewLoginLogStore(database)
 	meshStore := db.NewMeshStore(database)
@@ -1440,10 +1462,12 @@ func securityHeadersMiddleware(cfg *config.Config) gin.HandlerFunc {
 				frameAncestors = cfg.Security.FrameAncestors
 			}
 
-			// Secure default CSP
+			// Secure default CSP - balanced for React production builds
+			// Note: 'unsafe-inline' required for React/Tailwind CSS-in-JS patterns
+			// 'unsafe-eval' removed - not needed for production React builds
 			csp = "default-src 'self'; " +
-				"script-src 'self' 'unsafe-inline' 'unsafe-eval'; " + // React needs unsafe-inline/eval
-				"style-src 'self' 'unsafe-inline'; " + // Inline styles for React
+				"script-src 'self' 'unsafe-inline'; " + // unsafe-inline for React; eval not needed in production
+				"style-src 'self' 'unsafe-inline'; " + // Inline styles for React/Tailwind
 				"img-src 'self' data: https:; " + // Allow data URIs and HTTPS images
 				"font-src 'self' data:; " + // Allow data URI fonts
 				"connect-src 'self' wss: https:; " + // WebSocket and API connections
