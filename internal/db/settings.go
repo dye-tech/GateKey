@@ -96,6 +96,18 @@ func (s *SettingsStore) GetBool(ctx context.Context, key string, defaultVal bool
 	return val
 }
 
+// GetString returns a setting as a string with a default value
+func (s *SettingsStore) GetString(ctx context.Context, key string, defaultVal string) string {
+	setting, err := s.Get(ctx, key)
+	if err != nil {
+		return defaultVal
+	}
+	if setting.Value == "" {
+		return defaultVal
+	}
+	return setting.Value
+}
+
 // Common setting keys
 const (
 	SettingSessionDurationHours  = "session_duration_hours"
@@ -114,6 +126,9 @@ const (
 	SettingProxySSRFProtection         = "proxy_ssrf_protection"          // bool: block requests to private/internal IPs (default: false)
 	SettingProxyDNSRebindingProtection = "proxy_dns_rebinding_protection" // bool: validate IPs at dial time (default: false)
 	SettingProxyTLSVerify              = "proxy_tls_verify"               // bool: verify TLS certs for proxied apps (default: false)
+
+	// CA Key Encryption - auto-generated and stored for encrypting CA private keys at rest
+	SettingCAKeyEncryptionKey = "ca_key_encryption_key" // base64-encoded 32-byte AES-256-GCM key
 )
 
 // Default crypto profiles (all enabled by default)
