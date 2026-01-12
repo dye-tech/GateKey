@@ -378,10 +378,10 @@ build-all: build-client-all build-server-all build-gateway-all build-wireguard-g
 ## Docker
 
 docker-build: ## Build Docker image
-	docker build -t gatekey:latest .
+	docker build -f build/docker/server.Dockerfile -t gatekey:latest .
 
 docker-build-web: ## Build web Docker image
-	docker build -f Dockerfile.web -t gatekey-web:latest .
+	docker build -f build/docker/web.Dockerfile -t gatekey-web:latest .
 
 docker-compose-up: ## Start with docker-compose
 	docker-compose up -d

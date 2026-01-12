@@ -3,9 +3,7 @@ package main
 
 import (
 	"context"
-	"embed"
 	"fmt"
-	"io/fs"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,9 +18,6 @@ import (
 	"github.com/gatekey-project/gatekey/internal/config"
 	"github.com/gatekey-project/gatekey/internal/db"
 )
-
-//go:embed migrations/*.sql
-var migrationsFS embed.FS
 
 var (
 	configPath string
@@ -68,11 +63,11 @@ func run(cmd *cobra.Command, args []string) error {
 
 	// Run database migrations
 	logger.Info("Running database migrations...")
-	migrationsSubFS, err := fs.Sub(migrationsFS, "migrations")
+	migrationsFS, err := db.MigrationsFS()
 	if err != nil {
 		return fmt.Errorf("failed to access embedded migrations: %w", err)
 	}
-	if err := db.RunMigrations(migrationsSubFS, cfg.Database.URL); err != nil {
+	if err := db.RunMigrations(migrationsFS, cfg.Database.URL); err != nil {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 	logger.Info("Database migrations completed")
