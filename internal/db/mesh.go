@@ -1665,4 +1665,3 @@ func (s *MeshStore) SyncHubConnectionCounts(ctx context.Context) (int64, error) 
 	}
 	return result.RowsAffected(), nil
 }
-

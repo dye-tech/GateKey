@@ -5,6 +5,36 @@ All notable changes to GateKey are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.5] - 2026-01-11
+
+### Added
+- Per-app TLS verification skip option for proxy applications
+- Database support for storing per-app TLS verification settings
+- Admin settings for TLS verification configuration
+
+### Changed
+- SSRF protection disabled by default for better compatibility
+- Added mesh network health check endpoint
+
+### Security
+- Enhanced TLS verification controls for enterprise environments
+
+## [1.4.4] - 2026-01-11
+
+### Added
+- Database schema dump and setup documentation
+
+### Security
+- Security feature improvements and fixes
+
+## [1.4.3] - 2026-01-11
+
+### Fixed
+- Resolved golangci-lint errors across codebase
+
+### Documentation
+- Added detailed changelog for v1.4.2 release
+
 ## [1.4.2] - 2026-01-11
 
 ### Added
