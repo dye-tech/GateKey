@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { api, getCA, rotateCA, updateCA, CAInfo, listCAs, CAListItem, prepareCARotation, activateCA, revokeCA } from '../api/client'
 
 interface ClaimMappings {
@@ -58,13 +58,14 @@ const defaultAttributeMappings: AttributeMappings = {
   groups: 'groups'
 }
 
-type TabType = 'oidc' | 'saml' | 'general' | 'ca'
+type TabType = 'oidc' | 'saml' | 'general' | 'ca' | 'security'
 
 const tabTitles: Record<TabType, string> = {
   oidc: 'OIDC Providers',
   saml: 'SAML Providers',
   general: 'VPN Settings',
   ca: 'Certificate Authority',
+  security: 'Proxy Security',
 }
 
 export default function AdminSettings() {
@@ -184,13 +185,46 @@ export default function AdminSettings() {
     )
   }
 
+  // Check if we're on settings tabs that should show the tab bar
+  const showSettingsTabBar = activeTab === 'general' || activeTab === 'security'
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-theme-primary">{tabTitles[activeTab]}</h1>
+        <h1 className="text-2xl font-bold text-theme-primary">
+          {showSettingsTabBar ? 'Settings' : tabTitles[activeTab]}
+        </h1>
         <p className="text-theme-tertiary mt-1">Configure VPN settings, authentication providers, and security options</p>
       </div>
+
+      {/* Settings Tab Bar */}
+      {showSettingsTabBar && (
+        <div className="border-b border-theme">
+          <nav className="-mb-px flex space-x-8">
+            <Link
+              to="/admin/settings/general"
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'general'
+                  ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                  : 'border-transparent text-theme-tertiary hover:text-theme-secondary hover:border-gray-300'
+              }`}
+            >
+              VPN Settings
+            </Link>
+            <Link
+              to="/admin/settings/security"
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'security'
+                  ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                  : 'border-transparent text-theme-tertiary hover:text-theme-secondary hover:border-gray-300'
+              }`}
+            >
+              Proxy Security
+            </Link>
+          </nav>
+        </div>
+      )}
 
       {/* Alerts */}
       {error && (
@@ -236,6 +270,7 @@ export default function AdminSettings() {
         )}
         {activeTab === 'general' && <GeneralTab />}
         {activeTab === 'ca' && <CATab />}
+        {activeTab === 'security' && <SecurityTab />}
       </div>
     </div>
   )
@@ -1573,6 +1608,211 @@ function GeneralTab() {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// Security Settings Tab
+function SecurityTab() {
+  const [settings, setSettings] = useState<Record<string, string>>({})
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+
+  useEffect(() => {
+    loadSettings()
+  }, [])
+
+  async function loadSettings() {
+    try {
+      setLoading(true)
+      const res = await api.get('/api/v1/admin/settings')
+      setSettings(res.data.settings || {})
+    } catch (err) {
+      setError('Failed to load settings')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function saveSettings() {
+    try {
+      setSaving(true)
+      setError(null)
+      await api.put('/api/v1/admin/settings', settings)
+      setSuccess('Security settings saved successfully')
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      setError('Failed to save settings')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-medium">Proxy Security Settings</h3>
+        <p className="text-sm text-theme-tertiary">Configure security options for reverse proxy applications</p>
+      </div>
+
+      {error && (
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 text-sm">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-400 text-sm">
+          {success}
+        </div>
+      )}
+
+      <div className="grid gap-6">
+        {/* TLS Verification */}
+        <div className="border rounded-lg p-4">
+          <h4 className="font-medium mb-4">TLS Certificate Verification</h4>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-theme-tertiary rounded-lg">
+              <div className="flex-1">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="proxy-tls-verify"
+                    checked={settings.proxy_tls_verify === 'true'}
+                    onChange={(e) => setSettings({ ...settings, proxy_tls_verify: e.target.checked ? 'true' : 'false' })}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-theme rounded"
+                  />
+                  <label htmlFor="proxy-tls-verify" className="ml-2 font-medium text-theme-secondary">
+                    Verify TLS Certificates for Proxy Targets
+                  </label>
+                </div>
+                <p className="text-sm text-theme-tertiary mt-1 ml-6">
+                  When enabled, GateKey verifies TLS certificates when proxying to backend applications.
+                  Disable only if targets use self-signed certificates you trust.
+                </p>
+              </div>
+            </div>
+
+            {settings.proxy_tls_verify !== 'true' && (
+              <div className="p-3 bg-amber-100 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800 rounded-lg">
+                <p className="text-sm text-amber-900 dark:text-amber-300">
+                  <strong>Warning:</strong> TLS verification is disabled. This allows proxied connections
+                  to servers with invalid or self-signed certificates, which could be a security risk.
+                  Consider enabling this setting or using per-app "Skip TLS Verify" for specific applications.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* SSRF Protection */}
+        <div className="border rounded-lg p-4">
+          <h4 className="font-medium mb-4">SSRF Protection</h4>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-theme-tertiary rounded-lg">
+              <div className="flex-1">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="proxy-ssrf-protection"
+                    checked={settings.proxy_ssrf_protection === 'true'}
+                    onChange={(e) => setSettings({ ...settings, proxy_ssrf_protection: e.target.checked ? 'true' : 'false' })}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-theme rounded"
+                  />
+                  <label htmlFor="proxy-ssrf-protection" className="ml-2 font-medium text-theme-secondary">
+                    Enable SSRF Protection
+                  </label>
+                </div>
+                <p className="text-sm text-theme-tertiary mt-1 ml-6">
+                  Block proxy requests to private/internal IP addresses (10.x.x.x, 192.168.x.x, 127.0.0.1, etc.).
+                  This prevents Server-Side Request Forgery attacks.
+                </p>
+              </div>
+            </div>
+
+            {settings.proxy_ssrf_protection === 'true' && (
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <p className="text-sm text-blue-900 dark:text-blue-300">
+                  <strong>Note:</strong> With SSRF protection enabled, proxy applications cannot target
+                  internal services using private IP addresses. Use public-facing addresses or disable
+                  this setting if you need to proxy to internal services.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* DNS Rebinding Protection */}
+        <div className="border rounded-lg p-4">
+          <h4 className="font-medium mb-4">DNS Rebinding Protection</h4>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-theme-tertiary rounded-lg">
+              <div className="flex-1">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="proxy-dns-rebinding-protection"
+                    checked={settings.proxy_dns_rebinding_protection === 'true'}
+                    onChange={(e) => setSettings({ ...settings, proxy_dns_rebinding_protection: e.target.checked ? 'true' : 'false' })}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-theme rounded"
+                  />
+                  <label htmlFor="proxy-dns-rebinding-protection" className="ml-2 font-medium text-theme-secondary">
+                    Enable DNS Rebinding Protection
+                  </label>
+                </div>
+                <p className="text-sm text-theme-tertiary mt-1 ml-6">
+                  Validate IP addresses at connection time to prevent DNS rebinding attacks.
+                  This is an advanced protection that re-checks IPs when establishing connections.
+                </p>
+              </div>
+            </div>
+
+            {settings.proxy_dns_rebinding_protection === 'true' && (
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <p className="text-sm text-blue-900 dark:text-blue-300">
+                  <strong>Note:</strong> DNS rebinding protection validates IPs at dial time, which may add
+                  slight latency. This is an extra layer of security beyond basic SSRF protection.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Info Box */}
+        <div className="p-4 bg-theme-tertiary border border-theme rounded-lg">
+          <h5 className="font-medium text-theme-secondary mb-2">About These Settings</h5>
+          <ul className="text-sm text-theme-tertiary space-y-2 list-disc list-inside">
+            <li><strong>TLS Verification:</strong> Controls whether backend TLS certificates are validated. Individual apps can override this with "Skip TLS Verify" in their settings.</li>
+            <li><strong>SSRF Protection:</strong> Blocks requests to private networks. Useful if proxy targets should only be public services.</li>
+            <li><strong>DNS Rebinding Protection:</strong> Advanced protection against DNS-based attacks that change IP resolution between checks.</li>
+          </ul>
+          <p className="text-sm text-theme-tertiary mt-3">
+            These settings take effect immediately for new proxy requests. Changes are stored in the database and override any config file settings.
+          </p>
+        </div>
+      </div>
+
+      <div className="pt-4 border-t">
+        <button
+          onClick={saveSettings}
+          disabled={saving}
+          className="btn btn-primary inline-flex items-center"
+        >
+          <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+          </svg>
+          {saving ? 'Saving...' : 'Save Security Settings'}
+        </button>
       </div>
     </div>
   )

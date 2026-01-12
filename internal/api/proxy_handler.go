@@ -257,8 +257,8 @@ func (s *Server) handleProxyRequest(c *gin.Context) {
 		return
 	}
 
-	// 3.5 SSRF protection check (if enabled)
-	if s.config.Security.ProxySSRFProtection {
+	// 3.5 SSRF protection check (if enabled via DB setting or config)
+	if s.GetProxySSRFProtection(c.Request.Context()) {
 		if err := s.validateProxyTarget(targetURL); err != nil {
 			s.logger.Warn("SSRF protection blocked request",
 				zap.String("slug", slug),
@@ -438,15 +438,15 @@ func (s *Server) createReverseProxy(app *db.ProxyApplication, targetURL *url.URL
 				http.Error(w, "Application unavailable: "+err.Error(), http.StatusBadGateway)
 			}
 		},
-		Transport: s.createProxyTransport(app),
+		Transport: s.createProxyTransport(c.Request.Context(), app),
 	}
 
 	return proxy
 }
 
 // createProxyTransport creates an HTTP transport with SSRF protection and TLS verification
-func (s *Server) createProxyTransport(app *db.ProxyApplication) *http.Transport {
-	tlsConfig := s.buildProxyTLSConfig(app)
+func (s *Server) createProxyTransport(ctx context.Context, app *db.ProxyApplication) *http.Transport {
+	tlsConfig := s.buildProxyTLSConfig(ctx, app)
 
 	transport := &http.Transport{
 		TLSClientConfig:       tlsConfig,
@@ -457,8 +457,8 @@ func (s *Server) createProxyTransport(app *db.ProxyApplication) *http.Transport 
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 
-	// Use SSRF-safe dialer when DNS rebinding protection is enabled
-	if s.config.Security.ProxyDNSRebindingProtection {
+	// Use SSRF-safe dialer when DNS rebinding protection is enabled (via DB setting or config)
+	if s.GetProxyDNSRebindingProtection(ctx) {
 		transport.DialContext = s.ssrfSafeDialer()
 	} else {
 		transport.DialContext = (&net.Dialer{
@@ -471,7 +471,7 @@ func (s *Server) createProxyTransport(app *db.ProxyApplication) *http.Transport 
 }
 
 // buildProxyTLSConfig creates a TLS config for proxy connections based on global and per-app settings
-func (s *Server) buildProxyTLSConfig(app *db.ProxyApplication) *tls.Config {
+func (s *Server) buildProxyTLSConfig(ctx context.Context, app *db.ProxyApplication) *tls.Config {
 	tlsConfig := &tls.Config{}
 
 	// Set minimum TLS version
@@ -483,8 +483,9 @@ func (s *Server) buildProxyTLSConfig(app *db.ProxyApplication) *tls.Config {
 	}
 
 	// Determine if we should skip TLS verification
-	// Per-app setting overrides global setting
-	skipVerify := !s.config.Security.ProxyTLSVerify // Global default
+	// Per-app setting overrides global setting (from DB or config)
+	globalTLSVerify := s.GetProxyTLSVerify(ctx)
+	skipVerify := !globalTLSVerify // Global default
 	if app.SkipTLSVerify {
 		skipVerify = true // Per-app override to skip
 	}
