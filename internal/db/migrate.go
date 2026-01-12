@@ -2,6 +2,7 @@
 package db
 
 import (
+	"embed"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -10,6 +11,14 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 )
+
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
+
+// MigrationsFS returns the embedded migrations filesystem.
+func MigrationsFS() (fs.FS, error) {
+	return fs.Sub(migrationsFS, "migrations")
+}
 
 // RunMigrations runs all pending database migrations using the provided embedded filesystem.
 func RunMigrations(migrationsFS fs.FS, databaseURL string) error {

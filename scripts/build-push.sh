@@ -29,38 +29,47 @@ PROJECT_ROOT="$( cd "${SCRIPT_DIR}/.." && pwd )"
 
 cd "${PROJECT_ROOT}"
 
+# Dockerfile paths (reorganized structure)
+DOCKER_DIR="build/docker"
+
 # Build server image
 echo -e "${YELLOW}Building gatekey-server...${NC}"
-docker build ${BUILD_ARGS} -t "${REGISTRY}/${PROJECT}/gatekey-server:${VERSION}" -f Dockerfile .
+docker build ${BUILD_ARGS} -t "${REGISTRY}/${PROJECT}/gatekey-server:${VERSION}" -f "${DOCKER_DIR}/server.Dockerfile" .
 
-# Build gateway image (OpenVPN)
+# Build OpenVPN gateway image
 echo -e "${YELLOW}Building gatekey-gateway...${NC}"
-docker build ${BUILD_ARGS} -t "${REGISTRY}/${PROJECT}/gatekey-gateway:${VERSION}" -f Dockerfile.gateway .
+docker build ${BUILD_ARGS} -t "${REGISTRY}/${PROJECT}/gatekey-gateway:${VERSION}" -f "${DOCKER_DIR}/openvpn/gateway.Dockerfile" .
 
-# Build hub image (OpenVPN mesh)
+# Build OpenVPN hub image
 echo -e "${YELLOW}Building gatekey-hub...${NC}"
-docker build ${BUILD_ARGS} -t "${REGISTRY}/${PROJECT}/gatekey-hub:${VERSION}" -f Dockerfile.hub .
+docker build ${BUILD_ARGS} -t "${REGISTRY}/${PROJECT}/gatekey-hub:${VERSION}" -f "${DOCKER_DIR}/openvpn/hub.Dockerfile" .
 
-# Build wireguard-gateway image
-echo -e "${YELLOW}Building gatekey-wireguard-gateway...${NC}"
-docker build ${BUILD_ARGS} -t "${REGISTRY}/${PROJECT}/gatekey-wireguard-gateway:${VERSION}" -f Dockerfile.wireguard-gateway .
-
-# Build wireguard-hub image (if Dockerfile exists)
-if [ -f "Dockerfile.wireguard-hub" ]; then
-    echo -e "${YELLOW}Building gatekey-wireguard-hub...${NC}"
-    docker build ${BUILD_ARGS} -t "${REGISTRY}/${PROJECT}/gatekey-wireguard-hub:${VERSION}" -f Dockerfile.wireguard-hub .
+# Build OpenVPN spoke image
+if [ -f "${DOCKER_DIR}/openvpn/spoke.Dockerfile" ]; then
+    echo -e "${YELLOW}Building gatekey-mesh-gateway...${NC}"
+    docker build ${BUILD_ARGS} -t "${REGISTRY}/${PROJECT}/gatekey-mesh-gateway:${VERSION}" -f "${DOCKER_DIR}/openvpn/spoke.Dockerfile" .
 fi
 
-# Build wireguard-mesh-gateway image (if Dockerfile exists)
-if [ -f "Dockerfile.wireguard-mesh-gateway" ]; then
+# Build WireGuard gateway image
+echo -e "${YELLOW}Building gatekey-wireguard-gateway...${NC}"
+docker build ${BUILD_ARGS} -t "${REGISTRY}/${PROJECT}/gatekey-wireguard-gateway:${VERSION}" -f "${DOCKER_DIR}/wireguard/gateway.Dockerfile" .
+
+# Build WireGuard hub image
+if [ -f "${DOCKER_DIR}/wireguard/hub.Dockerfile" ]; then
+    echo -e "${YELLOW}Building gatekey-wireguard-hub...${NC}"
+    docker build ${BUILD_ARGS} -t "${REGISTRY}/${PROJECT}/gatekey-wireguard-hub:${VERSION}" -f "${DOCKER_DIR}/wireguard/hub.Dockerfile" .
+fi
+
+# Build WireGuard spoke image
+if [ -f "${DOCKER_DIR}/wireguard/spoke.Dockerfile" ]; then
     echo -e "${YELLOW}Building gatekey-wireguard-mesh-gateway...${NC}"
-    docker build ${BUILD_ARGS} -t "${REGISTRY}/${PROJECT}/gatekey-wireguard-mesh-gateway:${VERSION}" -f Dockerfile.wireguard-mesh-gateway .
+    docker build ${BUILD_ARGS} -t "${REGISTRY}/${PROJECT}/gatekey-wireguard-mesh-gateway:${VERSION}" -f "${DOCKER_DIR}/wireguard/spoke.Dockerfile" .
 fi
 
 # Build web image (if web directory exists and has package.json)
 if [ -f "web/package.json" ]; then
     echo -e "${YELLOW}Building gatekey-web...${NC}"
-    docker build ${BUILD_ARGS} -t "${REGISTRY}/${PROJECT}/gatekey-web:${VERSION}" -f Dockerfile.web .
+    docker build ${BUILD_ARGS} -t "${REGISTRY}/${PROJECT}/gatekey-web:${VERSION}" -f "${DOCKER_DIR}/web.Dockerfile" .
 else
     echo -e "${YELLOW}Skipping gatekey-web (web/package.json not found)${NC}"
 fi
@@ -79,15 +88,20 @@ echo -e "${GREEN}Pushed gatekey-gateway:${VERSION}${NC}"
 docker push "${REGISTRY}/${PROJECT}/gatekey-hub:${VERSION}"
 echo -e "${GREEN}Pushed gatekey-hub:${VERSION}${NC}"
 
+if [ -f "${DOCKER_DIR}/openvpn/spoke.Dockerfile" ]; then
+    docker push "${REGISTRY}/${PROJECT}/gatekey-mesh-gateway:${VERSION}"
+    echo -e "${GREEN}Pushed gatekey-mesh-gateway:${VERSION}${NC}"
+fi
+
 docker push "${REGISTRY}/${PROJECT}/gatekey-wireguard-gateway:${VERSION}"
 echo -e "${GREEN}Pushed gatekey-wireguard-gateway:${VERSION}${NC}"
 
-if [ -f "Dockerfile.wireguard-hub" ]; then
+if [ -f "${DOCKER_DIR}/wireguard/hub.Dockerfile" ]; then
     docker push "${REGISTRY}/${PROJECT}/gatekey-wireguard-hub:${VERSION}"
     echo -e "${GREEN}Pushed gatekey-wireguard-hub:${VERSION}${NC}"
 fi
 
-if [ -f "Dockerfile.wireguard-mesh-gateway" ]; then
+if [ -f "${DOCKER_DIR}/wireguard/spoke.Dockerfile" ]; then
     docker push "${REGISTRY}/${PROJECT}/gatekey-wireguard-mesh-gateway:${VERSION}"
     echo -e "${GREEN}Pushed gatekey-wireguard-mesh-gateway:${VERSION}${NC}"
 fi
@@ -103,11 +117,14 @@ echo "Images:"
 echo "  - ${REGISTRY}/${PROJECT}/gatekey-server:${VERSION}"
 echo "  - ${REGISTRY}/${PROJECT}/gatekey-gateway:${VERSION}"
 echo "  - ${REGISTRY}/${PROJECT}/gatekey-hub:${VERSION}"
+if [ -f "${DOCKER_DIR}/openvpn/spoke.Dockerfile" ]; then
+    echo "  - ${REGISTRY}/${PROJECT}/gatekey-mesh-gateway:${VERSION}"
+fi
 echo "  - ${REGISTRY}/${PROJECT}/gatekey-wireguard-gateway:${VERSION}"
-if [ -f "Dockerfile.wireguard-hub" ]; then
+if [ -f "${DOCKER_DIR}/wireguard/hub.Dockerfile" ]; then
     echo "  - ${REGISTRY}/${PROJECT}/gatekey-wireguard-hub:${VERSION}"
 fi
-if [ -f "Dockerfile.wireguard-mesh-gateway" ]; then
+if [ -f "${DOCKER_DIR}/wireguard/spoke.Dockerfile" ]; then
     echo "  - ${REGISTRY}/${PROJECT}/gatekey-wireguard-mesh-gateway:${VERSION}"
 fi
 if [ -f "web/package.json" ]; then
