@@ -83,6 +83,7 @@ func (e *KeyEncryptor) Encrypt(plaintext string) (string, error) {
 	}
 
 	// Encrypt the plaintext
+	// #nosec G407 -- nonce is randomly generated above with crypto/rand, not hardcoded
 	ciphertext := gcm.Seal(nonce, nonce, []byte(plaintext), nil)
 
 	// Encode and prefix

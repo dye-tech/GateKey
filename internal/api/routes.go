@@ -4739,13 +4739,13 @@ func (s *Server) handleUpdateSettings(c *gin.Context) {
 
 	// Validate allowed settings
 	allowedSettings := map[string]bool{
-		db.SettingSessionDurationHours:     true,
-		db.SettingSecureCookies:            true,
-		db.SettingVPNCertValidityHours:     true,
-		db.SettingRequireFIPS:              true,
-		db.SettingAllowedCryptoProfiles:    true,
-		db.SettingMinTLSVersion:            true,
-		db.SettingAllowedCiphers:           true,
+		db.SettingSessionDurationHours:  true,
+		db.SettingSecureCookies:         true,
+		db.SettingVPNCertValidityHours:  true,
+		db.SettingRequireFIPS:           true,
+		db.SettingAllowedCryptoProfiles: true,
+		db.SettingMinTLSVersion:         true,
+		db.SettingAllowedCiphers:        true,
 		// Security settings
 		db.SettingProxySSRFProtection:         true,
 		db.SettingProxyDNSRebindingProtection: true,
