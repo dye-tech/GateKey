@@ -59,7 +59,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
         { name: 'Monitoring', href: '/admin/monitoring', icon: 'monitoring' },
         { name: 'Geo-Fencing', href: '/admin/geo-fencing', icon: 'geo-fence' },
         { name: 'All Configs', href: '/admin/configs', icon: 'configs' },
-        { name: 'VPN Settings', href: '/admin/settings/general', icon: 'cog' },
+        { name: 'Settings', href: '/admin/settings/general', icon: 'cog' },
         { name: 'Certificate CA', href: '/admin/settings/ca', icon: 'certificate' },
       ]
     },

@@ -110,8 +110,10 @@ const (
 	SettingGeoFencingEnabled = "geo_fencing_enabled" // bool: enable/disable geo-fencing
 	SettingGeoFencingEnforce = "geo_fencing_enforce" // "enforce" or "audit"
 
-	// Proxy settings
-	SettingProxyTLSVerify = "proxy_tls_verify" // bool: verify TLS certs for proxied apps (default: false)
+	// Proxy/Security settings
+	SettingProxySSRFProtection        = "proxy_ssrf_protection"         // bool: block requests to private/internal IPs (default: false)
+	SettingProxyDNSRebindingProtection = "proxy_dns_rebinding_protection" // bool: validate IPs at dial time (default: false)
+	SettingProxyTLSVerify             = "proxy_tls_verify"               // bool: verify TLS certs for proxied apps (default: false)
 )
 
 // Default crypto profiles (all enabled by default)
