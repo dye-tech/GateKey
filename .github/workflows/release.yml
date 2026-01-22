@@ -65,7 +65,15 @@ jobs:
           - image: gatekey-hub
             dockerfile: ./Dockerfile.hub
             title: GateKey Mesh Hub
-            description: GateKey Zero-Trust VPN Mesh Hub Server
+            description: GateKey Zero-Trust VPN Mesh Hub Server (OpenVPN)
+          - image: gatekey-wireguard-gateway
+            dockerfile: ./Dockerfile.wireguard-gateway
+            title: GateKey WireGuard Gateway
+            description: GateKey Zero-Trust VPN WireGuard Gateway Agent
+          - image: gatekey-wireguard-hub
+            dockerfile: ./Dockerfile.wireguard-hub
+            title: GateKey WireGuard Mesh Hub
+            description: GateKey Zero-Trust VPN WireGuard Mesh Hub Server
     steps:
       - name: Checkout
         uses: actions/checkout@v6
