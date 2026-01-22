@@ -5,6 +5,37 @@ All notable changes to GateKey are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.6] - 2026-01-22
+
+### Added
+- Standalone web UI Docker image (`gatekey-web`) with nginx for flexible deployment architectures
+- Mesh hub Docker image (`gatekey-hub`) for containerized hub deployments
+- GitHub Actions build caching for faster CI/CD pipelines
+
+### Changed
+- **Breaking**: Renamed config file from `gatex.yaml` to `gatekey.yaml` across all deployment methods
+- **Breaking**: Changed environment variable prefix from `GATEX_` to `GATEKEY_` for consistency
+- CI/CD pipeline now builds all 4 Docker images in parallel using matrix strategy (~4x faster)
+- Server Docker image (`gatekey-server`) is now API-only; web UI served separately via `gatekey-web`
+- Config loader now auto-discovers `gatekey.yaml` in `/app/configs`, `./configs`, or current directory
+- Updated Helm chart templates to use `gatekey.yaml` config filename
+- Updated Kustomize base with proper config file mounting and secret structure
+
+### Fixed
+- Docker build times reduced from ~18 minutes to ~4 minutes with parallelization
+- Config loading now properly uses `GATEKEY_` prefixed environment variables
+- Kubernetes deployments now correctly mount config files to `/app/configs`
+
+### Removed
+- Frontend build stage from main server Dockerfile (moved to dedicated web image)
+- Legacy `gatex` naming convention throughout codebase
+
+### Migration Guide
+If upgrading from v1.4.5:
+1. Rename `gatex.yaml` to `gatekey.yaml` in your ConfigMaps
+2. Update any `GATEX_*` environment variables to `GATEKEY_*`
+3. If using embedded web UI, switch to the separate `gatekey-web` container
+
 ## [1.4.5] - 2026-01-11
 
 ### Added
