@@ -1417,8 +1417,17 @@ func (s *Server) authRateLimitMiddleware() gin.HandlerFunc {
 
 // securityHeadersMiddleware returns a Gin middleware that adds security headers to all responses.
 // It is multi-tenant aware and can dynamically set frame-ancestors based on the Host header.
+// NOTE: Security headers are NOT applied to /proxy/* routes to avoid breaking proxied applications.
+// Proxied apps have their own security headers that should not be overwritten.
 func securityHeadersMiddleware(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Skip security headers for proxy routes - proxied apps have their own headers
+		// and our CSP/X-Content-Type-Options can break them
+		if strings.HasPrefix(c.Request.URL.Path, "/proxy/") {
+			c.Next()
+			return
+		}
+
 		// X-Content-Type-Options: Prevents MIME type sniffing
 		c.Header("X-Content-Type-Options", "nosniff")
 

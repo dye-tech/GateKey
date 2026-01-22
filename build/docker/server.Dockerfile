@@ -104,7 +104,7 @@ COPY bin/gatekey-android.apk /app/bin/gatekey-android.apk
 COPY web/dist /app/web/dist
 
 # Copy migrations
-COPY migrations /app/migrations
+COPY internal/db/migrations /app/migrations
 
 # Copy install scripts
 COPY scripts /app/scripts
@@ -123,4 +123,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget -qO- http://localhost:8080/health || exit 1
 
 ENTRYPOINT ["/usr/local/bin/gatekey-server"]
-CMD ["--config", "/app/configs/gatex.yaml"]
+CMD ["--config", "/app/configs/gatekey.yaml"]
