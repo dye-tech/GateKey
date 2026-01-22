@@ -16,19 +16,7 @@ This is fundamentally different from traditional VPNs where connecting grants fu
 
 ### Entity Relationships
 
-```
-┌─────────────┐         ┌─────────────┐         ┌──────────────┐
-│   Users     │◄───────►│  Gateways   │◄───────►│   Networks   │
-│  (SSO/Local)│         │  (VPN nodes)│         │  (CIDR blocks)│
-└──────┬──────┘         └─────────────┘         └──────────────┘
-       │                                                │
-       │                                                │
-       ▼                                                ▼
-┌─────────────┐                                 ┌──────────────┐
-│   Groups    │◄───────────────────────────────►│ Access Rules │
-│ (from IdP)  │                                 │ (IP/hostname)│
-└─────────────┘                                 └──────────────┘
-```
+![Entity Relationships](diagrams/entity-relationships.svg)
 
 ### Access Control Layers
 
@@ -40,46 +28,7 @@ This is fundamentally different from traditional VPNs where connecting grants fu
 
 ### Permission Flow
 
-```
-User requests VPN access
-         │
-         ▼
-┌─────────────────────────────┐
-│ 1. Is user assigned to      │ ──NO──► Access Denied
-│    this gateway?            │
-└──────────────┬──────────────┘
-               │ YES
-               ▼
-┌─────────────────────────────┐
-│ 2. Generate config with     │
-│    short-lived certificate  │
-└──────────────┬──────────────┘
-               │
-               ▼
-User connects with OpenVPN client
-               │
-               ▼
-┌─────────────────────────────┐
-│ 3. Gateway verifies:        │
-│    - Certificate valid?     │ ──NO──► Connection Rejected
-│    - User still has access? │
-│    - Account active?        │
-└──────────────┬──────────────┘
-               │ YES
-               ▼
-┌─────────────────────────────┐
-│ 4. Retrieve user's access   │
-│    rules and apply firewall │
-│    (Default: DENY ALL)      │
-└──────────────┬──────────────┘
-               │
-               ▼
-┌─────────────────────────────┐
-│ 5. User can only reach      │
-│    destinations permitted   │
-│    by their access rules    │
-└─────────────────────────────┘
-```
+![Permission Flow](diagrams/permission-flow.svg)
 
 ## Security Enforcement Points
 
@@ -228,42 +177,7 @@ GateKey supports graceful CA rotation with zero-downtime using a dual-trust peri
 
 ### Rotation Process
 
-```
-Phase 1: Preparation
-┌─────────────────────────────────────────────────────────┐
-│  POST /settings/ca/prepare-rotation                     │
-│  - Generates new CA with status "pending"               │
-│  - Both old and new CAs are trusted                     │
-│  - No impact to existing connections                    │
-└─────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-Phase 2: Activation
-┌─────────────────────────────────────────────────────────┐
-│  POST /settings/ca/activate/:id                         │
-│  - Old CA → "retired" (still trusted)                   │
-│  - New CA → "active" (now issuing)                      │
-│  - Gateways detect change via ca_fingerprint            │
-│  - Auto-reprovision triggered on next heartbeat         │
-└─────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-Phase 3: Grace Period
-┌─────────────────────────────────────────────────────────┐
-│  - Existing certs from old CA still work                │
-│  - New certs issued by new CA                           │
-│  - Clients regenerate configs naturally                 │
-│  - Wait for old certs to expire (24h default)           │
-└─────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-Phase 4: Cleanup (Optional)
-┌─────────────────────────────────────────────────────────┐
-│  POST /settings/ca/revoke/:old-ca-id                    │
-│  - Old CA becomes completely untrusted                  │
-│  - Any remaining old certs are rejected                 │
-└─────────────────────────────────────────────────────────┘
-```
+![CA Rotation Process](diagrams/ca-rotation.svg)
 
 ### Automatic CA Rotation Detection
 
@@ -321,19 +235,7 @@ Access rules are enforced in real-time without requiring client reconnection:
 
 ### Architecture
 
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  Admin UI       │────►│  Control Plane  │────►│  Gateway Agent  │
-│  (Rule Change)  │     │  (Database)     │     │  (nftables)     │
-└─────────────────┘     └────────┬────────┘     └────────┬────────┘
-                                 │                       │
-                                 ▼                       ▼
-                        ┌─────────────────┐     ┌─────────────────┐
-                        │ /gateway/       │     │  Client Traffic │
-                        │ client-rules    │────►│  Immediately    │
-                        │ all-rules       │     │  Blocked/Allowed│
-                        └─────────────────┘     └─────────────────┘
-```
+![Real-Time Enforcement Architecture](diagrams/realtime-enforcement.svg)
 
 ### Flow
 

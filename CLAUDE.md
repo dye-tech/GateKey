@@ -18,24 +18,7 @@ GateKey is a zero-trust VPN solution that wraps OpenVPN to provide software-defi
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      GATEKEY CONTROL PLANE                      │
-├─────────────────────────────────────────────────────────────────┤
-│  Web UI (React) │ REST API (Gin) │ Embedded CA (PKI)           │
-├─────────────────────────────────────────────────────────────────┤
-│  Auth Service   │ Policy Service │ Session Svc │ K8s Secrets   │
-├─────────────────────────────────────────────────────────────────┤
-│                         PostgreSQL                               │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      GATEKEY GATEWAY                            │
-│  OpenVPN Server (Stock) ◄─ Hook Executor (Go)                   │
-│  Firewall Manager (nftables) - Per-identity rules               │
-└─────────────────────────────────────────────────────────────────┘
-```
+![Architecture Overview](docs/diagrams/architecture-overview.svg)
 
 ## Project Structure
 

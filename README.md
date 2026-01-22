@@ -202,34 +202,7 @@ This section is for IT administrators setting up GateKey infrastructure.
 
 ## Architecture Overview
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    GATEKEY CONTROL PLANE                        │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │   Web UI     │  │   REST API   │  │ Embedded CA  │          │
-│  │  (React)     │  │    (Go)      │  │   (PKI)      │          │
-│  └──────────────┘  └──────────────┘  └──────────────┘          │
-│                           │                                     │
-│  ┌────────────────────────┴───────────────────────────────┐    │
-│  │                     PostgreSQL                          │    │
-│  └─────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┴───────────────┐
-              ▼                               ▼
-┌──────────────────────────────┐  ┌──────────────────────────────┐
-│     OPENVPN GATEWAY          │  │     WIREGUARD GATEWAY        │
-│  ┌────────────┐ ┌─────────┐  │  │  ┌────────────┐ ┌─────────┐  │
-│  │  OpenVPN   │◄┤ Gateway │  │  │  │ WireGuard  │◄┤ Gateway │  │
-│  │  Server    │ │  Agent  │  │  │  │  Server    │ │  Agent  │  │
-│  └────────────┘ └─────────┘  │  │  └────────────┘ └─────────┘  │
-│         │                    │  │         │                    │
-│  ┌──────┴──────────────────┐ │  │  ┌──────┴──────────────────┐ │
-│  │  nftables Firewall      │ │  │  │  nftables Firewall      │ │
-│  │  (Per-Identity Rules)   │ │  │  │  (Per-Identity Rules)   │ │
-│  └─────────────────────────┘ │  │  └─────────────────────────┘ │
-└──────────────────────────────┘  └──────────────────────────────┘
-```
+![Architecture Overview](docs/diagrams/readme-architecture.svg)
 
 ## Server Setup
 
@@ -620,23 +593,7 @@ Use the admin UI or API to:
 3. Your firewall rules are automatically applied based on your role/group membership
 4. Configs auto-refresh, so you never deal with expired certificates
 
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│  Your Computer  │    │  GateKey Server  │    │  Your Company   │
-│                 │    │                  │    │    Network      │
-│  ┌───────────┐  │    │  ┌────────────┐  │    │                 │
-│  │  gatekey  │──┼────┼─►│   Auth +   │  │    │  ┌───────────┐  │
-│  │   CLI     │  │    │  │  PKI       │  │    │  │ Internal  │  │
-│  └───────────┘  │    │  └────────────┘  │    │  │ Services  │  │
-│       │         │    │                  │    │  └───────────┘  │
-│       ▼         │    │  ┌────────────┐  │    │       ▲         │
-│  ┌───────────┐  │    │  │  OpenVPN   │  │    │       │         │
-│  │  OpenVPN  │──┼────┼─►│     or     │──┼────┼───────┘         │
-│  │    or     │  │    │  │ WireGuard  │  │    │                 │
-│  │ WireGuard │  │    │  │  Gateway   │  │    │                 │
-│  └───────────┘  │    │  └────────────┘  │    │                 │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-```
+![Connection Flow](docs/diagrams/connection-flow.svg)
 
 ---
 
