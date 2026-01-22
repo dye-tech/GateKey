@@ -2,7 +2,9 @@
 
 ## Overview
 
-GateKey is a Software Defined Perimeter (SDP) solution that wraps OpenVPN to provide zero-trust VPN capabilities while maintaining 100% compatibility with existing OpenVPN clients.
+GateKey is a Software Defined Perimeter (SDP) solution that wraps OpenVPN and WireGuard to provide zero-trust VPN capabilities while maintaining 100% compatibility with existing VPN clients.
+
+![Architecture Overview](diagrams/architecture-overview.svg)
 
 ## System Components
 
@@ -13,34 +15,12 @@ The control plane is the central management component that handles:
 - **Authentication**: OIDC and SAML integration with identity providers
 - **Authorization**: Policy-based access control
 - **Certificate Management**: Embedded PKI for short-lived certificates
-- **Configuration Generation**: Dynamic .ovpn file generation
+- **Configuration Generation**: Dynamic .ovpn/.conf file generation
 - **Session Management**: User session tracking and validation
 - **Gateway Management**: Registration and monitoring of gateway nodes
 - **Audit Logging**: Comprehensive audit trail
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      CONTROL PLANE                               │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
-│  │   Web UI     │  │   REST API   │  │   gRPC API   │           │
-│  │  (React/TS)  │  │   (Go/Gin)   │  │  (internal)  │           │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘           │
-│         └─────────────────┼──────────────────┘                   │
-│                           │                                      │
-│  ┌────────────────────────┴────────────────────────────────┐    │
-│  │                    Core Services                         │    │
-│  ├─────────────┬─────────────┬─────────────┬───────────────┤    │
-│  │  Auth Svc   │  Policy Svc │   PKI Svc   │  Session Svc  │    │
-│  │ (OIDC/SAML) │  (RBAC/ACL) │ (Cert Gen)  │  (State Mgmt) │    │
-│  └─────────────┴─────────────┴─────────────┴───────────────┘    │
-│                           │                                      │
-│  ┌────────────────────────┴────────────────────────────────┐    │
-│  │                    Data Layer                            │    │
-│  │                    PostgreSQL                            │    │
-│  └──────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────┘
-```
+![Control Plane](diagrams/control-plane.svg)
 
 ### Gateway Agent (`gatekey-gateway`)
 
@@ -51,23 +31,7 @@ The gateway agent runs alongside OpenVPN on each gateway node:
 - **Connection Reporting**: Reports connection state to control plane
 - **Health Monitoring**: Sends heartbeats to control plane
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      GATEWAY NODE                                │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌──────────────────┐  ┌──────────────────┐                     │
-│  │  OpenVPN Server  │  │  GateKey Gateway   │                     │
-│  │    (Stock)       │◄─┤     Agent        │                     │
-│  └────────┬─────────┘  └────────┬─────────┘                     │
-│           │                      │                               │
-│           │ Hook Scripts         │ API Calls                     │
-│           │                      │                               │
-│  ┌────────┴──────────────────────┴──────────────────────────┐   │
-│  │              Firewall Manager (nftables)                  │   │
-│  │         Per-identity rules, narrow route enforcement      │   │
-│  └───────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-```
+![Gateway Node](diagrams/gateway-node.svg)
 
 ### Mesh Hub (`gatekey-hub`)
 
@@ -79,24 +43,7 @@ The mesh hub enables site-to-site VPN connectivity using a hub-and-spoke topolog
 - **Control Plane Sync**: Syncs configuration and access rules from control plane
 - **Health Monitoring**: Sends heartbeats to control plane
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      MESH HUB NODE                               │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌──────────────────┐  ┌──────────────────┐                     │
-│  │  OpenVPN Server  │  │   GateKey Hub    │                     │
-│  │    (Mesh)        │◄─┤   (gatekey-hub)  │                     │
-│  └────────┬─────────┘  └────────┬─────────┘                     │
-│           │                      │                               │
-│           │ Spoke/Client         │ API Sync                      │
-│           │ Connections          │                               │
-│           │                      │                               │
-│  ┌────────┴──────────────────────┴──────────────────────────┐   │
-│  │              Route Aggregation & Distribution             │   │
-│  │         Collects spoke routes, pushes to clients          │   │
-│  └───────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-```
+![Mesh Topology](diagrams/mesh-topology.svg)
 
 ### Mesh Spoke (`gatekey-mesh-gateway`)
 
@@ -107,25 +54,6 @@ The mesh spoke connects remote sites to the mesh hub:
 - **Automatic Reconnection**: Maintains persistent connection to hub
 - **Control Plane Sync**: Receives configuration updates
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      MESH SPOKE NODE                             │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌──────────────────┐  ┌──────────────────┐                     │
-│  │  OpenVPN Client  │  │   Mesh Gateway   │                     │
-│  │  (to Hub)        │◄─┤ (gatekey-mesh-gw)│                     │
-│  └────────┬─────────┘  └────────┬─────────┘                     │
-│           │                      │                               │
-│           │ VPN Tunnel           │ Local Network                 │
-│           │ to Hub               │ Routing                       │
-│           │                      │                               │
-│  ┌────────┴──────────────────────┴──────────────────────────┐   │
-│  │              Local Network Access (10.0.0.0/8, etc.)      │   │
-│  │         Routes traffic between hub and local networks     │   │
-│  └───────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-```
-
 ### WireGuard Gateway Agent (`gatekey-wireguard-gateway`)
 
 The WireGuard gateway agent provides an alternative to OpenVPN gateways:
@@ -135,26 +63,6 @@ The WireGuard gateway agent provides an alternative to OpenVPN gateways:
 - **Firewall Management**: Per-peer nftables rules with zero-trust
 - **Connection Reporting**: Reports peer handshakes and traffic stats
 - **Health Monitoring**: Sends heartbeats to control plane
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                  WIREGUARD GATEWAY NODE                          │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌──────────────────┐  ┌──────────────────────────────────────┐ │
-│  │   WireGuard      │  │    GateKey WireGuard Gateway Agent   │ │
-│  │   Interface      │◄─┤      (gatekey-wireguard-gateway)     │ │
-│  │   (wg0)          │  └────────────────┬─────────────────────┘ │
-│  └────────┬─────────┘                   │                       │
-│           │                              │                       │
-│           │ Peer Management              │ API Calls             │
-│           │ (wg set/show)                │ (heartbeat, sync)     │
-│           │                              │                       │
-│  ┌────────┴──────────────────────────────┴──────────────────┐   │
-│  │              Firewall Manager (nftables)                  │   │
-│  │         Per-peer rules, default DENY policy               │   │
-│  └───────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-```
 
 #### WireGuard vs OpenVPN Gateway
 
@@ -171,92 +79,15 @@ The WireGuard gateway agent provides an alternative to OpenVPN gateways:
 
 ### User Authentication Flow
 
-```
-┌──────┐     ┌─────────┐     ┌──────────────┐     ┌─────┐
-│ User │────▶│ Web UI  │────▶│ Control Plane│────▶│ IdP │
-└──────┘     └─────────┘     └──────────────┘     └─────┘
-    │                              │                  │
-    │    1. Access Web UI          │                  │
-    │◄────────────────────────────▶│                  │
-    │                              │                  │
-    │    2. Redirect to IdP        │                  │
-    │─────────────────────────────▶│─────────────────▶│
-    │                              │                  │
-    │    3. Authenticate           │                  │
-    │◄────────────────────────────────────────────────│
-    │                              │                  │
-    │    4. Callback with token    │                  │
-    │─────────────────────────────▶│◄─────────────────│
-    │                              │                  │
-    │    5. Create session         │                  │
-    │◄─────────────────────────────│                  │
-```
+![Authentication Flow](diagrams/auth-flow.svg)
 
 ### VPN Connection Flow
 
-```
-┌──────┐     ┌────────────┐     ┌──────────────┐     ┌─────────┐
-│ User │────▶│ OpenVPN    │────▶│   Gateway    │────▶│ Control │
-│      │     │  Client    │     │   Agent      │     │ Plane   │
-└──────┘     └────────────┘     └──────────────┘     └─────────┘
-    │              │                   │                   │
-    │  1. Connect  │                   │                   │
-    │─────────────▶│                   │                   │
-    │              │  2. TLS Handshake │                   │
-    │              │──────────────────▶│                   │
-    │              │                   │  3. Verify Cert   │
-    │              │                   │──────────────────▶│
-    │              │                   │  4. Auth Result   │
-    │              │                   │◀──────────────────│
-    │              │                   │                   │
-    │              │  5. Connect Hook  │                   │
-    │              │──────────────────▶│                   │
-    │              │                   │  6. Get Policies  │
-    │              │                   │──────────────────▶│
-    │              │                   │  7. Policy Rules  │
-    │              │                   │◀──────────────────│
-    │              │                   │                   │
-    │              │                   │  8. Apply FW Rules│
-    │              │                   │───────┐           │
-    │              │                   │◀──────┘           │
-    │              │                   │                   │
-    │              │  9. Push Config   │                   │
-    │              │◀──────────────────│                   │
-    │              │                   │                   │
-    │  10. Tunnel  │                   │                   │
-    │◀────────────▶│◀─────────────────▶│                   │
-```
+![VPN Connection Flow](diagrams/vpn-connection-flow.svg)
 
-### Mesh Networking Flow
+### Permission Flow
 
-```
-┌──────┐     ┌────────────┐     ┌──────────────┐     ┌─────────┐
-│ Spoke│────▶│    Hub     │────▶│   Control    │     │  User   │
-│      │     │            │     │   Plane      │     │ Client  │
-└──────┘     └────────────┘     └──────────────┘     └─────────┘
-    │              │                   │                   │
-    │  1. Connect  │                   │                   │
-    │─────────────▶│                   │                   │
-    │              │  2. Verify Token  │                   │
-    │              │──────────────────▶│                   │
-    │              │  3. Auth OK       │                   │
-    │              │◀──────────────────│                   │
-    │              │                   │                   │
-    │  4. Advertise│                   │                   │
-    │  local nets  │                   │                   │
-    │─────────────▶│                   │                   │
-    │              │                   │                   │
-    │              │                   │  5. User connects │
-    │              │◀──────────────────┼──────────────────│
-    │              │                   │                   │
-    │              │  6. Push routes   │                   │
-    │              │  (based on access)│                   │
-    │              │──────────────────▶│                   │
-    │              │                   │                   │
-    │  7. Traffic  │◀────────────────────────────────────▶│
-    │   flows via  │                   │                   │
-    │     hub      │                   │                   │
-```
+![Permission Flow](diagrams/permission-flow.svg)
 
 ## Security Model
 
@@ -285,25 +116,7 @@ This means even if a user obtains a valid `.ovpn` file, they cannot bypass secur
 
 ### Certificate Lifecycle
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Certificate Lifecycle                         │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐         │
-│  │ Request │──▶│ Issue   │──▶│ Active  │──▶│ Expire  │         │
-│  └─────────┘   └─────────┘   └─────────┘   └─────────┘         │
-│       │                           │              │               │
-│       │                           │              │               │
-│       │                      ┌────┴────┐         │               │
-│       │                      │ Revoke  │─────────┘               │
-│       │                      └─────────┘                         │
-│       │                                                          │
-│  Typical lifetime: 24 hours                                      │
-│  User must re-authenticate to get new certificate                │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
+Certificates are short-lived (24 hours default) and automatically expire. Users must re-authenticate to get new certificates.
 
 ### Firewall Rules
 
@@ -350,68 +163,11 @@ table inet gatekey {
 
 ### Entity Relationships
 
-```
-┌─────────┐      ┌──────────┐      ┌─────────────┐
-│  users  │──────│ sessions │──────│ certificates│
-└────┬────┘      └──────────┘      └─────────────┘
-     │
-     │      ┌──────────────┐      ┌─────────────┐
-     └──────│ connections  │──────│  gateways   │
-            └──────────────┘      └─────────────┘
-
-┌──────────┐      ┌──────────────┐
-│ policies │──────│ policy_rules │
-└──────────┘      └──────────────┘
-```
+![Entity Relationships](diagrams/entity-relationships.svg)
 
 ## Deployment Architecture
 
-### Single Region
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Cloud Region                             │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ┌──────────────────┐    ┌──────────────────┐                   │
-│  │  Load Balancer   │    │    Database      │                   │
-│  │     (HTTPS)      │    │   (PostgreSQL)   │                   │
-│  └────────┬─────────┘    └────────┬─────────┘                   │
-│           │                       │                              │
-│           ▼                       │                              │
-│  ┌──────────────────┐            │                              │
-│  │  Control Plane   │◄───────────┘                              │
-│  │   (gatekey-server) │                                           │
-│  └────────┬─────────┘                                           │
-│           │                                                      │
-│           ▼                                                      │
-│  ┌──────────────────┐    ┌──────────────────┐                   │
-│  │  Gateway Node 1  │    │  Gateway Node 2  │                   │
-│  │   (OpenVPN +     │    │   (OpenVPN +     │                   │
-│  │    gatekey-gw)     │    │    gatekey-gw)     │                   │
-│  └──────────────────┘    └──────────────────┘                   │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Multi-Region
-
-```
-┌────────────────────┐    ┌────────────────────┐
-│     US-EAST        │    │     EU-WEST        │
-├────────────────────┤    ├────────────────────┤
-│                    │    │                    │
-│ ┌────────────────┐ │    │ ┌────────────────┐ │
-│ │ Control Plane  │◄├────┼─┤ Control Plane  │ │
-│ │   (Primary)    │ │    │ │   (Replica)    │ │
-│ └───────┬────────┘ │    │ └───────┬────────┘ │
-│         │          │    │         │          │
-│ ┌───────┴────────┐ │    │ ┌───────┴────────┐ │
-│ │    Gateway     │ │    │ │    Gateway     │ │
-│ └────────────────┘ │    │ └────────────────┘ │
-│                    │    │                    │
-└────────────────────┘    └────────────────────┘
-```
+GateKey supports single-region and multi-region deployments. See the [deployment guide](deployment.md) for detailed instructions.
 
 ## Technology Stack
 
