@@ -43,9 +43,29 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   docker:
-    name: Build and Push Docker Images
+    name: Build ${{ matrix.image }}
     needs: release
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: gatekey-server
+            dockerfile: ./Dockerfile
+            title: GateKey Server
+            description: GateKey Zero-Trust VPN Control Plane
+          - image: gatekey-web
+            dockerfile: ./Dockerfile.web
+            title: GateKey Web UI
+            description: GateKey Zero-Trust VPN Web Interface
+          - image: gatekey-gateway
+            dockerfile: ./Dockerfile.gateway
+            title: GateKey Gateway
+            description: GateKey Zero-Trust VPN Gateway Agent
+          - image: gatekey-hub
+            dockerfile: ./Dockerfile.hub
+            title: GateKey Mesh Hub
+            description: GateKey Zero-Trust VPN Mesh Hub Server
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -66,78 +86,23 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USER }}
           password: ${{ secrets.DOCKER_HUB_SECRET }}
 
-      - name: Build and push gatekey-server
+      - name: Build and push ${{ matrix.image }}
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./Dockerfile
+          file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true
           sbom: true
           provenance: true
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
           tags: |
-            dyetech/gatekey-server:${{ steps.version.outputs.VERSION }}
-            dyetech/gatekey-server:latest
+            dyetech/${{ matrix.image }}:${{ steps.version.outputs.VERSION }}
+            dyetech/${{ matrix.image }}:latest
           labels: |
-            org.opencontainers.image.title=GateKey Server
-            org.opencontainers.image.description=GateKey Zero-Trust VPN Control Plane
-            org.opencontainers.image.version=${{ steps.version.outputs.VERSION }}
-            org.opencontainers.image.source=https://github.com/dye-tech/GateKey
-            org.opencontainers.image.licenses=Apache-2.0
-
-      - name: Build and push gatekey-web
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile.web
-          platforms: linux/amd64,linux/arm64
-          push: true
-          sbom: true
-          provenance: true
-          tags: |
-            dyetech/gatekey-web:${{ steps.version.outputs.VERSION }}
-            dyetech/gatekey-web:latest
-          labels: |
-            org.opencontainers.image.title=GateKey Web UI
-            org.opencontainers.image.description=GateKey Zero-Trust VPN Web Interface
-            org.opencontainers.image.version=${{ steps.version.outputs.VERSION }}
-            org.opencontainers.image.source=https://github.com/dye-tech/GateKey
-            org.opencontainers.image.licenses=Apache-2.0
-
-      - name: Build and push gatekey-gateway
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile.gateway
-          platforms: linux/amd64,linux/arm64
-          push: true
-          sbom: true
-          provenance: true
-          tags: |
-            dyetech/gatekey-gateway:${{ steps.version.outputs.VERSION }}
-            dyetech/gatekey-gateway:latest
-          labels: |
-            org.opencontainers.image.title=GateKey Gateway
-            org.opencontainers.image.description=GateKey Zero-Trust VPN Gateway Agent
-            org.opencontainers.image.version=${{ steps.version.outputs.VERSION }}
-            org.opencontainers.image.source=https://github.com/dye-tech/GateKey
-            org.opencontainers.image.licenses=Apache-2.0
-
-      - name: Build and push gatekey-hub
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile.hub
-          platforms: linux/amd64,linux/arm64
-          push: true
-          sbom: true
-          provenance: true
-          tags: |
-            dyetech/gatekey-hub:${{ steps.version.outputs.VERSION }}
-            dyetech/gatekey-hub:latest
-          labels: |
-            org.opencontainers.image.title=GateKey Mesh Hub
-            org.opencontainers.image.description=GateKey Zero-Trust VPN Mesh Hub Server
+            org.opencontainers.image.title=${{ matrix.title }}
+            org.opencontainers.image.description=${{ matrix.description }}
             org.opencontainers.image.version=${{ steps.version.outputs.VERSION }}
             org.opencontainers.image.source=https://github.com/dye-tech/GateKey
             org.opencontainers.image.licenses=Apache-2.0
