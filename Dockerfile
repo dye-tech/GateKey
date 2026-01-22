@@ -1,16 +1,5 @@
-# Build frontend
-FROM node:20-alpine AS frontend-builder
-
-WORKDIR /app/web
-
-COPY web/package.json web/package-lock.json ./
-RUN npm ci
-
-COPY web/ ./
-RUN npm run build
-
 # Build backend
-FROM golang:1.25-alpine AS backend-builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
@@ -24,9 +13,6 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Copy frontend build
-COPY --from=frontend-builder /app/web/dist ./web/dist
-
 # Build the server binary
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /gatekey-server ./cmd/gatekey-server
 
@@ -37,7 +23,7 @@ RUN apk add --no-cache ca-certificates tzdata
 
 WORKDIR /app
 
-COPY --from=backend-builder /gatekey-server /app/gatekey-server
+COPY --from=builder /gatekey-server /app/gatekey-server
 
 EXPOSE 8080
 
