@@ -5,7 +5,7 @@ All notable changes to GateKey are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.4.6] - 2026-01-22
+## [1.5.0] - 2026-01-22
 
 ### Added
 - Standalone web UI Docker image (`gatekey-web`) with nginx for flexible deployment architectures
@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Legacy `gatex` naming convention throughout codebase
 
 ### Migration Guide
-If upgrading from v1.4.5:
+If upgrading from v1.4.x:
 1. Rename `gatex.yaml` to `gatekey.yaml` in your ConfigMaps
 2. Update any `GATEX_*` environment variables to `GATEKEY_*`
 3. If using embedded web UI, switch to the separate `gatekey-web` container
