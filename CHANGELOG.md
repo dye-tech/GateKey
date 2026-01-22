@@ -9,13 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Standalone web UI Docker image (`gatekey-web`) with nginx for flexible deployment architectures
-- Mesh hub Docker image (`gatekey-hub`) for containerized hub deployments
+- Mesh hub Docker image (`gatekey-hub`) for containerized OpenVPN hub deployments
+- WireGuard gateway Docker image (`gatekey-wireguard-gateway`) for containerized WireGuard gateway deployments
+- WireGuard mesh hub Docker image (`gatekey-wireguard-hub`) for containerized WireGuard hub deployments
 - GitHub Actions build caching for faster CI/CD pipelines
 
 ### Changed
 - **Breaking**: Renamed config file from `gatex.yaml` to `gatekey.yaml` across all deployment methods
 - **Breaking**: Changed environment variable prefix from `GATEX_` to `GATEKEY_` for consistency
-- CI/CD pipeline now builds all 4 Docker images in parallel using matrix strategy (~4x faster)
+- CI/CD pipeline now builds all 6 Docker images in parallel using matrix strategy
 - Server Docker image (`gatekey-server`) is now API-only; web UI served separately via `gatekey-web`
 - Config loader now auto-discovers `gatekey.yaml` in `/app/configs`, `./configs`, or current directory
 - Updated Helm chart templates to use `gatekey.yaml` config filename
