@@ -201,16 +201,25 @@ func Load(configPath string) (*Config, error) {
 	// Set defaults
 	setDefaults(v)
 
-	// Read config file if specified
+	// Read config file - try specified path or search default locations
 	if configPath != "" {
 		v.SetConfigFile(configPath)
 		if err := v.ReadInConfig(); err != nil {
 			return nil, fmt.Errorf("failed to read config file: %w", err)
 		}
+	} else {
+		// Search for config in common locations
+		v.SetConfigName("gatekey")
+		v.SetConfigType("yaml")
+		v.AddConfigPath("/app/configs")
+		v.AddConfigPath("./configs")
+		v.AddConfigPath(".")
+		// Ignore error - continue with defaults and env vars if no config found
+		_ = v.ReadInConfig()
 	}
 
 	// Read from environment variables
-	v.SetEnvPrefix("GATEX")
+	v.SetEnvPrefix("GATEKEY")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
