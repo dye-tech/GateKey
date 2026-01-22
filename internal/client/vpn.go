@@ -889,7 +889,7 @@ func (v *VPNManager) showSingleConnectionStatus(conn *ConnectionState) {
 		fmt.Printf("Transfer:     ↓ %s  ↑ %s\n", formatBytes(conn.BytesIn), formatBytes(conn.BytesOut))
 	}
 
-	routes := v.getRoutesFromGatewayConfig(conn.Gateway)
+	routes := v.getRoutesFromGatewayConfig(conn.Gateway, conn.GatewayType)
 	if len(routes) > 0 {
 		fmt.Println("\nRoutes:")
 		for _, route := range routes {
@@ -979,15 +979,22 @@ func (v *VPNManager) checkTunnelStatusForGateway(gatewayName string) string {
 }
 
 // getRoutesFromGatewayConfig extracts routes from a gateway-specific config.
-func (v *VPNManager) getRoutesFromGatewayConfig(gatewayName string) []string {
-	// Handle mesh connections - mesh:hubname uses config file mesh-hubname.ovpn
+func (v *VPNManager) getRoutesFromGatewayConfig(gatewayName string, gatewayType string) []string {
+	// Handle mesh connections - mesh:hubname uses config file mesh-hubname
 	configName := gatewayName
 	if strings.HasPrefix(gatewayName, "mesh:") {
 		hubName := strings.TrimPrefix(gatewayName, "mesh:")
 		configName = "mesh-" + hubName
 	}
 
-	configPath := v.config.GatewayConfigPath(configName)
+	// Determine config path based on gateway type
+	var configPath string
+	if gatewayType == "wireguard" {
+		configPath = v.config.WireGuardConfigPath(configName)
+	} else {
+		configPath = v.config.GatewayConfigPath(configName)
+	}
+
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil
@@ -995,13 +1002,35 @@ func (v *VPNManager) getRoutesFromGatewayConfig(gatewayName string) []string {
 
 	var routes []string
 	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "route ") {
-			parts := strings.Fields(line)
-			if len(parts) >= 3 {
-				cidr := netmaskToCIDR(parts[2])
-				routes = append(routes, fmt.Sprintf("%s/%s", parts[1], cidr))
+
+	if gatewayType == "wireguard" {
+		// Parse WireGuard config - look for AllowedIPs
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "AllowedIPs") {
+				// Format: AllowedIPs = 10.0.0.1/32, 10.0.2.0/24, ...
+				parts := strings.SplitN(line, "=", 2)
+				if len(parts) == 2 {
+					ips := strings.Split(strings.TrimSpace(parts[1]), ",")
+					for _, ip := range ips {
+						ip = strings.TrimSpace(ip)
+						if ip != "" {
+							routes = append(routes, ip)
+						}
+					}
+				}
+			}
+		}
+	} else {
+		// Parse OpenVPN config - look for route directives
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "route ") {
+				parts := strings.Fields(line)
+				if len(parts) >= 3 {
+					cidr := netmaskToCIDR(parts[2])
+					routes = append(routes, fmt.Sprintf("%s/%s", parts[1], cidr))
+				}
 			}
 		}
 	}
