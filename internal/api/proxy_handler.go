@@ -371,6 +371,31 @@ func (s *Server) createReverseProxy(app *db.ProxyApplication, targetURL *url.URL
 			// which don't work well with cookie-based authentication through proxies
 			req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
+			// Limit Accept-Encoding to gzip only - the HTML rewriter can only handle gzip
+			// decompression. Brotli (br) and deflate would result in garbled content when
+			// we try to rewrite URLs in HTML responses.
+			req.Header.Set("Accept-Encoding", "gzip")
+
+			// Rewrite Origin header to match target - prevents CORS/origin validation failures
+			// when backend apps (like Proxmox via Istio) check the Origin header
+			if req.Header.Get("Origin") != "" {
+				req.Header.Set("Origin", targetURL.Scheme+"://"+targetURL.Host)
+			}
+
+			// Rewrite Referer header to match target - prevents apps from rejecting requests
+			// that appear to come from a different origin
+			if referer := req.Header.Get("Referer"); referer != "" {
+				// Replace the proxy URL with the target URL in the referer
+				proxyBase := "https://" + c.Request.Host + "/proxy/" + slug
+				targetBase := targetURL.Scheme + "://" + targetURL.Host
+				newReferer := strings.Replace(referer, proxyBase, targetBase, 1)
+				// Also handle case where referer is just the origin
+				if newReferer == referer {
+					newReferer = strings.Replace(referer, "https://"+c.Request.Host, targetBase, 1)
+				}
+				req.Header.Set("Referer", newReferer)
+			}
+
 			s.logger.Debug("Proxying request",
 				zap.String("slug", slug),
 				zap.String("method", req.Method),
@@ -400,15 +425,15 @@ func (s *Server) createReverseProxy(app *db.ProxyApplication, targetURL *url.URL
 				}
 			}
 
-			// Strip internal headers
+			// Strip internal headers that reveal backend info
 			for _, h := range stripResponseHeaders {
 				resp.Header.Del(h)
 			}
 
-			// Add security headers
-			resp.Header.Set("X-Frame-Options", "SAMEORIGIN")
-			resp.Header.Set("X-Content-Type-Options", "nosniff")
-			resp.Header.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+			// NOTE: We intentionally do NOT add security headers (CSP, X-Frame-Options, etc.)
+			// to proxied responses. The backend application's own security headers should
+			// be respected. Adding our own headers can break apps like Proxmox, Radarr, etc.
+			// that depend on their own CSP and MIME type handling.
 
 			return nil
 		},
