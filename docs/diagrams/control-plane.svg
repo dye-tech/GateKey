@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420">
+  <defs>
+    <linearGradient id="headerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#0f172a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1e3a8a;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="apiGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="serviceGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="dbGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.2"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="420" fill="#f8fafc"/>
+
+  <!-- Main Container -->
+  <g filter="url(#shadow)">
+    <rect x="40" y="20" width="720" height="380" rx="16" fill="white" stroke="#e2e8f0" stroke-width="2"/>
+
+    <!-- Header -->
+    <rect x="40" y="20" width="720" height="50" rx="16" fill="url(#headerGrad)"/>
+    <rect x="40" y="50" width="720" height="20" fill="url(#headerGrad)"/>
+    <text x="400" y="52" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="700">CONTROL PLANE</text>
+  </g>
+
+  <!-- API Layer -->
+  <g filter="url(#shadow)">
+    <rect x="80" y="90" width="180" height="70" rx="10" fill="url(#apiGrad)"/>
+    <text x="170" y="120" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">Web UI</text>
+    <text x="170" y="140" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="11">(React/TypeScript)</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="310" y="90" width="180" height="70" rx="10" fill="url(#apiGrad)"/>
+    <text x="400" y="120" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">REST API</text>
+    <text x="400" y="140" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="11">(Go/Gin)</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="540" y="90" width="180" height="70" rx="10" fill="url(#apiGrad)"/>
+    <text x="630" y="120" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">gRPC API</text>
+    <text x="630" y="140" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="11">(Internal)</text>
+  </g>
+
+  <!-- Connection Lines from API to Services -->
+  <line x1="170" y1="160" x2="170" y2="195" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="400" y1="160" x2="400" y2="195" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="630" y1="160" x2="630" y2="195" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Core Services Container -->
+  <rect x="80" y="195" width="640" height="90" rx="10" fill="#f0fdf4" stroke="#86efac" stroke-width="2"/>
+  <text x="400" y="218" text-anchor="middle" fill="#166534" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">Core Services</text>
+
+  <!-- Service Boxes -->
+  <g>
+    <rect x="95" y="230" width="140" height="45" rx="8" fill="url(#serviceGrad)"/>
+    <text x="165" y="250" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="600">Auth Service</text>
+    <text x="165" y="265" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="10">(OIDC/SAML)</text>
+  </g>
+
+  <g>
+    <rect x="250" y="230" width="140" height="45" rx="8" fill="url(#serviceGrad)"/>
+    <text x="320" y="250" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="600">Policy Service</text>
+    <text x="320" y="265" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="10">(RBAC/ACL)</text>
+  </g>
+
+  <g>
+    <rect x="405" y="230" width="140" height="45" rx="8" fill="url(#serviceGrad)"/>
+    <text x="475" y="250" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="600">PKI Service</text>
+    <text x="475" y="265" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="10">(Cert Gen)</text>
+  </g>
+
+  <g>
+    <rect x="560" y="230" width="140" height="45" rx="8" fill="url(#serviceGrad)"/>
+    <text x="630" y="250" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="600">Session Service</text>
+    <text x="630" y="265" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="10">(State Mgmt)</text>
+  </g>
+
+  <!-- Connection to Database -->
+  <line x1="400" y1="285" x2="400" y2="315" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Database Layer -->
+  <g filter="url(#shadow)">
+    <rect x="200" y="320" width="400" height="60" rx="10" fill="url(#dbGrad)"/>
+    <text x="400" y="348" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="600">Data Layer</text>
+    <text x="400" y="368" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="12">PostgreSQL</text>
+  </g>
+</svg>

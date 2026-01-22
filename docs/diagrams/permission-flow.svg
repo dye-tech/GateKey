@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 700">
+  <defs>
+    <linearGradient id="stepGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1d4ed8;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="decisionGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#f59e0b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#d97706;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="successGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="denyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ef4444;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#dc2626;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="actionGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-opacity="0.15"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrowRed" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#ef4444"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#10b981"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="700" height="700" fill="#f8fafc"/>
+
+  <!-- Flow Lines -->
+  <line x1="350" y1="55" x2="350" y2="75" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="350" y1="135" x2="350" y2="165" stroke="#10b981" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <line x1="350" y1="235" x2="350" y2="265" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="350" y1="325" x2="350" y2="355" stroke="#10b981" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <line x1="350" y1="425" x2="350" y2="455" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="350" y1="525" x2="350" y2="555" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Denial paths -->
+  <path d="M530,105 L580,105" stroke="#ef4444" stroke-width="2" marker-end="url(#arrowRed)" fill="none"/>
+  <path d="M530,395 L580,395" stroke="#ef4444" stroke-width="2" marker-end="url(#arrowRed)" fill="none"/>
+
+  <!-- Start: User requests VPN access -->
+  <g filter="url(#shadow)">
+    <rect x="200" y="15" width="300" height="40" rx="20" fill="url(#stepGrad)"/>
+    <text x="350" y="42" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="500">User requests VPN access</text>
+  </g>
+
+  <!-- Step 1: Gateway assignment check -->
+  <g filter="url(#shadow)">
+    <rect x="170" y="75" width="360" height="60" rx="10" fill="url(#decisionGrad)"/>
+    <text x="350" y="100" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">1. Is user assigned to this gateway?</text>
+    <text x="175" y="125" fill="rgba(255,255,255,0.9)" font-family="system-ui, -apple-system, sans-serif" font-size="11">YES</text>
+    <text x="505" y="125" fill="rgba(255,255,255,0.9)" font-family="system-ui, -apple-system, sans-serif" font-size="11">NO</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="580" y="85" width="100" height="40" rx="8" fill="url(#denyGrad)"/>
+    <text x="630" y="110" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="500">Denied</text>
+  </g>
+
+  <!-- Step 2: Generate config -->
+  <g filter="url(#shadow)">
+    <rect x="170" y="165" width="360" height="70" rx="10" fill="url(#actionGrad)"/>
+    <text x="350" y="193" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">2. Generate config with</text>
+    <text x="350" y="213" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="system-ui, -apple-system, sans-serif" font-size="12">short-lived certificate</text>
+  </g>
+
+  <!-- User connects -->
+  <g filter="url(#shadow)">
+    <rect x="200" y="265" width="300" height="40" rx="20" fill="url(#stepGrad)"/>
+    <text x="350" y="292" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="500">User connects with VPN client</text>
+  </g>
+
+  <!-- Step 3: Gateway verifies -->
+  <g filter="url(#shadow)">
+    <rect x="170" y="355" width="360" height="70" rx="10" fill="url(#decisionGrad)"/>
+    <text x="350" y="378" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">3. Gateway verifies:</text>
+    <text x="350" y="398" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="system-ui, -apple-system, sans-serif" font-size="11">Certificate valid? User has access? Account active?</text>
+    <text x="175" y="415" fill="rgba(255,255,255,0.9)" font-family="system-ui, -apple-system, sans-serif" font-size="11">YES</text>
+    <text x="505" y="415" fill="rgba(255,255,255,0.9)" font-family="system-ui, -apple-system, sans-serif" font-size="11">NO</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="580" y="375" width="100" height="40" rx="8" fill="url(#denyGrad)"/>
+    <text x="630" y="400" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="500">Rejected</text>
+  </g>
+
+  <!-- Step 4: Apply firewall -->
+  <g filter="url(#shadow)">
+    <rect x="170" y="455" width="360" height="70" rx="10" fill="url(#actionGrad)"/>
+    <text x="350" y="483" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">4. Retrieve user's access rules</text>
+    <text x="350" y="503" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="system-ui, -apple-system, sans-serif" font-size="12">and apply firewall (Default: DENY ALL)</text>
+  </g>
+
+  <!-- Step 5: Access granted -->
+  <g filter="url(#shadow)">
+    <rect x="170" y="555" width="360" height="70" rx="10" fill="url(#successGrad)"/>
+    <text x="350" y="583" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">5. User can only reach destinations</text>
+    <text x="350" y="603" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="system-ui, -apple-system, sans-serif" font-size="12">permitted by their access rules</text>
+  </g>
+</svg>

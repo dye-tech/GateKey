@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600">
+  <defs>
+    <linearGradient id="userGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1d4ed8;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="clientGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="agentGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="cpGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#f59e0b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#d97706;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-opacity="0.15"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrowReturn" markerWidth="10" markerHeight="10" refX="0" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M9,0 L9,6 L0,3 z" fill="#10b981"/>
+    </marker>
+    <marker id="arrowBi" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,3 L5,0 L5,6 z M10,3 L5,0 L5,6 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="600" fill="#f8fafc"/>
+
+  <!-- Entity boxes at top -->
+  <g filter="url(#shadow)">
+    <rect x="40" y="15" width="100" height="55" rx="10" fill="url(#userGrad)"/>
+    <text x="90" y="48" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">User</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="240" y="15" width="120" height="55" rx="10" fill="url(#clientGrad)"/>
+    <text x="300" y="40" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">OpenVPN</text>
+    <text x="300" y="56" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="system-ui, -apple-system, sans-serif" font-size="11">Client</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="480" y="15" width="130" height="55" rx="10" fill="url(#agentGrad)"/>
+    <text x="545" y="40" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">Gateway</text>
+    <text x="545" y="56" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="system-ui, -apple-system, sans-serif" font-size="11">Agent</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="740" y="15" width="120" height="55" rx="10" fill="url(#cpGrad)"/>
+    <text x="800" y="40" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">Control</text>
+    <text x="800" y="56" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="system-ui, -apple-system, sans-serif" font-size="11">Plane</text>
+  </g>
+
+  <!-- Vertical lines -->
+  <line x1="90" y1="70" x2="90" y2="580" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="5,5"/>
+  <line x1="300" y1="70" x2="300" y2="580" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="5,5"/>
+  <line x1="545" y1="70" x2="545" y2="580" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="5,5"/>
+  <line x1="800" y1="70" x2="800" y2="580" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="5,5"/>
+
+  <!-- Step 1: Connect -->
+  <line x1="95" y1="100" x2="290" y2="100" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="145" y="85" width="100" height="24" rx="4" fill="white" stroke="#e2e8f0"/>
+  <text x="195" y="102" text-anchor="middle" fill="#1e293b" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="500">1. Connect</text>
+
+  <!-- Step 2: TLS Handshake -->
+  <line x1="305" y1="140" x2="535" y2="140" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="360" y="125" width="120" height="24" rx="4" fill="white" stroke="#e2e8f0"/>
+  <text x="420" y="142" text-anchor="middle" fill="#1e293b" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="500">2. TLS Handshake</text>
+
+  <!-- Step 3: Verify Cert -->
+  <line x1="550" y1="180" x2="790" y2="180" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="615" y="165" width="120" height="24" rx="4" fill="white" stroke="#e2e8f0"/>
+  <text x="675" y="182" text-anchor="middle" fill="#1e293b" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="500">3. Verify Cert</text>
+
+  <!-- Step 4: Auth Result -->
+  <line x1="795" y1="220" x2="555" y2="220" stroke="#10b981" stroke-width="2" marker-end="url(#arrowReturn)"/>
+  <rect x="615" y="205" width="120" height="24" rx="4" fill="white" stroke="#e2e8f0"/>
+  <text x="675" y="222" text-anchor="middle" fill="#1e293b" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="500">4. Auth Result</text>
+
+  <!-- Step 5: Connect Hook -->
+  <line x1="305" y1="260" x2="535" y2="260" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="360" y="245" width="120" height="24" rx="4" fill="white" stroke="#e2e8f0"/>
+  <text x="420" y="262" text-anchor="middle" fill="#1e293b" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="500">5. Connect Hook</text>
+
+  <!-- Step 6: Get Policies -->
+  <line x1="550" y1="300" x2="790" y2="300" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="615" y="285" width="120" height="24" rx="4" fill="white" stroke="#e2e8f0"/>
+  <text x="675" y="302" text-anchor="middle" fill="#1e293b" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="500">6. Get Policies</text>
+
+  <!-- Step 7: Policy Rules -->
+  <line x1="795" y1="340" x2="555" y2="340" stroke="#10b981" stroke-width="2" marker-end="url(#arrowReturn)"/>
+  <rect x="615" y="325" width="120" height="24" rx="4" fill="white" stroke="#e2e8f0"/>
+  <text x="675" y="342" text-anchor="middle" fill="#1e293b" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="500">7. Policy Rules</text>
+
+  <!-- Step 8: Apply FW Rules (self-loop) -->
+  <path d="M555,380 C600,380 600,420 555,420" stroke="#64748b" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <rect x="560" y="385" width="120" height="24" rx="4" fill="white" stroke="#e2e8f0"/>
+  <text x="620" y="402" text-anchor="middle" fill="#1e293b" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="500">8. Apply FW Rules</text>
+
+  <!-- Step 9: Push Config -->
+  <line x1="540" y1="460" x2="310" y2="460" stroke="#10b981" stroke-width="2" marker-end="url(#arrowReturn)"/>
+  <rect x="360" y="445" width="120" height="24" rx="4" fill="white" stroke="#e2e8f0"/>
+  <text x="420" y="462" text-anchor="middle" fill="#1e293b" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="500">9. Push Config</text>
+
+  <!-- Step 10: Tunnel Established -->
+  <line x1="95" y1="520" x2="535" y2="520" stroke="#3b82f6" stroke-width="3"/>
+  <line x1="95" y1="515" x2="110" y2="520" stroke="#3b82f6" stroke-width="3"/>
+  <line x1="95" y1="525" x2="110" y2="520" stroke="#3b82f6" stroke-width="3"/>
+  <line x1="520" y1="515" x2="535" y2="520" stroke="#3b82f6" stroke-width="3"/>
+  <line x1="520" y1="525" x2="535" y2="520" stroke="#3b82f6" stroke-width="3"/>
+  <rect x="245" y="500" width="150" height="28" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="320" y="520" text-anchor="middle" fill="#1e40af" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="600">10. Tunnel Established</text>
+</svg>
