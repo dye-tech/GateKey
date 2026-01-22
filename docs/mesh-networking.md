@@ -16,27 +16,7 @@ Mesh networking enables secure site-to-site connectivity using a hub-and-spoke t
 
 ## Architecture
 
-```
-                 ┌─────────────────┐
-                 │  Control Plane  │
-                 │   (GateKey UI)  │
-                 └────────┬────────┘
-                          │ API / Config Sync
-                          ▼
-                 ┌─────────────────┐
-                 │   Mesh Hub      │◄── OpenVPN Server
-                 │  (gatekey-hub)  │    Runs on public endpoint
-                 └────────┬────────┘
-                          │
-         ┌────────────────┼────────────────┐
-         │                │                │
-         ▼                ▼                ▼
-┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│   Spoke A   │  │   Spoke B   │  │   Spoke C   │
-│  10.0.0.0/8 │  │ 192.168.0/24│  │ 172.16.0/16 │
-└─────────────┘  └─────────────┘  └─────────────┘
-  Home Lab         AWS VPC         Office Network
-```
+![Mesh Architecture](diagrams/mesh-architecture.svg)
 
 ### Components
 
@@ -192,39 +172,7 @@ You can:
 
 ### Access Control Flow (Zero-Trust)
 
-```
-User requests mesh VPN connection
-        │
-        ▼
-┌───────────────────────────────┐
-│ Is user assigned to hub?      │──NO──► Cannot generate config
-└───────────────┬───────────────┘
-                │ YES
-                ▼
-┌───────────────────────────────┐
-│ Get networks assigned to hub  │
-│ (via Networks tab)            │
-└───────────────┬───────────────┘
-                │
-                ▼
-┌───────────────────────────────┐
-│ Filter to access rules user   │
-│ is assigned to (zero-trust)   │
-└───────────────┬───────────────┘
-                │
-                ▼
-┌───────────────────────────────┐
-│ Generate VPN config with      │
-│ ONLY authorized routes        │
-└───────────────┬───────────────┘
-                │
-                ▼
-┌───────────────────────────────┐
-│ User connects to mesh         │
-│ Can only reach networks from  │
-│ spokes they have access to    │
-└───────────────────────────────┘
-```
+![Access Control Flow](diagrams/mesh-access-flow.svg)
 
 ## Client VPN Access
 

@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 520">
+  <defs>
+    <linearGradient id="phase1Grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="phase2Grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="phase3Grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#f59e0b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#d97706;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="phase4Grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.15"/>
+    </filter>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L8,3 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="500" height="520" fill="#f8fafc"/>
+
+  <!-- Phase 1: Preparation -->
+  <g filter="url(#shadow)">
+    <rect x="30" y="20" width="440" height="95" rx="10" fill="white" stroke="#e2e8f0" stroke-width="2"/>
+    <rect x="30" y="20" width="440" height="28" rx="10" fill="url(#phase1Grad)"/>
+    <rect x="30" y="38" width="440" height="10" fill="url(#phase1Grad)"/>
+    <text x="250" y="40" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="700">Phase 1: Preparation</text>
+    <text x="50" y="70" fill="#475569" font-family="system-ui, -apple-system, sans-serif" font-size="10">POST /settings/ca/prepare-rotation</text>
+    <text x="50" y="85" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="9">- Generates new CA with status "pending"</text>
+    <text x="50" y="98" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="9">- Both old and new CAs are trusted</text>
+    <text x="50" y="111" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="9">- No impact to existing connections</text>
+  </g>
+
+  <!-- Arrow -->
+  <line x1="250" y1="115" x2="250" y2="135" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Phase 2: Activation -->
+  <g filter="url(#shadow)">
+    <rect x="30" y="140" width="440" height="105" rx="10" fill="white" stroke="#e2e8f0" stroke-width="2"/>
+    <rect x="30" y="140" width="440" height="28" rx="10" fill="url(#phase2Grad)"/>
+    <rect x="30" y="158" width="440" height="10" fill="url(#phase2Grad)"/>
+    <text x="250" y="160" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="700">Phase 2: Activation</text>
+    <text x="50" y="190" fill="#475569" font-family="system-ui, -apple-system, sans-serif" font-size="10">POST /settings/ca/activate/:id</text>
+    <text x="50" y="205" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="9">- Old CA -> "retired" (still trusted)</text>
+    <text x="50" y="218" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="9">- New CA -> "active" (now issuing)</text>
+    <text x="50" y="231" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="9">- Gateways detect change via ca_fingerprint</text>
+    <text x="50" y="244" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="9">- Auto-reprovision triggered on next heartbeat</text>
+  </g>
+
+  <!-- Arrow -->
+  <line x1="250" y1="245" x2="250" y2="265" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Phase 3: Grace Period -->
+  <g filter="url(#shadow)">
+    <rect x="30" y="270" width="440" height="95" rx="10" fill="white" stroke="#e2e8f0" stroke-width="2"/>
+    <rect x="30" y="270" width="440" height="28" rx="10" fill="url(#phase3Grad)"/>
+    <rect x="30" y="288" width="440" height="10" fill="url(#phase3Grad)"/>
+    <text x="250" y="290" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="700">Phase 3: Grace Period</text>
+    <text x="50" y="320" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="9">- Existing certs from old CA still work</text>
+    <text x="50" y="333" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="9">- New certs issued by new CA</text>
+    <text x="50" y="346" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="9">- Clients regenerate configs naturally</text>
+    <text x="50" y="359" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="9">- Wait for old certs to expire (24h default)</text>
+  </g>
+
+  <!-- Arrow -->
+  <line x1="250" y1="365" x2="250" y2="385" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Phase 4: Cleanup -->
+  <g filter="url(#shadow)">
+    <rect x="30" y="390" width="440" height="85" rx="10" fill="white" stroke="#e2e8f0" stroke-width="2"/>
+    <rect x="30" y="390" width="440" height="28" rx="10" fill="url(#phase4Grad)"/>
+    <rect x="30" y="408" width="440" height="10" fill="url(#phase4Grad)"/>
+    <text x="250" y="410" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="700">Phase 4: Cleanup (Optional)</text>
+    <text x="50" y="440" fill="#475569" font-family="system-ui, -apple-system, sans-serif" font-size="10">POST /settings/ca/revoke/:old-ca-id</text>
+    <text x="50" y="455" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="9">- Old CA becomes completely untrusted</text>
+    <text x="50" y="468" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="9">- Any remaining old certs are rejected</text>
+  </g>
+</svg>
