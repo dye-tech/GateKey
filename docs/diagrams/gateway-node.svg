@@ -37,34 +37,34 @@
     <!-- Header -->
     <rect x="30" y="20" width="640" height="50" rx="16" fill="url(#headerGrad)"/>
     <rect x="30" y="50" width="640" height="20" fill="url(#headerGrad)"/>
-    <text x="350" y="52" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="700">GATEWAY NODE</text>
+    <text x="350" y="52" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">GATEWAY NODE</text>
   </g>
 
   <!-- OpenVPN Server -->
   <g filter="url(#shadow)">
     <rect x="60" y="90" width="180" height="80" rx="10" fill="url(#vpnGrad)"/>
-    <text x="150" y="125" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">OpenVPN Server</text>
-    <text x="150" y="148" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="11">(Stock)</text>
+    <text x="150" y="125" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="600">OpenVPN Server</text>
+    <text x="150" y="148" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="11">(Stock)</text>
   </g>
 
   <!-- GateKey Gateway Agent -->
   <g filter="url(#shadow)">
     <rect x="340" y="90" width="180" height="80" rx="10" fill="url(#agentGrad)"/>
-    <text x="430" y="120" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">GateKey Gateway</text>
-    <text x="430" y="140" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">Agent</text>
+    <text x="430" y="120" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="600">GateKey Gateway</text>
+    <text x="430" y="140" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="600">Agent</text>
   </g>
 
   <!-- Connection between OpenVPN and Agent -->
   <line x1="240" y1="130" x2="335" y2="130" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)" marker-start="url(#arrowLeft)"/>
 
   <!-- Labels for the connection -->
-  <text x="287" y="118" text-anchor="middle" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="10">Hook Scripts</text>
+  <text x="287" y="118" text-anchor="middle" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="10">Hook Scripts</text>
 
   <!-- API Calls label going to edge -->
   <line x1="520" y1="130" x2="620" y2="130" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
-  <text x="570" y="118" text-anchor="middle" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="10">API Calls</text>
-  <text x="630" y="135" text-anchor="start" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-style="italic">to Control</text>
-  <text x="630" y="148" text-anchor="start" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-style="italic">Plane</text>
+  <text x="570" y="118" text-anchor="middle" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="10">API Calls</text>
+  <text x="630" y="135" text-anchor="start" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="10" font-style="italic">to Control</text>
+  <text x="630" y="148" text-anchor="start" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="10" font-style="italic">Plane</text>
 
   <!-- Connection down to Firewall -->
   <line x1="150" y1="170" x2="150" y2="195" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
@@ -73,7 +73,7 @@
   <!-- Firewall Manager -->
   <g filter="url(#shadow)">
     <rect x="60" y="200" width="460" height="75" rx="10" fill="url(#fwGrad)"/>
-    <text x="290" y="232" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="600">Firewall Manager (nftables)</text>
-    <text x="290" y="255" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-family="system-ui, -apple-system, sans-serif" font-size="12">Per-identity rules, narrow route enforcement</text>
+    <text x="290" y="232" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="600">Firewall Manager (nftables)</text>
+    <text x="290" y="255" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-family="Arial, Helvetica, sans-serif" font-size="12">Per-identity rules, narrow route enforcement</text>
   </g>
 </svg>

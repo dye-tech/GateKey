@@ -44,32 +44,32 @@
     <rect x="150" y="20" width="600" height="200" rx="16" fill="white" stroke="#e2e8f0" stroke-width="2"/>
     <rect x="150" y="20" width="600" height="45" rx="16" fill="url(#cpHeaderGrad)"/>
     <rect x="150" y="45" width="600" height="20" fill="url(#cpHeaderGrad)"/>
-    <text x="450" y="50" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="700">GATEKEY CONTROL PLANE</text>
+    <text x="450" y="50" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700">GATEKEY CONTROL PLANE</text>
   </g>
 
   <!-- Control Plane Boxes -->
   <g filter="url(#shadow)">
     <rect x="180" y="80" width="160" height="55" rx="8" fill="url(#cpBoxGrad)"/>
-    <text x="260" y="105" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">Web UI</text>
-    <text x="260" y="122" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="10">(React)</text>
+    <text x="260" y="105" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="600">Web UI</text>
+    <text x="260" y="122" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="10">(React)</text>
   </g>
 
   <g filter="url(#shadow)">
     <rect x="370" y="80" width="160" height="55" rx="8" fill="url(#cpBoxGrad)"/>
-    <text x="450" y="105" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">REST API</text>
-    <text x="450" y="122" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="10">(Go)</text>
+    <text x="450" y="105" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="600">REST API</text>
+    <text x="450" y="122" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="10">(Go)</text>
   </g>
 
   <g filter="url(#shadow)">
     <rect x="560" y="80" width="160" height="55" rx="8" fill="url(#cpBoxGrad)"/>
-    <text x="640" y="105" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">Embedded CA</text>
-    <text x="640" y="122" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="10">(PKI)</text>
+    <text x="640" y="105" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="600">Embedded CA</text>
+    <text x="640" y="122" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="10">(PKI)</text>
   </g>
 
   <!-- Database -->
   <g filter="url(#shadow)">
     <rect x="300" y="155" width="300" height="50" rx="8" fill="url(#dbGrad)"/>
-    <text x="450" y="185" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">PostgreSQL</text>
+    <text x="450" y="185" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="600">PostgreSQL</text>
   </g>
 
   <!-- Connection arrows from CP to gateways -->
@@ -81,20 +81,20 @@
     <rect x="50" y="290" width="350" height="240" rx="16" fill="white" stroke="#e2e8f0" stroke-width="2"/>
     <rect x="50" y="290" width="350" height="40" rx="16" fill="url(#ovpnGrad)"/>
     <rect x="50" y="310" width="350" height="20" fill="url(#ovpnGrad)"/>
-    <text x="225" y="317" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="700">OPENVPN GATEWAY</text>
+    <text x="225" y="317" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700">OPENVPN GATEWAY</text>
   </g>
 
   <!-- OpenVPN boxes -->
   <g>
     <rect x="80" y="350" width="130" height="50" rx="8" fill="url(#ovpnGrad)"/>
-    <text x="145" y="375" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="600">OpenVPN</text>
-    <text x="145" y="390" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="10">Server</text>
+    <text x="145" y="375" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="600">OpenVPN</text>
+    <text x="145" y="390" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="10">Server</text>
   </g>
 
   <g>
     <rect x="240" y="350" width="130" height="50" rx="8" fill="url(#agentGrad)"/>
-    <text x="305" y="375" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="600">Gateway</text>
-    <text x="305" y="390" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="10">Agent</text>
+    <text x="305" y="375" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="600">Gateway</text>
+    <text x="305" y="390" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="10">Agent</text>
   </g>
 
   <line x1="210" y1="375" x2="235" y2="375" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
@@ -102,8 +102,8 @@
   <!-- OpenVPN Firewall -->
   <g>
     <rect x="80" y="430" width="290" height="80" rx="8" fill="url(#fwGrad)"/>
-    <text x="225" y="465" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">nftables Firewall</text>
-    <text x="225" y="488" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-family="system-ui, -apple-system, sans-serif" font-size="11">(Per-Identity Rules)</text>
+    <text x="225" y="465" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="600">nftables Firewall</text>
+    <text x="225" y="488" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-family="Arial, Helvetica, sans-serif" font-size="11">(Per-Identity Rules)</text>
   </g>
 
   <line x1="145" y1="400" x2="145" y2="425" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
@@ -114,20 +114,20 @@
     <rect x="500" y="290" width="350" height="240" rx="16" fill="white" stroke="#e2e8f0" stroke-width="2"/>
     <rect x="500" y="290" width="350" height="40" rx="16" fill="url(#wgGrad)"/>
     <rect x="500" y="310" width="350" height="20" fill="url(#wgGrad)"/>
-    <text x="675" y="317" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="700">WIREGUARD GATEWAY</text>
+    <text x="675" y="317" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700">WIREGUARD GATEWAY</text>
   </g>
 
   <!-- WireGuard boxes -->
   <g>
     <rect x="530" y="350" width="130" height="50" rx="8" fill="url(#wgGrad)"/>
-    <text x="595" y="375" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="600">WireGuard</text>
-    <text x="595" y="390" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="10">Server</text>
+    <text x="595" y="375" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="600">WireGuard</text>
+    <text x="595" y="390" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="10">Server</text>
   </g>
 
   <g>
     <rect x="690" y="350" width="130" height="50" rx="8" fill="url(#agentGrad)"/>
-    <text x="755" y="375" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="600">Gateway</text>
-    <text x="755" y="390" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="10">Agent</text>
+    <text x="755" y="375" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="600">Gateway</text>
+    <text x="755" y="390" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="10">Agent</text>
   </g>
 
   <line x1="660" y1="375" x2="685" y2="375" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
@@ -135,8 +135,8 @@
   <!-- WireGuard Firewall -->
   <g>
     <rect x="530" y="430" width="290" height="80" rx="8" fill="url(#fwGrad)"/>
-    <text x="675" y="465" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">nftables Firewall</text>
-    <text x="675" y="488" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-family="system-ui, -apple-system, sans-serif" font-size="11">(Per-Identity Rules)</text>
+    <text x="675" y="465" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="600">nftables Firewall</text>
+    <text x="675" y="488" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-family="Arial, Helvetica, sans-serif" font-size="11">(Per-Identity Rules)</text>
   </g>
 
   <line x1="595" y1="400" x2="595" y2="425" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>

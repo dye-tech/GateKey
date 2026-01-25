@@ -28,21 +28,21 @@
     <rect x="30" y="40" width="200" height="220" rx="12" fill="white" stroke="#e2e8f0" stroke-width="2"/>
     <rect x="30" y="40" width="200" height="35" rx="12" fill="url(#clientGrad)"/>
     <rect x="30" y="60" width="200" height="15" fill="url(#clientGrad)"/>
-    <text x="130" y="64" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="700">Your Computer</text>
+    <text x="130" y="64" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700">Your Computer</text>
   </g>
 
   <!-- gatekey CLI -->
   <g>
     <rect x="55" y="95" width="150" height="45" rx="8" fill="url(#clientGrad)"/>
-    <text x="130" y="118" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="600">gatekey CLI</text>
-    <text x="130" y="131" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="9">Authentication + Config</text>
+    <text x="130" y="118" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="600">gatekey CLI</text>
+    <text x="130" y="131" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="9">Authentication + Config</text>
   </g>
 
   <!-- OpenVPN/WireGuard -->
   <g>
     <rect x="55" y="160" width="150" height="45" rx="8" fill="url(#clientGrad)"/>
-    <text x="130" y="183" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="600">OpenVPN / WireGuard</text>
-    <text x="130" y="196" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="9">VPN Client</text>
+    <text x="130" y="183" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="600">OpenVPN / WireGuard</text>
+    <text x="130" y="196" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="9">VPN Client</text>
   </g>
 
   <!-- Arrow from CLI to VPN -->
@@ -53,21 +53,21 @@
     <rect x="300" y="40" width="200" height="220" rx="12" fill="white" stroke="#e2e8f0" stroke-width="2"/>
     <rect x="300" y="40" width="200" height="35" rx="12" fill="url(#serverGrad)"/>
     <rect x="300" y="60" width="200" height="15" fill="url(#serverGrad)"/>
-    <text x="400" y="64" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="700">GateKey Server</text>
+    <text x="400" y="64" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700">GateKey Server</text>
   </g>
 
   <!-- Auth + PKI -->
   <g>
     <rect x="325" y="95" width="150" height="45" rx="8" fill="url(#serverGrad)"/>
-    <text x="400" y="118" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="600">Auth + PKI</text>
-    <text x="400" y="131" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="9">SSO + Certificates</text>
+    <text x="400" y="118" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="600">Auth + PKI</text>
+    <text x="400" y="131" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="9">SSO + Certificates</text>
   </g>
 
   <!-- VPN Gateway -->
   <g>
     <rect x="325" y="160" width="150" height="45" rx="8" fill="url(#serverGrad)"/>
-    <text x="400" y="183" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="600">VPN Gateway</text>
-    <text x="400" y="196" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="9">OpenVPN / WireGuard</text>
+    <text x="400" y="183" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="600">VPN Gateway</text>
+    <text x="400" y="196" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="9">OpenVPN / WireGuard</text>
   </g>
 
   <!-- Arrow from Auth to Gateway -->
@@ -78,17 +78,17 @@
     <rect x="570" y="40" width="200" height="220" rx="12" fill="white" stroke="#e2e8f0" stroke-width="2"/>
     <rect x="570" y="40" width="200" height="35" rx="12" fill="url(#networkGrad)"/>
     <rect x="570" y="60" width="200" height="15" fill="url(#networkGrad)"/>
-    <text x="670" y="64" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="700">Company Network</text>
+    <text x="670" y="64" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700">Company Network</text>
   </g>
 
   <!-- Internal Services -->
   <g>
     <rect x="595" y="95" width="150" height="120" rx="8" fill="url(#networkGrad)"/>
-    <text x="670" y="125" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="600">Internal Services</text>
-    <text x="670" y="145" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="9">Databases</text>
-    <text x="670" y="160" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="9">APIs</text>
-    <text x="670" y="175" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="9">Applications</text>
-    <text x="670" y="190" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="9">File Servers</text>
+    <text x="670" y="125" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="600">Internal Services</text>
+    <text x="670" y="145" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="9">Databases</text>
+    <text x="670" y="160" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="9">APIs</text>
+    <text x="670" y="175" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="9">Applications</text>
+    <text x="670" y="190" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="9">File Servers</text>
   </g>
 
   <!-- Horizontal connection arrows -->
@@ -97,8 +97,8 @@
   <line x1="475" y1="155" x2="590" y2="155" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
 
   <!-- Labels -->
-  <text x="262" y="108" text-anchor="middle" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="8">SSO</text>
-  <text x="262" y="175" text-anchor="middle" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="8">VPN</text>
-  <text x="533" y="148" text-anchor="middle" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="8">Secure</text>
-  <text x="533" y="160" text-anchor="middle" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="8">Access</text>
+  <text x="262" y="108" text-anchor="middle" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="8">SSO</text>
+  <text x="262" y="175" text-anchor="middle" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="8">VPN</text>
+  <text x="533" y="148" text-anchor="middle" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="8">Secure</text>
+  <text x="533" y="160" text-anchor="middle" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="8">Access</text>
 </svg>
