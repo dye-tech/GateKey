@@ -61,6 +61,7 @@ GateKey is a **zero-trust VPN solution** that wraps OpenVPN and WireGuard. Users
 - [API Reference](#api-reference)
 - [Security Features](#security-features)
 - [Development](#development)
+- [Additional Documentation](#additional-development)
 - [License](#license)
 
 ---
@@ -683,6 +684,13 @@ make build-admin      # Build only admin CLI
 ```
 
 ---
+
+# Additional Documentation
+
+Visit our documentation website at <https://gatekey.net>
+
+---
+
 
 # License
 
