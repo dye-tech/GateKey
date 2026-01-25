@@ -34,22 +34,22 @@
   <!-- Admin UI -->
   <g filter="url(#shadow)">
     <rect x="30" y="30" width="120" height="60" rx="8" fill="url(#uiGrad)"/>
-    <text x="90" y="57" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="600">Admin UI</text>
-    <text x="90" y="72" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="9">(Rule Change)</text>
+    <text x="90" y="57" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="600">Admin UI</text>
+    <text x="90" y="72" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="9">(Rule Change)</text>
   </g>
 
   <!-- Control Plane -->
   <g filter="url(#shadow)">
     <rect x="200" y="30" width="120" height="60" rx="8" fill="url(#dbGrad)"/>
-    <text x="260" y="57" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="600">Control Plane</text>
-    <text x="260" y="72" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="9">(Database)</text>
+    <text x="260" y="57" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="600">Control Plane</text>
+    <text x="260" y="72" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="9">(Database)</text>
   </g>
 
   <!-- Gateway Agent -->
   <g filter="url(#shadow)">
     <rect x="370" y="30" width="120" height="60" rx="8" fill="url(#agentGrad)"/>
-    <text x="430" y="57" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="600">Gateway Agent</text>
-    <text x="430" y="72" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="9">(nftables)</text>
+    <text x="430" y="57" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="600">Gateway Agent</text>
+    <text x="430" y="72" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="9">(nftables)</text>
   </g>
 
   <!-- Horizontal arrows top row -->
@@ -59,17 +59,17 @@
   <!-- API Endpoint -->
   <g filter="url(#shadow)">
     <rect x="200" y="130" width="120" height="60" rx="8" fill="url(#apiGrad)"/>
-    <text x="260" y="150" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="600">/gateway/</text>
-    <text x="260" y="163" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="system-ui, -apple-system, sans-serif" font-size="9">client-rules</text>
-    <text x="260" y="176" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="system-ui, -apple-system, sans-serif" font-size="9">all-rules</text>
+    <text x="260" y="150" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="600">/gateway/</text>
+    <text x="260" y="163" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="Arial, Helvetica, sans-serif" font-size="9">client-rules</text>
+    <text x="260" y="176" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="Arial, Helvetica, sans-serif" font-size="9">all-rules</text>
   </g>
 
   <!-- Client Traffic -->
   <g filter="url(#shadow)">
     <rect x="370" y="130" width="120" height="60" rx="8" fill="url(#fwGrad)"/>
-    <text x="430" y="150" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="600">Client Traffic</text>
-    <text x="430" y="165" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="system-ui, -apple-system, sans-serif" font-size="9">Immediately</text>
-    <text x="430" y="178" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="system-ui, -apple-system, sans-serif" font-size="9">Blocked/Allowed</text>
+    <text x="430" y="150" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="600">Client Traffic</text>
+    <text x="430" y="165" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="Arial, Helvetica, sans-serif" font-size="9">Immediately</text>
+    <text x="430" y="178" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="Arial, Helvetica, sans-serif" font-size="9">Blocked/Allowed</text>
   </g>
 
   <!-- Vertical arrows -->
