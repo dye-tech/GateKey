@@ -1677,6 +1677,7 @@ export interface UserMeshHub {
   id: string
   name: string
   description: string
+  hubType: 'openvpn' | 'wireguard'
   status: string
   connectedspokes: number
 }
@@ -1700,6 +1701,16 @@ export interface MeshClientConfigWithId {
 
 export async function generateMeshClientConfig(hubId: string): Promise<MeshClientConfigWithId> {
   const response = await api.post('/api/v1/mesh/generate-config', { hubid: hubId })
+  return {
+    id: response.data.id,
+    hubname: response.data.hubname,
+    config: response.data.config,
+    expiresAt: response.data.expiresAt,
+  }
+}
+
+export async function generateWireGuardMeshClientConfig(hubId: string): Promise<MeshClientConfigWithId> {
+  const response = await api.post('/api/v1/mesh/wireguard/generate-config', { hubid: hubId })
   return {
     id: response.data.id,
     hubname: response.data.hubname,
