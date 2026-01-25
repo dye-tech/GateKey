@@ -437,3 +437,21 @@ Session data includes:
 
 ### Web UI
 Navigate to **Administration → Topology** to view the network map and active sessions.
+
+## SVG Diagram Standards
+
+SVG diagrams in `docs/diagrams/` must follow these standards for cross-platform compatibility.
+
+### Font Family
+
+Use `Arial, Helvetica, sans-serif` for all text elements:
+
+```xml
+<!-- Correct -->
+<text font-family="Arial, Helvetica, sans-serif">Label</text>
+
+<!-- Incorrect - causes garbled text on some systems -->
+<text font-family="system-ui, -apple-system, sans-serif">Label</text>
+```
+
+**Why**: The `system-ui` font causes rendering issues on some platforms where the font is substituted incorrectly, resulting in unreadable/garbled text characters.
