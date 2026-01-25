@@ -35,6 +35,9 @@ WORKDIR /app
 
 COPY --from=builder /app-binary /app/gatekey
 
+# Copy install scripts for server
+COPY --from=builder /app/scripts /app/scripts
+
 # Server listens on 8080
 EXPOSE 8080
 
