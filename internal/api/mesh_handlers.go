@@ -110,6 +110,14 @@ func (s *Server) handleCreateMeshHub(c *gin.Context) {
 		return
 	}
 
+	// Validate crypto profile is allowed (only for OpenVPN, not WireGuard)
+	if req.GatewayType != db.MeshGatewayTypeWireGuard && req.CryptoProfile != "" {
+		if err := s.validateCryptoProfileAllowed(ctx, req.CryptoProfile); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
 	// Default gateway type to openvpn if not specified
 	gatewayType := req.GatewayType
 	if gatewayType == "" {
