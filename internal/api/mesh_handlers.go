@@ -85,20 +85,28 @@ func (s *Server) handleCreateMeshHub(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	var req struct {
-		Name           string `json:"name" binding:"required"`
-		Description    string `json:"description"`
-		PublicEndpoint string `json:"publicEndpoint" binding:"required"`
-		VPNPort        int    `json:"vpnPort"`
-		VPNProtocol    string `json:"vpnProtocol"`
-		VPNSubnet      string `json:"vpnSubnet"`
-		CryptoProfile  string `json:"cryptoProfile"`
-		TLSAuthEnabled bool   `json:"tlsAuthEnabled"`
-		GatewayType    string `json:"gatewayType"`  // "openvpn" or "wireguard", default "openvpn"
-		WGListenPort   int    `json:"wgListenPort"` // WireGuard listen port, default 51820
+		Name             string `json:"name" binding:"required"`
+		Description      string `json:"description"`
+		PublicEndpoint   string `json:"publicEndpoint"`   // IPv4 endpoint (optional if IPv6 provided)
+		PublicEndpointV6 string `json:"publicEndpointV6"` // IPv6 endpoint (optional if IPv4 provided)
+		VPNPort          int    `json:"vpnPort"`
+		VPNProtocol      string `json:"vpnProtocol"`
+		VPNSubnet        string `json:"vpnSubnet"`
+		VPNSubnetV6      string `json:"vpnSubnetV6"`
+		CryptoProfile    string `json:"cryptoProfile"`
+		TLSAuthEnabled   bool   `json:"tlsAuthEnabled"`
+		GatewayType      string `json:"gatewayType"`  // "openvpn" or "wireguard", default "openvpn"
+		WGListenPort     int    `json:"wgListenPort"` // WireGuard listen port, default 51820
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Validate at least one public endpoint is provided
+	if req.PublicEndpoint == "" && req.PublicEndpointV6 == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one of publicEndpoint or publicEndpointV6 is required"})
 		return
 	}
 

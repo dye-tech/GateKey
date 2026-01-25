@@ -770,6 +770,22 @@ export async function revokeCA(id: string): Promise<void> {
   await api.post(`/api/v1/admin/settings/ca/revoke/${id}`)
 }
 
+// System Settings
+export interface SystemSettings {
+  allowed_crypto_profiles?: string
+  session_duration_hours?: string
+  secure_cookies?: string
+  vpn_cert_validity_hours?: string
+  require_fips?: string
+  min_tls_version?: string
+  allowed_ciphers?: string
+}
+
+export async function getSystemSettings(): Promise<SystemSettings> {
+  const response = await api.get('/api/v1/admin/settings')
+  return response.data.settings || {}
+}
+
 // Proxy Application API (Web Access)
 export interface ProxyApplication {
   id: string

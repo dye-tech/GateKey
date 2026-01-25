@@ -4,6 +4,7 @@ import {
   getGatewayNetworks, getNetworks, assignGatewayToNetwork, removeGatewayFromNetwork,
   getGatewayUsers, assignUserToGateway, removeUserFromGateway,
   getGatewayGroups, assignGroupToGateway, removeGroupFromGateway,
+  getSystemSettings,
   AdminGateway, RegisterGatewayResponse, Network, GatewayUser, GatewayGroup, CryptoProfile, GatewayType, RotateTokenResponse
 } from '../api/client'
 import ActionDropdown, { ActionItem } from '../components/ActionDropdown'
@@ -375,6 +376,18 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
   const [sessionEnabled, setSessionEnabled] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [allowedCryptoProfiles, setAllowedCryptoProfiles] = useState<string[]>([])
+
+  // Fetch allowed crypto profiles on mount
+  useEffect(() => {
+    getSystemSettings().then(settings => {
+      if (settings.allowed_crypto_profiles) {
+        setAllowedCryptoProfiles(settings.allowed_crypto_profiles.split(',').map(p => p.trim()))
+      }
+    }).catch(() => {
+      // If we can't fetch settings, allow all profiles
+    })
+  }, [])
 
   // Update port when gateway type changes
   useEffect(() => {
@@ -384,6 +397,9 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
       setVpnPort('1194')
     }
   }, [gatewayType])
+
+  // Check if selected crypto profile is allowed
+  const isCryptoProfileAllowed = allowedCryptoProfiles.length === 0 || allowedCryptoProfiles.includes(cryptoProfile)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -591,6 +607,20 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
                 {cryptoProfile === 'compatible' && 'Compatible mode supports older OpenVPN 2.3.x clients with CBC fallback.'}
                 {cryptoProfile === 'modern' && 'Modern mode uses the latest secure ciphers including CHACHA20-POLY1305.'}
               </p>
+              {!isCryptoProfileAllowed && (
+                <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded text-amber-700 dark:text-amber-400 text-sm">
+                  <div className="flex items-start">
+                    <svg className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div>
+                      <strong>Warning:</strong> This crypto profile is not allowed by system settings.
+                      Allowed profiles: {allowedCryptoProfiles.join(', ')}.
+                      Gateway creation will fail unless you select an allowed profile.
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

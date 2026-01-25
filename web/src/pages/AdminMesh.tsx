@@ -661,7 +661,10 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
     try {
       const hub = await createMeshHub({
         ...form,
+        publicEndpoint: form.publicEndpoint || undefined,
+        publicEndpointV6: form.publicEndpointV6 || undefined,
         vpnSubnet: form.vpnSubnet || undefined,
+        vpnSubnetV6: form.vpnSubnetV6 || undefined,
       })
       onSuccess(hub)
     } catch (err) {
