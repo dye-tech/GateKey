@@ -660,6 +660,10 @@ See [docs/api.md](docs/api.md) for full API documentation.
 
 # Security Features
 
+GateKey implements a **Zero Trust** security model where all traffic is denied by default. Users can only access resources explicitly permitted by their access rules.
+
+![Permission Flow](docs/diagrams/permission-flow.svg)
+
 - **Zero Trust**: No network access without authentication
 - **Short-Lived Certificates**: Auto-expire after 24 hours (configurable)
 - **Per-Identity Firewall**: Each user gets their own firewall rules (nftables)
