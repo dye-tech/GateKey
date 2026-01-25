@@ -683,8 +683,9 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
         vpnSubnetV6: form.vpnSubnetV6 || undefined,
       })
       onSuccess(hub)
-    } catch (err) {
-      setError('Failed to create hub')
+    } catch (err: unknown) {
+      const axiosError = err as { response?: { data?: { error?: string } } }
+      setError(axiosError.response?.data?.error || 'Failed to create hub')
     } finally {
       setLoading(false)
     }
@@ -1073,8 +1074,9 @@ function AddSpokeModal({ hubId, hubGatewayType, onClose, onSuccess }: { hubId: s
     try {
       const spoke = await createMeshSpoke(hubId, form)
       onSuccess(spoke)
-    } catch (err) {
-      setError('Failed to create spoke')
+    } catch (err: unknown) {
+      const axiosError = err as { response?: { data?: { error?: string } } }
+      setError(axiosError.response?.data?.error || 'Failed to create spoke')
     } finally {
       setLoading(false)
     }
