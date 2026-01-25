@@ -1,4 +1,4 @@
-.PHONY: build build-server build-gateway build-wireguard-gateway build-admin build-client build-hub build-mesh-gateway build-wireguard-hub build-wireguard-mesh-gateway test lint clean dev migrate-up migrate-down help release release-all release-hub release-mesh-gateway release-wireguard-gateway release-wireguard-hub release-wireguard-mesh-gateway
+.PHONY: build build-gatekey build-gatekey-server build-gatekey-gateway build-gatekey-wireguard-gateway build-gatekey-admin build-gatekey-hub build-gatekey-mesh-gateway build-gatekey-wireguard-hub build-gatekey-wireguard-mesh-gateway test lint clean dev help release release-all
 
 # Go parameters
 GOCMD=go
@@ -8,15 +8,17 @@ GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 BINARY_DIR=bin
 RELEASE_DIR=dist
-SERVER_BINARY=$(BINARY_DIR)/gatekey-server
-GATEWAY_BINARY=$(BINARY_DIR)/gatekey-gateway
-ADMIN_BINARY=$(BINARY_DIR)/gatekey-admin
-CLIENT_BINARY=$(BINARY_DIR)/gatekey
-HUB_BINARY=$(BINARY_DIR)/gatekey-hub
-MESH_GATEWAY_BINARY=$(BINARY_DIR)/gatekey-mesh-gateway
-WG_GATEWAY_BINARY=$(BINARY_DIR)/gatekey-wireguard-gateway
-WG_HUB_BINARY=$(BINARY_DIR)/gatekey-wireguard-hub
-WG_MESH_GATEWAY_BINARY=$(BINARY_DIR)/gatekey-wireguard-mesh-gateway
+
+# Binary output paths
+BINARY_GATEKEY=$(BINARY_DIR)/gatekey
+BINARY_GATEKEY_SERVER=$(BINARY_DIR)/gatekey-server
+BINARY_GATEKEY_GATEWAY=$(BINARY_DIR)/gatekey-gateway
+BINARY_GATEKEY_WIREGUARD_GATEWAY=$(BINARY_DIR)/gatekey-wireguard-gateway
+BINARY_GATEKEY_ADMIN=$(BINARY_DIR)/gatekey-admin
+BINARY_GATEKEY_HUB=$(BINARY_DIR)/gatekey-hub
+BINARY_GATEKEY_MESH_GATEWAY=$(BINARY_DIR)/gatekey-mesh-gateway
+BINARY_GATEKEY_WIREGUARD_HUB=$(BINARY_DIR)/gatekey-wireguard-hub
+BINARY_GATEKEY_WIREGUARD_MESH_GATEWAY=$(BINARY_DIR)/gatekey-wireguard-mesh-gateway
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -32,50 +34,54 @@ PLATFORMS=darwin/amd64 darwin/arm64 linux/amd64 linux/arm64
 # Default target
 all: build
 
-## Build targets
+# =============================================================================
+# Build Targets
+# =============================================================================
 
-build: build-server build-gateway build-wireguard-gateway build-admin build-client build-hub build-mesh-gateway build-wireguard-hub build-wireguard-mesh-gateway ## Build all binaries
+build: build-gatekey build-gatekey-server build-gatekey-gateway build-gatekey-wireguard-gateway build-gatekey-admin build-gatekey-hub build-gatekey-mesh-gateway build-gatekey-wireguard-hub build-gatekey-wireguard-mesh-gateway ## Build all binaries
 	@echo "Build complete"
 
-build-server: ## Build the control plane server
+build-gatekey: ## Build gatekey (VPN client CLI)
 	@mkdir -p $(BINARY_DIR)
-	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(SERVER_BINARY) ./cmd/gatekey-server
+	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(BINARY_GATEKEY) ./cmd/gatekey
 
-build-gateway: ## Build the gateway agent
+build-gatekey-server: ## Build gatekey-server (control plane)
 	@mkdir -p $(BINARY_DIR)
-	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(GATEWAY_BINARY) ./cmd/gatekey-gateway
+	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(BINARY_GATEKEY_SERVER) ./cmd/gatekey-server
 
-build-wireguard-gateway: ## Build the WireGuard gateway agent
+build-gatekey-gateway: ## Build gatekey-gateway (OpenVPN gateway agent)
 	@mkdir -p $(BINARY_DIR)
-	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(WG_GATEWAY_BINARY) ./cmd/gatekey-wireguard-gateway
+	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(BINARY_GATEKEY_GATEWAY) ./cmd/gatekey-gateway
 
-build-admin: ## Build the admin CLI tool
+build-gatekey-wireguard-gateway: ## Build gatekey-wireguard-gateway (WireGuard gateway agent)
 	@mkdir -p $(BINARY_DIR)
-	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(ADMIN_BINARY) ./cmd/gatekey-admin
+	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(BINARY_GATEKEY_WIREGUARD_GATEWAY) ./cmd/gatekey-wireguard-gateway
 
-build-client: ## Build the user VPN client
+build-gatekey-admin: ## Build gatekey-admin (admin CLI)
 	@mkdir -p $(BINARY_DIR)
-	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(CLIENT_BINARY) ./cmd/gatekey
+	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(BINARY_GATEKEY_ADMIN) ./cmd/gatekey-admin
 
-build-hub: ## Build the mesh hub server
+build-gatekey-hub: ## Build gatekey-hub (OpenVPN mesh hub)
 	@mkdir -p $(BINARY_DIR)
-	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(HUB_BINARY) ./cmd/gatekey-hub
+	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(BINARY_GATEKEY_HUB) ./cmd/gatekey-hub
 
-build-mesh-gateway: ## Build the mesh gateway agent
+build-gatekey-mesh-gateway: ## Build gatekey-mesh-gateway (OpenVPN mesh spoke)
 	@mkdir -p $(BINARY_DIR)
-	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(MESH_GATEWAY_BINARY) ./cmd/gatekey-mesh-gateway
+	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(BINARY_GATEKEY_MESH_GATEWAY) ./cmd/gatekey-mesh-gateway
 
-build-wireguard-hub: ## Build the WireGuard mesh hub server
+build-gatekey-wireguard-hub: ## Build gatekey-wireguard-hub (WireGuard mesh hub)
 	@mkdir -p $(BINARY_DIR)
-	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(WG_HUB_BINARY) ./cmd/gatekey-wireguard-hub
+	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(BINARY_GATEKEY_WIREGUARD_HUB) ./cmd/gatekey-wireguard-hub
 
-build-wireguard-mesh-gateway: ## Build the WireGuard mesh gateway agent
+build-gatekey-wireguard-mesh-gateway: ## Build gatekey-wireguard-mesh-gateway (WireGuard mesh spoke)
 	@mkdir -p $(BINARY_DIR)
-	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(WG_MESH_GATEWAY_BINARY) ./cmd/gatekey-wireguard-mesh-gateway
+	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(BINARY_GATEKEY_WIREGUARD_MESH_GATEWAY) ./cmd/gatekey-wireguard-mesh-gateway
 
-## Release targets for Homebrew
+# =============================================================================
+# Release Targets (for Homebrew)
+# =============================================================================
 
-release: release-client release-server release-gateway release-wireguard-gateway release-admin release-hub release-mesh-gateway release-wireguard-hub release-wireguard-mesh-gateway ## Build release archives for all binaries
+release: release-gatekey release-gatekey-server release-gatekey-gateway release-gatekey-wireguard-gateway release-gatekey-admin release-gatekey-hub release-gatekey-mesh-gateway release-gatekey-wireguard-hub release-gatekey-wireguard-mesh-gateway ## Build release archives for all binaries
 	@echo "Release archives created in $(RELEASE_DIR)/"
 	@echo "SHA256 checksums:"
 	@cat $(RELEASE_DIR)/checksums.txt
@@ -83,7 +89,7 @@ release: release-client release-server release-gateway release-wireguard-gateway
 release-all: clean release ## Clean and build all release artifacts
 	@echo "Full release complete"
 
-release-client: ## Build client release archives for all platforms
+release-gatekey: ## Build gatekey release archives for all platforms
 	@mkdir -p $(RELEASE_DIR)
 	@for platform in $(PLATFORMS); do \
 		os=$${platform%/*}; \
@@ -96,9 +102,9 @@ release-client: ## Build client release archives for all platforms
 		rm -rf $(RELEASE_DIR)/$$output_name; \
 		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
 	done
-	@echo "Client release complete"
+	@echo "gatekey release complete"
 
-release-server: ## Build server release archives for all platforms
+release-gatekey-server: ## Build gatekey-server release archives for all platforms
 	@mkdir -p $(RELEASE_DIR)
 	@for platform in $(PLATFORMS); do \
 		os=$${platform%/*}; \
@@ -111,9 +117,9 @@ release-server: ## Build server release archives for all platforms
 		rm -rf $(RELEASE_DIR)/$$output_name; \
 		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
 	done
-	@echo "Server release complete"
+	@echo "gatekey-server release complete"
 
-release-gateway: ## Build gateway release archives for all platforms
+release-gatekey-gateway: ## Build gatekey-gateway release archives for all platforms
 	@mkdir -p $(RELEASE_DIR)
 	@for platform in $(PLATFORMS); do \
 		os=$${platform%/*}; \
@@ -126,9 +132,9 @@ release-gateway: ## Build gateway release archives for all platforms
 		rm -rf $(RELEASE_DIR)/$$output_name; \
 		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
 	done
-	@echo "Gateway release complete"
+	@echo "gatekey-gateway release complete"
 
-release-wireguard-gateway: ## Build WireGuard gateway release archives for all platforms
+release-gatekey-wireguard-gateway: ## Build gatekey-wireguard-gateway release archives for all platforms
 	@mkdir -p $(RELEASE_DIR)
 	@for platform in $(PLATFORMS); do \
 		os=$${platform%/*}; \
@@ -141,9 +147,9 @@ release-wireguard-gateway: ## Build WireGuard gateway release archives for all p
 		rm -rf $(RELEASE_DIR)/$$output_name; \
 		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
 	done
-	@echo "WireGuard gateway release complete"
+	@echo "gatekey-wireguard-gateway release complete"
 
-release-admin: ## Build admin CLI release archives for all platforms
+release-gatekey-admin: ## Build gatekey-admin release archives for all platforms
 	@mkdir -p $(RELEASE_DIR)
 	@for platform in $(PLATFORMS); do \
 		os=$${platform%/*}; \
@@ -156,9 +162,9 @@ release-admin: ## Build admin CLI release archives for all platforms
 		rm -rf $(RELEASE_DIR)/$$output_name; \
 		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
 	done
-	@echo "Admin CLI release complete"
+	@echo "gatekey-admin release complete"
 
-release-hub: ## Build mesh hub release archives for all platforms
+release-gatekey-hub: ## Build gatekey-hub release archives for all platforms
 	@mkdir -p $(RELEASE_DIR)
 	@for platform in $(PLATFORMS); do \
 		os=$${platform%/*}; \
@@ -171,9 +177,9 @@ release-hub: ## Build mesh hub release archives for all platforms
 		rm -rf $(RELEASE_DIR)/$$output_name; \
 		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
 	done
-	@echo "Mesh hub release complete"
+	@echo "gatekey-hub release complete"
 
-release-mesh-gateway: ## Build mesh gateway release archives for all platforms
+release-gatekey-mesh-gateway: ## Build gatekey-mesh-gateway release archives for all platforms
 	@mkdir -p $(RELEASE_DIR)
 	@for platform in $(PLATFORMS); do \
 		os=$${platform%/*}; \
@@ -186,9 +192,9 @@ release-mesh-gateway: ## Build mesh gateway release archives for all platforms
 		rm -rf $(RELEASE_DIR)/$$output_name; \
 		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
 	done
-	@echo "Mesh gateway release complete"
+	@echo "gatekey-mesh-gateway release complete"
 
-release-wireguard-hub: ## Build WireGuard mesh hub release archives for all platforms
+release-gatekey-wireguard-hub: ## Build gatekey-wireguard-hub release archives for all platforms
 	@mkdir -p $(RELEASE_DIR)
 	@for platform in $(PLATFORMS); do \
 		os=$${platform%/*}; \
@@ -201,9 +207,9 @@ release-wireguard-hub: ## Build WireGuard mesh hub release archives for all plat
 		rm -rf $(RELEASE_DIR)/$$output_name; \
 		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
 	done
-	@echo "WireGuard mesh hub release complete"
+	@echo "gatekey-wireguard-hub release complete"
 
-release-wireguard-mesh-gateway: ## Build WireGuard mesh gateway release archives for all platforms
+release-gatekey-wireguard-mesh-gateway: ## Build gatekey-wireguard-mesh-gateway release archives for all platforms
 	@mkdir -p $(RELEASE_DIR)
 	@for platform in $(PLATFORMS); do \
 		os=$${platform%/*}; \
@@ -216,20 +222,38 @@ release-wireguard-mesh-gateway: ## Build WireGuard mesh gateway release archives
 		rm -rf $(RELEASE_DIR)/$$output_name; \
 		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
 	done
-	@echo "WireGuard mesh gateway release complete"
+	@echo "gatekey-wireguard-mesh-gateway release complete"
 
-## Development targets
+# =============================================================================
+# Development Targets
+# =============================================================================
 
-dev: ## Run in development mode
+dev: dev-gatekey-server ## Run gatekey-server in development mode (alias)
+
+dev-gatekey-server: ## Run gatekey-server in development mode
 	$(GOCMD) run ./cmd/gatekey-server --config configs/gatekey.yaml
 
-dev-gateway: ## Run gateway in development mode
+dev-gatekey-gateway: ## Run gatekey-gateway in development mode
 	$(GOCMD) run ./cmd/gatekey-gateway --config configs/gateway.yaml
 
-dev-wireguard-gateway: ## Run WireGuard gateway in development mode
+dev-gatekey-wireguard-gateway: ## Run gatekey-wireguard-gateway in development mode
 	$(GOCMD) run ./cmd/gatekey-wireguard-gateway --config configs/wireguard-gateway.yaml
 
-## Test targets
+dev-gatekey-hub: ## Run gatekey-hub in development mode
+	$(GOCMD) run ./cmd/gatekey-hub --config configs/hub.yaml
+
+dev-gatekey-mesh-gateway: ## Run gatekey-mesh-gateway in development mode
+	$(GOCMD) run ./cmd/gatekey-mesh-gateway --config configs/mesh-gateway.yaml
+
+dev-gatekey-wireguard-hub: ## Run gatekey-wireguard-hub in development mode
+	$(GOCMD) run ./cmd/gatekey-wireguard-hub --config configs/wireguard-hub.yaml
+
+dev-gatekey-wireguard-mesh-gateway: ## Run gatekey-wireguard-mesh-gateway in development mode
+	$(GOCMD) run ./cmd/gatekey-wireguard-mesh-gateway --config configs/wireguard-mesh-gateway.yaml
+
+# =============================================================================
+# Test Targets
+# =============================================================================
 
 test: ## Run all tests
 	$(GOTEST) -v -race -cover ./...
@@ -245,7 +269,9 @@ test-coverage: ## Run tests with coverage report
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
-## Lint and format
+# =============================================================================
+# Lint and Format
+# =============================================================================
 
 lint: ## Run linter
 	golangci-lint run ./...
@@ -254,7 +280,9 @@ fmt: ## Format code
 	$(GOCMD) fmt ./...
 	gofumpt -w .
 
-## Database migrations
+# =============================================================================
+# Database Migrations
+# =============================================================================
 
 migrate-up: ## Run database migrations
 	migrate -path migrations -database "$(DATABASE_URL)" up
@@ -269,7 +297,9 @@ migrate-reset: ## Reset database (down all, then up)
 migrate-create: ## Create new migration (usage: make migrate-create name=create_users)
 	migrate create -ext sql -dir migrations -seq $(name)
 
-## Dependencies
+# =============================================================================
+# Dependencies
+# =============================================================================
 
 deps: ## Download dependencies
 	$(GOMOD) download
@@ -279,7 +309,9 @@ deps-update: ## Update dependencies
 	$(GOGET) -u ./...
 	$(GOMOD) tidy
 
-## Frontend
+# =============================================================================
+# Frontend
+# =============================================================================
 
 frontend-install: ## Install frontend dependencies
 	cd web && npm install
@@ -290,92 +322,98 @@ frontend-build: ## Build frontend for production
 frontend-dev: ## Run frontend in development mode
 	cd web && npm run dev
 
-## Clean
+# =============================================================================
+# Clean
+# =============================================================================
 
 clean: ## Clean build artifacts
 	rm -rf $(BINARY_DIR)
 	rm -rf $(RELEASE_DIR)
 	rm -f coverage.out coverage.html
 
-## Cross-compile for multiple platforms (legacy targets)
+# =============================================================================
+# Cross-Compile (all platforms)
+# =============================================================================
 
-build-client-all: ## Build client for all platforms
+build-gatekey-all: ## Build gatekey for all platforms
 	@mkdir -p $(BINARY_DIR)
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-linux-amd64 ./cmd/gatekey
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-linux-arm64 ./cmd/gatekey
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-darwin-amd64 ./cmd/gatekey
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-darwin-arm64 ./cmd/gatekey
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-windows-amd64.exe ./cmd/gatekey
-	@echo "Client binaries built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64"
+	@echo "gatekey built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64"
 
-build-server-all: ## Build server for all platforms
+build-gatekey-server-all: ## Build gatekey-server for all platforms
 	@mkdir -p $(BINARY_DIR)
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-server-linux-amd64 ./cmd/gatekey-server
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-server-linux-arm64 ./cmd/gatekey-server
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-server-darwin-amd64 ./cmd/gatekey-server
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-server-darwin-arm64 ./cmd/gatekey-server
-	@echo "Server binaries built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64"
+	@echo "gatekey-server built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64"
 
-build-gateway-all: ## Build gateway for all platforms
+build-gatekey-gateway-all: ## Build gatekey-gateway for all platforms
 	@mkdir -p $(BINARY_DIR)
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-gateway-linux-amd64 ./cmd/gatekey-gateway
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-gateway-linux-arm64 ./cmd/gatekey-gateway
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-gateway-darwin-amd64 ./cmd/gatekey-gateway
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-gateway-darwin-arm64 ./cmd/gatekey-gateway
-	@echo "Gateway binaries built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64"
+	@echo "gatekey-gateway built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64"
 
-build-wireguard-gateway-all: ## Build WireGuard gateway for all platforms
+build-gatekey-wireguard-gateway-all: ## Build gatekey-wireguard-gateway for all platforms
 	@mkdir -p $(BINARY_DIR)
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-wireguard-gateway-linux-amd64 ./cmd/gatekey-wireguard-gateway
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-wireguard-gateway-linux-arm64 ./cmd/gatekey-wireguard-gateway
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-wireguard-gateway-darwin-amd64 ./cmd/gatekey-wireguard-gateway
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-wireguard-gateway-darwin-arm64 ./cmd/gatekey-wireguard-gateway
-	@echo "WireGuard gateway binaries built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64"
+	@echo "gatekey-wireguard-gateway built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64"
 
-build-admin-all: ## Build admin CLI for all platforms
+build-gatekey-admin-all: ## Build gatekey-admin for all platforms
 	@mkdir -p $(BINARY_DIR)
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-admin-linux-amd64 ./cmd/gatekey-admin
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-admin-linux-arm64 ./cmd/gatekey-admin
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-admin-darwin-amd64 ./cmd/gatekey-admin
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-admin-darwin-arm64 ./cmd/gatekey-admin
-	@echo "Admin CLI binaries built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64"
+	@echo "gatekey-admin built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64"
 
-build-hub-all: ## Build mesh hub for all platforms
+build-gatekey-hub-all: ## Build gatekey-hub for all platforms
 	@mkdir -p $(BINARY_DIR)
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-hub-linux-amd64 ./cmd/gatekey-hub
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-hub-linux-arm64 ./cmd/gatekey-hub
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-hub-darwin-amd64 ./cmd/gatekey-hub
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-hub-darwin-arm64 ./cmd/gatekey-hub
-	@echo "Mesh hub binaries built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64"
+	@echo "gatekey-hub built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64"
 
-build-mesh-gateway-all: ## Build mesh gateway for all platforms
+build-gatekey-mesh-gateway-all: ## Build gatekey-mesh-gateway for all platforms
 	@mkdir -p $(BINARY_DIR)
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-mesh-gateway-linux-amd64 ./cmd/gatekey-mesh-gateway
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-mesh-gateway-linux-arm64 ./cmd/gatekey-mesh-gateway
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-mesh-gateway-darwin-amd64 ./cmd/gatekey-mesh-gateway
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-mesh-gateway-darwin-arm64 ./cmd/gatekey-mesh-gateway
-	@echo "Mesh gateway binaries built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64"
+	@echo "gatekey-mesh-gateway built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64"
 
-build-wireguard-hub-all: ## Build WireGuard mesh hub for all platforms
+build-gatekey-wireguard-hub-all: ## Build gatekey-wireguard-hub for all platforms
 	@mkdir -p $(BINARY_DIR)
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-wireguard-hub-linux-amd64 ./cmd/gatekey-wireguard-hub
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-wireguard-hub-linux-arm64 ./cmd/gatekey-wireguard-hub
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-wireguard-hub-darwin-amd64 ./cmd/gatekey-wireguard-hub
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-wireguard-hub-darwin-arm64 ./cmd/gatekey-wireguard-hub
-	@echo "WireGuard mesh hub binaries built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64"
+	@echo "gatekey-wireguard-hub built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64"
 
-build-wireguard-mesh-gateway-all: ## Build WireGuard mesh gateway for all platforms
+build-gatekey-wireguard-mesh-gateway-all: ## Build gatekey-wireguard-mesh-gateway for all platforms
 	@mkdir -p $(BINARY_DIR)
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-wireguard-mesh-gateway-linux-amd64 ./cmd/gatekey-wireguard-mesh-gateway
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-wireguard-mesh-gateway-linux-arm64 ./cmd/gatekey-wireguard-mesh-gateway
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-wireguard-mesh-gateway-darwin-amd64 ./cmd/gatekey-wireguard-mesh-gateway
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/gatekey-wireguard-mesh-gateway-darwin-arm64 ./cmd/gatekey-wireguard-mesh-gateway
-	@echo "WireGuard mesh gateway binaries built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64"
+	@echo "gatekey-wireguard-mesh-gateway built for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64"
 
-build-all: build-client-all build-server-all build-gateway-all build-wireguard-gateway-all build-admin-all build-hub-all build-mesh-gateway-all build-wireguard-hub-all build-wireguard-mesh-gateway-all ## Build all binaries for all platforms
-	@echo "All binaries built"
+build-all: build-gatekey-all build-gatekey-server-all build-gatekey-gateway-all build-gatekey-wireguard-gateway-all build-gatekey-admin-all build-gatekey-hub-all build-gatekey-mesh-gateway-all build-gatekey-wireguard-hub-all build-gatekey-wireguard-mesh-gateway-all ## Build all binaries for all platforms
+	@echo "All binaries built for all platforms"
 
-## Docker
+# =============================================================================
+# Docker
+# =============================================================================
 
 docker-build: ## Build Docker image
 	docker build -f build/docker/server.Dockerfile -t gatekey:latest .
@@ -389,7 +427,9 @@ docker-compose-up: ## Start with docker-compose
 docker-compose-down: ## Stop docker-compose
 	docker-compose down
 
-## Certificates (development)
+# =============================================================================
+# Certificates (development)
+# =============================================================================
 
 gen-ca: ## Generate development CA
 	@mkdir -p certs
@@ -405,12 +445,30 @@ gen-server-cert: ## Generate development server certificate
 	openssl x509 -req -days 365 -in certs/server.csr -CA certs/ca.crt \
 		-CAkey certs/ca.key -CAcreateserial -out certs/server.crt
 
-## Help
+# =============================================================================
+# Help
+# =============================================================================
 
 help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@echo "GateKey Makefile"
+	@echo ""
+	@echo "Binaries:"
+	@echo "  gatekey                        VPN client CLI (end users)"
+	@echo "  gatekey-server                 Control plane server"
+	@echo "  gatekey-gateway                OpenVPN gateway agent"
+	@echo "  gatekey-wireguard-gateway      WireGuard gateway agent"
+	@echo "  gatekey-admin                  Admin CLI for policy management"
+	@echo "  gatekey-hub                    OpenVPN mesh hub"
+	@echo "  gatekey-mesh-gateway           OpenVPN mesh spoke"
+	@echo "  gatekey-wireguard-hub          WireGuard mesh hub"
+	@echo "  gatekey-wireguard-mesh-gateway WireGuard mesh spoke"
+	@echo ""
+	@echo "Targets:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-35s\033[0m %s\n", $$1, $$2}'
 
-## Version info
+# =============================================================================
+# Version Info
+# =============================================================================
 
 version: ## Show version information
 	@echo "Version: $(VERSION)"
