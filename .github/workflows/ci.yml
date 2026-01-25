@@ -80,12 +80,41 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   build:
-    name: Build
+    name: Build ${{ matrix.component.name }} (${{ matrix.goos }}, ${{ matrix.goarch }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         goos: [linux, darwin]
         goarch: [amd64, arm64]
+        component:
+          - name: Client
+            binary: gatekey
+            cmd: gatekey
+          - name: Server
+            binary: gatekey-server
+            cmd: gatekey-server
+          - name: Gateway
+            binary: gatekey-gateway
+            cmd: gatekey-gateway
+          - name: WireGuard Gateway
+            binary: gatekey-wireguard-gateway
+            cmd: gatekey-wireguard-gateway
+          - name: Admin CLI
+            binary: gatekey-admin
+            cmd: gatekey-admin
+          - name: Hub
+            binary: gatekey-hub
+            cmd: gatekey-hub
+          - name: Mesh Gateway
+            binary: gatekey-mesh-gateway
+            cmd: gatekey-mesh-gateway
+          - name: WireGuard Hub
+            binary: gatekey-wireguard-hub
+            cmd: gatekey-wireguard-hub
+          - name: WireGuard Mesh Gateway
+            binary: gatekey-wireguard-mesh-gateway
+            cmd: gatekey-wireguard-mesh-gateway
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -96,17 +125,14 @@ jobs:
           go-version: '1.25'
           cache: true
 
-      - name: Build binaries
+      - name: Build ${{ matrix.component.name }}
         run: |
-          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags="-s -w" -o bin/gatekey-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/gatekey
-          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags="-s -w" -o bin/gatekey-server-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/gatekey-server
-          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags="-s -w" -o bin/gatekey-gateway-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/gatekey-gateway
-          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags="-s -w" -o bin/gatekey-admin-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/gatekey-admin
+          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags="-s -w" -o bin/${{ matrix.component.binary }}-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/${{ matrix.component.cmd }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: ${{ matrix.component.binary }}-${{ matrix.goos }}-${{ matrix.goarch }}
           path: bin/
           retention-days: 7
 
@@ -137,8 +163,36 @@ jobs:
         run: npm run build
 
   docker:
-    name: Docker Build
+    name: Docker Build ${{ matrix.image.name }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - name: Server
+            file: Dockerfile
+            tag: gatekey-server:test
+          - name: Gateway
+            file: Dockerfile.gateway
+            tag: gatekey-gateway:test
+          - name: WireGuard Gateway
+            file: Dockerfile.wireguard-gateway
+            tag: gatekey-wireguard-gateway:test
+          - name: Hub
+            file: Dockerfile.hub
+            tag: gatekey-hub:test
+          - name: Mesh Gateway
+            file: Dockerfile.mesh-gateway
+            tag: gatekey-mesh-gateway:test
+          - name: WireGuard Hub
+            file: Dockerfile.wireguard-hub
+            tag: gatekey-wireguard-hub:test
+          - name: WireGuard Mesh Gateway
+            file: Dockerfile.wireguard-mesh-gateway
+            tag: gatekey-wireguard-mesh-gateway:test
+          - name: Web
+            file: Dockerfile.web
+            tag: gatekey-web:test
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -146,22 +200,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build server image
+      - name: Build ${{ matrix.image.name }} image
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./Dockerfile
+          file: ./${{ matrix.image.file }}
           push: false
-          tags: gatekey-server:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build gateway image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile.gateway
-          push: false
-          tags: gatekey-gateway:test
+          tags: ${{ matrix.image.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
