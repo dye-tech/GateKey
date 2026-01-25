@@ -5,6 +5,15 @@ All notable changes to GateKey are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2026-01-25
+
+### Fixed
+- WireGuard mesh hub configs were incorrectly generated in OpenVPN format
+- Frontend now calls the correct API endpoint (`/api/v1/mesh/wireguard/generate-config`) for WireGuard mesh hubs
+- Download content-type headers now correctly use `application/x-wireguard-profile` for WireGuard configs
+- Mesh config download modal displays correct file extension (`.conf` for WireGuard, `.ovpn` for OpenVPN)
+- Manual configuration instructions now show WireGuard-specific setup steps when connecting to WireGuard mesh hubs
+
 ## [1.5.0] - 2026-01-22
 
 ### Added
