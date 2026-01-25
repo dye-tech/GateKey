@@ -953,8 +953,24 @@ CREATE TABLE public.proxy_applications (
     websocket_enabled boolean DEFAULT true,
     timeout_seconds integer DEFAULT 30,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    skip_tls_verify boolean DEFAULT false,
+    custom_ca_cert text
 );
+
+
+--
+-- Name: COLUMN proxy_applications.skip_tls_verify; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.proxy_applications.skip_tls_verify IS 'Skip TLS certificate verification for this app (overrides global setting)';
+
+
+--
+-- Name: COLUMN proxy_applications.custom_ca_cert; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.proxy_applications.custom_ca_cert IS 'Custom CA certificate PEM for this app (optional)';
 
 
 --
@@ -3091,5 +3107,4 @@ ALTER TABLE ONLY public.wireguard_peers
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 4HJJr8dwfCzuisPqIEhgLQmp9rhP9Cicg1Ucr04Nkp7gJizZq9Jj1wkZxom51Xc
 
