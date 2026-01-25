@@ -26,7 +26,7 @@ fi
 echo "Updating Homebrew formulas to version ${VERSION}..."
 
 # Formulas and their corresponding binary names
-FORMULAS="gatekey gatekey-admin gatekey-server gatekey-gateway gatekey-hub gatekey-mesh-gateway"
+FORMULAS="gatekey gatekey-admin gatekey-server gatekey-gateway gatekey-hub gatekey-mesh-gateway gatekey-wireguard-gateway gatekey-wireguard-hub gatekey-wireguard-mesh-gateway"
 
 for formula in $FORMULAS; do
     binary="$formula"
