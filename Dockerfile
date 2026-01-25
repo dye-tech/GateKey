@@ -1,5 +1,10 @@
-# Build backend
+# Consolidated Dockerfile for all GateKey Go binaries
+# Usage: docker build --build-arg BINARY=gatekey-server --build-arg RUNTIME_DEPS="ca-certificates tzdata" .
+
+# Build stage
 FROM golang:1.25-alpine AS builder
+
+ARG BINARY=gatekey-server
 
 WORKDIR /app
 
@@ -13,18 +18,24 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the server binary
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /gatekey-server ./cmd/gatekey-server
+# Build the specified binary
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app-binary ./cmd/${BINARY}
 
 # Final image
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates tzdata
+# Runtime dependencies vary by binary type:
+#   server:    ca-certificates tzdata
+#   openvpn:   ca-certificates tzdata openvpn nftables iptables iproute2
+#   wireguard: ca-certificates tzdata wireguard-tools nftables iptables iproute2
+ARG RUNTIME_DEPS="ca-certificates tzdata"
+RUN apk add --no-cache ${RUNTIME_DEPS}
 
 WORKDIR /app
 
-COPY --from=builder /gatekey-server /app/gatekey-server
+COPY --from=builder /app-binary /app/gatekey
 
+# Server listens on 8080
 EXPOSE 8080
 
-ENTRYPOINT ["/app/gatekey-server"]
+ENTRYPOINT ["/app/gatekey"]

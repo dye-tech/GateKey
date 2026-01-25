@@ -170,29 +170,33 @@ jobs:
       matrix:
         image:
           - name: Server
-            file: Dockerfile
+            binary: gatekey-server
+            deps: ca-certificates tzdata
             tag: gatekey-server:test
           - name: Gateway
-            file: Dockerfile.gateway
+            binary: gatekey-gateway
+            deps: ca-certificates tzdata openvpn nftables iptables iproute2
             tag: gatekey-gateway:test
           - name: WireGuard Gateway
-            file: Dockerfile.wireguard-gateway
+            binary: gatekey-wireguard-gateway
+            deps: ca-certificates tzdata wireguard-tools nftables iptables iproute2
             tag: gatekey-wireguard-gateway:test
           - name: Hub
-            file: Dockerfile.hub
+            binary: gatekey-hub
+            deps: ca-certificates tzdata openvpn nftables iptables iproute2
             tag: gatekey-hub:test
           - name: Mesh Gateway
-            file: Dockerfile.mesh-gateway
+            binary: gatekey-mesh-gateway
+            deps: ca-certificates tzdata openvpn nftables iptables iproute2
             tag: gatekey-mesh-gateway:test
           - name: WireGuard Hub
-            file: Dockerfile.wireguard-hub
+            binary: gatekey-wireguard-hub
+            deps: ca-certificates tzdata wireguard-tools nftables iptables iproute2
             tag: gatekey-wireguard-hub:test
           - name: WireGuard Mesh Gateway
-            file: Dockerfile.wireguard-mesh-gateway
+            binary: gatekey-wireguard-mesh-gateway
+            deps: ca-certificates tzdata wireguard-tools nftables iptables iproute2
             tag: gatekey-wireguard-mesh-gateway:test
-          - name: Web
-            file: Dockerfile.web
-            tag: gatekey-web:test
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -204,8 +208,31 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./${{ matrix.image.file }}
+          file: ./Dockerfile
+          build-args: |
+            BINARY=${{ matrix.image.binary }}
+            RUNTIME_DEPS=${{ matrix.image.deps }}
           push: false
           tags: ${{ matrix.image.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  docker-web:
+    name: Docker Build Web
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.web
+          push: false
+          tags: gatekey-web:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
