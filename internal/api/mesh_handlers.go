@@ -2940,9 +2940,16 @@ func (s *Server) handleDownloadMeshConfig(c *gin.Context) {
 	// Mark as downloaded
 	_ = s.meshConfigStore.MarkDownloaded(c.Request.Context(), configID)
 
+	// Determine content type based on hub's gateway type
+	contentType := "application/x-openvpn-profile"
+	hub, err := s.meshStore.GetHub(c.Request.Context(), config.HubID)
+	if err == nil && hub.GatewayType == db.MeshGatewayTypeWireGuard {
+		contentType = "application/x-wireguard-profile"
+	}
+
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", config.FileName))
-	c.Header("Content-Type", "application/x-openvpn-profile")
-	c.Data(http.StatusOK, "application/x-openvpn-profile", config.ConfigData)
+	c.Header("Content-Type", contentType)
+	c.Data(http.StatusOK, contentType, config.ConfigData)
 }
 
 // ==================== Admin Mesh Config Management ====================

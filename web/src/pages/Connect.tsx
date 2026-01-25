@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
-import { getGateways, generateConfig, generateWireGuardConfig, getUserMeshHubs, generateMeshClientConfig, Gateway, GeneratedConfig, GeneratedWireGuardConfig, UserMeshHub } from '../api/client'
+import { getGateways, generateConfig, generateWireGuardConfig, getUserMeshHubs, generateMeshClientConfig, generateWireGuardMeshClientConfig, Gateway, GeneratedConfig, GeneratedWireGuardConfig, UserMeshHub } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 
 type ConnectionType = 'gateways' | 'mesh'
@@ -96,7 +96,10 @@ export default function Connect() {
     setError(null)
 
     try {
-      const config = await generateMeshClientConfig(selectedMeshHub.id)
+      // Use the appropriate endpoint based on hub type
+      const config = selectedMeshHub.hubType === 'wireguard'
+        ? await generateWireGuardMeshClientConfig(selectedMeshHub.id)
+        : await generateMeshClientConfig(selectedMeshHub.id)
       setMeshConfig(config)
     } catch (err) {
       setError('Failed to generate mesh configuration')
@@ -106,12 +109,15 @@ export default function Connect() {
   }
 
   function handleMeshDownload() {
-    if (!meshConfig) return
-    const blob = new Blob([meshConfig.config], { type: 'application/x-openvpn-profile' })
+    if (!meshConfig || !selectedMeshHub) return
+    const isWireGuard = selectedMeshHub.hubType === 'wireguard'
+    const mimeType = isWireGuard ? 'application/x-wireguard-profile' : 'application/x-openvpn-profile'
+    const extension = isWireGuard ? 'conf' : 'ovpn'
+    const blob = new Blob([meshConfig.config], { type: mimeType })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `mesh-${meshConfig.hubname}.ovpn`
+    a.download = `mesh-${meshConfig.hubname}.${extension}`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -669,7 +675,11 @@ export default function Connect() {
               >
                 <div>
                   <h2 className="text-lg font-semibold text-theme-primary">Manual Configuration</h2>
-                  <p className="text-sm text-theme-tertiary">Download an OpenVPN config file for use with any OpenVPN client</p>
+                  <p className="text-sm text-theme-tertiary">
+                    {selectedMeshHub?.hubType === 'wireguard'
+                      ? 'Download a WireGuard config file for use with any WireGuard client'
+                      : 'Download an OpenVPN config file for use with any OpenVPN client'}
+                  </p>
                 </div>
                 <svg
                   className={`w-5 h-5 text-theme-muted transition-transform ${showManualDownload ? 'rotate-180' : ''}`}
@@ -734,30 +744,61 @@ export default function Connect() {
 
                       {/* Platform-specific instructions */}
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
-                        <div>
-                          <h3 className="font-medium text-theme-primary mb-2">Windows</h3>
-                          <ol className="text-sm text-theme-secondary space-y-1">
-                            <li>1. Download OpenVPN GUI</li>
-                            <li>2. Import the .ovpn file</li>
-                            <li>3. Right-click tray icon &rarr; Connect</li>
-                          </ol>
-                        </div>
-                        <div>
-                          <h3 className="font-medium text-theme-primary mb-2">macOS</h3>
-                          <ol className="text-sm text-theme-secondary space-y-1">
-                            <li>1. Install Tunnelblick or OpenVPN Connect</li>
-                            <li>2. Double-click the .ovpn file</li>
-                            <li>3. Click Connect</li>
-                          </ol>
-                        </div>
-                        <div>
-                          <h3 className="font-medium text-theme-primary mb-2">Linux</h3>
-                          <ol className="text-sm text-theme-secondary space-y-1">
-                            <li>1. Install openvpn package</li>
-                            <li>2. Run: sudo openvpn config.ovpn</li>
-                            <li>3. Or import to NetworkManager</li>
-                          </ol>
-                        </div>
+                        {selectedMeshHub?.hubType === 'wireguard' ? (
+                          <>
+                            <div>
+                              <h3 className="font-medium text-theme-primary mb-2">Windows</h3>
+                              <ol className="text-sm text-theme-secondary space-y-1">
+                                <li>1. Download WireGuard from wireguard.com</li>
+                                <li>2. Import the .conf file</li>
+                                <li>3. Click Activate</li>
+                              </ol>
+                            </div>
+                            <div>
+                              <h3 className="font-medium text-theme-primary mb-2">macOS</h3>
+                              <ol className="text-sm text-theme-secondary space-y-1">
+                                <li>1. Install WireGuard from App Store</li>
+                                <li>2. Import tunnel from file</li>
+                                <li>3. Click Activate</li>
+                              </ol>
+                            </div>
+                            <div>
+                              <h3 className="font-medium text-theme-primary mb-2">Linux</h3>
+                              <ol className="text-sm text-theme-secondary space-y-1">
+                                <li>1. Install wireguard-tools package</li>
+                                <li>2. Run: sudo wg-quick up ./config.conf</li>
+                                <li>3. Or import to NetworkManager</li>
+                              </ol>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div>
+                              <h3 className="font-medium text-theme-primary mb-2">Windows</h3>
+                              <ol className="text-sm text-theme-secondary space-y-1">
+                                <li>1. Download OpenVPN GUI</li>
+                                <li>2. Import the .ovpn file</li>
+                                <li>3. Right-click tray icon &rarr; Connect</li>
+                              </ol>
+                            </div>
+                            <div>
+                              <h3 className="font-medium text-theme-primary mb-2">macOS</h3>
+                              <ol className="text-sm text-theme-secondary space-y-1">
+                                <li>1. Install Tunnelblick or OpenVPN Connect</li>
+                                <li>2. Double-click the .ovpn file</li>
+                                <li>3. Click Connect</li>
+                              </ol>
+                            </div>
+                            <div>
+                              <h3 className="font-medium text-theme-primary mb-2">Linux</h3>
+                              <ol className="text-sm text-theme-secondary space-y-1">
+                                <li>1. Install openvpn package</li>
+                                <li>2. Run: sudo openvpn config.ovpn</li>
+                                <li>3. Or import to NetworkManager</li>
+                              </ol>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -793,7 +834,7 @@ export default function Connect() {
                   <strong>Hub:</strong> {meshConfig.hubname}
                 </p>
                 <p className="text-sm text-theme-secondary">
-                  <strong>File:</strong> mesh-{meshConfig.hubname}.ovpn
+                  <strong>File:</strong> mesh-{meshConfig.hubname}.{selectedMeshHub?.hubType === 'wireguard' ? 'conf' : 'ovpn'}
                 </p>
               </div>
               <div className="flex space-x-3">

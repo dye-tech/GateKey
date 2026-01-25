@@ -369,7 +369,8 @@ func (s *Server) handleDownloadWireGuardConfig(c *gin.Context) {
 	}
 
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", config.FileName))
-	c.Data(http.StatusOK, "text/plain", config.ConfigData)
+	c.Header("Content-Type", "application/x-wireguard-profile")
+	c.Data(http.StatusOK, "application/x-wireguard-profile", config.ConfigData)
 }
 
 // handleRevokeWireGuardConfig allows a user to revoke their own config
