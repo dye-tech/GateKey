@@ -1,7 +1,7 @@
 # GateKey - Zero Trust VPN
 
 ## Project Overview
-GateKey is a zero-trust VPN solution that wraps OpenVPN to provide software-defined perimeter capabilities. It maintains 100% compatibility with existing OpenVPN clients while adding modern authentication, authorization, and access control.
+GateKey is a zero-trust VPN solution that wraps OpenVPN and WireGuard to provide software-defined perimeter capabilities. It maintains 100% compatibility with existing OpenVPN and WireGuard clients while adding modern authentication, authorization, and access control.
 
 ## Key Decisions
 
@@ -25,10 +25,15 @@ GateKey is a zero-trust VPN solution that wraps OpenVPN to provide software-defi
 ```
 gatekey/
 ├── cmd/
-│   ├── gatekey/           # User VPN client (main binary for end users)
-│   ├── gatekey-server/    # Control plane server
-│   ├── gatekey-gateway/   # Gateway agent (runs alongside OpenVPN)
-│   └── gatekey-admin/     # Admin CLI tool
+│   ├── gatekey/                      # User VPN client (main binary for end users)
+│   ├── gatekey-server/               # Control plane server
+│   ├── gatekey-gateway/              # OpenVPN gateway agent
+│   ├── gatekey-wireguard-gateway/    # WireGuard gateway agent
+│   ├── gatekey-admin/                # Admin CLI tool
+│   ├── gatekey-hub/                  # OpenVPN mesh hub
+│   ├── gatekey-mesh-gateway/         # OpenVPN mesh spoke
+│   ├── gatekey-wireguard-hub/        # WireGuard mesh hub
+│   └── gatekey-wireguard-mesh-gateway/ # WireGuard mesh spoke
 ├── internal/
 │   ├── api/               # REST API (Gin handlers, middleware, routes)
 │   ├── auth/              # Authentication (OIDC, SAML, local auth)
@@ -48,12 +53,15 @@ gatekey/
 
 | Binary | Description | Platform |
 |--------|-------------|----------|
-| `gatekey` | User VPN client - this is what end users install | Linux, macOS |
-| `gatekey-server` | Control plane server | Linux (Docker/K8s) |
-| `gatekey-gateway` | Gateway agent (runs alongside OpenVPN) | Linux only |
-| `gatekey-hub` | Mesh hub with zero-trust firewall | Linux only |
-| `gatekey-mesh-gateway` | Mesh spoke (connects to hub) | Linux only |
+| `gatekey` | User VPN client - this is what end users install | Linux, macOS, Windows |
+| `gatekey-server` | Control plane server (API + embedded CA) | Linux (Docker/K8s) |
+| `gatekey-gateway` | OpenVPN gateway agent | Linux only |
+| `gatekey-wireguard-gateway` | WireGuard gateway agent | Linux only |
 | `gatekey-admin` | Admin CLI for managing policies | Linux, macOS |
+| `gatekey-hub` | OpenVPN mesh hub | Linux only |
+| `gatekey-mesh-gateway` | OpenVPN mesh spoke (connects to hub) | Linux only |
+| `gatekey-wireguard-hub` | WireGuard mesh hub | Linux only |
+| `gatekey-wireguard-mesh-gateway` | WireGuard mesh spoke | Linux only |
 
 **Note**: Gateway, hub, and mesh components require Linux for nftables firewall support.
 See [docs/compatibility.md](docs/compatibility.md) for full platform support matrix.
@@ -61,11 +69,27 @@ See [docs/compatibility.md](docs/compatibility.md) for full platform support mat
 ## Build Commands
 
 ```bash
-make build          # Build all binaries
-make build-client   # Build just the VPN client
-make test           # Run tests
-make dev            # Run server in development mode
-make frontend-build # Build frontend
+# Build all binaries
+make build
+
+# Build individual binaries (target names match binary names)
+make build-gatekey                  # VPN client CLI
+make build-gatekey-server           # Control plane server
+make build-gatekey-gateway          # OpenVPN gateway agent
+make build-gatekey-wireguard-gateway # WireGuard gateway agent
+make build-gatekey-admin            # Admin CLI
+make build-gatekey-hub              # OpenVPN mesh hub
+make build-gatekey-mesh-gateway     # OpenVPN mesh spoke
+make build-gatekey-wireguard-hub    # WireGuard mesh hub
+make build-gatekey-wireguard-mesh-gateway # WireGuard mesh spoke
+
+# Development
+make dev                            # Run gatekey-server in dev mode
+make dev-gatekey-gateway            # Run gateway in dev mode
+make test                           # Run tests
+make lint                           # Run linter
+make frontend-build                 # Build frontend
+make frontend-dev                   # Run frontend in dev mode
 ```
 
 ## Configuration
@@ -437,3 +461,59 @@ Session data includes:
 
 ### Web UI
 Navigate to **Administration → Topology** to view the network map and active sessions.
+
+## Docker Images
+
+| Image | Description |
+|-------|-------------|
+| `dyetech/gatekey-server` | Control plane (API + embedded CA) |
+| `dyetech/gatekey-web` | Web UI (nginx + React) |
+| `dyetech/gatekey-gateway` | OpenVPN gateway agent |
+| `dyetech/gatekey-hub` | OpenVPN mesh hub |
+| `dyetech/gatekey-mesh-gateway` | OpenVPN mesh spoke |
+| `dyetech/gatekey-wireguard-gateway` | WireGuard gateway agent |
+| `dyetech/gatekey-wireguard-hub` | WireGuard mesh hub |
+| `dyetech/gatekey-wireguard-mesh-gateway` | WireGuard mesh spoke |
+
+## SVG Diagram Standards
+
+SVG diagrams in `docs/diagrams/` must follow these standards for cross-platform compatibility.
+
+### Font Family
+
+Use `Arial, Helvetica, sans-serif` for all text elements:
+
+```xml
+<!-- Correct -->
+<text font-family="Arial, Helvetica, sans-serif">Label</text>
+
+<!-- Incorrect - causes garbled text on some systems -->
+<text font-family="system-ui, -apple-system, sans-serif">Label</text>
+```
+
+**Why**: The `system-ui` font causes rendering issues on some platforms where the font is substituted incorrectly, resulting in unreadable/garbled text characters.
+
+## Git Commit Message Guidelines
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+<type>(<scope>): <description>
+```
+
+Types:
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation only
+- `style`: Formatting, no code change
+- `refactor`: Code change that neither fixes a bug nor adds a feature
+- `test`: Adding or updating tests
+- `chore`: Maintenance tasks (build, CI, deps)
+
+Examples:
+```
+feat(api): add endpoint for listing user sessions
+fix(gateway): handle connection timeout gracefully
+docs: update API documentation for v2 endpoints
+chore(build): standardize Makefile target names
+```
