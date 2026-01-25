@@ -49,29 +49,29 @@
   <!-- Mesh Hub -->
   <g filter="url(#shadow)">
     <rect x="270" y="40" width="160" height="80" rx="12" fill="url(#hubGrad)"/>
-    <text x="350" y="75" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="700">Mesh Hub</text>
-    <text x="350" y="100" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="12">(Central)</text>
+    <text x="350" y="75" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700">Mesh Hub</text>
+    <text x="350" y="100" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="12">(Central)</text>
   </g>
 
   <!-- Spoke A - Office 1 -->
   <g filter="url(#shadow)">
     <rect x="70" y="250" width="160" height="80" rx="12" fill="url(#spokeGrad)"/>
-    <text x="150" y="285" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">Spoke A</text>
-    <text x="150" y="308" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="12">(Office 1)</text>
+    <text x="150" y="285" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="600">Spoke A</text>
+    <text x="150" y="308" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="12">(Office 1)</text>
   </g>
 
   <!-- Spoke B - Office 2 -->
   <g filter="url(#shadow)">
     <rect x="270" y="250" width="160" height="80" rx="12" fill="url(#spokeGrad)"/>
-    <text x="350" y="285" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">Spoke B</text>
-    <text x="350" y="308" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="12">(Office 2)</text>
+    <text x="350" y="285" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="600">Spoke B</text>
+    <text x="350" y="308" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="12">(Office 2)</text>
   </g>
 
   <!-- User Client -->
   <g filter="url(#shadow)">
     <rect x="470" y="250" width="160" height="80" rx="12" fill="url(#userGrad)"/>
-    <text x="550" y="285" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">User</text>
-    <text x="550" y="308" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="12">(Client)</text>
+    <text x="550" y="285" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="600">User</text>
+    <text x="550" y="308" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="12">(Client)</text>
   </g>
 
   <!-- Connection indicators -->

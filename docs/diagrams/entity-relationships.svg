@@ -44,35 +44,35 @@
   <!-- Users Box -->
   <g filter="url(#shadow)">
     <rect x="30" y="30" width="140" height="80" rx="12" fill="url(#userGrad)"/>
-    <text x="100" y="60" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600">Users</text>
-    <text x="100" y="82" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="12">(SSO/Local)</text>
+    <text x="100" y="60" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="600">Users</text>
+    <text x="100" y="82" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="12">(SSO/Local)</text>
   </g>
 
   <!-- Gateways Box -->
   <g filter="url(#shadow)">
     <rect x="310" y="30" width="180" height="80" rx="12" fill="url(#gatewayGrad)"/>
-    <text x="400" y="60" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600">Gateways</text>
-    <text x="400" y="82" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="12">(VPN Nodes)</text>
+    <text x="400" y="60" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="600">Gateways</text>
+    <text x="400" y="82" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="12">(VPN Nodes)</text>
   </g>
 
   <!-- Networks Box -->
   <g filter="url(#shadow)">
     <rect x="630" y="30" width="140" height="80" rx="12" fill="url(#networkGrad)"/>
-    <text x="700" y="60" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600">Networks</text>
-    <text x="700" y="82" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="12">(CIDR Blocks)</text>
+    <text x="700" y="60" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="600">Networks</text>
+    <text x="700" y="82" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="12">(CIDR Blocks)</text>
   </g>
 
   <!-- Groups Box -->
   <g filter="url(#shadow)">
     <rect x="30" y="190" width="140" height="80" rx="12" fill="url(#groupGrad)"/>
-    <text x="100" y="220" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600">Groups</text>
-    <text x="100" y="242" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="12">(from IdP)</text>
+    <text x="100" y="220" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="600">Groups</text>
+    <text x="100" y="242" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="12">(from IdP)</text>
   </g>
 
   <!-- Access Rules Box -->
   <g filter="url(#shadow)">
     <rect x="630" y="190" width="140" height="80" rx="12" fill="url(#ruleGrad)"/>
-    <text x="700" y="220" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600">Access Rules</text>
-    <text x="700" y="242" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="12">(IP/Hostname)</text>
+    <text x="700" y="220" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="600">Access Rules</text>
+    <text x="700" y="242" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, Helvetica, sans-serif" font-size="12">(IP/Hostname)</text>
   </g>
 </svg>
