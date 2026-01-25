@@ -194,8 +194,8 @@ kubectl rollout restart deployment -n gatekey gatekey-server gatekey-web
 
 ## Prerequisites
 
-- Go 1.23+
-- PostgreSQL 14+
+- Go 1.25+
+- PostgreSQL 16+
 - OpenVPN 2.5+
 - Node.js 20+ (for building frontend)
 - Linux server with nftables support
@@ -464,7 +464,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:14
+    image: postgres:16
     environment:
       POSTGRES_DB: gatekey
       POSTGRES_USER: gatekey
