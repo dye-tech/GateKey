@@ -61,7 +61,7 @@ GateKey is a **zero-trust VPN solution** that wraps OpenVPN and WireGuard. Users
 - [API Reference](#api-reference)
 - [Security Features](#security-features)
 - [Development](#development)
-- [Additional Documentation](#additional-development)
+- [Additional Documentation](#additional-documentation)
 - [License](#license)
 
 ---
@@ -124,7 +124,7 @@ sudo mv gatekey /usr/local/bin/
 ```bash
 git clone https://github.com/dye-tech/GateKey.git
 cd GateKey
-make build-client
+make build-gatekey
 sudo cp bin/gatekey /usr/local/bin/
 ```
 
@@ -300,7 +300,7 @@ git clone https://github.com/dye-tech/GateKey.git
 cd GateKey
 
 # Build server
-make build-server
+make build-gatekey-server
 
 # Setup database
 export DATABASE_URL="postgres://gatekey:password@localhost/gatekey?sslmode=disable"
@@ -443,7 +443,7 @@ sudo systemctl start gatekey-gateway
 
 ```bash
 cd GateKey
-make build-gateway
+make build-gatekey-gateway
 sudo cp bin/gatekey-gateway /usr/local/bin/
 ```
 
@@ -492,7 +492,7 @@ Or build from source:
 
 ```bash
 cd GateKey
-make build-wireguard-gateway
+make build-gatekey-wireguard-gateway
 sudo cp bin/gatekey-wireguard-gateway /usr/local/bin/
 ```
 
@@ -522,7 +522,7 @@ sudo mv gatekey-admin-darwin-arm64 /usr/local/bin/gatekey-admin
 
 ```bash
 cd GateKey
-make build-admin
+make build-gatekey-admin
 sudo cp bin/gatekey-admin /usr/local/bin/
 ```
 
@@ -675,15 +675,18 @@ See [docs/api.md](docs/api.md) for full API documentation.
 # Development
 
 ```bash
-make dev              # Run server in dev mode
-make test             # Run tests
-make lint             # Run linter
-make frontend-dev     # Run frontend in dev mode
-make build            # Build all binaries
-make build-client     # Build only client
-make build-server     # Build only server
-make build-gateway    # Build only gateway
-make build-admin      # Build only admin CLI
+make dev                            # Run server in dev mode
+make test                           # Run tests
+make lint                           # Run linter
+make frontend-dev                   # Run frontend in dev mode
+make build                          # Build all binaries
+make build-gatekey                  # Build gatekey (VPN client CLI)
+make build-gatekey-server           # Build gatekey-server (control plane)
+make build-gatekey-gateway          # Build gatekey-gateway (OpenVPN gateway)
+make build-gatekey-wireguard-gateway # Build gatekey-wireguard-gateway
+make build-gatekey-admin            # Build gatekey-admin (admin CLI)
+make build-gatekey-hub              # Build gatekey-hub (OpenVPN mesh hub)
+make build-gatekey-mesh-gateway     # Build gatekey-mesh-gateway (mesh spoke)
 ```
 
 ---
