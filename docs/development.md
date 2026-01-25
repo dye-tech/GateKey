@@ -6,9 +6,9 @@ This document covers development practices, linting configuration, and code styl
 
 ### Prerequisites
 
-- Go 1.23+
+- Go 1.25+
 - Node.js 20+
-- PostgreSQL 15+
+- PostgreSQL 16+
 - Docker (optional, for testing)
 - golangci-lint (for linting)
 

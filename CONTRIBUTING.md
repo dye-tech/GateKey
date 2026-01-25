@@ -43,9 +43,9 @@ Feature suggestions are welcome! Please include:
 
 ### Prerequisites
 
-- Go 1.23+
+- Go 1.25+
 - Node.js 20+
-- PostgreSQL 15+
+- PostgreSQL 16+
 - Docker (optional, for testing)
 
 ### Getting Started

@@ -29,7 +29,7 @@ What actually happened.
 - **GateKey Version**: [e.g., 1.0.0]
 - **Component**: [server/gateway/client/web]
 - **OS**: [e.g., Ubuntu 22.04, macOS 14]
-- **Go Version**: [e.g., 1.23]
+- **Go Version**: [e.g., 1.25]
 - **Browser** (if web): [e.g., Chrome 120]
 
 ## Logs

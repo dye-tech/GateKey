@@ -211,7 +211,7 @@ The GateKey server is the control plane that handles authentication, certificate
 
 ### Prerequisites
 
-- PostgreSQL 14+
+- PostgreSQL 16+
 - Go 1.25+ (if building from source)
 
 ### Option 1: Kubernetes (Recommended)
