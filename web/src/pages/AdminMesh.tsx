@@ -9,7 +9,8 @@ import {
   getMeshSpokeGroups, assignMeshSpokeGroup, removeMeshSpokeGroup,
   getUsers, getLocalUsers, getGroups, getNetworks, Network,
   MeshHub, MeshHubWithToken, MeshSpoke, MeshSpokeWithToken,
-  CreateMeshHubRequest, CreateMeshSpokeRequest, CryptoProfile, RotateTokenResponse, GatewayType
+  CreateMeshHubRequest, CreateMeshSpokeRequest, CryptoProfile, RotateTokenResponse, GatewayType,
+  getSystemSettings
 } from '../api/client'
 import ActionDropdown from '../components/ActionDropdown'
 
@@ -638,6 +639,21 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
   const [dnsInput, setDnsInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [allowedCryptoProfiles, setAllowedCryptoProfiles] = useState<string[]>([])
+
+  // Fetch allowed crypto profiles on mount
+  useEffect(() => {
+    getSystemSettings().then(settings => {
+      if (settings.allowed_crypto_profiles) {
+        setAllowedCryptoProfiles(settings.allowed_crypto_profiles.split(',').map(p => p.trim()))
+      }
+    }).catch(() => {
+      // If we can't fetch settings, allow all profiles
+    })
+  }, [])
+
+  // Check if selected crypto profile is allowed
+  const isCryptoProfileAllowed = allowedCryptoProfiles.length === 0 || (form.cryptoProfile && allowedCryptoProfiles.includes(form.cryptoProfile))
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -661,11 +677,15 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
     try {
       const hub = await createMeshHub({
         ...form,
+        publicEndpoint: form.publicEndpoint || undefined,
+        publicEndpointV6: form.publicEndpointV6 || undefined,
         vpnSubnet: form.vpnSubnet || undefined,
+        vpnSubnetV6: form.vpnSubnetV6 || undefined,
       })
       onSuccess(hub)
-    } catch (err) {
-      setError('Failed to create hub')
+    } catch (err: unknown) {
+      const axiosError = err as { response?: { data?: { error?: string } } }
+      setError(axiosError.response?.data?.error || 'Failed to create hub')
     } finally {
       setLoading(false)
     }
@@ -832,6 +852,20 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                     <option value="modern">Modern (AES-256-GCM, ChaCha20)</option>
                     <option value="compatible">Compatible (includes CBC ciphers)</option>
                   </select>
+                  {!isCryptoProfileAllowed && (
+                    <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded text-amber-700 dark:text-amber-400 text-sm">
+                      <div className="flex items-start">
+                        <svg className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <div>
+                          <strong>Warning:</strong> This crypto profile is not allowed by system settings.
+                          Allowed profiles: {allowedCryptoProfiles.join(', ')}.
+                          Hub creation will fail unless you select an allowed profile.
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center">
@@ -1040,8 +1074,9 @@ function AddSpokeModal({ hubId, hubGatewayType, onClose, onSuccess }: { hubId: s
     try {
       const spoke = await createMeshSpoke(hubId, form)
       onSuccess(spoke)
-    } catch (err) {
-      setError('Failed to create spoke')
+    } catch (err: unknown) {
+      const axiosError = err as { response?: { data?: { error?: string } } }
+      setError(axiosError.response?.data?.error || 'Failed to create spoke')
     } finally {
       setLoading(false)
     }

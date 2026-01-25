@@ -51,11 +51,12 @@ type MeshHub struct {
 	GatewayType string // "openvpn" or "wireguard"
 
 	// Endpoint configuration
-	PublicEndpoint string // hostname:port for gateways to connect to
-	VPNPort        int
-	VPNProtocol    string
-	VPNSubnet      string  // Mesh network subnet (e.g., 172.30.0.0/16)
-	VPNSubnetV6    *string // IPv6 mesh network subnet (e.g., fd00::/64)
+	PublicEndpoint   string  // hostname:port for gateways to connect to (IPv4)
+	PublicEndpointV6 *string // IPv6 public endpoint for gateways to connect to
+	VPNPort          int
+	VPNProtocol      string
+	VPNSubnet        string  // Mesh network subnet (e.g., 172.30.0.0/16)
+	VPNSubnetV6      *string // IPv6 mesh network subnet (e.g., fd00::/64)
 
 	// Local networks directly accessible from the hub (pushed to all clients)
 	LocalNetworks []string
