@@ -5,6 +5,24 @@ All notable changes to GateKey are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-01-26
+
+### Added
+- **FIPS Mode Enforcement**: New "Enforce FIPS Mode" option for gateways, mesh hubs, and mesh spokes
+  - Enables FIPS 140-3 cryptographic compliance at the OS level
+  - Configurable per-gateway and per-spoke for granular control
+  - Requires FIPS-enabled operating system on the gateway/spoke host
+- Database migration (000048) for `enforce_fips_mode` column across gateway tables
+- Ingress configuration documentation covering Istio, NGINX, Traefik, and cloud load balancers
+
+### Changed
+- Mesh spokes can now have independent FIPS mode settings instead of only inheriting from the parent hub
+- CI/CD pipeline now automatically cascades releases to Helm chart and Homebrew repositories
+
+### Documentation
+- Added comprehensive Kubernetes ingress guide (`docs/ingress.md`)
+- Covers TLS termination, UDP ingress for VPN traffic, certificate management, and troubleshooting
+
 ## [1.5.4] - 2026-01-25
 
 ### Fixed
