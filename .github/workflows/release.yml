@@ -206,4 +206,44 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
           git diff --staged --quiet || git commit -m "Update formulas for GateKey v${{ steps.version.outputs.VERSION }}"
+          git tag -f "v${{ steps.version.outputs.VERSION }}"
           git push
+          git push origin "v${{ steps.version.outputs.VERSION }}" --force
+
+  update-helm-chart:
+    name: Update Helm Chart
+    needs: [release, docker, docker-web]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Checkout Helm Chart
+        uses: actions/checkout@v6
+        with:
+          repository: dye-tech/gatekey-helm-chart
+          path: helm-chart
+          ssh-key: ${{ secrets.HELM_CHART_DEPLOY_KEY }}
+
+      - name: Update Helm chart version
+        run: |
+          cd helm-chart
+
+          # Use same version for chart and app
+          sed -i "s/^version: .*/version: ${{ steps.version.outputs.VERSION }}/" Chart.yaml
+          sed -i "s/^appVersion: .*/appVersion: \"${{ steps.version.outputs.VERSION }}\"/" Chart.yaml
+
+          # Update all image tags in values.yaml
+          sed -i "s/tag: \"[0-9]*\.[0-9]*\.[0-9]*\"/tag: \"${{ steps.version.outputs.VERSION }}\"/g" values.yaml
+
+      - name: Push to Helm Chart repo
+        run: |
+          cd helm-chart
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --staged --quiet || git commit -m "chore: bump to v${{ steps.version.outputs.VERSION }}"
+          git tag -f "v${{ steps.version.outputs.VERSION }}"
+          git push
+          git push origin "v${{ steps.version.outputs.VERSION }}" --force
