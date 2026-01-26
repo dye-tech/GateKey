@@ -737,9 +737,10 @@ func (s *Server) handleCreateMeshSpoke(c *gin.Context) {
 	hubID := c.Param("id")
 
 	var req struct {
-		Name          string   `json:"name" binding:"required"`
-		Description   string   `json:"description"`
-		LocalNetworks []string `json:"localNetworks"`
+		Name            string   `json:"name" binding:"required"`
+		Description     string   `json:"description"`
+		LocalNetworks   []string `json:"localNetworks"`
+		EnforceFIPSMode *bool    `json:"enforceFipsMode"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -767,14 +768,20 @@ func (s *Server) handleCreateMeshSpoke(c *gin.Context) {
 		return
 	}
 
+	// Determine FIPS mode: use request value if provided, otherwise inherit from hub
+	enforceFIPSMode := hub.EnforceFIPSMode
+	if req.EnforceFIPSMode != nil {
+		enforceFIPSMode = *req.EnforceFIPSMode
+	}
+
 	gw := &db.MeshSpoke{
 		HubID:           hubID,
 		Name:            req.Name,
 		Description:     req.Description,
 		LocalNetworks:   req.LocalNetworks,
 		Token:           token,
-		GatewayType:     hub.GatewayType,     // Inherit from hub
-		EnforceFIPSMode: hub.EnforceFIPSMode, // Inherit FIPS mode from hub
+		GatewayType:     hub.GatewayType, // Inherit from hub
+		EnforceFIPSMode: enforceFIPSMode,
 		Status:          db.MeshSpokeStatusPending,
 	}
 
@@ -872,12 +879,13 @@ func (s *Server) handleUpdateMeshSpoke(c *gin.Context) {
 	gwID := c.Param("id")
 
 	var req struct {
-		Name           string   `json:"name"`
-		Description    string   `json:"description"`
-		LocalNetworks  []string `json:"localNetworks"`
-		FullTunnelMode *bool    `json:"fullTunnelMode"`
-		PushDNS        *bool    `json:"pushDns"`
-		DNSServers     []string `json:"dnsServers"`
+		Name            string   `json:"name"`
+		Description     string   `json:"description"`
+		LocalNetworks   []string `json:"localNetworks"`
+		FullTunnelMode  *bool    `json:"fullTunnelMode"`
+		PushDNS         *bool    `json:"pushDns"`
+		DNSServers      []string `json:"dnsServers"`
+		EnforceFIPSMode *bool    `json:"enforceFipsMode"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -916,6 +924,9 @@ func (s *Server) handleUpdateMeshSpoke(c *gin.Context) {
 	}
 	if req.DNSServers != nil {
 		gw.DNSServers = req.DNSServers
+	}
+	if req.EnforceFIPSMode != nil {
+		gw.EnforceFIPSMode = *req.EnforceFIPSMode
 	}
 
 	if err := s.meshStore.UpdateMeshSpoke(ctx, gw); err != nil {

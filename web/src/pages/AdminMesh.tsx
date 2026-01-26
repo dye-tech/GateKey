@@ -1067,6 +1067,7 @@ function AddSpokeModal({ hubId, hubGatewayType, onClose, onSuccess }: { hubId: s
     description: '',
     localNetworks: [],
     sessionEnabled: true,
+    enforceFipsMode: false,
   })
   const [networkInput, setNetworkInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -1205,6 +1206,22 @@ function AddSpokeModal({ hubId, hubGatewayType, onClose, onSuccess }: { hubId: s
             </div>
             <p className="text-xs text-theme-tertiary -mt-2">
               Allow administrators to run commands on this spoke via the Remote Sessions page.
+            </p>
+
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="spokeEnforceFipsMode"
+                checked={form.enforceFipsMode ?? false}
+                onChange={(e) => setForm({ ...form, enforceFipsMode: e.target.checked })}
+                className="rounded border-theme text-primary-600 focus:ring-primary-500"
+              />
+              <label htmlFor="spokeEnforceFipsMode" className="ml-2 text-sm text-theme-secondary">
+                Enforce FIPS Mode
+              </label>
+            </div>
+            <p className="text-xs text-theme-tertiary -mt-2">
+              Enforce FIPS 140-3 cryptographic mode at the OS level. Requires FIPS-enabled operating system.
             </p>
 
             <div className="flex justify-end space-x-3 pt-4">
@@ -2251,7 +2268,7 @@ function EditHubModal({ hub, onClose, onSuccess }: { hub: MeshHub; onClose: () =
 
 // Edit Spoke Modal Component
 function EditSpokeModal({ spoke, onClose, onSuccess }: { spoke: MeshSpoke; onClose: () => void; onSuccess: () => void }) {
-  const [form, setForm] = useState({ name: spoke.name, description: spoke.description || '', localNetworks: spoke.localNetworks || [], sessionEnabled: spoke.sessionEnabled ?? true })
+  const [form, setForm] = useState({ name: spoke.name, description: spoke.description || '', localNetworks: spoke.localNetworks || [], sessionEnabled: spoke.sessionEnabled ?? true, enforceFipsMode: spoke.enforceFipsMode ?? false })
   const [networkInput, setNetworkInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -2286,6 +2303,8 @@ function EditSpokeModal({ spoke, onClose, onSuccess }: { spoke: MeshSpoke; onClo
             <div><label className="block text-sm font-medium text-theme-secondary">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="e.g., 10.0.0.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput && !form.localNetworks.includes(networkInput)) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div><p className="text-xs text-theme-tertiary mt-1">Networks behind this spoke routable via hub</p>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((net) => <span key={net} className="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded text-sm flex items-center font-medium">{net}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(n => n !== net) })} className="ml-1 text-red-500 hover:text-red-600">×</button></span>)}</div>}</div>
             <div className="flex items-center"><input type="checkbox" id="editSpokeSessionEnabled" checked={form.sessionEnabled ?? true} onChange={(e) => setForm({ ...form, sessionEnabled: e.target.checked })} className="rounded border-theme text-primary-600 focus:ring-primary-500" /><label htmlFor="editSpokeSessionEnabled" className="ml-2 text-sm text-theme-secondary">Enable Remote Sessions</label></div>
             <p className="text-xs text-theme-tertiary -mt-2">Allow administrators to run commands on this spoke via the Remote Sessions page.</p>
+            <div className="flex items-center"><input type="checkbox" id="editSpokeEnforceFipsMode" checked={form.enforceFipsMode ?? false} onChange={(e) => setForm({ ...form, enforceFipsMode: e.target.checked })} className="rounded border-theme text-primary-600 focus:ring-primary-500" /><label htmlFor="editSpokeEnforceFipsMode" className="ml-2 text-sm text-theme-secondary">Enforce FIPS Mode</label></div>
+            <p className="text-xs text-theme-tertiary -mt-2">Enforce FIPS 140-3 cryptographic mode at the OS level. Requires FIPS-enabled operating system.</p>
             <div className="flex justify-end space-x-3 pt-4"><button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button><button type="submit" disabled={loading} className="btn btn-primary">{loading ? 'Saving...' : 'Save'}</button></div>
           </form>
         </div>
