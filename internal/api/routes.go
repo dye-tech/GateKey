@@ -2967,18 +2967,19 @@ func (s *Server) handleGatewayProvision(c *gin.Context) {
 		zap.Bool("tls_auth_enabled", gateway.TLSAuthEnabled))
 
 	response := gin.H{
-		"gateway_id":       gateway.ID,
-		"gateway_name":     gateway.Name,
-		"ca_cert":          string(s.ca.CertificatePEM()),
-		"server_cert":      string(cert.CertificatePEM),
-		"server_key":       string(cert.PrivateKeyPEM),
-		"vpn_subnet":       vpnSubnet,
-		"vpn_network":      vpnNetwork,
-		"vpn_netmask":      vpnNetmask,
-		"vpn_port":         gateway.VPNPort,
-		"vpn_protocol":     gateway.VPNProtocol,
-		"crypto_profile":   gateway.CryptoProfile,
-		"tls_auth_enabled": gateway.TLSAuthEnabled,
+		"gateway_id":        gateway.ID,
+		"gateway_name":      gateway.Name,
+		"ca_cert":           string(s.ca.CertificatePEM()),
+		"server_cert":       string(cert.CertificatePEM),
+		"server_key":        string(cert.PrivateKeyPEM),
+		"vpn_subnet":        vpnSubnet,
+		"vpn_network":       vpnNetwork,
+		"vpn_netmask":       vpnNetmask,
+		"vpn_port":          gateway.VPNPort,
+		"vpn_protocol":      gateway.VPNProtocol,
+		"crypto_profile":    gateway.CryptoProfile,
+		"tls_auth_enabled":  gateway.TLSAuthEnabled,
+		"enforce_fips_mode": gateway.EnforceFIPSMode,
 	}
 
 	// Only include TLS-Auth key if enabled
@@ -3509,6 +3510,7 @@ func (s *Server) handleListGateways(c *gin.Context) {
 				gwData["wgPublicKey"] = gw.WGPublicKey
 			}
 		}
+		gwData["enforceFipsMode"] = gw.EnforceFIPSMode
 
 		if gw.LastHeartbeat != nil {
 			gwData["lastHeartbeat"] = gw.LastHeartbeat.Format(time.RFC3339)
@@ -3522,19 +3524,20 @@ func (s *Server) handleListGateways(c *gin.Context) {
 func (s *Server) handleRegisterGateway(c *gin.Context) {
 	// Register a new gateway (admin only)
 	var req struct {
-		Name           string   `json:"name" binding:"required"`
-		GatewayType    string   `json:"gateway_type"` // "openvpn" or "wireguard" (default: openvpn)
-		Hostname       string   `json:"hostname"`
-		PublicIP       string   `json:"public_ip"`
-		VPNPort        int      `json:"vpn_port"`
-		VPNProtocol    string   `json:"vpn_protocol"`
-		CryptoProfile  string   `json:"crypto_profile"`   // modern, fips, or compatible (OpenVPN only)
-		VPNSubnet      string   `json:"vpn_subnet"`       // VPN client subnet (e.g., "10.8.0.0/24")
-		TLSAuthEnabled *bool    `json:"tls_auth_enabled"` // Enable TLS-Auth (default: true, OpenVPN only)
-		FullTunnelMode *bool    `json:"full_tunnel_mode"` // Route all traffic through VPN (default: false)
-		PushDNS        *bool    `json:"push_dns"`         // Push DNS servers to clients (default: false)
-		DNSServers     []string `json:"dns_servers"`      // DNS server IPs to push
-		WGListenPort   int      `json:"wg_listen_port"`   // WireGuard listen port (default: 51820)
+		Name            string   `json:"name" binding:"required"`
+		GatewayType     string   `json:"gateway_type"` // "openvpn" or "wireguard" (default: openvpn)
+		Hostname        string   `json:"hostname"`
+		PublicIP        string   `json:"public_ip"`
+		VPNPort         int      `json:"vpn_port"`
+		VPNProtocol     string   `json:"vpn_protocol"`
+		CryptoProfile   string   `json:"crypto_profile"`    // modern, fips, or compatible (OpenVPN only)
+		VPNSubnet       string   `json:"vpn_subnet"`        // VPN client subnet (e.g., "10.8.0.0/24")
+		TLSAuthEnabled  *bool    `json:"tls_auth_enabled"`  // Enable TLS-Auth (default: true, OpenVPN only)
+		FullTunnelMode  *bool    `json:"full_tunnel_mode"`  // Route all traffic through VPN (default: false)
+		PushDNS         *bool    `json:"push_dns"`          // Push DNS servers to clients (default: false)
+		DNSServers      []string `json:"dns_servers"`       // DNS server IPs to push
+		WGListenPort    int      `json:"wg_listen_port"`    // WireGuard listen port (default: 51820)
+		EnforceFIPSMode *bool    `json:"enforce_fips_mode"` // Enforce FIPS 140-3 mode at OS level (default: false)
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -3638,21 +3641,28 @@ func (s *Server) handleRegisterGateway(c *gin.Context) {
 		pushDNS = *req.PushDNS
 	}
 
+	// Default Enforce FIPS Mode to false if not specified
+	enforceFIPSMode := false
+	if req.EnforceFIPSMode != nil {
+		enforceFIPSMode = *req.EnforceFIPSMode
+	}
+
 	gateway := &db.Gateway{
-		Name:           req.Name,
-		GatewayType:    gatewayType,
-		Hostname:       req.Hostname,
-		PublicIP:       req.PublicIP,
-		VPNPort:        req.VPNPort,
-		VPNProtocol:    req.VPNProtocol,
-		CryptoProfile:  req.CryptoProfile,
-		VPNSubnet:      req.VPNSubnet,
-		TLSAuthEnabled: tlsAuthEnabled,
-		FullTunnelMode: fullTunnelMode,
-		PushDNS:        pushDNS,
-		DNSServers:     req.DNSServers,
-		WGListenPort:   req.WGListenPort,
-		Token:          token,
+		Name:            req.Name,
+		GatewayType:     gatewayType,
+		Hostname:        req.Hostname,
+		PublicIP:        req.PublicIP,
+		VPNPort:         req.VPNPort,
+		VPNProtocol:     req.VPNProtocol,
+		CryptoProfile:   req.CryptoProfile,
+		VPNSubnet:       req.VPNSubnet,
+		TLSAuthEnabled:  tlsAuthEnabled,
+		FullTunnelMode:  fullTunnelMode,
+		PushDNS:         pushDNS,
+		DNSServers:      req.DNSServers,
+		WGListenPort:    req.WGListenPort,
+		EnforceFIPSMode: enforceFIPSMode,
+		Token:           token,
 	}
 
 	if err := s.gatewayStore.CreateGateway(ctx, gateway); err != nil {
@@ -3703,6 +3713,7 @@ func (s *Server) handleRegisterGateway(c *gin.Context) {
 			response["wgPublicKey"] = createdGateway.WGPublicKey
 		}
 	}
+	response["enforceFipsMode"] = createdGateway.EnforceFIPSMode
 
 	c.JSON(http.StatusCreated, response)
 }
@@ -3823,17 +3834,18 @@ func (s *Server) handleUpdateGateway(c *gin.Context) {
 	gatewayID := c.Param("id")
 
 	var req struct {
-		Name           string   `json:"name" binding:"required"`
-		Hostname       string   `json:"hostname"`
-		PublicIP       string   `json:"public_ip"`
-		VPNPort        int      `json:"vpn_port"`
-		VPNProtocol    string   `json:"vpn_protocol"`
-		CryptoProfile  string   `json:"crypto_profile"`   // modern, fips, or compatible
-		VPNSubnet      string   `json:"vpn_subnet"`       // VPN client subnet (e.g., "10.8.0.0/24")
-		TLSAuthEnabled *bool    `json:"tls_auth_enabled"` // Enable TLS-Auth
-		FullTunnelMode *bool    `json:"full_tunnel_mode"` // Route all traffic through VPN
-		PushDNS        *bool    `json:"push_dns"`         // Push DNS servers to clients
-		DNSServers     []string `json:"dns_servers"`      // DNS server IPs to push
+		Name            string   `json:"name" binding:"required"`
+		Hostname        string   `json:"hostname"`
+		PublicIP        string   `json:"public_ip"`
+		VPNPort         int      `json:"vpn_port"`
+		VPNProtocol     string   `json:"vpn_protocol"`
+		CryptoProfile   string   `json:"crypto_profile"`    // modern, fips, or compatible
+		VPNSubnet       string   `json:"vpn_subnet"`        // VPN client subnet (e.g., "10.8.0.0/24")
+		TLSAuthEnabled  *bool    `json:"tls_auth_enabled"`  // Enable TLS-Auth
+		FullTunnelMode  *bool    `json:"full_tunnel_mode"`  // Route all traffic through VPN
+		PushDNS         *bool    `json:"push_dns"`          // Push DNS servers to clients
+		DNSServers      []string `json:"dns_servers"`       // DNS server IPs to push
+		EnforceFIPSMode *bool    `json:"enforce_fips_mode"` // Enforce FIPS 140-3 mode at OS level
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -3919,19 +3931,26 @@ func (s *Server) handleUpdateGateway(c *gin.Context) {
 		dnsServers = req.DNSServers
 	}
 
+	// Use existing EnforceFIPSMode if not specified in request
+	enforceFIPSMode := existingGw.EnforceFIPSMode
+	if req.EnforceFIPSMode != nil {
+		enforceFIPSMode = *req.EnforceFIPSMode
+	}
+
 	gw := &db.Gateway{
-		ID:             gatewayID,
-		Name:           req.Name,
-		Hostname:       req.Hostname,
-		PublicIP:       req.PublicIP,
-		VPNPort:        req.VPNPort,
-		VPNProtocol:    req.VPNProtocol,
-		CryptoProfile:  req.CryptoProfile,
-		VPNSubnet:      req.VPNSubnet,
-		TLSAuthEnabled: tlsAuthEnabled,
-		FullTunnelMode: fullTunnelMode,
-		PushDNS:        pushDNS,
-		DNSServers:     dnsServers,
+		ID:              gatewayID,
+		Name:            req.Name,
+		Hostname:        req.Hostname,
+		PublicIP:        req.PublicIP,
+		VPNPort:         req.VPNPort,
+		VPNProtocol:     req.VPNProtocol,
+		CryptoProfile:   req.CryptoProfile,
+		VPNSubnet:       req.VPNSubnet,
+		TLSAuthEnabled:  tlsAuthEnabled,
+		FullTunnelMode:  fullTunnelMode,
+		PushDNS:         pushDNS,
+		DNSServers:      dnsServers,
+		EnforceFIPSMode: enforceFIPSMode,
 	}
 
 	if err := s.gatewayStore.UpdateGateway(ctx, gw); err != nil {
