@@ -39,3 +39,6 @@ web/.env.*.local
 Thumbs.db
 CLAUDE.md
 CLAUDE.md
+
+# Frontend build output
+web/dist/

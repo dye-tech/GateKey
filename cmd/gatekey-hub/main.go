@@ -934,37 +934,6 @@ func countConnections(prefix string) int {
 	return count
 }
 
-// isClientConnected checks if a specific client (by common name) is in the OpenVPN status file
-func isClientConnected(commonName string) bool {
-	statusFile := "/var/log/openvpn/hub-status.log"
-	data, err := os.ReadFile(statusFile)
-	if err != nil {
-		// If we can't read status file, assume connected to avoid blocking legitimate connections
-		return true
-	}
-
-	lines := strings.Split(string(data), "\n")
-	inClientList := false
-
-	for _, line := range lines {
-		if strings.HasPrefix(line, "ROUTING TABLE") {
-			inClientList = false
-		}
-		if strings.HasPrefix(line, "Common Name,") {
-			inClientList = true
-			continue
-		}
-		if inClientList && line != "" {
-			parts := strings.Split(line, ",")
-			if len(parts) >= 1 && parts[0] == commonName {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
 // ==================== Firewall Enforcement ====================
 
 // ConnectedClient represents a connected VPN client

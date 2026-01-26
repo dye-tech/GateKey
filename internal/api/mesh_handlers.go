@@ -308,9 +308,11 @@ func (s *Server) handleUpdateMeshHub(c *gin.Context) {
 		return
 	}
 
-	// Update fields
-	if req.Name != "" {
-		hub.Name = req.Name
+	// Hub names are immutable because they are used for agent authentication.
+	// Changing the name would break the hub agent's connection to the control plane.
+	if req.Name != "" && req.Name != hub.Name {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "hub name cannot be changed after creation"})
+		return
 	}
 	if req.Description != "" {
 		hub.Description = req.Description
@@ -881,8 +883,11 @@ func (s *Server) handleUpdateMeshSpoke(c *gin.Context) {
 		return
 	}
 
-	if req.Name != "" {
-		gw.Name = req.Name
+	// Spoke names are immutable because they are used for agent authentication.
+	// Changing the name would break the spoke agent's connection to the control plane.
+	if req.Name != "" && req.Name != gw.Name {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "spoke name cannot be changed after creation"})
+		return
 	}
 	if req.Description != "" {
 		gw.Description = req.Description

@@ -3888,6 +3888,13 @@ func (s *Server) handleUpdateGateway(c *gin.Context) {
 		return
 	}
 
+	// Gateway names are immutable because they are used for agent authentication.
+	// Changing the name would break the gateway agent's connection to the control plane.
+	if req.Name != existingGw.Name {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "gateway name cannot be changed after creation"})
+		return
+	}
+
 	// Use existing TLSAuthEnabled if not specified in request
 	tlsAuthEnabled := existingGw.TLSAuthEnabled
 	if req.TLSAuthEnabled != nil {

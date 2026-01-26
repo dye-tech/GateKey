@@ -695,13 +695,9 @@ func handleHook(cmd *cobra.Command, args []string) error {
 		os.Exit(0)
 
 	case openvpn.HookClientConnect:
-		// Verify the client is actually connected by checking OpenVPN status file
-		// This prevents spurious connect events that OpenVPN sends during disconnect
-		time.Sleep(100 * time.Millisecond) // Brief delay to let status file update
-		if !isClientConnected(req.CommonName) {
-			fmt.Fprintf(os.Stderr, "Skipping connect notification - client %s not in status file\n", req.CommonName)
-			os.Exit(0)
-		}
+		// Note: We no longer check status file for client presence because OpenVPN
+		// updates the status file on a timer (default 10s), not immediately on connect.
+		// The control plane will validate the connection anyway.
 
 		resp, err := client.Connect(req)
 		if err != nil {
@@ -778,41 +774,6 @@ func writeClientFile(vpnIP string, client ConnectedClient) error {
 func removeClientFile(vpnIP string) {
 	filename := fmt.Sprintf("%s/%s.json", clientsDir, strings.ReplaceAll(vpnIP, ".", "-"))
 	os.Remove(filename)
-}
-
-// isClientConnected checks if a specific client (by common name) is in the OpenVPN status file
-func isClientConnected(commonName string) bool {
-	statusFile := "/var/log/openvpn/server-status.log"
-	data, err := os.ReadFile(statusFile)
-	if err != nil {
-		// Try alternate path
-		data, err = os.ReadFile("/var/log/openvpn/status.log")
-		if err != nil {
-			// If we can't read status file, assume connected to avoid blocking legitimate connections
-			return true
-		}
-	}
-
-	lines := strings.Split(string(data), "\n")
-	inClientList := false
-
-	for _, line := range lines {
-		if strings.HasPrefix(line, "ROUTING TABLE") {
-			inClientList = false
-		}
-		if strings.HasPrefix(line, "Common Name,") {
-			inClientList = true
-			continue
-		}
-		if inClientList && line != "" {
-			parts := strings.Split(line, ",")
-			if len(parts) >= 1 && parts[0] == commonName {
-				return true
-			}
-		}
-	}
-
-	return false
 }
 
 // loadConnectedClients loads all connected client files.
