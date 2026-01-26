@@ -1385,6 +1385,7 @@ export interface CreateMeshSpokeRequest {
   description?: string
   localNetworks: string[]
   sessionEnabled?: boolean
+  enforceFipsMode?: boolean
 }
 
 // Mesh Hub Management
