@@ -386,6 +386,7 @@ CREATE TABLE public.gateways (
     public_ip_v6 inet,
     internal_ip_v6 inet,
     vpn_subnet_v6 cidr,
+    enforce_fips_mode boolean DEFAULT false NOT NULL,
     CONSTRAINT chk_gateway_address CHECK (((hostname IS NOT NULL) OR (public_ip IS NOT NULL))),
     CONSTRAINT valid_gateway_type CHECK (((gateway_type)::text = ANY ((ARRAY['openvpn'::character varying, 'wireguard'::character varying])::text[])))
 );
@@ -669,6 +670,7 @@ CREATE TABLE public.mesh_gateways (
     wg_preshared_key text,
     local_networks_v6 text[] DEFAULT '{}'::text[] NOT NULL,
     tunnel_ip_v6 inet,
+    enforce_fips_mode boolean DEFAULT false NOT NULL,
     CONSTRAINT valid_mesh_spoke_gateway_type CHECK (((gateway_type)::text = ANY ((ARRAY['openvpn'::character varying, 'wireguard'::character varying])::text[])))
 );
 
@@ -785,6 +787,7 @@ CREATE TABLE public.mesh_hubs (
     wg_public_key text,
     wg_listen_port integer DEFAULT 51820,
     vpn_subnet_v6 cidr,
+    enforce_fips_mode boolean DEFAULT false NOT NULL,
     CONSTRAINT valid_mesh_hub_gateway_type CHECK (((gateway_type)::text = ANY ((ARRAY['openvpn'::character varying, 'wireguard'::character varying])::text[])))
 );
 

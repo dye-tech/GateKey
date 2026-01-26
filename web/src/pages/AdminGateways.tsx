@@ -289,6 +289,7 @@ export default function AdminGateways() {
               pushDns: false, // Default for new gateways
               dnsServers: [], // Default for new gateways
               sessionEnabled: true, // Default for new gateways
+              enforceFipsMode: false, // Default for new gateways
               gatewayType: newGateway.gatewayType || 'openvpn',
               wgPublicKey: newGateway.wgPublicKey,
               wgListenPort: newGateway.wgListenPort,
@@ -374,6 +375,7 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
   const [pushDns, setPushDns] = useState(false)
   const [dnsServers, setDnsServers] = useState('1.1.1.1, 8.8.8.8')
   const [sessionEnabled, setSessionEnabled] = useState(true)
+  const [enforceFipsMode, setEnforceFipsMode] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [allowedCryptoProfiles, setAllowedCryptoProfiles] = useState<string[]>([])
@@ -429,6 +431,7 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
         push_dns: pushDns,
         dns_servers: pushDns ? dnsServers.split(',').map(s => s.trim()).filter(s => s) : [],
         session_enabled: sessionEnabled,
+        enforce_fips_mode: enforceFipsMode,
         gateway_type: gatewayType,
         wg_listen_port: gatewayType === 'wireguard' ? parseInt(vpnPort) || 51820 : undefined,
       })
@@ -757,6 +760,22 @@ function AddGatewayModal({ onClose, onSuccess }: AddGatewayModalProps) {
             Allow administrators to run commands on this gateway via the Remote Sessions page.
           </p>
 
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="enforceFipsMode"
+              checked={enforceFipsMode}
+              onChange={(e) => setEnforceFipsMode(e.target.checked)}
+              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-theme rounded"
+            />
+            <label htmlFor="enforceFipsMode" className="ml-2 block text-sm text-theme-secondary">
+              Enforce FIPS Mode
+            </label>
+          </div>
+          <p className="text-xs text-theme-tertiary -mt-2">
+            Enforce FIPS 140-3 cryptographic mode at the OS level. Requires FIPS-enabled operating system.
+          </p>
+
           <div className="flex justify-end space-x-3 pt-4">
             <button
               type="button"
@@ -1026,6 +1045,7 @@ function EditGatewayModal({ gateway, onClose, onSuccess }: EditGatewayModalProps
   const [pushDns, setPushDns] = useState(gateway.pushDns ?? false)
   const [dnsServers, setDnsServers] = useState((gateway.dnsServers ?? []).join(', ') || '1.1.1.1, 8.8.8.8')
   const [sessionEnabled, setSessionEnabled] = useState(gateway.sessionEnabled ?? true)
+  const [enforceFipsMode, setEnforceFipsMode] = useState(gateway.enforceFipsMode ?? false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -1059,6 +1079,7 @@ function EditGatewayModal({ gateway, onClose, onSuccess }: EditGatewayModalProps
         push_dns: pushDns,
         dns_servers: pushDns ? dnsServers.split(',').map(s => s.trim()).filter(s => s) : [],
         session_enabled: sessionEnabled,
+        enforce_fips_mode: enforceFipsMode,
       })
       onSuccess()
     } catch (err: unknown) {
@@ -1325,6 +1346,22 @@ function EditGatewayModal({ gateway, onClose, onSuccess }: EditGatewayModalProps
           </div>
           <p className="text-xs text-theme-tertiary -mt-2">
             Allow administrators to run commands on this gateway via the Remote Sessions page.
+          </p>
+
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="editEnforceFipsMode"
+              checked={enforceFipsMode}
+              onChange={(e) => setEnforceFipsMode(e.target.checked)}
+              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-theme rounded"
+            />
+            <label htmlFor="editEnforceFipsMode" className="ml-2 block text-sm text-theme-secondary">
+              Enforce FIPS Mode
+            </label>
+          </div>
+          <p className="text-xs text-theme-tertiary -mt-2">
+            Enforce FIPS 140-3 cryptographic mode at the OS level. Requires FIPS-enabled operating system.
           </p>
 
           <div className="flex justify-end space-x-3 pt-4">

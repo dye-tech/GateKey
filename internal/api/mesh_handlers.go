@@ -65,6 +65,7 @@ func (s *Server) handleListMeshHubs(c *gin.Context) {
 			"pushDns":          hub.PushDNS,
 			"dnsServers":       hub.DNSServers,
 			"localNetworks":    hub.LocalNetworks,
+			"enforceFipsMode":  hub.EnforceFIPSMode,
 			"status":           status,
 			"statusMessage":    hub.StatusMessage,
 			"connectedSpokes":  hub.ConnectedSpokes,
@@ -95,8 +96,9 @@ func (s *Server) handleCreateMeshHub(c *gin.Context) {
 		VPNSubnetV6      string `json:"vpnSubnetV6"`
 		CryptoProfile    string `json:"cryptoProfile"`
 		TLSAuthEnabled   bool   `json:"tlsAuthEnabled"`
-		GatewayType      string `json:"gatewayType"`  // "openvpn" or "wireguard", default "openvpn"
-		WGListenPort     int    `json:"wgListenPort"` // WireGuard listen port, default 51820
+		GatewayType      string `json:"gatewayType"`     // "openvpn" or "wireguard", default "openvpn"
+		WGListenPort     int    `json:"wgListenPort"`    // WireGuard listen port, default 51820
+		EnforceFIPSMode  bool   `json:"enforceFipsMode"` // Enforce FIPS 140-3 mode at OS level
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -170,6 +172,7 @@ func (s *Server) handleCreateMeshHub(c *gin.Context) {
 		APIToken:        apiToken,
 		ControlPlaneURL: controlPlaneURL,
 		Status:          db.MeshHubStatusPending,
+		EnforceFIPSMode: req.EnforceFIPSMode,
 	}
 
 	// Generate WireGuard keypair if type is wireguard
@@ -210,6 +213,7 @@ func (s *Server) handleCreateMeshHub(c *gin.Context) {
 			"wgPublicKey":     hub.WGPublicKey,
 			"wgListenPort":    hub.WGListenPort,
 			"localNetworks":   hub.LocalNetworks,
+			"enforceFipsMode": hub.EnforceFIPSMode,
 			"apiToken":        apiToken, // Only shown once at creation
 			"controlPlaneUrl": controlPlaneURL,
 			"status":          hub.Status,
@@ -269,20 +273,21 @@ func (s *Server) handleUpdateMeshHub(c *gin.Context) {
 	hubID := c.Param("id")
 
 	var req struct {
-		Name           string   `json:"name"`
-		Description    string   `json:"description"`
-		PublicEndpoint string   `json:"publicEndpoint"`
-		VPNPort        int      `json:"vpnPort"`
-		VPNProtocol    string   `json:"vpnProtocol"`
-		VPNSubnet      string   `json:"vpnSubnet"`
-		CryptoProfile  string   `json:"cryptoProfile"`
-		TLSAuthEnabled *bool    `json:"tlsAuthEnabled"`
-		FullTunnelMode *bool    `json:"fullTunnelMode"`
-		PushDNS        *bool    `json:"pushDns"`
-		DNSServers     []string `json:"dnsServers"`
-		LocalNetworks  []string `json:"localNetworks"`
-		GatewayType    string   `json:"gatewayType"`  // Cannot be changed after creation
-		WGListenPort   int      `json:"wgListenPort"` // WireGuard listen port (only for wireguard type)
+		Name            string   `json:"name"`
+		Description     string   `json:"description"`
+		PublicEndpoint  string   `json:"publicEndpoint"`
+		VPNPort         int      `json:"vpnPort"`
+		VPNProtocol     string   `json:"vpnProtocol"`
+		VPNSubnet       string   `json:"vpnSubnet"`
+		CryptoProfile   string   `json:"cryptoProfile"`
+		TLSAuthEnabled  *bool    `json:"tlsAuthEnabled"`
+		FullTunnelMode  *bool    `json:"fullTunnelMode"`
+		PushDNS         *bool    `json:"pushDns"`
+		DNSServers      []string `json:"dnsServers"`
+		LocalNetworks   []string `json:"localNetworks"`
+		GatewayType     string   `json:"gatewayType"`     // Cannot be changed after creation
+		WGListenPort    int      `json:"wgListenPort"`    // WireGuard listen port (only for wireguard type)
+		EnforceFIPSMode *bool    `json:"enforceFipsMode"` // Enforce FIPS 140-3 mode at OS level
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -352,6 +357,9 @@ func (s *Server) handleUpdateMeshHub(c *gin.Context) {
 	// WireGuard listen port can only be updated for wireguard hubs
 	if req.WGListenPort > 0 && hub.GatewayType == db.MeshGatewayTypeWireGuard {
 		hub.WGListenPort = req.WGListenPort
+	}
+	if req.EnforceFIPSMode != nil {
+		hub.EnforceFIPSMode = *req.EnforceFIPSMode
 	}
 
 	if err := s.meshStore.UpdateHub(ctx, hub); err != nil {
@@ -448,10 +456,11 @@ func (s *Server) handleProvisionMeshHub(c *gin.Context) {
 	configVersion := computeConfigVersion(hub.VPNPort, hub.VPNProtocol, hub.VPNSubnet, hub.CryptoProfile, hub.TLSAuthEnabled, hub.TLSAuthKey, hub.CACert)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":       "hub provisioned successfully",
-		"configVersion": configVersion,
-		"hasCACert":     true,
-		"hasServerCert": true,
+		"message":         "hub provisioned successfully",
+		"configVersion":   configVersion,
+		"hasCACert":       true,
+		"hasServerCert":   true,
+		"enforceFipsMode": hub.EnforceFIPSMode,
 	})
 }
 
@@ -694,24 +703,25 @@ func (s *Server) handleListMeshSpokes(c *gin.Context) {
 		}
 
 		gwData := gin.H{
-			"id":             gw.ID,
-			"hubId":          gw.HubID,
-			"name":           gw.Name,
-			"description":    gw.Description,
-			"gatewayType":    gw.GatewayType,
-			"localNetworks":  gw.LocalNetworks,
-			"wgPublicKey":    gw.WGPublicKey,
-			"fullTunnelMode": gw.FullTunnelMode,
-			"pushDns":        gw.PushDNS,
-			"dnsServers":     gw.DNSServers,
-			"tunnelIp":       gw.TunnelIP,
-			"status":         status,
-			"statusMessage":  gw.StatusMessage,
-			"bytesSent":      gw.BytesSent,
-			"bytesReceived":  gw.BytesReceived,
-			"remoteIp":       gw.RemoteIP,
-			"createdAt":      gw.CreatedAt.Format(time.RFC3339),
-			"updatedAt":      gw.UpdatedAt.Format(time.RFC3339),
+			"id":              gw.ID,
+			"hubId":           gw.HubID,
+			"name":            gw.Name,
+			"description":     gw.Description,
+			"gatewayType":     gw.GatewayType,
+			"localNetworks":   gw.LocalNetworks,
+			"wgPublicKey":     gw.WGPublicKey,
+			"fullTunnelMode":  gw.FullTunnelMode,
+			"pushDns":         gw.PushDNS,
+			"dnsServers":      gw.DNSServers,
+			"tunnelIp":        gw.TunnelIP,
+			"enforceFipsMode": gw.EnforceFIPSMode,
+			"status":          status,
+			"statusMessage":   gw.StatusMessage,
+			"bytesSent":       gw.BytesSent,
+			"bytesReceived":   gw.BytesReceived,
+			"remoteIp":        gw.RemoteIP,
+			"createdAt":       gw.CreatedAt.Format(time.RFC3339),
+			"updatedAt":       gw.UpdatedAt.Format(time.RFC3339),
 		}
 		if gw.LastSeen != nil {
 			gwData["lastSeen"] = gw.LastSeen.Format(time.RFC3339)
@@ -758,13 +768,14 @@ func (s *Server) handleCreateMeshSpoke(c *gin.Context) {
 	}
 
 	gw := &db.MeshSpoke{
-		HubID:         hubID,
-		Name:          req.Name,
-		Description:   req.Description,
-		LocalNetworks: req.LocalNetworks,
-		Token:         token,
-		GatewayType:   hub.GatewayType, // Inherit from hub
-		Status:        db.MeshSpokeStatusPending,
+		HubID:           hubID,
+		Name:            req.Name,
+		Description:     req.Description,
+		LocalNetworks:   req.LocalNetworks,
+		Token:           token,
+		GatewayType:     hub.GatewayType,     // Inherit from hub
+		EnforceFIPSMode: hub.EnforceFIPSMode, // Inherit FIPS mode from hub
+		Status:          db.MeshSpokeStatusPending,
 	}
 
 	// Generate WireGuard keypair + PSK if hub type is wireguard
@@ -800,15 +811,16 @@ func (s *Server) handleCreateMeshSpoke(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, gin.H{
 		"spoke": gin.H{
-			"id":            gw.ID,
-			"hubId":         gw.HubID,
-			"name":          gw.Name,
-			"description":   gw.Description,
-			"gatewayType":   gw.GatewayType,
-			"localNetworks": gw.LocalNetworks,
-			"wgPublicKey":   gw.WGPublicKey,
-			"token":         token, // Only shown once at creation
-			"status":        gw.Status,
+			"id":              gw.ID,
+			"hubId":           gw.HubID,
+			"name":            gw.Name,
+			"description":     gw.Description,
+			"gatewayType":     gw.GatewayType,
+			"localNetworks":   gw.LocalNetworks,
+			"wgPublicKey":     gw.WGPublicKey,
+			"enforceFipsMode": gw.EnforceFIPSMode,
+			"token":           token, // Only shown once at creation
+			"status":          gw.Status,
 		},
 		"message": "Spoke created. Use the install script to set up the spoke.",
 	})
@@ -831,25 +843,26 @@ func (s *Server) handleGetMeshSpoke(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"spoke": gin.H{
-			"id":             gw.ID,
-			"hubId":          gw.HubID,
-			"name":           gw.Name,
-			"description":    gw.Description,
-			"gatewayType":    gw.GatewayType,
-			"localNetworks":  gw.LocalNetworks,
-			"wgPublicKey":    gw.WGPublicKey,
-			"fullTunnelMode": gw.FullTunnelMode,
-			"pushDns":        gw.PushDNS,
-			"dnsServers":     gw.DNSServers,
-			"tunnelIp":       gw.TunnelIP,
-			"status":         gw.Status,
-			"statusMessage":  gw.StatusMessage,
-			"bytesSent":      gw.BytesSent,
-			"bytesReceived":  gw.BytesReceived,
-			"remoteIp":       gw.RemoteIP,
-			"hasClientCert":  gw.ClientCert != "",
-			"createdAt":      gw.CreatedAt.Format(time.RFC3339),
-			"updatedAt":      gw.UpdatedAt.Format(time.RFC3339),
+			"id":              gw.ID,
+			"hubId":           gw.HubID,
+			"name":            gw.Name,
+			"description":     gw.Description,
+			"gatewayType":     gw.GatewayType,
+			"localNetworks":   gw.LocalNetworks,
+			"wgPublicKey":     gw.WGPublicKey,
+			"fullTunnelMode":  gw.FullTunnelMode,
+			"pushDns":         gw.PushDNS,
+			"dnsServers":      gw.DNSServers,
+			"tunnelIp":        gw.TunnelIP,
+			"enforceFipsMode": gw.EnforceFIPSMode,
+			"status":          gw.Status,
+			"statusMessage":   gw.StatusMessage,
+			"bytesSent":       gw.BytesSent,
+			"bytesReceived":   gw.BytesReceived,
+			"remoteIp":        gw.RemoteIP,
+			"hasClientCert":   gw.ClientCert != "",
+			"createdAt":       gw.CreatedAt.Format(time.RFC3339),
+			"updatedAt":       gw.UpdatedAt.Format(time.RFC3339),
 		},
 	})
 }
@@ -985,9 +998,10 @@ func (s *Server) handleProvisionMeshSpoke(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":       "spoke provisioned successfully",
-		"tunnelIp":      tunnelIP,
-		"hasClientCert": true,
+		"message":         "spoke provisioned successfully",
+		"tunnelIp":        tunnelIP,
+		"hasClientCert":   true,
+		"enforceFipsMode": gw.EnforceFIPSMode,
 	})
 }
 

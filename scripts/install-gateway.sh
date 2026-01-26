@@ -30,6 +30,10 @@ OPENVPN_CONFIG_DIR="/etc/openvpn/server"
 VPN_PORT="1194"
 VPN_PROTOCOL="udp"
 VPN_NETWORK="172.31.255.0/24"
+ENABLE_FIPS="false"
+FIPS_REBOOT_REQUIRED=false
+FIPS_MANUAL_REQUIRED=false
+CRYPTO_PROFILE=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -58,6 +62,10 @@ while [[ $# -gt 0 ]]; do
             VPN_NETWORK="$2"
             shift 2
             ;;
+        --enable-fips)
+            ENABLE_FIPS="true"
+            shift
+            ;;
         --help)
             echo "GateKey Gateway Installer"
             echo ""
@@ -72,6 +80,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --port PORT       OpenVPN port (default: 1194)"
             echo "  --protocol PROTO  OpenVPN protocol: udp or tcp (default: udp)"
             echo "  --network CIDR    VPN network CIDR (default: 172.31.255.0/24)"
+            echo "  --enable-fips     Enable OS-level FIPS mode if FIPS crypto profile is used"
             echo ""
             exit 0
             ;;
@@ -119,6 +128,114 @@ detect_os() {
     else
         echo -e "${RED}Error: Unable to detect OS${NC}"
         exit 1
+    fi
+}
+
+# Check if FIPS mode is enabled at the OS level
+check_fips_mode() {
+    if [[ -f /proc/sys/crypto/fips_enabled ]]; then
+        FIPS_ENABLED=$(cat /proc/sys/crypto/fips_enabled)
+        if [[ "$FIPS_ENABLED" == "1" ]]; then
+            return 0  # FIPS enabled
+        fi
+    fi
+    return 1  # FIPS not enabled
+}
+
+# Setup FIPS mode on the system
+setup_fips_mode() {
+    echo -e "${YELLOW}Setting up FIPS mode...${NC}"
+
+    case $OS in
+        rhel|centos|rocky|almalinux|fedora)
+            # Check if fips-mode-setup is available
+            if command -v fips-mode-setup &> /dev/null; then
+                echo -e "${YELLOW}Enabling FIPS mode (system will require reboot)...${NC}"
+                fips-mode-setup --enable
+                FIPS_REBOOT_REQUIRED=true
+            else
+                echo -e "${RED}Error: fips-mode-setup not found. Install with: dnf install crypto-policies-scripts${NC}"
+                echo -e "${YELLOW}Installing crypto-policies-scripts...${NC}"
+                dnf install -y crypto-policies-scripts
+                fips-mode-setup --enable
+                FIPS_REBOOT_REQUIRED=true
+            fi
+            ;;
+        ubuntu|debian)
+            echo -e "${YELLOW}FIPS mode on Ubuntu/Debian requires Ubuntu Pro subscription.${NC}"
+            echo -e "${YELLOW}Please enable FIPS manually:${NC}"
+            echo "  1. Attach Ubuntu Pro: sudo pro attach <token>"
+            echo "  2. Enable FIPS: sudo pro enable fips"
+            echo "  3. Reboot the system"
+            echo ""
+            echo -e "${RED}Continuing without FIPS mode. For true FIPS compliance, enable FIPS manually.${NC}"
+            FIPS_MANUAL_REQUIRED=true
+            ;;
+        amzn)
+            if [[ "$VERSION" == "2023" ]] || [[ "$VERSION" =~ ^2023 ]]; then
+                echo -e "${YELLOW}Amazon Linux 2023 FIPS mode:${NC}"
+                if command -v fips-mode-setup &> /dev/null; then
+                    fips-mode-setup --enable
+                    FIPS_REBOOT_REQUIRED=true
+                else
+                    echo -e "${RED}FIPS mode setup not available on this Amazon Linux version${NC}"
+                    FIPS_MANUAL_REQUIRED=true
+                fi
+            else
+                echo -e "${RED}FIPS mode not supported on Amazon Linux 2${NC}"
+                FIPS_MANUAL_REQUIRED=true
+            fi
+            ;;
+        *)
+            echo -e "${RED}FIPS mode setup not supported for $OS${NC}"
+            echo -e "${YELLOW}Please enable FIPS mode manually according to your OS documentation.${NC}"
+            FIPS_MANUAL_REQUIRED=true
+            ;;
+    esac
+}
+
+# Handle FIPS crypto profile requirements
+handle_fips_profile() {
+    local crypto_profile="$1"
+
+    if [[ "$crypto_profile" != "fips" ]]; then
+        return 0  # Not FIPS profile, nothing to do
+    fi
+
+    echo -e "${YELLOW}FIPS crypto profile detected${NC}"
+
+    if check_fips_mode; then
+        echo -e "${GREEN}OS FIPS mode is already enabled${NC}"
+        return 0
+    fi
+
+    echo -e "${YELLOW}WARNING: FIPS crypto profile requires OS-level FIPS mode for true compliance${NC}"
+    echo ""
+    echo "GateKey's FIPS profile uses FIPS-approved algorithms, but true FIPS 140-2/140-3"
+    echo "compliance requires the operating system to be running in FIPS mode with"
+    echo "NIST-validated cryptographic modules."
+    echo ""
+
+    # Check if --enable-fips flag was passed
+    if [[ "$ENABLE_FIPS" == "true" ]]; then
+        setup_fips_mode
+    else
+        echo -e "${YELLOW}To enable OS FIPS mode, re-run this script with --enable-fips${NC}"
+        echo "Or enable FIPS mode manually:"
+        case $OS in
+            rhel|centos|rocky|almalinux|fedora)
+                echo "  sudo fips-mode-setup --enable"
+                echo "  sudo reboot"
+                ;;
+            ubuntu|debian)
+                echo "  sudo pro enable fips  (requires Ubuntu Pro)"
+                echo "  sudo reboot"
+                ;;
+            *)
+                echo "  Consult your OS documentation for FIPS mode setup"
+                ;;
+        esac
+        echo ""
     fi
 }
 

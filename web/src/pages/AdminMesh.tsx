@@ -634,6 +634,7 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
     fullTunnelMode: false,
     pushDns: false,
     dnsServers: [],
+    enforceFipsMode: false,
     sessionEnabled: true,
   })
   const [dnsInput, setDnsInput] = useState('')
@@ -1028,6 +1029,22 @@ function AddHubModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             </div>
             <p className="text-xs text-theme-tertiary -mt-2">
               Allow administrators to run commands on this hub via the Remote Sessions page.
+            </p>
+
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="hubEnforceFipsMode"
+                checked={form.enforceFipsMode ?? false}
+                onChange={(e) => setForm({ ...form, enforceFipsMode: e.target.checked })}
+                className="rounded border-theme text-primary-600 focus:ring-primary-500"
+              />
+              <label htmlFor="hubEnforceFipsMode" className="ml-2 text-sm text-theme-secondary">
+                Enforce FIPS Mode
+              </label>
+            </div>
+            <p className="text-xs text-theme-tertiary -mt-2">
+              Enforce FIPS 140-3 cryptographic mode at the OS level. Requires FIPS-enabled operating system.
             </p>
 
             <div className="flex justify-end space-x-3 pt-4">
@@ -2159,7 +2176,7 @@ function ManageSpokeAccessModal({ spoke, onClose }: { spoke: MeshSpoke; onClose:
 
 // Edit Hub Modal Component
 function EditHubModal({ hub, onClose, onSuccess }: { hub: MeshHub; onClose: () => void; onSuccess: () => void }) {
-  const [form, setForm] = useState({ name: hub.name, description: hub.description || '', publicEndpoint: hub.publicEndpoint || '', vpnPort: hub.vpnPort || 1194, vpnProtocol: hub.vpnProtocol || 'udp', vpnSubnet: hub.vpnSubnet || '172.30.0.0/16', vpnSubnetV6: hub.vpnSubnetV6 || '', cryptoProfile: hub.cryptoProfile || 'modern' as CryptoProfile, tlsAuthEnabled: hub.tlsAuthEnabled ?? true, fullTunnelMode: hub.fullTunnelMode ?? false, pushDns: hub.pushDns ?? false, dnsServers: hub.dnsServers || [], localNetworks: hub.localNetworks || [], sessionEnabled: hub.sessionEnabled ?? true })
+  const [form, setForm] = useState({ name: hub.name, description: hub.description || '', publicEndpoint: hub.publicEndpoint || '', vpnPort: hub.vpnPort || 1194, vpnProtocol: hub.vpnProtocol || 'udp', vpnSubnet: hub.vpnSubnet || '172.30.0.0/16', vpnSubnetV6: hub.vpnSubnetV6 || '', cryptoProfile: hub.cryptoProfile || 'modern' as CryptoProfile, tlsAuthEnabled: hub.tlsAuthEnabled ?? true, fullTunnelMode: hub.fullTunnelMode ?? false, pushDns: hub.pushDns ?? false, dnsServers: hub.dnsServers || [], localNetworks: hub.localNetworks || [], enforceFipsMode: hub.enforceFipsMode ?? false, sessionEnabled: hub.sessionEnabled ?? true })
   const [dnsInput, setDnsInput] = useState('')
   const [networkInput, setNetworkInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -2222,6 +2239,8 @@ function EditHubModal({ hub, onClose, onSuccess }: { hub: MeshHub; onClose: () =
             <div><label className="block text-sm font-medium text-theme-secondary">Local Networks</label><div className="flex space-x-2"><input type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)} className="input flex-1" placeholder="192.168.1.0/24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } } }} /><button type="button" onClick={() => { if (networkInput) { setForm({ ...form, localNetworks: [...form.localNetworks, networkInput] }); setNetworkInput('') } }} className="btn btn-secondary">Add</button></div>{form.localNetworks.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{form.localNetworks.map((n) => <span key={n} className="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded text-sm font-medium">{n}<button type="button" onClick={() => setForm({ ...form, localNetworks: form.localNetworks.filter(x => x !== n) })} className="ml-1 text-red-500 hover:text-red-600">×</button></span>)}</div>}</div>
             <div className="flex items-center"><input type="checkbox" id="editHubSessionEnabled" checked={form.sessionEnabled ?? true} onChange={(e) => setForm({ ...form, sessionEnabled: e.target.checked })} className="rounded border-theme text-primary-600 focus:ring-primary-500" /><label htmlFor="editHubSessionEnabled" className="ml-2 text-sm text-theme-secondary">Enable Remote Sessions</label></div>
             <p className="text-xs text-theme-tertiary -mt-2">Allow administrators to run commands on this hub via the Remote Sessions page.</p>
+            <div className="flex items-center"><input type="checkbox" id="editHubEnforceFipsMode" checked={form.enforceFipsMode ?? false} onChange={(e) => setForm({ ...form, enforceFipsMode: e.target.checked })} className="rounded border-theme text-primary-600 focus:ring-primary-500" /><label htmlFor="editHubEnforceFipsMode" className="ml-2 text-sm text-theme-secondary">Enforce FIPS Mode</label></div>
+            <p className="text-xs text-theme-tertiary -mt-2">Enforce FIPS 140-3 cryptographic mode at the OS level. Requires FIPS-enabled operating system.</p>
             <div className="flex justify-end space-x-3 pt-4"><button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button><button type="submit" disabled={loading} className="btn btn-primary">{loading ? 'Saving...' : 'Save'}</button></div>
           </form>
         </div>

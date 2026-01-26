@@ -97,6 +97,9 @@ type MeshHub struct {
 	// Config versioning
 	ConfigVersion string
 
+	// FIPS enforcement
+	EnforceFIPSMode bool // Enforce FIPS 140-3 mode at OS level
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -144,6 +147,9 @@ type MeshSpoke struct {
 
 	// Remote public IP when connected
 	RemoteIP string
+
+	// FIPS enforcement (inherited from hub, but can be stored for display)
+	EnforceFIPSMode bool // Enforce FIPS 140-3 mode at OS level
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -219,19 +225,19 @@ func (s *MeshStore) CreateHub(ctx context.Context, hub *MeshHub) error {
 			gateway_type, crypto_profile, tls_auth_enabled, tls_auth_key,
 			wg_private_key, wg_public_key, wg_listen_port,
 			ca_cert, ca_key, server_cert, server_key, dh_params,
-			api_token, control_plane_url, status, status_message
+			api_token, control_plane_url, status, status_message, enforce_fips_mode
 		) VALUES (
 			$1, $2, $3, $4, $5, $6::cidr, NULLIF($7, '')::cidr,
 			$8, $9, $10, $11,
 			$12, $13, $14,
 			$15, $16, $17, $18, $19,
-			$20, $21, $22, $23
+			$20, $21, $22, $23, $24
 		)
 	`, hub.Name, hub.Description, hub.PublicEndpoint, hub.VPNPort, hub.VPNProtocol, hub.VPNSubnet, hub.VPNSubnetV6,
 		hub.GatewayType, hub.CryptoProfile, hub.TLSAuthEnabled, hub.TLSAuthKey,
 		hub.WGPrivateKey, hub.WGPublicKey, hub.WGListenPort,
 		hub.CACert, hub.CAKey, hub.ServerCert, hub.ServerKey, hub.DHParams,
-		hub.APIToken, hub.ControlPlaneURL, hub.Status, hub.StatusMessage)
+		hub.APIToken, hub.ControlPlaneURL, hub.Status, hub.StatusMessage, hub.EnforceFIPSMode)
 
 	if err != nil && strings.Contains(err.Error(), "duplicate key") {
 		return ErrMeshHubExists
@@ -256,7 +262,7 @@ func (s *MeshStore) GetHub(ctx context.Context, id string) (*MeshHub, error) {
 			COALESCE(ca_cert, ''), COALESCE(ca_key, ''), COALESCE(server_cert, ''), COALESCE(server_key, ''), COALESCE(dh_params, ''),
 			api_token, control_plane_url,
 			status, COALESCE(status_message, ''), last_heartbeat, connected_gateways, connected_clients,
-			COALESCE(config_version, ''),
+			COALESCE(config_version, ''), COALESCE(enforce_fips_mode, false),
 			created_at, updated_at
 		FROM mesh_hubs WHERE id = $1
 	`, id).Scan(
@@ -270,7 +276,7 @@ func (s *MeshStore) GetHub(ctx context.Context, id string) (*MeshHub, error) {
 		&hub.CACert, &hub.CAKey, &hub.ServerCert, &hub.ServerKey, &hub.DHParams,
 		&hub.APIToken, &hub.ControlPlaneURL,
 		&hub.Status, &hub.StatusMessage, &hub.LastHeartbeat, &hub.ConnectedSpokes, &hub.ConnectedClients,
-		&hub.ConfigVersion,
+		&hub.ConfigVersion, &hub.EnforceFIPSMode,
 		&hub.CreatedAt, &hub.UpdatedAt,
 	)
 
@@ -309,7 +315,7 @@ func (s *MeshStore) GetHubByToken(ctx context.Context, token string) (*MeshHub, 
 			COALESCE(ca_cert, ''), COALESCE(ca_key, ''), COALESCE(server_cert, ''), COALESCE(server_key, ''), COALESCE(dh_params, ''),
 			api_token, control_plane_url,
 			status, COALESCE(status_message, ''), last_heartbeat, connected_gateways, connected_clients,
-			COALESCE(config_version, ''),
+			COALESCE(config_version, ''), COALESCE(enforce_fips_mode, false),
 			created_at, updated_at
 		FROM mesh_hubs WHERE api_token = $1
 	`, token).Scan(
@@ -323,7 +329,7 @@ func (s *MeshStore) GetHubByToken(ctx context.Context, token string) (*MeshHub, 
 		&hub.CACert, &hub.CAKey, &hub.ServerCert, &hub.ServerKey, &hub.DHParams,
 		&hub.APIToken, &hub.ControlPlaneURL,
 		&hub.Status, &hub.StatusMessage, &hub.LastHeartbeat, &hub.ConnectedSpokes, &hub.ConnectedClients,
-		&hub.ConfigVersion,
+		&hub.ConfigVersion, &hub.EnforceFIPSMode,
 		&hub.CreatedAt, &hub.UpdatedAt,
 	)
 
@@ -363,7 +369,7 @@ func (s *MeshStore) GetHubByName(name string) (*MeshHub, error) {
 			COALESCE(ca_cert, ''), COALESCE(ca_key, ''), COALESCE(server_cert, ''), COALESCE(server_key, ''), COALESCE(dh_params, ''),
 			api_token, control_plane_url,
 			status, COALESCE(status_message, ''), last_heartbeat, connected_gateways, connected_clients,
-			COALESCE(config_version, ''),
+			COALESCE(config_version, ''), COALESCE(enforce_fips_mode, false),
 			created_at, updated_at
 		FROM mesh_hubs WHERE name = $1
 	`, name).Scan(
@@ -377,7 +383,7 @@ func (s *MeshStore) GetHubByName(name string) (*MeshHub, error) {
 		&hub.CACert, &hub.CAKey, &hub.ServerCert, &hub.ServerKey, &hub.DHParams,
 		&hub.APIToken, &hub.ControlPlaneURL,
 		&hub.Status, &hub.StatusMessage, &hub.LastHeartbeat, &hub.ConnectedSpokes, &hub.ConnectedClients,
-		&hub.ConfigVersion,
+		&hub.ConfigVersion, &hub.EnforceFIPSMode,
 		&hub.CreatedAt, &hub.UpdatedAt,
 	)
 
@@ -410,6 +416,7 @@ func (s *MeshStore) ListHubs(ctx context.Context) ([]*MeshHub, error) {
 			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
 			COALESCE(local_networks, '{}'),
 			status, COALESCE(status_message, ''), last_heartbeat, connected_gateways, connected_clients,
+			COALESCE(enforce_fips_mode, false),
 			created_at, updated_at
 		FROM mesh_hubs
 		ORDER BY name
@@ -434,6 +441,7 @@ func (s *MeshStore) ListHubs(ctx context.Context) ([]*MeshHub, error) {
 			&hub.FullTunnelMode, &hub.PushDNS, &hub.DNSServers,
 			&hub.LocalNetworks,
 			&hub.Status, &hub.StatusMessage, &hub.LastHeartbeat, &hub.ConnectedSpokes, &hub.ConnectedClients,
+			&hub.EnforceFIPSMode,
 			&hub.CreatedAt, &hub.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -461,13 +469,13 @@ func (s *MeshStore) UpdateHub(ctx context.Context, hub *MeshHub) error {
 			public_endpoint = $4, vpn_port = $5, vpn_protocol = $6, vpn_subnet = $7::cidr, vpn_subnet_v6 = NULLIF($8, '')::cidr,
 			crypto_profile = $9, tls_auth_enabled = $10, local_networks = $11,
 			wg_listen_port = $12,
-			full_tunnel_mode = $13, push_dns = $14, dns_servers = $15
+			full_tunnel_mode = $13, push_dns = $14, dns_servers = $15, enforce_fips_mode = $16
 		WHERE id = $1
 	`, hub.ID, hub.Name, hub.Description,
 		hub.PublicEndpoint, hub.VPNPort, hub.VPNProtocol, hub.VPNSubnet, hub.VPNSubnetV6,
 		hub.CryptoProfile, hub.TLSAuthEnabled, hub.LocalNetworks,
 		hub.WGListenPort,
-		hub.FullTunnelMode, hub.PushDNS, hub.DNSServers)
+		hub.FullTunnelMode, hub.PushDNS, hub.DNSServers, hub.EnforceFIPSMode)
 
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {
@@ -579,21 +587,21 @@ func (s *MeshStore) CreateMeshSpoke(ctx context.Context, gw *MeshSpoke) error {
 			client_cert, client_key,
 			wg_private_key, wg_public_key, wg_preshared_key,
 			token,
-			status, status_message
+			status, status_message, enforce_fips_mode
 		) VALUES (
 			$1, $2, $3, $4,
 			$5,
 			$6, $7,
 			$8, $9, $10,
 			$11,
-			$12, $13
+			$12, $13, $14
 		)
 	`, gw.HubID, gw.Name, gw.Description, gw.LocalNetworks,
 		gw.GatewayType,
 		gw.ClientCert, gw.ClientKey,
 		gw.WGPrivateKey, gw.WGPublicKey, gw.WGPresharedKey,
 		gw.Token,
-		gw.Status, gw.StatusMessage)
+		gw.Status, gw.StatusMessage, gw.EnforceFIPSMode)
 
 	if err != nil && strings.Contains(err.Error(), "duplicate key") {
 		return ErrMeshSpokeExists
@@ -613,7 +621,7 @@ func (s *MeshStore) GetMeshSpoke(ctx context.Context, id string) (*MeshSpoke, er
 			COALESCE(wg_private_key, ''), COALESCE(wg_public_key, ''), COALESCE(wg_preshared_key, ''),
 			token,
 			status, COALESCE(status_message, ''), last_seen, bytes_sent, bytes_received,
-			host(remote_ip),
+			host(remote_ip), COALESCE(enforce_fips_mode, false),
 			created_at, updated_at
 		FROM mesh_gateways WHERE id = $1
 	`, id).Scan(
@@ -624,7 +632,7 @@ func (s *MeshStore) GetMeshSpoke(ctx context.Context, id string) (*MeshSpoke, er
 		&gw.WGPrivateKey, &gw.WGPublicKey, &gw.WGPresharedKey,
 		&gw.Token,
 		&gw.Status, &gw.StatusMessage, &gw.LastSeen, &gw.BytesSent, &gw.BytesReceived,
-		&remoteIP,
+		&remoteIP, &gw.EnforceFIPSMode,
 		&gw.CreatedAt, &gw.UpdatedAt,
 	)
 
@@ -656,7 +664,7 @@ func (s *MeshStore) GetMeshSpokeByToken(ctx context.Context, token string) (*Mes
 			COALESCE(wg_private_key, ''), COALESCE(wg_public_key, ''), COALESCE(wg_preshared_key, ''),
 			token,
 			status, COALESCE(status_message, ''), last_seen, bytes_sent, bytes_received,
-			host(remote_ip),
+			host(remote_ip), COALESCE(enforce_fips_mode, false),
 			created_at, updated_at
 		FROM mesh_gateways WHERE token = $1
 	`, token).Scan(
@@ -667,7 +675,7 @@ func (s *MeshStore) GetMeshSpokeByToken(ctx context.Context, token string) (*Mes
 		&gw.WGPrivateKey, &gw.WGPublicKey, &gw.WGPresharedKey,
 		&gw.Token,
 		&gw.Status, &gw.StatusMessage, &gw.LastSeen, &gw.BytesSent, &gw.BytesReceived,
-		&remoteIP,
+		&remoteIP, &gw.EnforceFIPSMode,
 		&gw.CreatedAt, &gw.UpdatedAt,
 	)
 
@@ -700,7 +708,7 @@ func (s *MeshStore) GetMeshSpokeByName(name string) (*MeshSpoke, error) {
 			COALESCE(wg_private_key, ''), COALESCE(wg_public_key, ''), COALESCE(wg_preshared_key, ''),
 			token,
 			status, COALESCE(status_message, ''), last_seen, bytes_sent, bytes_received,
-			host(remote_ip),
+			host(remote_ip), COALESCE(enforce_fips_mode, false),
 			created_at, updated_at
 		FROM mesh_gateways WHERE name = $1
 	`, name).Scan(
@@ -711,7 +719,7 @@ func (s *MeshStore) GetMeshSpokeByName(name string) (*MeshSpoke, error) {
 		&gw.WGPrivateKey, &gw.WGPublicKey, &gw.WGPresharedKey,
 		&gw.Token,
 		&gw.Status, &gw.StatusMessage, &gw.LastSeen, &gw.BytesSent, &gw.BytesReceived,
-		&remoteIP,
+		&remoteIP, &gw.EnforceFIPSMode,
 		&gw.CreatedAt, &gw.UpdatedAt,
 	)
 
@@ -739,7 +747,7 @@ func (s *MeshStore) ListMeshSpokesByHub(ctx context.Context, hubID string) ([]*M
 			COALESCE(full_tunnel_mode, false), COALESCE(push_dns, false), COALESCE(dns_servers, '{}'),
 			host(tunnel_ip), host(tunnel_ip_v6), COALESCE(wg_public_key, ''), COALESCE(wg_preshared_key, ''),
 			status, COALESCE(status_message, ''), last_seen,
-			bytes_sent, bytes_received, host(remote_ip),
+			bytes_sent, bytes_received, host(remote_ip), COALESCE(enforce_fips_mode, false),
 			created_at, updated_at
 		FROM mesh_gateways
 		WHERE hub_id = $1
@@ -760,7 +768,7 @@ func (s *MeshStore) ListMeshSpokesByHub(ctx context.Context, hubID string) ([]*M
 			&gw.FullTunnelMode, &gw.PushDNS, &gw.DNSServers,
 			&tunnelIP, &tunnelIPv6, &gw.WGPublicKey, &gw.WGPresharedKey,
 			&gw.Status, &gw.StatusMessage, &gw.LastSeen,
-			&gw.BytesSent, &gw.BytesReceived, &remoteIP,
+			&gw.BytesSent, &gw.BytesReceived, &remoteIP, &gw.EnforceFIPSMode,
 			&gw.CreatedAt, &gw.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -782,10 +790,10 @@ func (s *MeshStore) UpdateMeshSpoke(ctx context.Context, gw *MeshSpoke) error {
 	result, err := s.db.Pool.Exec(ctx, `
 		UPDATE mesh_gateways SET
 			name = $2, description = $3, local_networks = $4,
-			full_tunnel_mode = $5, push_dns = $6, dns_servers = $7
+			full_tunnel_mode = $5, push_dns = $6, dns_servers = $7, enforce_fips_mode = $8
 		WHERE id = $1
 	`, gw.ID, gw.Name, gw.Description, gw.LocalNetworks,
-		gw.FullTunnelMode, gw.PushDNS, gw.DNSServers)
+		gw.FullTunnelMode, gw.PushDNS, gw.DNSServers, gw.EnforceFIPSMode)
 
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {

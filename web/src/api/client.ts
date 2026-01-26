@@ -150,6 +150,8 @@ export interface AdminGateway {
   // WireGuard-specific fields
   wgPublicKey?: string
   wgListenPort?: number
+  // FIPS enforcement
+  enforceFipsMode: boolean
 }
 
 export interface RegisterGatewayRequest {
@@ -171,6 +173,8 @@ export interface RegisterGatewayRequest {
   gateway_type?: GatewayType
   // WireGuard-specific fields
   wg_listen_port?: number
+  // FIPS enforcement
+  enforce_fips_mode?: boolean
 }
 
 export interface RegisterGatewayResponse {
@@ -234,6 +238,7 @@ export interface UpdateGatewayRequest {
   push_dns?: boolean
   dns_servers?: string[]
   session_enabled?: boolean
+  enforce_fips_mode?: boolean
 }
 
 export async function updateGateway(id: string, req: UpdateGatewayRequest): Promise<void> {
@@ -1308,6 +1313,7 @@ export interface MeshHub {
   pushDns: boolean
   dnsServers: string[]
   localNetworks: string[]
+  enforceFipsMode: boolean
   sessionEnabled: boolean
   status: MeshHubStatus
   statusMessage: string
@@ -1340,6 +1346,7 @@ export interface CreateMeshHubRequest {
   pushDns?: boolean
   dnsServers?: string[]
   localNetworks?: string[]
+  enforceFipsMode?: boolean
   sessionEnabled?: boolean
 }
 
@@ -1354,6 +1361,7 @@ export interface MeshSpoke {
   fullTunnelMode: boolean
   pushDns: boolean
   dnsServers: string[]
+  enforceFipsMode: boolean
   sessionEnabled: boolean
   tunnelIp: string
   tunnelIpV6?: string
@@ -1400,6 +1408,7 @@ export async function getMeshHubs(): Promise<MeshHub[]> {
     pushDns: hub.pushDns || false,
     dnsServers: (hub.dnsServers as string[]) || [],
     localNetworks: (hub.localNetworks as string[]) || [],
+    enforceFipsMode: hub.enforceFipsMode || false,
     sessionEnabled: hub.sessionEnabled ?? true,
     status: hub.status,
     statusMessage: hub.statusMessage || '',
@@ -1432,6 +1441,7 @@ export async function getMeshHub(id: string): Promise<MeshHub> {
     pushDns: hub.pushDns || false,
     dnsServers: hub.dnsServers || [],
     localNetworks: hub.localNetworks || [],
+    enforceFipsMode: hub.enforceFipsMode || false,
     sessionEnabled: hub.sessionEnabled ?? true,
     status: hub.status,
     statusMessage: hub.statusMessage || '',
@@ -1464,6 +1474,7 @@ export async function createMeshHub(req: CreateMeshHubRequest): Promise<MeshHubW
     pushDns: hub.pushDns || false,
     dnsServers: hub.dnsServers || [],
     localNetworks: hub.localNetworks || [],
+    enforceFipsMode: hub.enforceFipsMode || false,
     sessionEnabled: hub.sessionEnabled ?? true,
     apiToken: hub.apiToken,
     controlPlaneUrl: hub.controlPlaneUrl,
@@ -1563,6 +1574,7 @@ export async function getMeshSpokes(hubId: string): Promise<MeshSpoke[]> {
     fullTunnelMode: spoke.fullTunnelMode || false,
     pushDns: spoke.pushDns || false,
     dnsServers: (spoke.dnsServers as string[]) || [],
+    enforceFipsMode: spoke.enforceFipsMode || false,
     sessionEnabled: spoke.sessionEnabled ?? true,
     tunnelIp: spoke.tunnelIp || '',
     tunnelIpV6: spoke.tunnelIpV6 as string | undefined,
@@ -1592,6 +1604,7 @@ export async function getMeshSpoke(id: string): Promise<MeshSpoke> {
     fullTunnelMode: spoke.fullTunnelMode || false,
     pushDns: spoke.pushDns || false,
     dnsServers: spoke.dnsServers || [],
+    enforceFipsMode: spoke.enforceFipsMode || false,
     sessionEnabled: spoke.sessionEnabled ?? true,
     tunnelIp: spoke.tunnelIp || '',
     tunnelIpV6: spoke.tunnelIpV6,
@@ -1621,6 +1634,7 @@ export async function createMeshSpoke(hubId: string, req: CreateMeshSpokeRequest
     fullTunnelMode: spoke.fullTunnelMode || false,
     pushDns: spoke.pushDns || false,
     dnsServers: spoke.dnsServers || [],
+    enforceFipsMode: spoke.enforceFipsMode || false,
     sessionEnabled: spoke.sessionEnabled ?? true,
     tunnelIp: '',
     tunnelIpV6: spoke.tunnelIpV6,
