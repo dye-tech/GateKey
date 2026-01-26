@@ -10,7 +10,7 @@ COPY web/ ./
 RUN npm run build
 
 # Production image
-FROM nginx:alpine
+FROM nginx:alpine3.23
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY web/nginx.conf /etc/nginx/conf.d/default.conf
