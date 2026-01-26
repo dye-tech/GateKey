@@ -5,6 +5,34 @@ All notable changes to GateKey are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.4] - 2026-01-25
+
+### Fixed
+- Gateway client-connect hook timing issue where VPN connections were being skipped because OpenVPN updates the status file on a 10s timer, not immediately on connect
+- Added missing database columns for gateway and mesh configurations
+
+### Changed
+- Gateway, mesh hub, and mesh spoke names are now immutable after creation to prevent authentication failures when agents reconnect with mismatched credentials
+
+### Security
+- Prevents accidental authentication breakage by blocking name changes on deployed agents
+
+## [1.5.3] - 2026-01-25
+
+### Fixed
+- OpenVPN mesh and gateway creation issues with certificate generation
+- Crypto profile validation during gateway creation
+
+## [1.5.2] - 2026-01-25
+
+### Changed
+- Consolidated all Dockerfiles into a single parameterized Dockerfile for easier maintenance
+- Removed unused Homebrew formula templates
+
+### Fixed
+- Added missing nginx proxy routes for backend API endpoints in web container
+- Server Docker image now includes install scripts for gateway provisioning
+
 ## [1.5.1] - 2026-01-25
 
 ### Fixed
