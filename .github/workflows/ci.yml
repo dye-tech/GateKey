@@ -69,6 +69,22 @@ jobs:
         env:
           DATABASE_URL: postgres://test:test@localhost:5432/gatekey_test?sslmode=disable
 
+      - name: Check security-critical path coverage
+        run: |
+          echo "=== Security-Critical Path Coverage ==="
+          go test -coverprofile=coverage-security.out ./internal/auth/... ./internal/crypto/... ./internal/pki/... ./internal/policy/...
+          go tool cover -func=coverage-security.out | grep -E "^(github.com/gatekey-project/gatekey/internal/(auth|crypto|pki|policy)/|total:)"
+          echo ""
+          TOTAL=$(go tool cover -func=coverage-security.out | grep "^total:" | awk '{gsub(/%/, "", $3); print $3}')
+          echo "Total security-critical coverage: ${TOTAL}%"
+          if (( $(echo "$TOTAL < 60" | bc -l) )); then
+            echo "::warning::Security-critical coverage ${TOTAL}% is below 60% target"
+          else
+            echo "Security-critical coverage meets 60% threshold"
+          fi
+        env:
+          DATABASE_URL: postgres://test:test@localhost:5432/gatekey_test?sslmode=disable
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
