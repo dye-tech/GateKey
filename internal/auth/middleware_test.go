@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/gatekey-project/gatekey/internal/config"
+	"github.com/gatekey-project/gatekey/internal/db"
 	"github.com/gatekey-project/gatekey/internal/models"
 )
 
@@ -931,5 +932,256 @@ func TestRequireAdmin_NonAdminUser(t *testing.T) {
 	// not from what we set in context before it
 	if w.Code != http.StatusUnauthorized {
 		t.Logf("Note: RequireAdmin extracts token from request, not pre-set context")
+	}
+}
+
+func TestGetAPIKey(t *testing.T) {
+	router := gin.New()
+
+	testAPIKey := &db.APIKey{
+		ID:     uuid.New().String(),
+		Name:   "test-api-key",
+		Scopes: []string{"read:users"},
+	}
+
+	router.GET("/test", func(c *gin.Context) {
+		c.Set(ContextKeyAPIKey, testAPIKey)
+
+		apiKey := GetAPIKey(c)
+		if apiKey == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "api key not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"name": apiKey.Name})
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+
+	if response["name"] != "test-api-key" {
+		t.Errorf("Expected name 'test-api-key', got '%v'", response["name"])
+	}
+}
+
+func TestGetAPIKey_NotSet(t *testing.T) {
+	router := gin.New()
+
+	router.GET("/test", func(c *gin.Context) {
+		apiKey := GetAPIKey(c)
+		if apiKey == nil {
+			c.JSON(http.StatusOK, gin.H{"api_key": nil})
+		} else {
+			c.JSON(http.StatusOK, gin.H{"api_key": apiKey.Name})
+		}
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+
+	if response["api_key"] != nil {
+		t.Errorf("Expected api_key=nil, got %v", response["api_key"])
+	}
+}
+
+func TestGetAPIKey_WrongType(t *testing.T) {
+	router := gin.New()
+
+	router.GET("/test", func(c *gin.Context) {
+		// Set wrong type
+		c.Set(ContextKeyAPIKey, "not-an-api-key")
+
+		apiKey := GetAPIKey(c)
+		if apiKey == nil {
+			c.JSON(http.StatusOK, gin.H{"api_key": nil})
+		} else {
+			c.JSON(http.StatusOK, gin.H{"api_key": apiKey.Name})
+		}
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+
+	if response["api_key"] != nil {
+		t.Errorf("Expected api_key=nil for wrong type, got %v", response["api_key"])
+	}
+}
+
+func TestGetUser_WrongType(t *testing.T) {
+	router := gin.New()
+
+	router.GET("/test", func(c *gin.Context) {
+		// Set wrong type
+		c.Set(ContextKeyUser, "not-a-user")
+
+		user := GetUser(c)
+		if user == nil {
+			c.JSON(http.StatusOK, gin.H{"user": nil})
+		} else {
+			c.JSON(http.StatusOK, gin.H{"user": user.Email})
+		}
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+
+	if response["user"] != nil {
+		t.Errorf("Expected user=nil for wrong type, got %v", response["user"])
+	}
+}
+
+func TestNewGatewayAuthMiddleware(t *testing.T) {
+	// Test creating gateway auth middleware
+	middleware := NewGatewayAuthMiddleware(nil)
+
+	if middleware == nil {
+		t.Error("NewGatewayAuthMiddleware should not return nil")
+	}
+}
+
+func TestRequireGatewayAuth_NoToken(t *testing.T) {
+	middleware := NewGatewayAuthMiddleware(nil)
+
+	router := gin.New()
+	router.GET("/gateway", middleware.RequireGatewayAuth(), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "success"})
+	})
+
+	req, _ := http.NewRequest("GET", "/gateway", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Expected status 401, got %d", w.Code)
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+
+	if response["error"] != "Gateway authentication required" {
+		t.Errorf("Expected error 'Gateway authentication required', got '%v'", response["error"])
+	}
+}
+
+func TestRequireGatewayAuth_WithXGatewayTokenHeader(t *testing.T) {
+	// Without a real gateway repo, this will fail validation
+	middleware := NewGatewayAuthMiddleware(nil)
+
+	router := gin.New()
+	router.GET("/gateway", middleware.RequireGatewayAuth(), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "success"})
+	})
+
+	req, _ := http.NewRequest("GET", "/gateway", nil)
+	req.Header.Set("X-Gateway-Token", "test-gateway-token")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should return error since gateway repo is nil
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status 500 when gateway repo is nil, got %d", w.Code)
+	}
+}
+
+func TestRequireGatewayAuth_WithAuthorizationHeader(t *testing.T) {
+	middleware := NewGatewayAuthMiddleware(nil)
+
+	router := gin.New()
+	router.GET("/gateway", middleware.RequireGatewayAuth(), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "success"})
+	})
+
+	req, _ := http.NewRequest("GET", "/gateway", nil)
+	req.Header.Set("Authorization", "Gateway test-gateway-token")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should return error since gateway repo is nil
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status 500 when gateway repo is nil, got %d", w.Code)
+	}
+}
+
+func TestExtractTokenWithType_CookieIsNeverAPIKey(t *testing.T) {
+	cfg := &config.AuthConfig{}
+	manager := NewManager(cfg, nil, nil)
+	middleware := NewMiddleware(manager, "session_token")
+
+	router := gin.New()
+	var extractedToken string
+	var isAPIKey bool
+	router.GET("/test", func(c *gin.Context) {
+		extractedToken, isAPIKey = middleware.extractTokenWithType(c)
+		c.Status(http.StatusOK)
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	// Even if cookie value looks like API key, it should not be treated as one
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: "gk_looks_like_api_key"})
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if extractedToken != "gk_looks_like_api_key" {
+		t.Errorf("Expected token 'gk_looks_like_api_key', got '%s'", extractedToken)
+	}
+
+	if isAPIKey {
+		t.Error("Cookie tokens should never be treated as API keys")
+	}
+}
+
+func TestExtractTokenWithType_EmptyToken(t *testing.T) {
+	cfg := &config.AuthConfig{}
+	manager := NewManager(cfg, nil, nil)
+	middleware := NewMiddleware(manager, "session_token")
+
+	router := gin.New()
+	var extractedToken string
+	var isAPIKey bool
+	router.GET("/test", func(c *gin.Context) {
+		extractedToken, isAPIKey = middleware.extractTokenWithType(c)
+		c.Status(http.StatusOK)
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if extractedToken != "" {
+		t.Errorf("Expected empty token, got '%s'", extractedToken)
+	}
+
+	if isAPIKey {
+		t.Error("Empty token should not be API key")
 	}
 }
