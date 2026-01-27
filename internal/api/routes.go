@@ -2293,7 +2293,6 @@ func (s *Server) handleAdminListUserMeshConfigs(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"configs": response})
 }
 
-
 // Gateway handlers (internal API for gateways)
 
 func (s *Server) handleGatewayVerify(c *gin.Context) {
