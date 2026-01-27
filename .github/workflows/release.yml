@@ -179,7 +179,7 @@ jobs:
       - name: Download release artifacts
         run: |
           mkdir -p dist
-          for binary in gatekey gatekey-server gatekey-gateway gatekey-admin gatekey-hub gatekey-mesh-gateway; do
+          for binary in gatekey gatekey-server gatekey-gateway gatekey-wireguard-gateway gatekey-admin gatekey-hub gatekey-mesh-gateway gatekey-wireguard-hub gatekey-wireguard-mesh-gateway; do
             for platform in darwin-amd64 darwin-arm64 linux-amd64 linux-arm64; do
               curl -sL "https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.VERSION }}/${binary}-${{ steps.version.outputs.VERSION }}-${platform}.tar.gz" \
                 -o "dist/${binary}-${{ steps.version.outputs.VERSION }}-${platform}.tar.gz"
