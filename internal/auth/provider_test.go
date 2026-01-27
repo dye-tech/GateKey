@@ -325,7 +325,7 @@ func TestUserInfo_Fields(t *testing.T) {
 		Groups:     []string{"admin", "users"},
 		Provider:   "oidc:google",
 		Attributes: map[string]interface{}{
-			"department": "engineering",
+			"department":  "engineering",
 			"employee_id": 12345,
 		},
 	}

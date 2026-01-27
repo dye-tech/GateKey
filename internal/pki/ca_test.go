@@ -1,6 +1,7 @@
 package pki
 
 import (
+	"context"
 	"crypto/x509"
 	"math/big"
 	"os"
@@ -1483,7 +1484,7 @@ func TestUpdateFromPEM_InvalidPEM(t *testing.T) {
 		t.Fatalf("Failed to create CA: %v", err)
 	}
 
-	err = ca.UpdateFromPEM(nil, "invalid cert", "invalid key")
+	err = ca.UpdateFromPEM(context.TODO(), "invalid cert", "invalid key")
 	if err == nil {
 		t.Error("Expected error for invalid PEM")
 	}
@@ -1513,7 +1514,7 @@ func TestUpdateFromPEM_NonCACertificate(t *testing.T) {
 	}
 
 	// Try to update CA with a non-CA certificate
-	err = ca.UpdateFromPEM(nil, string(issued.CertificatePEM), string(issued.PrivateKeyPEM))
+	err = ca.UpdateFromPEM(context.TODO(), string(issued.CertificatePEM), string(issued.PrivateKeyPEM))
 	if err == nil {
 		t.Error("Expected error when updating with non-CA certificate")
 	}
@@ -1541,7 +1542,7 @@ func TestUpdateFromPEM_ValidCA(t *testing.T) {
 	// Update CA1 with CA2's certificate
 	oldSerial := ca1.Certificate().SerialNumber.String()
 
-	err = ca1.UpdateFromPEM(nil, string(ca2.CertificatePEM()), string(ca2.PrivateKeyPEM()))
+	err = ca1.UpdateFromPEM(context.TODO(), string(ca2.CertificatePEM()), string(ca2.PrivateKeyPEM()))
 	if err != nil {
 		t.Fatalf("Failed to update CA from PEM: %v", err)
 	}
@@ -1552,7 +1553,6 @@ func TestUpdateFromPEM_ValidCA(t *testing.T) {
 		t.Error("Serial number should have changed after update")
 	}
 }
-
 
 func TestLoadFromPEM_RSAKey(t *testing.T) {
 	cfg := config.PKIConfig{
@@ -1996,7 +1996,7 @@ func TestUpdateFromPEM_WithFileSave(t *testing.T) {
 	}
 
 	// Update CA1 with CA2's certificate - this should trigger file save
-	err = ca1.UpdateFromPEM(nil, string(ca2.CertificatePEM()), string(ca2.PrivateKeyPEM()))
+	err = ca1.UpdateFromPEM(context.TODO(), string(ca2.CertificatePEM()), string(ca2.PrivateKeyPEM()))
 	if err != nil {
 		t.Fatalf("Failed to update CA from PEM: %v", err)
 	}
@@ -2040,7 +2040,7 @@ func TestUpdateFromPEM_FileSaveError(t *testing.T) {
 	ca1.config.CAKey = keyPath
 
 	// Update should fail because the directory doesn't exist
-	err = ca1.UpdateFromPEM(nil, string(ca2.CertificatePEM()), string(ca2.PrivateKeyPEM()))
+	err = ca1.UpdateFromPEM(context.TODO(), string(ca2.CertificatePEM()), string(ca2.PrivateKeyPEM()))
 	if err == nil {
 		t.Error("Expected error when file save fails")
 	}
