@@ -15,11 +15,20 @@ heartbeat_interval: "30s"
 # Peer sync interval (how often to fetch authorized peers from control plane)
 peer_sync_interval: "10s"
 
-# Stats report interval (how often to report peer traffic stats)
-stats_report_interval: "5s"
+# Stats sync interval (how often to report peer traffic stats)
+stats_sync_interval: "5s"
 
 # Log level: debug, info, warn, error
 log_level: "info"
+
+# Remote agent configuration
+# The agent allows remote tool execution from the control plane
+agent_enabled: true
+agent_listen_addr: ":9444"
+
+# Remote session support
+# Allows SSH-like sessions through the control plane
+session_enabled: true
 
 # WireGuard configuration
 wireguard:

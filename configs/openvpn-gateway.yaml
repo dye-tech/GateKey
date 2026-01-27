@@ -12,6 +12,9 @@ token: "${GATEX_TOKEN}"
 # Heartbeat interval
 heartbeat_interval: "30s"
 
+# Rule refresh interval (how often to refresh firewall rules)
+rule_refresh_interval: "30s"
+
 # Log level: debug, info, warn, error
 log_level: "info"
 
