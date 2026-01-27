@@ -4669,13 +4669,6 @@ func (s *Server) handleRemoveRuleFromGroup(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "rule removed from group"})
 }
 
-// Metrics handler - returns Prometheus-compatible metrics
-
-func (s *Server) handleMetrics(c *gin.Context) {
-	// Basic server info metric - additional metrics can be added as needed
-	c.String(http.StatusOK, "# HELP gatekey_info GateKey server info\n# TYPE gatekey_info gauge\ngatekey_info{version=\"0.1.0\"} 1\n")
-}
-
 // Server info handler - returns server requirements for clients
 func (s *Server) handleGetServerInfo(c *gin.Context) {
 	ctx := c.Request.Context()
