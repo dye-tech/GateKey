@@ -5,6 +5,41 @@ All notable changes to GateKey are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-01-27
+
+### Added
+- **Prometheus Metrics**: Comprehensive metrics collection for monitoring and alerting
+  - HTTP metrics: `gatekey_http_requests_total`, `gatekey_http_request_duration_seconds`, `gatekey_http_requests_in_flight`
+  - Authentication metrics: `gatekey_auth_sessions_active`, `gatekey_auth_logins_total`
+  - PKI metrics: `gatekey_certificates_issued_total`, `gatekey_certificates_revoked_total`, `gatekey_ca_expiry_seconds`
+  - Gateway metrics: `gatekey_gateway_connections_active`, `gatekey_gateway_heartbeats_total`
+  - Database metrics: `gatekey_db_connections_open`, `gatekey_db_connections_in_use`, `gatekey_db_connections_idle`
+  - Policy metrics: `gatekey_policy_evaluations_total`, `gatekey_policy_evaluation_duration_seconds`
+  - Server info: `gatekey_server_info` with version labels
+- **OpenTelemetry Tracing**: Distributed tracing support for end-to-end request visibility
+  - Automatic span creation for all HTTP requests
+  - W3C Trace Context propagation
+  - OTLP export via gRPC or HTTP protocols
+  - Configurable sampling rate for production environments
+  - Rich span attributes including method, path, status, user agent, and client IP
+- **Custom Error Types**: Structured error responses for consistent API error handling
+  - `NotFoundError`, `ValidationError`, `AuthenticationError`, `AuthorizationError`
+  - Consistent JSON error format across all endpoints
+  - Improved error messages for debugging
+
+### Changed
+- Gin middleware now automatically records HTTP metrics for all requests
+- Server gracefully shuts down OpenTelemetry provider on termination
+
+### Fixed
+- Removed dead code handlers and unused stub functions
+- Fixed potential security issues identified in code review
+
+### Testing
+- Added comprehensive test coverage for security-critical paths
+- Added unit tests for metrics package and middleware
+- Added unit tests for telemetry package and middleware
+
 ## [1.6.1] - 2026-01-27
 
 ### Fixed
