@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -61,52 +62,39 @@ func parseExpiration(expiresIn string) *time.Time {
 		return nil
 	}
 
+	if len(expiresIn) < 2 {
+		return nil
+	}
+
+	numStr := expiresIn[:len(expiresIn)-1]
+	unit := expiresIn[len(expiresIn)-1]
+
+	n, err := strconv.Atoi(numStr)
+	if err != nil || n <= 0 {
+		// Try parsing as Go duration (e.g., "24h", "168h")
+		if d, err := time.ParseDuration(expiresIn); err == nil && d > 0 {
+			t := time.Now().Add(d)
+			return &t
+		}
+		return nil
+	}
+
 	var duration time.Duration
-	switch {
-	case len(expiresIn) > 1 && expiresIn[len(expiresIn)-1] == 'd':
-		days := 0
-		if _, err := time.ParseDuration(expiresIn[:len(expiresIn)-1] + "h"); err == nil {
-			// Parse as hours and multiply
-		}
-		// Simple parsing
-		if n, _ := parseInt(expiresIn[:len(expiresIn)-1]); n > 0 {
-			days = n
-		}
-		duration = time.Duration(days) * 24 * time.Hour
-	case len(expiresIn) > 1 && expiresIn[len(expiresIn)-1] == 'y':
-		years := 0
-		if n, _ := parseInt(expiresIn[:len(expiresIn)-1]); n > 0 {
-			years = n
-		}
-		duration = time.Duration(years) * 365 * 24 * time.Hour
-	case len(expiresIn) > 1 && expiresIn[len(expiresIn)-1] == 'h':
-		if d, err := time.ParseDuration(expiresIn); err == nil {
-			duration = d
-		}
+	switch unit {
+	case 'd':
+		duration = time.Duration(n) * 24 * time.Hour
+	case 'y':
+		duration = time.Duration(n) * 365 * 24 * time.Hour
+	case 'h':
+		duration = time.Duration(n) * time.Hour
+	case 'm':
+		duration = time.Duration(n) * time.Minute
 	default:
-		// Try parsing as duration
-		if d, err := time.ParseDuration(expiresIn); err == nil {
-			duration = d
-		}
+		return nil
 	}
 
-	if duration > 0 {
-		t := time.Now().Add(duration)
-		return &t
-	}
-	return nil
-}
-
-func parseInt(s string) (int, error) {
-	var n int
-	for _, c := range s {
-		if c >= '0' && c <= '9' {
-			n = n*10 + int(c-'0')
-		} else {
-			return 0, nil
-		}
-	}
-	return n, nil
+	t := time.Now().Add(duration)
+	return &t
 }
 
 // toAPIKeyResponse converts an APIKey to a response

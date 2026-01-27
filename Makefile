@@ -81,7 +81,30 @@ build-gatekey-wireguard-mesh-gateway: ## Build gatekey-wireguard-mesh-gateway (W
 # Release Targets (for Homebrew)
 # =============================================================================
 
-release: release-gatekey release-gatekey-server release-gatekey-gateway release-gatekey-wireguard-gateway release-gatekey-admin release-gatekey-hub release-gatekey-mesh-gateway release-gatekey-wireguard-hub release-gatekey-wireguard-mesh-gateway ## Build release archives for all binaries
+# All binaries to release
+RELEASE_BINARIES=gatekey gatekey-server gatekey-gateway gatekey-wireguard-gateway gatekey-admin gatekey-hub gatekey-mesh-gateway gatekey-wireguard-hub gatekey-wireguard-mesh-gateway
+
+# Release build function: $(call release-binary,binary-name)
+define release-binary
+	@mkdir -p $(RELEASE_DIR)
+	@for platform in $(PLATFORMS); do \
+		os=$${platform%/*}; \
+		arch=$${platform#*/}; \
+		echo "Building $(1) for $$os/$$arch..."; \
+		output_name="$(1)-$(VERSION)-$$os-$$arch"; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GOBUILD) $(LDFLAGS) -o $(RELEASE_DIR)/$$output_name/$(1) ./cmd/$(1); \
+		cp README.md LICENSE $(RELEASE_DIR)/$$output_name/ 2>/dev/null || true; \
+		tar -czf $(RELEASE_DIR)/$$output_name.tar.gz -C $(RELEASE_DIR) $$output_name; \
+		rm -rf $(RELEASE_DIR)/$$output_name; \
+		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
+	done
+	@echo "$(1) release complete"
+endef
+
+release: ## Build release archives for all binaries
+	@for binary in $(RELEASE_BINARIES); do \
+		$(MAKE) release-$$binary; \
+	done
 	@echo "Release archives created in $(RELEASE_DIR)/"
 	@echo "SHA256 checksums:"
 	@cat $(RELEASE_DIR)/checksums.txt
@@ -89,140 +112,32 @@ release: release-gatekey release-gatekey-server release-gatekey-gateway release-
 release-all: clean release ## Clean and build all release artifacts
 	@echo "Full release complete"
 
-release-gatekey: ## Build gatekey release archives for all platforms
-	@mkdir -p $(RELEASE_DIR)
-	@for platform in $(PLATFORMS); do \
-		os=$${platform%/*}; \
-		arch=$${platform#*/}; \
-		echo "Building gatekey for $$os/$$arch..."; \
-		output_name="gatekey-$(VERSION)-$$os-$$arch"; \
-		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GOBUILD) $(LDFLAGS) -o $(RELEASE_DIR)/$$output_name/gatekey ./cmd/gatekey; \
-		cp README.md LICENSE $(RELEASE_DIR)/$$output_name/ 2>/dev/null || true; \
-		tar -czf $(RELEASE_DIR)/$$output_name.tar.gz -C $(RELEASE_DIR) $$output_name; \
-		rm -rf $(RELEASE_DIR)/$$output_name; \
-		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
-	done
-	@echo "gatekey release complete"
+release-gatekey: ## Build gatekey release archives
+	$(call release-binary,gatekey)
 
-release-gatekey-server: ## Build gatekey-server release archives for all platforms
-	@mkdir -p $(RELEASE_DIR)
-	@for platform in $(PLATFORMS); do \
-		os=$${platform%/*}; \
-		arch=$${platform#*/}; \
-		echo "Building gatekey-server for $$os/$$arch..."; \
-		output_name="gatekey-server-$(VERSION)-$$os-$$arch"; \
-		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GOBUILD) $(LDFLAGS) -o $(RELEASE_DIR)/$$output_name/gatekey-server ./cmd/gatekey-server; \
-		cp README.md LICENSE $(RELEASE_DIR)/$$output_name/ 2>/dev/null || true; \
-		tar -czf $(RELEASE_DIR)/$$output_name.tar.gz -C $(RELEASE_DIR) $$output_name; \
-		rm -rf $(RELEASE_DIR)/$$output_name; \
-		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
-	done
-	@echo "gatekey-server release complete"
+release-gatekey-server: ## Build gatekey-server release archives
+	$(call release-binary,gatekey-server)
 
-release-gatekey-gateway: ## Build gatekey-gateway release archives for all platforms
-	@mkdir -p $(RELEASE_DIR)
-	@for platform in $(PLATFORMS); do \
-		os=$${platform%/*}; \
-		arch=$${platform#*/}; \
-		echo "Building gatekey-gateway for $$os/$$arch..."; \
-		output_name="gatekey-gateway-$(VERSION)-$$os-$$arch"; \
-		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GOBUILD) $(LDFLAGS) -o $(RELEASE_DIR)/$$output_name/gatekey-gateway ./cmd/gatekey-gateway; \
-		cp README.md LICENSE $(RELEASE_DIR)/$$output_name/ 2>/dev/null || true; \
-		tar -czf $(RELEASE_DIR)/$$output_name.tar.gz -C $(RELEASE_DIR) $$output_name; \
-		rm -rf $(RELEASE_DIR)/$$output_name; \
-		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
-	done
-	@echo "gatekey-gateway release complete"
+release-gatekey-gateway: ## Build gatekey-gateway release archives
+	$(call release-binary,gatekey-gateway)
 
-release-gatekey-wireguard-gateway: ## Build gatekey-wireguard-gateway release archives for all platforms
-	@mkdir -p $(RELEASE_DIR)
-	@for platform in $(PLATFORMS); do \
-		os=$${platform%/*}; \
-		arch=$${platform#*/}; \
-		echo "Building gatekey-wireguard-gateway for $$os/$$arch..."; \
-		output_name="gatekey-wireguard-gateway-$(VERSION)-$$os-$$arch"; \
-		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GOBUILD) $(LDFLAGS) -o $(RELEASE_DIR)/$$output_name/gatekey-wireguard-gateway ./cmd/gatekey-wireguard-gateway; \
-		cp README.md LICENSE $(RELEASE_DIR)/$$output_name/ 2>/dev/null || true; \
-		tar -czf $(RELEASE_DIR)/$$output_name.tar.gz -C $(RELEASE_DIR) $$output_name; \
-		rm -rf $(RELEASE_DIR)/$$output_name; \
-		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
-	done
-	@echo "gatekey-wireguard-gateway release complete"
+release-gatekey-wireguard-gateway: ## Build gatekey-wireguard-gateway release archives
+	$(call release-binary,gatekey-wireguard-gateway)
 
-release-gatekey-admin: ## Build gatekey-admin release archives for all platforms
-	@mkdir -p $(RELEASE_DIR)
-	@for platform in $(PLATFORMS); do \
-		os=$${platform%/*}; \
-		arch=$${platform#*/}; \
-		echo "Building gatekey-admin for $$os/$$arch..."; \
-		output_name="gatekey-admin-$(VERSION)-$$os-$$arch"; \
-		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GOBUILD) $(LDFLAGS) -o $(RELEASE_DIR)/$$output_name/gatekey-admin ./cmd/gatekey-admin; \
-		cp README.md LICENSE $(RELEASE_DIR)/$$output_name/ 2>/dev/null || true; \
-		tar -czf $(RELEASE_DIR)/$$output_name.tar.gz -C $(RELEASE_DIR) $$output_name; \
-		rm -rf $(RELEASE_DIR)/$$output_name; \
-		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
-	done
-	@echo "gatekey-admin release complete"
+release-gatekey-admin: ## Build gatekey-admin release archives
+	$(call release-binary,gatekey-admin)
 
-release-gatekey-hub: ## Build gatekey-hub release archives for all platforms
-	@mkdir -p $(RELEASE_DIR)
-	@for platform in $(PLATFORMS); do \
-		os=$${platform%/*}; \
-		arch=$${platform#*/}; \
-		echo "Building gatekey-hub for $$os/$$arch..."; \
-		output_name="gatekey-hub-$(VERSION)-$$os-$$arch"; \
-		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GOBUILD) $(LDFLAGS) -o $(RELEASE_DIR)/$$output_name/gatekey-hub ./cmd/gatekey-hub; \
-		cp README.md LICENSE $(RELEASE_DIR)/$$output_name/ 2>/dev/null || true; \
-		tar -czf $(RELEASE_DIR)/$$output_name.tar.gz -C $(RELEASE_DIR) $$output_name; \
-		rm -rf $(RELEASE_DIR)/$$output_name; \
-		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
-	done
-	@echo "gatekey-hub release complete"
+release-gatekey-hub: ## Build gatekey-hub release archives
+	$(call release-binary,gatekey-hub)
 
-release-gatekey-mesh-gateway: ## Build gatekey-mesh-gateway release archives for all platforms
-	@mkdir -p $(RELEASE_DIR)
-	@for platform in $(PLATFORMS); do \
-		os=$${platform%/*}; \
-		arch=$${platform#*/}; \
-		echo "Building gatekey-mesh-gateway for $$os/$$arch..."; \
-		output_name="gatekey-mesh-gateway-$(VERSION)-$$os-$$arch"; \
-		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GOBUILD) $(LDFLAGS) -o $(RELEASE_DIR)/$$output_name/gatekey-mesh-gateway ./cmd/gatekey-mesh-gateway; \
-		cp README.md LICENSE $(RELEASE_DIR)/$$output_name/ 2>/dev/null || true; \
-		tar -czf $(RELEASE_DIR)/$$output_name.tar.gz -C $(RELEASE_DIR) $$output_name; \
-		rm -rf $(RELEASE_DIR)/$$output_name; \
-		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
-	done
-	@echo "gatekey-mesh-gateway release complete"
+release-gatekey-mesh-gateway: ## Build gatekey-mesh-gateway release archives
+	$(call release-binary,gatekey-mesh-gateway)
 
-release-gatekey-wireguard-hub: ## Build gatekey-wireguard-hub release archives for all platforms
-	@mkdir -p $(RELEASE_DIR)
-	@for platform in $(PLATFORMS); do \
-		os=$${platform%/*}; \
-		arch=$${platform#*/}; \
-		echo "Building gatekey-wireguard-hub for $$os/$$arch..."; \
-		output_name="gatekey-wireguard-hub-$(VERSION)-$$os-$$arch"; \
-		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GOBUILD) $(LDFLAGS) -o $(RELEASE_DIR)/$$output_name/gatekey-wireguard-hub ./cmd/gatekey-wireguard-hub; \
-		cp README.md LICENSE $(RELEASE_DIR)/$$output_name/ 2>/dev/null || true; \
-		tar -czf $(RELEASE_DIR)/$$output_name.tar.gz -C $(RELEASE_DIR) $$output_name; \
-		rm -rf $(RELEASE_DIR)/$$output_name; \
-		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
-	done
-	@echo "gatekey-wireguard-hub release complete"
+release-gatekey-wireguard-hub: ## Build gatekey-wireguard-hub release archives
+	$(call release-binary,gatekey-wireguard-hub)
 
-release-gatekey-wireguard-mesh-gateway: ## Build gatekey-wireguard-mesh-gateway release archives for all platforms
-	@mkdir -p $(RELEASE_DIR)
-	@for platform in $(PLATFORMS); do \
-		os=$${platform%/*}; \
-		arch=$${platform#*/}; \
-		echo "Building gatekey-wireguard-mesh-gateway for $$os/$$arch..."; \
-		output_name="gatekey-wireguard-mesh-gateway-$(VERSION)-$$os-$$arch"; \
-		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GOBUILD) $(LDFLAGS) -o $(RELEASE_DIR)/$$output_name/gatekey-wireguard-mesh-gateway ./cmd/gatekey-wireguard-mesh-gateway; \
-		cp README.md LICENSE $(RELEASE_DIR)/$$output_name/ 2>/dev/null || true; \
-		tar -czf $(RELEASE_DIR)/$$output_name.tar.gz -C $(RELEASE_DIR) $$output_name; \
-		rm -rf $(RELEASE_DIR)/$$output_name; \
-		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
-	done
-	@echo "gatekey-wireguard-mesh-gateway release complete"
+release-gatekey-wireguard-mesh-gateway: ## Build gatekey-wireguard-mesh-gateway release archives
+	$(call release-binary,gatekey-wireguard-mesh-gateway)
 
 # =============================================================================
 # Development Targets
