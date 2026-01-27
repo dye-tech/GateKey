@@ -1,0 +1,26 @@
+# GateKey WireGuard Mesh Gateway (Spoke) Configuration
+# This file configures the WireGuard mesh gateway that connects to a hub.
+# Binary: gatekey-wireguard-mesh-gateway
+# Environment prefix: GATEKEY_WG_MESH_ (e.g., GATEKEY_WG_MESH_GATEWAY_TOKEN, GATEKEY_WG_MESH_NAME)
+
+# Gateway name (used for identification in control plane)
+name: "wg-spoke-1"
+
+# Control plane URL
+control_plane_url: "https://gatekey.example.com"
+
+# Gateway token for authentication (obtain from control plane when registering the gateway)
+gateway_token: "${GATEKEY_WG_MESH_GATEWAY_TOKEN}"
+
+# Heartbeat interval (how often to send status to control plane)
+heartbeat_interval: "30s"
+
+# Log level: debug, info, warn, error
+log_level: "info"
+
+# WireGuard interface name
+interface_name: "wg0"
+
+# Remote session support
+# Allows SSH-like sessions through the control plane
+session_enabled: true

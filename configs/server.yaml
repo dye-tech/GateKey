@@ -9,8 +9,8 @@ server:
   # Enable TLS
   tls_enabled: true
   # TLS certificate and key paths
-  tls_cert: "/etc/gatex/certs/server.crt"
-  tls_key: "/etc/gatex/certs/server.key"
+  tls_cert: "/etc/gatekey/certs/server.crt"
+  tls_key: "/etc/gatekey/certs/server.key"
   # Trusted proxies for X-Forwarded-For
   trusted_proxies: []
   # CORS allowed origins
@@ -21,7 +21,7 @@ server:
 database:
   # PostgreSQL connection string
   # Note: sslmode in URL is overridden by ssl_mode config below
-  url: "postgres://gatex:gatex@localhost:5432/gatex?sslmode=require"
+  url: "postgres://gatekey:gatekey@localhost:5432/gatekey?sslmode=require"
   # Maximum open connections
   max_open_conns: 25
   # Maximum idle connections
@@ -65,7 +65,7 @@ auth:
     # Session token validity
     validity: "12h"
     # Session cookie name
-    cookie_name: "gatex_session"
+    cookie_name: "gatekey_session"
     # Secure cookie (HTTPS only)
     secure: true
     # HTTP only cookie
@@ -80,9 +80,9 @@ auth:
       - name: "default"
         display_name: "Login with SSO"
         issuer: "https://auth.example.com"
-        client_id: "${GATEX_OIDC_CLIENT_ID}"
-        client_secret: "${GATEX_OIDC_CLIENT_SECRET}"
-        redirect_url: "https://gatex.example.com/api/v1/auth/oidc/callback"
+        client_id: "${GATEKEY_OIDC_CLIENT_ID}"
+        client_secret: "${GATEKEY_OIDC_CLIENT_SECRET}"
+        redirect_url: "https://gatekey.example.com/api/v1/auth/oidc/callback"
         scopes:
           - "openid"
           - "profile"
@@ -103,12 +103,12 @@ auth:
         # IdP metadata URL or file path
         idp_metadata_url: "https://idp.example.com/metadata"
         # SP entity ID
-        entity_id: "https://gatex.example.com/saml/metadata"
+        entity_id: "https://gatekey.example.com/saml/metadata"
         # ACS URL
-        acs_url: "https://gatex.example.com/api/v1/auth/saml/acs"
+        acs_url: "https://gatekey.example.com/api/v1/auth/saml/acs"
         # Certificate and key for signing
-        cert_file: "/etc/gatex/saml/sp.crt"
-        key_file: "/etc/gatex/saml/sp.key"
+        cert_file: "/etc/gatekey/saml/sp.crt"
+        key_file: "/etc/gatekey/saml/sp.key"
         # Attribute mappings
         attributes:
           email: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
@@ -118,9 +118,9 @@ auth:
 # Gateway configuration
 gateway:
   # API endpoint for gateway communication
-  api_url: "https://gatex.example.com/api/v1/gateway"
+  api_url: "https://gatekey.example.com/api/v1/gateway"
   # Gateway authentication token
-  token: "${GATEX_GATEWAY_TOKEN}"
+  token: "${GATEKEY_GATEWAY_TOKEN}"
   # Heartbeat interval
   heartbeat_interval: "30s"
 
@@ -156,7 +156,7 @@ audit:
   # Audit log destination: database, file, syslog
   destination: "database"
   # File path (if destination is file)
-  file_path: "/var/log/gatex/audit.log"
+  file_path: "/var/log/gatekey/audit.log"
   # Events to audit
   events:
     - "auth.login"

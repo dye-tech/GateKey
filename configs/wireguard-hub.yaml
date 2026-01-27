@@ -1,0 +1,37 @@
+# GateKey WireGuard Mesh Hub Configuration
+# This file configures the WireGuard mesh hub server.
+# Binary: gatekey-wireguard-hub
+# Environment prefix: GATEKEY_WG_HUB_ (e.g., GATEKEY_WG_HUB_API_TOKEN, GATEKEY_WG_HUB_NAME)
+
+# Hub name (used for identification in control plane)
+name: "wg-hub-1"
+
+# Control plane URL
+control_plane_url: "https://gatekey.example.com"
+
+# API token for authentication with control plane (obtain from control plane)
+api_token: "${GATEKEY_WG_HUB_API_TOKEN}"
+
+# Heartbeat interval (how often to send status to control plane)
+heartbeat_interval: "30s"
+
+# Peer sync interval (how often to fetch authorized peers from control plane)
+peer_sync_interval: "10s"
+
+# Stats sync interval (how often to report peer traffic stats)
+stats_sync_interval: "5s"
+
+# Log level: debug, info, warn, error
+log_level: "info"
+
+# WireGuard interface name
+interface_name: "wg0"
+
+# Remote agent configuration
+# The agent allows remote tool execution from the control plane
+agent_enabled: true
+agent_listen_addr: ":9445"
+
+# Remote session support
+# Allows SSH-like sessions through the control plane
+session_enabled: true

@@ -1,14 +1,19 @@
-# GateKey Gateway Agent Configuration
+# GateKey OpenVPN Gateway Agent Configuration
 # This file configures the gateway agent that runs alongside OpenVPN.
+# Binary: gatekey-gateway
+# Environment prefix: GATEX_ (e.g., GATEX_TOKEN, GATEX_CONTROL_PLANE_URL)
 
 # Control plane URL
-control_plane_url: "https://gatex.example.com"
+control_plane_url: "https://gatekey.example.com"
 
 # Gateway authentication token (obtain from control plane)
-token: "${GATEX_GATEWAY_TOKEN}"
+token: "${GATEX_TOKEN}"
 
 # Heartbeat interval
 heartbeat_interval: "30s"
+
+# Rule refresh interval (how often to refresh firewall rules)
+rule_refresh_interval: "30s"
 
 # Log level: debug, info, warn, error
 log_level: "info"
@@ -26,10 +31,10 @@ openvpn:
 firewall:
   # Firewall backend: nftables or iptables
   backend: "nftables"
-  # Chain name for gatex rules
-  chain: "GATEX"
+  # Chain name for GateKey rules
+  chain: "GATEKEY"
   # Table name (nftables only)
-  table: "gatex"
+  table: "gatekey"
   # Default policy: accept or drop
   default_policy: "drop"
 
