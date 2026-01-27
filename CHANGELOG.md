@@ -5,6 +5,28 @@ All notable changes to GateKey are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.1] - 2026-01-27
+
+### Fixed
+- Unchecked `rand.Read()` error during admin password generation (`internal/db/users.go`)
+- Goroutine leak in rate limiter - cleanup routine now properly stops on server shutdown
+- Request handlers using `context.Background()` instead of request context for OIDC and async operations
+
+### Changed
+- Updated Alpine base images to 3.23 for all Docker images
+- Updated Node.js to 25-alpine for web build image
+- Removed unused scaffolding code and AI-generated placeholder implementations
+
+### Documentation
+- Added complete configuration examples for all 9 binaries
+- Renamed config files for clarity: `gatex.yaml` → `server.yaml`, `gateway.yaml` → `openvpn-gateway.yaml`, `hub.yaml` → `openvpn-hub.yaml`
+- Fixed config key discrepancies (`stats_report_interval` → `stats_sync_interval` in wireguard-gateway.yaml)
+
+### Dependencies
+- Bump axios from 1.13.2 to 1.13.3
+- Bump react-router-dom from 7.12.0 to 7.13.0
+- Bump @types/react from 19.2.8 to 19.2.9
+
 ## [1.6.0] - 2026-01-26
 
 ### Added
