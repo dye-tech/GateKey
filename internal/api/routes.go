@@ -152,7 +152,7 @@ func (s *Server) handleOIDCLogin(c *gin.Context) {
 	}
 
 	// Create OIDC provider
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	issuerURL := strings.TrimSpace(providerConfig.Issuer)
 	s.logger.Info("Connecting to OIDC provider", zap.String("provider", providerName), zap.String("issuer", issuerURL))
 
@@ -287,7 +287,7 @@ func (s *Server) handleOIDCCallback(c *gin.Context) {
 	}
 
 	// Create OIDC provider
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	issuerURL := strings.TrimSpace(providerConfig.Issuer)
 	oidcProvider, err := oidc.NewProvider(ctx, issuerURL)
 	if err != nil {
@@ -1800,8 +1800,12 @@ func (s *Server) getAuthenticatedUser(c *gin.Context) (*authenticatedUser, error
 			return nil, errors.New("invalid API key")
 		}
 
-		// Update last used (async)
-		go func() { _ = s.apiKeyStore.UpdateLastUsed(context.Background(), apiKey.ID, c.ClientIP()) }()
+		// Update last used (async with timeout to prevent indefinite hangs)
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = s.apiKeyStore.UpdateLastUsed(ctx, apiKey.ID, c.ClientIP())
+		}()
 
 		return &authenticatedUser{
 			UserID:       ssoUser.ID,

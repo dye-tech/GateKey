@@ -208,7 +208,9 @@ func (s *UserStore) InitDefaultAdmin(ctx context.Context) (string, bool, error) 
 	if password == "" {
 		// Generate a random password if not provided
 		passwordBytes := make([]byte, 16)
-		rand.Read(passwordBytes)
+		if _, err := rand.Read(passwordBytes); err != nil {
+			return "", false, fmt.Errorf("failed to generate admin password: %w", err)
+		}
 		password = base64.RawURLEncoding.EncodeToString(passwordBytes)
 	}
 

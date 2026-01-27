@@ -300,15 +300,17 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 		srv.sessionMgr.SetAllowedOrigins(cfg.Server.CORSOrigins)
 	}
 
+	// Create background context for all background tasks
+	bgCtx, bgCancel := context.WithCancel(context.Background())
+	srv.bgCancel = bgCancel
+
 	// Initialize rate limiter for auth endpoints (50 attempts per minute per IP)
-	srv.authRateLimiter = newRateLimiter(50, time.Minute)
+	srv.authRateLimiter = newRateLimiter(bgCtx, 50, time.Minute)
 
 	// Setup routes
 	srv.setupRoutes()
 
 	// Start background tasks
-	bgCtx, bgCancel := context.WithCancel(context.Background())
-	srv.bgCancel = bgCancel
 	go srv.runGatewayHealthCheck(bgCtx)
 	go srv.runConfigCleanup(bgCtx)
 	go srv.runLoginLogCleanup(bgCtx)
@@ -1324,14 +1326,15 @@ type rateLimiter struct {
 }
 
 // newRateLimiter creates a rate limiter with the specified limit and window.
-func newRateLimiter(limit int, window time.Duration) *rateLimiter {
+// The context is used to stop the cleanup goroutine on shutdown.
+func newRateLimiter(ctx context.Context, limit int, window time.Duration) *rateLimiter {
 	rl := &rateLimiter{
 		requests: make(map[string][]time.Time),
 		limit:    limit,
 		window:   window,
 	}
 	// Start cleanup goroutine
-	go rl.cleanup()
+	go rl.cleanup(ctx)
 	return rl
 }
 
@@ -1367,29 +1370,35 @@ func (rl *rateLimiter) allow(key string) bool {
 }
 
 // cleanup periodically removes old entries to prevent memory leaks.
-func (rl *rateLimiter) cleanup() {
+// It stops when the context is cancelled.
+func (rl *rateLimiter) cleanup(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		rl.mu.Lock()
-		now := time.Now()
-		windowStart := now.Add(-rl.window)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			rl.mu.Lock()
+			now := time.Now()
+			windowStart := now.Add(-rl.window)
 
-		for key, requests := range rl.requests {
-			validRequests := make([]time.Time, 0)
-			for _, t := range requests {
-				if t.After(windowStart) {
-					validRequests = append(validRequests, t)
+			for key, requests := range rl.requests {
+				validRequests := make([]time.Time, 0)
+				for _, t := range requests {
+					if t.After(windowStart) {
+						validRequests = append(validRequests, t)
+					}
+				}
+				if len(validRequests) == 0 {
+					delete(rl.requests, key)
+				} else {
+					rl.requests[key] = validRequests
 				}
 			}
-			if len(validRequests) == 0 {
-				delete(rl.requests, key)
-			} else {
-				rl.requests[key] = validRequests
-			}
+			rl.mu.Unlock()
 		}
-		rl.mu.Unlock()
 	}
 }
 
