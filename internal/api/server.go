@@ -1370,7 +1370,7 @@ func (rl *rateLimiter) allow(key string) bool {
 }
 
 // cleanup periodically removes old entries to prevent memory leaks.
-// It stops when the context is cancelled.
+// It stops when the context is canceled.
 func (rl *rateLimiter) cleanup(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
