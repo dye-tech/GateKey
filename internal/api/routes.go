@@ -1495,8 +1495,8 @@ func (s *Server) handleCLICallback(c *gin.Context) {
 	token, _ := c.Get("access_token")
 
 	if token == nil || token == "" {
-		// Fallback token for CLI callback - actual JWT should be set in context
-		token = "cli-token-placeholder"
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication failed - no token in session"})
+		return
 	}
 
 	// Build callback URL with token
@@ -2291,41 +2291,6 @@ func (s *Server) handleAdminListUserMeshConfigs(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"configs": response})
-}
-
-// Certificate handlers - reserved for future certificate management features
-
-func (s *Server) handleGetCACert(c *gin.Context) {
-	// CA certificate retrieval - use /api/v1/settings/ca endpoints instead
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "use /api/v1/settings/ca/list endpoint"})
-}
-
-func (s *Server) handleRevokeCert(c *gin.Context) {
-	// Certificate revocation - handled automatically via config expiry
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "certificate revocation not supported"})
-}
-
-// Policy handlers - reserved for future fine-grained policy management
-
-func (s *Server) handleListPolicies(c *gin.Context) {
-	// Use access rules for policy management
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "use /api/v1/admin/access-rules endpoint"})
-}
-
-func (s *Server) handleCreatePolicy(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "use /api/v1/admin/access-rules endpoint"})
-}
-
-func (s *Server) handleGetPolicy(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "use /api/v1/admin/access-rules endpoint"})
-}
-
-func (s *Server) handleUpdatePolicy(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "use /api/v1/admin/access-rules endpoint"})
-}
-
-func (s *Server) handleDeletePolicy(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "use /api/v1/admin/access-rules endpoint"})
 }
 
 // Gateway handlers (internal API for gateways)
@@ -3349,18 +3314,6 @@ func (s *Server) handleGatewayClientStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"ok": true})
-}
-
-// User handlers
-
-func (s *Server) handleGetCurrentUser(c *gin.Context) {
-	// Returns current authenticated user info - use session endpoint instead
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "use /api/v1/auth/session endpoint"})
-}
-
-func (s *Server) handleGetUserConnections(c *gin.Context) {
-	// User connections are shown in the monitoring dashboard
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "use /api/v1/admin/sessions/active endpoint"})
 }
 
 // User gateway handlers
