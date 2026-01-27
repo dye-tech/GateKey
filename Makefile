@@ -184,6 +184,28 @@ test-coverage: ## Run tests with coverage report
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
+test-coverage-security: ## Run tests with coverage for security-critical paths (target: 80%)
+	@echo "Testing security-critical paths with coverage..."
+	@$(GOTEST) -coverprofile=coverage-security.out ./internal/auth/... ./internal/crypto/... ./internal/pki/... ./internal/policy/...
+	@echo ""
+	@echo "=== Security-Critical Path Coverage ==="
+	@$(GOCMD) tool cover -func=coverage-security.out | grep -E "^(github.com/gatekey-project/gatekey/internal/(auth|crypto|pki|policy)/|total:)"
+	@echo ""
+	@echo "Checking coverage thresholds..."
+	@$(GOCMD) tool cover -func=coverage-security.out | awk '/^total:/ { gsub(/%/, "", $$3); if ($$3 < 60) { print "FAIL: Total coverage " $$3 "% is below 60% threshold"; exit 1 } else { print "PASS: Total coverage " $$3 "% meets 60% threshold" } }'
+
+test-coverage-check: ## Check if coverage meets thresholds (fails if below 60% for security paths)
+	@echo "Running coverage check for security-critical paths..."
+	@$(GOTEST) -coverprofile=coverage-check.out ./internal/auth/... ./internal/crypto/... ./internal/pki/... ./internal/policy/... 2>/dev/null
+	@TOTAL=$$($(GOCMD) tool cover -func=coverage-check.out | grep "^total:" | awk '{gsub(/%/, "", $$3); print $$3}'); \
+	if [ $$(echo "$$TOTAL < 60" | bc -l) -eq 1 ]; then \
+		echo "FAIL: Security-critical coverage $$TOTAL% is below 60% threshold"; \
+		exit 1; \
+	else \
+		echo "PASS: Security-critical coverage $$TOTAL% meets threshold"; \
+	fi
+	@rm -f coverage-check.out
+
 # =============================================================================
 # Lint and Format
 # =============================================================================

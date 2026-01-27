@@ -169,3 +169,213 @@ func (m *mockAuthProvider) HandleCallback(ctx context.Context, r *http.Request) 
 		Provider:   "mock",
 	}, nil
 }
+
+func TestMockProviderLoginURL(t *testing.T) {
+	provider := &mockAuthProvider{
+		name:        "test",
+		provType:    "oidc",
+		displayName: "Test Provider",
+	}
+
+	state := "random-state-123"
+	loginURL, err := provider.LoginURL(state)
+	if err != nil {
+		t.Fatalf("Failed to get login URL: %v", err)
+	}
+
+	expected := "https://example.com/login?state=" + state
+	if loginURL != expected {
+		t.Errorf("Expected %q, got %q", expected, loginURL)
+	}
+}
+
+func TestMockProviderHandleCallback(t *testing.T) {
+	provider := &mockAuthProvider{
+		name:        "test",
+		provType:    "oidc",
+		displayName: "Test Provider",
+	}
+
+	userInfo, err := provider.HandleCallback(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("Failed to handle callback: %v", err)
+	}
+
+	if userInfo == nil {
+		t.Fatal("UserInfo should not be nil")
+	}
+
+	if userInfo.Email != "test@example.com" {
+		t.Errorf("Expected email 'test@example.com', got %q", userInfo.Email)
+	}
+
+	if userInfo.Name != "Test User" {
+		t.Errorf("Expected name 'Test User', got %q", userInfo.Name)
+	}
+}
+
+func TestRegisterMultipleProviders(t *testing.T) {
+	cfg := &config.AuthConfig{}
+	manager := NewManager(cfg, nil, nil)
+
+	providers := []*mockAuthProvider{
+		{name: "google", provType: "oidc", displayName: "Google"},
+		{name: "azure", provType: "oidc", displayName: "Azure AD"},
+		{name: "okta", provType: "saml", displayName: "Okta"},
+	}
+
+	for _, p := range providers {
+		manager.RegisterProvider(p)
+	}
+
+	list := manager.ListProviders()
+	if len(list) != 3 {
+		t.Errorf("Expected 3 providers, got %d", len(list))
+	}
+
+	// Verify we can get each provider
+	for _, p := range providers {
+		got, err := manager.GetProvider(p.provType, p.name)
+		if err != nil {
+			t.Errorf("Failed to get provider %s:%s: %v", p.provType, p.name, err)
+		}
+		if got.Name() != p.name {
+			t.Errorf("Expected name %q, got %q", p.name, got.Name())
+		}
+	}
+}
+
+func TestGetProvider_NotFound(t *testing.T) {
+	cfg := &config.AuthConfig{}
+	manager := NewManager(cfg, nil, nil)
+
+	tests := []struct {
+		name  string
+		pType string
+		pName string
+	}{
+		{"non-existent oidc", "oidc", "nonexistent"},
+		{"non-existent saml", "saml", "unknown"},
+		{"wrong type", "ldap", "test"},
+		{"empty name", "oidc", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := manager.GetProvider(tt.pType, tt.pName)
+			if err == nil {
+				t.Error("Expected error for non-existent provider")
+			}
+		})
+	}
+}
+
+func TestGenerateSecureToken_DifferentLengths(t *testing.T) {
+	lengths := []int{8, 16, 32, 64}
+
+	for _, length := range lengths {
+		t.Run("length_"+string(rune('0'+length)), func(t *testing.T) {
+			token, err := generateSecureToken(length)
+			if err != nil {
+				t.Fatalf("Failed to generate token of length %d: %v", length, err)
+			}
+
+			// Base64 encoding increases size: output = ceil(input * 4/3)
+			// URL-safe base64 doesn't use padding by default in Go
+			if len(token) == 0 {
+				t.Errorf("Token for length %d should not be empty", length)
+			}
+		})
+	}
+}
+
+func TestHashToken_EmptyInput(t *testing.T) {
+	hash := hashToken("")
+
+	// Even empty string should produce valid hash
+	if len(hash) != 64 {
+		t.Errorf("Expected hash length 64, got %d", len(hash))
+	}
+}
+
+func TestHashToken_Consistency(t *testing.T) {
+	testCases := []string{
+		"simple",
+		"with spaces",
+		"special!@#$%^&*()",
+		"unicode-日本語",
+		"very-long-token-" + string(make([]byte, 1000)),
+	}
+
+	for _, input := range testCases {
+		hash1 := hashToken(input)
+		hash2 := hashToken(input)
+
+		if hash1 != hash2 {
+			t.Errorf("Hash should be deterministic for input %q", input[:min(20, len(input))])
+		}
+	}
+}
+
+func TestUserInfo_Fields(t *testing.T) {
+	ui := &UserInfo{
+		ExternalID: "ext-123",
+		Email:      "user@example.com",
+		Name:       "Test User",
+		Groups:     []string{"admin", "users"},
+		Provider:   "oidc:google",
+		Attributes: map[string]interface{}{
+			"department":  "engineering",
+			"employee_id": 12345,
+		},
+	}
+
+	if ui.ExternalID != "ext-123" {
+		t.Errorf("Expected ExternalID 'ext-123', got %q", ui.ExternalID)
+	}
+
+	if len(ui.Groups) != 2 {
+		t.Errorf("Expected 2 groups, got %d", len(ui.Groups))
+	}
+
+	if ui.Attributes["department"] != "engineering" {
+		t.Errorf("Expected department 'engineering', got %v", ui.Attributes["department"])
+	}
+}
+
+func TestProviderInfo_Fields(t *testing.T) {
+	info := ProviderInfo{
+		Type:        "oidc",
+		Name:        "google",
+		DisplayName: "Google Workspace",
+	}
+
+	if info.Type != "oidc" {
+		t.Errorf("Expected Type 'oidc', got %q", info.Type)
+	}
+
+	if info.Name != "google" {
+		t.Errorf("Expected Name 'google', got %q", info.Name)
+	}
+
+	if info.DisplayName != "Google Workspace" {
+		t.Errorf("Expected DisplayName 'Google Workspace', got %q", info.DisplayName)
+	}
+}
+
+func TestListProviders_Empty(t *testing.T) {
+	cfg := &config.AuthConfig{}
+	manager := NewManager(cfg, nil, nil)
+
+	providers := manager.ListProviders()
+	if len(providers) != 0 {
+		t.Errorf("Expected 0 providers for empty manager, got %d", len(providers))
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}

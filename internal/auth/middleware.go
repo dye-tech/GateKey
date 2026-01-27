@@ -444,6 +444,12 @@ func (m *GatewayAuthMiddleware) RequireGatewayAuth() gin.HandlerFunc {
 		}
 
 		// Validate token
+		if m.gatewayRepo == nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+				"error": "Gateway authentication not configured",
+			})
+			return
+		}
 		tokenHash := hashToken(token)
 		gateway, err := m.gatewayRepo.ValidateToken(c.Request.Context(), tokenHash)
 		if err != nil {
