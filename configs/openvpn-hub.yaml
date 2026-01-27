@@ -1,4 +1,4 @@
-# GateKey Mesh Hub Configuration
+# GateKey OpenVPN Mesh Hub Configuration
 # This file configures the OpenVPN mesh hub server.
 # Binary: gatekey-hub
 # Environment prefix: GATEKEY_HUB_ (e.g., GATEKEY_HUB_API_TOKEN, GATEKEY_HUB_NAME)
