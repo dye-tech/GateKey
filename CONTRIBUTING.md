@@ -177,7 +177,6 @@ GateKey/
 │   ├── firewall/         # nftables management
 │   ├── pki/              # Certificate authority
 │   └── ...
-├── pkg/                   # Public libraries
 ├── web/                   # React frontend
 ├── migrations/            # Database migrations
 ├── docs/                  # Documentation

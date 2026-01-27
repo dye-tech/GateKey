@@ -521,24 +521,6 @@ Maintain documentation for:
 4. Audit log retention policies
 5. Incident response procedures
 
-## Post-Quantum Considerations
-
-### Future Readiness
-
-GateKey is designed for post-quantum readiness:
-
-1. **Modular Crypto**: Crypto operations abstracted behind interfaces
-2. **Hybrid Support**: Architecture supports hybrid classical+PQC schemes
-3. **Algorithm Agility**: Easy to add new algorithms
-
-### NIST PQC Algorithms
-
-When NIST finalizes PQC standards, GateKey will support:
-
-- ML-KEM (CRYSTALS-Kyber) for key encapsulation
-- ML-DSA (CRYSTALS-Dilithium) for signatures
-- SLH-DSA (SPHINCS+) for hash-based signatures
-
 ## References
 
 - [NIST FIPS 140-3](https://csrc.nist.gov/publications/detail/fips/140/3/final)
