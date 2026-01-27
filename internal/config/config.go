@@ -12,16 +12,17 @@ import (
 
 // Config holds all configuration for the GateKey server.
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	PKI      PKIConfig      `mapstructure:"pki"`
-	Auth     AuthConfig     `mapstructure:"auth"`
-	Gateway  GatewayConfig  `mapstructure:"gateway"`
-	Policy   PolicyConfig   `mapstructure:"policy"`
-	Logging  LoggingConfig  `mapstructure:"logging"`
-	Metrics  MetricsConfig  `mapstructure:"metrics"`
-	Audit    AuditConfig    `mapstructure:"audit"`
-	Security SecurityConfig `mapstructure:"security"`
+	Server    ServerConfig    `mapstructure:"server"`
+	Database  DatabaseConfig  `mapstructure:"database"`
+	PKI       PKIConfig       `mapstructure:"pki"`
+	Auth      AuthConfig      `mapstructure:"auth"`
+	Gateway   GatewayConfig   `mapstructure:"gateway"`
+	Policy    PolicyConfig    `mapstructure:"policy"`
+	Logging   LoggingConfig   `mapstructure:"logging"`
+	Metrics   MetricsConfig   `mapstructure:"metrics"`
+	Telemetry TelemetryConfig `mapstructure:"telemetry"`
+	Audit     AuditConfig     `mapstructure:"audit"`
+	Security  SecurityConfig  `mapstructure:"security"`
 }
 
 // ServerConfig holds HTTP server configuration.
@@ -135,6 +136,24 @@ type MetricsConfig struct {
 	Enabled bool   `mapstructure:"enabled"`
 	Path    string `mapstructure:"path"`
 	Port    int    `mapstructure:"port"`
+}
+
+// TelemetryConfig holds OpenTelemetry tracing configuration.
+type TelemetryConfig struct {
+	// Enabled enables/disables OpenTelemetry tracing
+	Enabled bool `mapstructure:"enabled"`
+	// ServiceName is the service name reported to the collector
+	ServiceName string `mapstructure:"service_name"`
+	// Environment is the deployment environment (e.g., "production", "staging")
+	Environment string `mapstructure:"environment"`
+	// OTLPEndpoint is the OpenTelemetry collector endpoint (e.g., "otel-collector:4317")
+	OTLPEndpoint string `mapstructure:"otlp_endpoint"`
+	// OTLPProtocol is the protocol to use ("grpc" or "http")
+	OTLPProtocol string `mapstructure:"otlp_protocol"`
+	// OTLPInsecure disables TLS for the OTLP connection
+	OTLPInsecure bool `mapstructure:"otlp_insecure"`
+	// SampleRate is the trace sampling rate (0.0 to 1.0, default 1.0 = 100%)
+	SampleRate float64 `mapstructure:"sample_rate"`
 }
 
 // AuditConfig holds audit logging configuration.

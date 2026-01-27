@@ -149,6 +149,23 @@ metrics:
   # Metrics port (0 = same as server)
   port: 0
 
+# OpenTelemetry tracing configuration
+telemetry:
+  # Enable distributed tracing
+  enabled: false
+  # Service name reported to the collector
+  service_name: "gatekey"
+  # Deployment environment (e.g., "production", "staging", "development")
+  environment: "production"
+  # OTLP collector endpoint (e.g., "otel-collector:4317" for gRPC)
+  otlp_endpoint: "otel-collector:4317"
+  # OTLP protocol: "grpc" or "http"
+  otlp_protocol: "grpc"
+  # Disable TLS for OTLP connection (set to true for local development)
+  otlp_insecure: false
+  # Trace sampling rate (0.0 to 1.0, where 1.0 = 100% of traces)
+  sample_rate: 1.0
+
 # Audit logging
 audit:
   # Enable audit logging

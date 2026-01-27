@@ -14,14 +14,17 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 
 	"github.com/gatekey-project/gatekey/internal/config"
 	"github.com/gatekey-project/gatekey/internal/db"
 	"github.com/gatekey-project/gatekey/internal/k8s"
+	"github.com/gatekey-project/gatekey/internal/metrics"
 	"github.com/gatekey-project/gatekey/internal/openvpn"
 	"github.com/gatekey-project/gatekey/internal/pki"
 	"github.com/gatekey-project/gatekey/internal/session"
+	"github.com/gatekey-project/gatekey/internal/telemetry"
 )
 
 // Server represents the HTTP API server.
@@ -51,10 +54,11 @@ type Server struct {
 	wgPeerStore     *db.WireGuardPeerStore   // WireGuard peer store
 	ca              *pki.CA
 	configGen       *openvpn.ConfigGenerator
-	adminPassword   string             // Initial admin password (shown once at startup)
-	bgCancel        context.CancelFunc // Cancel function for background tasks
-	sessionMgr      *session.Manager   // Remote session manager
-	authRateLimiter *rateLimiter       // Rate limiter for auth endpoints
+	adminPassword   string              // Initial admin password (shown once at startup)
+	bgCancel        context.CancelFunc  // Cancel function for background tasks
+	sessionMgr      *session.Manager    // Remote session manager
+	authRateLimiter *rateLimiter        // Rate limiter for auth endpoints
+	telemetry       *telemetry.Provider // OpenTelemetry provider
 }
 
 // NewServer creates a new API server instance.
@@ -73,6 +77,42 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	router.Use(zapLogger(logger))
 	// Request body size limit (10MB default) to prevent DoS attacks
 	router.Use(requestBodyLimitMiddleware(10 * 1024 * 1024))
+
+	// Add Prometheus metrics middleware
+	if cfg.Metrics.Enabled {
+		router.Use(metrics.GinMiddleware())
+	}
+
+	// Initialize OpenTelemetry tracing
+	var telemetryProvider *telemetry.Provider
+	if cfg.Telemetry.Enabled {
+		telemetryCfg := telemetry.Config{
+			Enabled:        cfg.Telemetry.Enabled,
+			ServiceName:    cfg.Telemetry.ServiceName,
+			ServiceVersion: "1.0.0",
+			Environment:    cfg.Telemetry.Environment,
+			OTLPEndpoint:   cfg.Telemetry.OTLPEndpoint,
+			OTLPProtocol:   cfg.Telemetry.OTLPProtocol,
+			OTLPInsecure:   cfg.Telemetry.OTLPInsecure,
+			SampleRate:     cfg.Telemetry.SampleRate,
+		}
+		var err error
+		telemetryProvider, err = telemetry.NewProvider(telemetryCfg)
+		if err != nil {
+			logger.Warn("Failed to initialize OpenTelemetry tracing", zap.Error(err))
+		} else {
+			logger.Info("OpenTelemetry tracing enabled",
+				zap.String("endpoint", cfg.Telemetry.OTLPEndpoint),
+				zap.String("service_name", cfg.Telemetry.ServiceName),
+				zap.Float64("sample_rate", cfg.Telemetry.SampleRate))
+			// Add tracing middleware
+			serviceName := cfg.Telemetry.ServiceName
+			if serviceName == "" {
+				serviceName = "gatekey"
+			}
+			router.Use(telemetry.GinMiddleware(serviceName))
+		}
+	}
 
 	// Configure CORS with exception for SAML ACS endpoint
 	// SAML ACS receives form POSTs from IdPs (not XHR/fetch) so doesn't need CORS headers.
@@ -261,6 +301,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 		ca:              ca,
 		configGen:       configGen,
 		adminPassword:   adminPassword,
+		telemetry:       telemetryProvider,
 	}
 
 	// Save admin password to Kubernetes secret if created
@@ -772,9 +813,12 @@ func (s *Server) setupRoutes() {
 	s.router.GET("/ws/agent", s.handleAgentWebSocket)
 	s.router.GET("/ws/admin/session", s.handleAdminSessionWebSocket)
 
-	// Metrics endpoint
+	// Metrics endpoint using Prometheus handler
 	if s.config.Metrics.Enabled {
-		s.router.GET(s.config.Metrics.Path, s.handleMetrics)
+		// Set server info metric
+		metrics.ServerInfo.WithLabelValues("1.0.0", "go1.22").Set(1)
+		// Use the standard Prometheus HTTP handler
+		s.router.GET(s.config.Metrics.Path, gin.WrapH(promhttp.Handler()))
 	}
 
 	// Reverse proxy routes (outside API group, handles /proxy/{slug}/*)
@@ -839,6 +883,13 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	// Cancel background tasks
 	if s.bgCancel != nil {
 		s.bgCancel()
+	}
+
+	// Shutdown telemetry provider to flush traces
+	if s.telemetry != nil {
+		if err := s.telemetry.Shutdown(ctx); err != nil {
+			s.logger.Warn("Failed to shutdown telemetry provider", zap.Error(err))
+		}
 	}
 
 	if s.httpServer != nil {
