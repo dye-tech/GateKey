@@ -396,24 +396,6 @@ func (s *Server) setupRoutes() {
 			configs.POST("/:id/revoke", s.handleRevokeConfig) // Revoke user's own config
 		}
 
-		// Certificate routes
-		certs := v1.Group("/certs")
-		{
-			certs.GET("/ca", s.handleGetCACert)
-			certs.POST("/revoke", s.handleRevokeCert)
-		}
-
-		// Policy routes (admin only)
-		policies := v1.Group("/policies")
-		policies.Use(s.adminAuthMiddleware())
-		{
-			policies.GET("", s.handleListPolicies)
-			policies.POST("", s.handleCreatePolicy)
-			policies.GET("/:id", s.handleGetPolicy)
-			policies.PUT("/:id", s.handleUpdatePolicy)
-			policies.DELETE("/:id", s.handleDeletePolicy)
-		}
-
 		// Gateway routes (internal - OpenVPN)
 		gateway := v1.Group("/gateway")
 		{
@@ -482,13 +464,6 @@ func (s *Server) setupRoutes() {
 		{
 			wgMeshSpoke.POST("/provision", s.handleWireGuardMeshSpokeProvision)
 			wgMeshSpoke.POST("/heartbeat", s.handleWireGuardMeshSpokeHeartbeat)
-		}
-
-		// User routes
-		users := v1.Group("/users")
-		{
-			users.GET("/me", s.handleGetCurrentUser)
-			users.GET("/me/connections", s.handleGetUserConnections)
 		}
 
 		// Gateway listing for authenticated users

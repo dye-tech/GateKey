@@ -266,19 +266,20 @@ func (b *NFTablesBackend) RemoveRules(ctx context.Context, connectionID string) 
 }
 
 // ListRules lists all rules managed by gatekey.
+// Note: Converting nftables rules back to Rule structs is not implemented
+// as firewall rules are managed internally and not exposed via API.
 func (b *NFTablesBackend) ListRules(ctx context.Context) ([]Rule, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	var allRules []Rule
+	// Return the count of rules without attempting to convert nftables rules
+	// back to our Rule struct (which would require parsing nftables expressions)
+	var count int
 	for _, rules := range b.rules {
-		for range rules {
-			// Note: Converting back from nftables rules to our Rule struct
-			// is complex and typically not needed. This is a placeholder.
-			allRules = append(allRules, Rule{})
-		}
+		count += len(rules)
 	}
-	return allRules, nil
+
+	return nil, fmt.Errorf("ListRules not implemented: %d rules tracked internally", count)
 }
 
 // Cleanup removes all gatekey-managed rules.
