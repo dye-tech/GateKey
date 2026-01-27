@@ -1,11 +1,13 @@
 # GateKey WireGuard Gateway Agent Configuration
 # This file configures the WireGuard gateway agent.
+# Binary: gatekey-wireguard-gateway
+# Environment prefix: GATEKEY_WG_ (e.g., GATEKEY_WG_TOKEN, GATEKEY_WG_CONTROL_PLANE_URL)
 
 # Control plane URL
-control_plane_url: "https://gatex.example.com"
+control_plane_url: "https://gatekey.example.com"
 
 # Gateway authentication token (obtain from control plane)
-token: "${GATEX_GATEWAY_TOKEN}"
+token: "${GATEKEY_WG_TOKEN}"
 
 # Heartbeat interval
 heartbeat_interval: "30s"
@@ -32,10 +34,10 @@ wireguard:
 firewall:
   # Firewall backend: nftables or iptables
   backend: "nftables"
-  # Chain name for gatex rules
-  chain: "GATEX"
+  # Chain name for GateKey rules
+  chain: "GATEKEY"
   # Table name (nftables only)
-  table: "gatex"
+  table: "gatekey"
   # Default policy: accept or drop
   default_policy: "drop"
 

@@ -1,0 +1,32 @@
+# GateKey Mesh Hub Configuration
+# This file configures the OpenVPN mesh hub server.
+# Binary: gatekey-hub
+# Environment prefix: GATEKEY_HUB_ (e.g., GATEKEY_HUB_API_TOKEN, GATEKEY_HUB_NAME)
+
+# Hub name (used for identification in control plane)
+name: "hub-1"
+
+# Control plane URL
+control_plane_url: "https://gatekey.example.com"
+
+# API token for authentication with control plane (obtain from control plane)
+api_token: "${GATEKEY_HUB_API_TOKEN}"
+
+# VPN configuration
+vpn_port: 1194
+vpn_protocol: "udp"  # udp or tcp
+
+# Heartbeat interval (how often to send status to control plane)
+heartbeat_interval: "30s"
+
+# Log level: debug, info, warn, error
+log_level: "info"
+
+# Remote agent configuration
+# The agent allows remote tool execution from the control plane
+agent_enabled: true
+agent_listen_addr: ":9443"
+
+# Remote session support
+# Allows SSH-like sessions through the control plane
+session_enabled: true

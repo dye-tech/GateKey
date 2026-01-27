@@ -1,0 +1,26 @@
+# GateKey Client Configuration
+# Default location: ~/.gatekey/config.yaml
+# Binary: gatekey
+#
+# Initialize with: gatekey config init --server https://gatekey.example.com
+
+# GateKey server URL
+server_url: "https://gatekey.example.com"
+
+# OpenVPN binary path (default: searches PATH)
+openvpn_binary: "openvpn"
+
+# WireGuard binary path (default: searches PATH)
+wireguard_binary: "wg-quick"
+
+# Configuration directory for downloaded VPN configs
+# Default: ~/.gatekey/configs
+config_dir: ""
+
+# Log level: debug, info, warn, error
+log_level: "info"
+
+# API key for non-interactive authentication (optional)
+# Generate from the GateKey web UI under Settings > API Keys
+# Prefer using environment variable GATEKEY_API_KEY for security
+# api_key: ""

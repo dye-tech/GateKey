@@ -1,0 +1,33 @@
+# GateKey Mesh Gateway (Spoke) Configuration
+# This file configures the OpenVPN mesh gateway that connects to a hub.
+# Binary: gatekey-mesh-gateway
+# Environment prefix: GATEKEY_MESH_ (e.g., GATEKEY_MESH_GATEWAY_TOKEN, GATEKEY_MESH_NAME)
+
+# Gateway name (used for identification in control plane)
+name: "spoke-1"
+
+# Control plane URL
+control_plane_url: "https://gatekey.example.com"
+
+# Gateway token for authentication (obtain from control plane when registering the gateway)
+gateway_token: "${GATEKEY_MESH_GATEWAY_TOKEN}"
+
+# Hub endpoint (usually auto-provisioned from control plane)
+# Format: hostname or hostname:port
+# hub_endpoint: "hub.example.com:1194"
+
+# Local networks to advertise to the hub
+# These networks will be routable through this gateway
+local_networks:
+  - "10.0.0.0/24"
+  - "192.168.1.0/24"
+
+# Heartbeat interval (how often to send status to control plane)
+heartbeat_interval: "30s"
+
+# Log level: debug, info, warn, error
+log_level: "info"
+
+# Remote session support
+# Allows SSH-like sessions through the control plane
+session_enabled: true
