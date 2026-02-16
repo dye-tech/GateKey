@@ -2,7 +2,7 @@
 # Usage: docker build --build-arg BINARY=gatekey-server --build-arg RUNTIME_DEPS="ca-certificates tzdata" .
 
 # Build stage
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 ARG BINARY=gatekey-server
 
