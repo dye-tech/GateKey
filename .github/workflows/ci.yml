@@ -146,7 +146,7 @@ jobs:
           CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags="-s -w" -o bin/${{ matrix.component.binary }}-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/${{ matrix.component.cmd }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.component.binary }}-${{ matrix.goos }}-${{ matrix.goarch }}
           path: bin/
