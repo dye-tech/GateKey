@@ -356,7 +356,7 @@ func GenerateTLSAuthKey() ([]byte, error) {
 	buf.WriteString("-----BEGIN OpenVPN Static key V1-----\n")
 
 	for i := 0; i < 256; i += 16 {
-		//nolint:gosec // key is exactly 256 bytes and loop steps by 16, so indices i..i+15 are always in bounds
+		// #nosec G602 -- key is exactly 256 bytes and loop steps by 16, so indices i..i+15 are always in bounds
 		fmt.Fprintf(&buf, "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\n",
 			key[i], key[i+1], key[i+2], key[i+3],
 			key[i+4], key[i+5], key[i+6], key[i+7],

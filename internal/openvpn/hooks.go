@@ -97,7 +97,7 @@ func (c *HookClient) Verify(req HookRequest) (*HookResponse, error) {
 		ClientIP:     req.UntrustedIP,
 	}
 
-	body, err := json.Marshal(verifyReq) //nolint:gosec // intentional serialization of credentials for secure storage/transmission
+	body, err := json.Marshal(verifyReq) // #nosec G117 -- intentional serialization of credentials for secure storage
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
