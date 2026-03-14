@@ -251,7 +251,7 @@ func saveTunnelConfig() error {
 		LocalNetworks: localNetworks,
 		PersistentKA:  persistentKA,
 	}
-	data, err := json.Marshal(cfg)
+	data, err := json.Marshal(cfg) //nolint:gosec // intentional serialization of credentials for secure storage/transmission
 	if err != nil {
 		return err
 	}

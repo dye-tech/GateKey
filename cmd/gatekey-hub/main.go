@@ -511,8 +511,8 @@ func generateServerConfig(prov ProvisionResponse) string {
 	sb.WriteString("# GateKey Mesh Hub OpenVPN Server Configuration\n")
 	sb.WriteString("# Auto-generated - do not edit manually\n\n")
 
-	sb.WriteString(fmt.Sprintf("port %d\n", prov.VPNPort))
-	sb.WriteString(fmt.Sprintf("proto %s\n", prov.VPNProtocol))
+	fmt.Fprintf(&sb, "port %d\n", prov.VPNPort)
+	fmt.Fprintf(&sb, "proto %s\n", prov.VPNProtocol)
 	sb.WriteString("dev tun\n\n")
 
 	sb.WriteString("# Certificate files\n")
@@ -540,7 +540,7 @@ func generateServerConfig(prov ProvisionResponse) string {
 		if parts[1] == "24" {
 			mask = "255.255.255.0"
 		}
-		sb.WriteString(fmt.Sprintf("server %s %s\n\n", network, mask))
+		fmt.Fprintf(&sb, "server %s %s\n\n", network, mask)
 	}
 
 	sb.WriteString("# Client configuration directory for spoke routes\n")
@@ -653,12 +653,12 @@ func updateGatewayRoutes(ctx context.Context, cfg *HubConfig) {
 
 		// CCD file content: iroute directives for this spoke's networks
 		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("# Spoke: %s\n", spoke.Name))
-		sb.WriteString(fmt.Sprintf("ifconfig-push %s 255.255.0.0\n", spoke.TunnelIP))
+		fmt.Fprintf(&sb, "# Spoke: %s\n", spoke.Name)
+		fmt.Fprintf(&sb, "ifconfig-push %s 255.255.0.0\n", spoke.TunnelIP)
 		for _, network := range spoke.LocalNetworks {
 			netIP, mask := cidrToNetmask(network)
 			if netIP != "" && mask != "" {
-				sb.WriteString(fmt.Sprintf("iroute %s %s\n", netIP, mask))
+				fmt.Fprintf(&sb, "iroute %s %s\n", netIP, mask)
 			}
 		}
 

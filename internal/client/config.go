@@ -117,7 +117,7 @@ func InitConfig(configPath string, serverURL string) error {
 
 // Save writes the configuration to disk.
 func (c *Config) Save() error {
-	data, err := yaml.Marshal(c)
+	data, err := yaml.Marshal(c) //nolint:gosec // intentional serialization of credentials for secure storage/transmission
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}

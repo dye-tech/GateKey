@@ -305,7 +305,7 @@ func (a *AuthManager) writeCallbackPage(w http.ResponseWriter, success bool, err
 </html>`, errMsg)
 	}
 
-	w.Write([]byte(html))
+	w.Write([]byte(html)) //nolint:gosec // HTML is constructed from trusted server response, not user input
 }
 
 // Logout clears saved credentials.
@@ -355,7 +355,7 @@ func (a *AuthManager) GetToken() (*TokenData, error) {
 
 // saveToken writes the token to disk securely.
 func (a *AuthManager) saveToken(token *TokenData) error {
-	data, err := json.Marshal(token)
+	data, err := json.Marshal(token) //nolint:gosec // intentional serialization of credentials for secure storage/transmission
 	if err != nil {
 		return fmt.Errorf("failed to marshal token: %w", err)
 	}
