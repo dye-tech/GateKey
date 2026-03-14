@@ -3,6 +3,7 @@ package wireguard
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -94,6 +95,62 @@ func (m *InterfaceManager) Setup(ctx context.Context, config InterfaceConfig) er
 		return fmt.Errorf("failed to bring up interface: %w", err)
 	}
 
+	// 6. Configure networking for routing/forwarding
+	if err := m.configureRouting(ctx); err != nil {
+		if m.logger != nil {
+			m.logger.Warn("Failed to configure routing (may require manual setup)", zap.Error(err))
+		}
+	}
+
+	return nil
+}
+
+// configureRouting enables IP forwarding and disables reverse path filtering
+// on the WireGuard interface so VPN traffic can be routed to the LAN.
+func (m *InterfaceManager) configureRouting(ctx context.Context) error {
+	// Enable IP forwarding
+	if err := m.executor.Run(ctx, "sysctl", "-w", "net.ipv4.ip_forward=1"); err != nil {
+		return fmt.Errorf("failed to enable IP forwarding: %w", err)
+	}
+
+	// Disable reverse path filtering on the WireGuard interface
+	// rp_filter=1 (strict) drops packets where the source address would not be
+	// routed back via the same interface, which breaks VPN forwarding
+	rpFilterKey := fmt.Sprintf("net.ipv4.conf.%s.rp_filter=0", m.name)
+	if err := m.executor.Run(ctx, "sysctl", "-w", rpFilterKey); err != nil {
+		return fmt.Errorf("failed to disable rp_filter: %w", err)
+	}
+
+	// Add NAT masquerade for VPN traffic exiting to the LAN
+	// This ensures reply packets from LAN hosts are routed back through the hub
+	if m.config.Address != "" {
+		// Extract subnet from address (e.g., "172.30.0.1/16" -> "172.30.0.0/16")
+		parts := strings.SplitN(m.config.Address, "/", 2)
+		if len(parts) == 2 {
+			ip := net.ParseIP(parts[0])
+			if ip != nil {
+				_, ipNet, err := net.ParseCIDR(m.config.Address)
+				if err == nil {
+					subnet := ipNet.String()
+					// Check if masquerade rule already exists before adding
+					checkErr := m.executor.Run(ctx, "iptables", "-t", "nat", "-C", "POSTROUTING",
+						"-s", subnet, "-o", "eth0", "-j", "MASQUERADE")
+					if checkErr != nil {
+						// Rule doesn't exist, add it
+						if err := m.executor.Run(ctx, "iptables", "-t", "nat", "-A", "POSTROUTING",
+							"-s", subnet, "!", "-o", m.name, "-j", "MASQUERADE"); err != nil {
+							return fmt.Errorf("failed to add masquerade rule: %w", err)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if m.logger != nil {
+		m.logger.Info("Routing configured for VPN forwarding",
+			zap.String("interface", m.name))
+	}
 	return nil
 }
 
