@@ -797,16 +797,16 @@ func (s *Server) handleGenerateWireGuardMeshClientConfig(c *gin.Context) {
 	// Generate WireGuard config file content
 	var configBuilder strings.Builder
 	configBuilder.WriteString("[Interface]\n")
-	configBuilder.WriteString(fmt.Sprintf("PrivateKey = %s\n", clientKeyPair.PrivateKey))
-	configBuilder.WriteString(fmt.Sprintf("Address = %s\n", assignedIP))
+	fmt.Fprintf(&configBuilder, "PrivateKey = %s\n", clientKeyPair.PrivateKey)
+	fmt.Fprintf(&configBuilder, "Address = %s\n", assignedIP)
 	if dnsServers != "" {
-		configBuilder.WriteString(fmt.Sprintf("DNS = %s\n", dnsServers))
+		fmt.Fprintf(&configBuilder, "DNS = %s\n", dnsServers)
 	}
 	configBuilder.WriteString("\n[Peer]\n")
-	configBuilder.WriteString(fmt.Sprintf("PublicKey = %s\n", hub.WGPublicKey))
-	configBuilder.WriteString(fmt.Sprintf("PresharedKey = %s\n", presharedKey))
-	configBuilder.WriteString(fmt.Sprintf("AllowedIPs = %s\n", strings.Join(allowedIPs, ", ")))
-	configBuilder.WriteString(fmt.Sprintf("Endpoint = %s\n", hubEndpoint))
+	fmt.Fprintf(&configBuilder, "PublicKey = %s\n", hub.WGPublicKey)
+	fmt.Fprintf(&configBuilder, "PresharedKey = %s\n", presharedKey)
+	fmt.Fprintf(&configBuilder, "AllowedIPs = %s\n", strings.Join(allowedIPs, ", "))
+	fmt.Fprintf(&configBuilder, "Endpoint = %s\n", hubEndpoint)
 	configBuilder.WriteString("PersistentKeepalive = 25\n")
 
 	configData := configBuilder.String()

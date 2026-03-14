@@ -1991,7 +1991,7 @@ func (v *VPNManager) startWireGuard(configPath, gatewayName, wgInterface string)
 		if err != nil {
 			return fmt.Errorf("failed to read config: %w", err)
 		}
-		if err := os.WriteFile(targetConfig, input, 0600); err != nil {
+		if err := os.WriteFile(targetConfig, input, 0600); err != nil { // #nosec G703 -- targetConfig path is constructed from controlled wgConfigDir and sanitized wgInterface name
 			return fmt.Errorf("failed to write config to %s: %w", wgConfigDir, err)
 		}
 	}

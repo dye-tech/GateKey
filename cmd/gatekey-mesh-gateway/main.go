@@ -525,7 +525,7 @@ func generateClientConfig(prov ProvisionResponse, hubEndpoint string) string {
 
 	sb.WriteString("client\n")
 	sb.WriteString("dev tun\n")
-	sb.WriteString(fmt.Sprintf("proto %s\n", prov.HubVPNProtocol))
+	fmt.Fprintf(&sb, "proto %s\n", prov.HubVPNProtocol)
 	sb.WriteString("\n")
 
 	// Parse hub endpoint (could be host:port or just host)
@@ -538,7 +538,7 @@ func generateClientConfig(prov ProvisionResponse, hubEndpoint string) string {
 			fmt.Sscanf(parts[1], "%d", &port)
 		}
 	}
-	sb.WriteString(fmt.Sprintf("remote %s %d\n\n", host, port))
+	fmt.Fprintf(&sb, "remote %s %d\n\n", host, port)
 
 	sb.WriteString("# Certificate files\n")
 	sb.WriteString("ca /etc/openvpn/client/ca.crt\n")

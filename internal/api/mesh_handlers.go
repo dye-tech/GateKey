@@ -515,7 +515,14 @@ func (s *Server) handleAssignMeshHubUser(c *gin.Context) {
 		return
 	}
 
-	if err := s.meshStore.AssignUserToHub(ctx, hubID, req.UserID); err != nil {
+	// Resolve username/email to UUID if needed
+	resolvedID, err := s.resolveUserID(ctx, req.UserID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user not found: " + req.UserID})
+		return
+	}
+
+	if err := s.meshStore.AssignUserToHub(ctx, hubID, resolvedID); err != nil {
 		s.logger.Error("Failed to assign user to hub", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign user to hub"})
 		return
@@ -1073,7 +1080,14 @@ func (s *Server) handleAssignMeshSpokeUser(c *gin.Context) {
 		return
 	}
 
-	if err := s.meshStore.AddUserToSpoke(ctx, spokeID, req.UserID); err != nil {
+	// Resolve username/email to UUID if needed
+	resolvedID, err := s.resolveUserID(ctx, req.UserID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user not found: " + req.UserID})
+		return
+	}
+
+	if err := s.meshStore.AddUserToSpoke(ctx, spokeID, resolvedID); err != nil {
 		s.logger.Error("Failed to assign user to spoke", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign user"})
 		return
@@ -2628,13 +2642,13 @@ func generateMeshClientOVPNConfig(hub *db.MeshHub, caChain, clientCert, clientKe
 	var sb strings.Builder
 
 	sb.WriteString("# GateKey Mesh VPN Configuration\n")
-	sb.WriteString(fmt.Sprintf("# Hub: %s\n", hub.Name))
-	sb.WriteString(fmt.Sprintf("# Generated: %s\n\n", time.Now().Format(time.RFC3339)))
+	fmt.Fprintf(&sb, "# Hub: %s\n", hub.Name)
+	fmt.Fprintf(&sb, "# Generated: %s\n\n", time.Now().Format(time.RFC3339))
 
 	sb.WriteString("client\n")
 	sb.WriteString("dev tun\n")
-	sb.WriteString(fmt.Sprintf("proto %s\n", hub.VPNProtocol))
-	sb.WriteString(fmt.Sprintf("remote %s %d\n", hub.PublicEndpoint, hub.VPNPort))
+	fmt.Fprintf(&sb, "proto %s\n", hub.VPNProtocol)
+	fmt.Fprintf(&sb, "remote %s %d\n", hub.PublicEndpoint, hub.VPNPort)
 	sb.WriteString("\n")
 	sb.WriteString("resolv-retry infinite\n")
 	sb.WriteString("nobind\n")
@@ -2684,7 +2698,7 @@ func generateMeshClientOVPNConfig(hub *db.MeshHub, caChain, clientCert, clientKe
 				if !strings.Contains(route, ":") {
 					netIP, netmask, err := cidrToNetmask(route)
 					if err == nil {
-						sb.WriteString(fmt.Sprintf("route %s %s\n", netIP, netmask))
+						fmt.Fprintf(&sb, "route %s %s\n", netIP, netmask)
 					}
 				}
 			}
@@ -2694,7 +2708,7 @@ func generateMeshClientOVPNConfig(hub *db.MeshHub, caChain, clientCert, clientKe
 			sb.WriteString("# IPv6 routes\n")
 			for _, route := range routes {
 				if strings.Contains(route, ":") {
-					sb.WriteString(fmt.Sprintf("route-ipv6 %s\n", route))
+					fmt.Fprintf(&sb, "route-ipv6 %s\n", route)
 				}
 			}
 		}
@@ -2706,7 +2720,7 @@ func generateMeshClientOVPNConfig(hub *db.MeshHub, caChain, clientCert, clientKe
 		sb.WriteString("# DNS servers\n")
 		if len(hub.DNSServers) > 0 {
 			for _, dns := range hub.DNSServers {
-				sb.WriteString(fmt.Sprintf("dhcp-option DNS %s\n", dns))
+				fmt.Fprintf(&sb, "dhcp-option DNS %s\n", dns)
 			}
 		} else {
 			// Default DNS servers

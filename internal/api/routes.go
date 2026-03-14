@@ -4639,7 +4639,15 @@ func (s *Server) handleAssignRuleToUser(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	if err := s.accessRuleStore.AssignRuleToUser(ctx, req.UserID, ruleID); err != nil {
+
+	// Resolve username/email to UUID if needed
+	resolvedID, err := s.resolveUserID(ctx, req.UserID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user not found: " + req.UserID})
+		return
+	}
+
+	if err := s.accessRuleStore.AssignRuleToUser(ctx, resolvedID, ruleID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign rule to user"})
 		return
 	}
