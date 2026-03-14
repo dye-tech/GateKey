@@ -515,7 +515,14 @@ func (s *Server) handleAssignMeshHubUser(c *gin.Context) {
 		return
 	}
 
-	if err := s.meshStore.AssignUserToHub(ctx, hubID, req.UserID); err != nil {
+	// Resolve username/email to UUID if needed
+	resolvedID, err := s.resolveUserID(ctx, req.UserID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user not found: " + req.UserID})
+		return
+	}
+
+	if err := s.meshStore.AssignUserToHub(ctx, hubID, resolvedID); err != nil {
 		s.logger.Error("Failed to assign user to hub", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign user to hub"})
 		return
@@ -1073,7 +1080,14 @@ func (s *Server) handleAssignMeshSpokeUser(c *gin.Context) {
 		return
 	}
 
-	if err := s.meshStore.AddUserToSpoke(ctx, spokeID, req.UserID); err != nil {
+	// Resolve username/email to UUID if needed
+	resolvedID, err := s.resolveUserID(ctx, req.UserID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user not found: " + req.UserID})
+		return
+	}
+
+	if err := s.meshStore.AddUserToSpoke(ctx, spokeID, resolvedID); err != nil {
 		s.logger.Error("Failed to assign user to spoke", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign user"})
 		return

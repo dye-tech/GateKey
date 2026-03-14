@@ -385,7 +385,14 @@ func (s *Server) handleAssignProxyAppToUser(c *gin.Context) {
 		return
 	}
 
-	if err := s.proxyAppStore.AssignAppToUser(c.Request.Context(), req.UserID, id); err != nil {
+	// Resolve username/email to UUID if needed
+	resolvedID, resolveErr := s.resolveUserID(c.Request.Context(), req.UserID)
+	if resolveErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user not found: " + req.UserID})
+		return
+	}
+
+	if err := s.proxyAppStore.AssignAppToUser(c.Request.Context(), resolvedID, id); err != nil {
 		s.logger.Error("Failed to assign proxy app to user", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign user"})
 		return

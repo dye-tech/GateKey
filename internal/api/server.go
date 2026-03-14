@@ -1206,6 +1206,33 @@ func (s *Server) requireAnyScope(requiredScopes ...string) gin.HandlerFunc {
 	}
 }
 
+// resolveUserID resolves a user identifier (UUID, username, or email) to a UUID.
+// If the input already looks like a UUID, it's returned as-is. Otherwise, the user
+// is looked up by username or email in both SSO and local user stores.
+func (s *Server) resolveUserID(ctx context.Context, userIdentifier string) (string, error) {
+	// If it looks like a UUID already, return as-is
+	if len(userIdentifier) == 36 && strings.Count(userIdentifier, "-") == 4 {
+		return userIdentifier, nil
+	}
+
+	// Try as local username
+	if localUser, err := s.userStore.GetLocalUserByUsername(ctx, userIdentifier); err == nil && localUser != nil {
+		return localUser.ID, nil
+	}
+
+	// Try as email (local users)
+	if localUser, err := s.userStore.GetLocalUserByEmail(ctx, userIdentifier); err == nil && localUser != nil {
+		return localUser.ID, nil
+	}
+
+	// Try as email (SSO users)
+	if ssoUser, err := s.userStore.GetSSOUserByEmail(ctx, userIdentifier); err == nil && ssoUser != nil {
+		return ssoUser.ID, nil
+	}
+
+	return "", fmt.Errorf("user not found: %s", userIdentifier)
+}
+
 const (
 	csrfCookieName = "gatekey_csrf"
 	csrfHeaderName = "X-CSRF-Token"

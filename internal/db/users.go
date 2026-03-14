@@ -461,7 +461,7 @@ func (s *UserStore) ListAllGroups(ctx context.Context) ([]string, error) {
 	// Local groups are prefixed with "local:" to distinguish them from IdP groups
 	rows, err := s.db.Pool.Query(ctx, `
 		SELECT DISTINCT group_name FROM (
-			SELECT jsonb_array_elements_text(groups) as group_name FROM users
+			SELECT jsonb_array_elements_text(groups) as group_name FROM users WHERE groups IS NOT NULL AND jsonb_typeof(groups) = 'array'
 			UNION
 			SELECT group_name FROM group_access_rules
 			UNION
