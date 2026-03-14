@@ -1482,7 +1482,8 @@ function ManageAccessModal({ hub, onClose }: { hub: MeshHub; onClose: () => void
   async function loadData() {
     try {
       setLoading(true)
-      const [hubUsers, hubGroups, hubNetworks, userList, localUserList, groupList, networkList] = await Promise.all([
+      // Use Promise.allSettled to avoid cascading failures when IdP is offline
+      const results = await Promise.allSettled([
         getMeshHubUsers(hub.id),
         getMeshHubGroups(hub.id),
         getMeshHubNetworks(hub.id),
@@ -1491,17 +1492,24 @@ function ManageAccessModal({ hub, onClose }: { hub: MeshHub; onClose: () => void
         getGroups(),
         getNetworks(),
       ])
-      setUsers(hubUsers)
-      setGroups(hubGroups)
-      setNetworks(hubNetworks)
+      const [hubUsers, hubGroups, hubNetworks, userList, localUserList, groupList, networkList] = results
+
+      setUsers(hubUsers.status === 'fulfilled' ? hubUsers.value : [])
+      setGroups(hubGroups.status === 'fulfilled' ? hubGroups.value : [])
+      setNetworks(hubNetworks.status === 'fulfilled' ? hubNetworks.value : [])
+
       // Combine SSO and local users, marking local users with (Local) suffix
-      const combinedUsers = [
-        ...userList.map(u => ({ id: u.id, email: u.email, name: u.name })),
-        ...localUserList.map(u => ({ id: u.id, email: u.email, name: `${u.username} (Local)` })),
-      ]
-      setAllUsers(combinedUsers)
-      setAllGroups(groupList.map(g => g.name))
-      setAllNetworks(networkList)
+      const ssoUsers = userList.status === 'fulfilled' ? userList.value.map(u => ({ id: u.id, email: u.email, name: u.name })) : []
+      const localUsers = localUserList.status === 'fulfilled' ? localUserList.value.map(u => ({ id: u.id, email: u.email, name: `${u.username} (Local)` })) : []
+      setAllUsers([...ssoUsers, ...localUsers])
+      setAllGroups(groupList.status === 'fulfilled' ? groupList.value.map(g => g.name) : [])
+      setAllNetworks(networkList.status === 'fulfilled' ? networkList.value : [])
+
+      // Warn if some data failed to load
+      const failures = results.filter(r => r.status === 'rejected')
+      if (failures.length > 0) {
+        setError(`Some data failed to load (${failures.length} of ${results.length} requests failed). Partial data shown.`)
+      }
     } catch (err) {
       setError('Failed to load access data')
     } finally {
@@ -1888,22 +1896,27 @@ function ManageSpokeAccessModal({ spoke, onClose }: { spoke: MeshSpoke; onClose:
   async function loadData() {
     try {
       setLoading(true)
-      const [spokeUsers, spokeGroups, userList, localUserList, groupList] = await Promise.all([
+      const results = await Promise.allSettled([
         getMeshSpokeUsers(spoke.id),
         getMeshSpokeGroups(spoke.id),
         getUsers(),
         getLocalUsers(),
         getGroups(),
       ])
-      setUsers(spokeUsers)
-      setGroups(spokeGroups)
-      // Combine SSO and local users, marking local users with (Local) suffix
-      const combinedUsers = [
-        ...userList.map(u => ({ id: u.id, email: u.email, name: u.name })),
-        ...localUserList.map(u => ({ id: u.id, email: u.email, name: `${u.username} (Local)` })),
-      ]
-      setAllUsers(combinedUsers)
-      setAllGroups(groupList.map(g => g.name))
+      const [spokeUsers, spokeGroups, userList, localUserList, groupList] = results
+
+      setUsers(spokeUsers.status === 'fulfilled' ? spokeUsers.value : [])
+      setGroups(spokeGroups.status === 'fulfilled' ? spokeGroups.value : [])
+
+      const ssoUsers = userList.status === 'fulfilled' ? userList.value.map(u => ({ id: u.id, email: u.email, name: u.name })) : []
+      const localUsers = localUserList.status === 'fulfilled' ? localUserList.value.map(u => ({ id: u.id, email: u.email, name: `${u.username} (Local)` })) : []
+      setAllUsers([...ssoUsers, ...localUsers])
+      setAllGroups(groupList.status === 'fulfilled' ? groupList.value.map(g => g.name) : [])
+
+      const failures = results.filter(r => r.status === 'rejected')
+      if (failures.length > 0) {
+        setError(`Some data failed to load (${failures.length} of ${results.length} requests failed). Partial data shown.`)
+      }
     } catch (err) {
       setError('Failed to load access data')
     } finally {

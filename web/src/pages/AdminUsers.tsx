@@ -71,17 +71,25 @@ export default function AdminUsers() {
   async function loadData() {
     try {
       setLoading(true)
-      const [sso, local, grps, lgrps] = await Promise.all([
+      const results = await Promise.allSettled([
         getUsers(),
         getLocalUsers(),
         getGroups(),
         getLocalGroups(),
       ])
-      setSSOUsers(sso)
-      setLocalUsers(local)
-      setGroups(grps)
-      setLocalGroups(lgrps)
-      setError(null)
+      const [sso, local, grps, lgrps] = results
+
+      setSSOUsers(sso.status === 'fulfilled' ? sso.value : [])
+      setLocalUsers(local.status === 'fulfilled' ? local.value : [])
+      setGroups(grps.status === 'fulfilled' ? grps.value : [])
+      setLocalGroups(lgrps.status === 'fulfilled' ? lgrps.value : [])
+
+      const failures = results.filter(r => r.status === 'rejected')
+      if (failures.length > 0) {
+        setError(`Some data failed to load (${failures.length} of ${results.length} requests failed). Partial data shown.`)
+      } else {
+        setError(null)
+      }
     } catch (err) {
       setError('Failed to load user data')
     } finally {

@@ -1262,6 +1262,12 @@ func (s *Server) csrfMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		// Skip CSRF for local login (JSON body with credentials, not vulnerable to CSRF)
+		if c.Request.URL.Path == "/api/v1/auth/local/login" {
+			c.Next()
+			return
+		}
+
 		// Validate CSRF token for state-changing requests with session auth (cookie-based)
 		cookieToken, err := c.Cookie(csrfCookieName)
 		if err != nil || cookieToken == "" {

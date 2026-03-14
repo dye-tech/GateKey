@@ -489,23 +489,29 @@ function AssignAccessModal({ app, onClose }: AssignAccessModalProps) {
   async function loadData() {
     try {
       setLoading(true)
-      const [ssoUsers, localUsers, groups, appUsers, appGroups] = await Promise.all([
+      const results = await Promise.allSettled([
         getUsers(),
         getLocalUsers(),
         getGroups(),
         getProxyAppUsers(app.id),
         getProxyAppGroups(app.id),
       ])
+      const [ssoUsers, localUsers, groups, appUsers, appGroups] = results
+
       // Combine SSO and local users
-      const combinedUsers = [
-        ...ssoUsers.map(u => ({ id: u.id, email: u.email, name: u.name, provider: u.provider })),
-        ...localUsers.map(u => ({ id: u.id, email: u.email, name: `${u.username} (Local)`, provider: 'local' })),
-      ]
-      setAllUsers(combinedUsers)
-      setAllGroups(groups)
-      setAssignedUserIds(appUsers)
-      setAssignedGroups(appGroups)
-      setError(null)
+      const sso = ssoUsers.status === 'fulfilled' ? ssoUsers.value.map(u => ({ id: u.id, email: u.email, name: u.name, provider: u.provider })) : []
+      const local = localUsers.status === 'fulfilled' ? localUsers.value.map(u => ({ id: u.id, email: u.email, name: `${u.username} (Local)`, provider: 'local' })) : []
+      setAllUsers([...sso, ...local])
+      setAllGroups(groups.status === 'fulfilled' ? groups.value : [])
+      setAssignedUserIds(appUsers.status === 'fulfilled' ? appUsers.value : [])
+      setAssignedGroups(appGroups.status === 'fulfilled' ? appGroups.value : [])
+
+      const failures = results.filter(r => r.status === 'rejected')
+      if (failures.length > 0) {
+        setError(`Some data failed to load. Partial data shown.`)
+      } else {
+        setError(null)
+      }
     } catch {
       setError('Failed to load data')
     } finally {
