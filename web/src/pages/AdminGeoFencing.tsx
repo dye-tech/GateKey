@@ -64,7 +64,7 @@ export default function AdminGeoFencing() {
   async function loadAll() {
     setLoading(true)
     try {
-      const [settingsData, rulesData, globalData, usersData, localUsersData, groupsData] = await Promise.all([
+      const results = await Promise.allSettled([
         getGeoFenceSettings(),
         getGeoFenceRules(),
         getGlobalGeoRules(),
@@ -72,17 +72,24 @@ export default function AdminGeoFencing() {
         getLocalUsers(),
         getGroups(),
       ])
-      setSettings(settingsData)
-      setRules(rulesData)
-      setGlobalRules(globalData)
+      const [settingsData, rulesData, globalData, usersData, localUsersData, groupsData] = results
+
+      if (settingsData.status === 'fulfilled') setSettings(settingsData.value)
+      if (rulesData.status === 'fulfilled') setRules(rulesData.value)
+      if (globalData.status === 'fulfilled') setGlobalRules(globalData.value)
+
       // Combine SSO and local users
-      const allUsers = [
-        ...usersData.map(u => ({ id: u.id, email: u.email, name: u.name || u.email })),
-        ...localUsersData.map(u => ({ id: u.id, email: u.email, name: u.username })),
-      ]
-      setUsers(allUsers)
-      setGroups(groupsData)
-      setError(null)
+      const sso = usersData.status === 'fulfilled' ? usersData.value.map(u => ({ id: u.id, email: u.email, name: u.name || u.email })) : []
+      const local = localUsersData.status === 'fulfilled' ? localUsersData.value.map(u => ({ id: u.id, email: u.email, name: u.username })) : []
+      setUsers([...sso, ...local])
+      if (groupsData.status === 'fulfilled') setGroups(groupsData.value)
+
+      const failures = results.filter(r => r.status === 'rejected')
+      if (failures.length > 0) {
+        setError(`Some data failed to load. Partial data shown.`)
+      } else {
+        setError(null)
+      }
     } catch (err) {
       setError('Failed to load geo-fencing data')
     } finally {

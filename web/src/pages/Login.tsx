@@ -48,6 +48,25 @@ export default function Login() {
     }, 100)
   }
 
+  // Map URL error codes to user-friendly messages
+  const errorMessages: Record<string, string> = {
+    provider_offline: 'Identity provider is offline. Try local login instead.',
+    provider_error: 'Identity provider error. Try local login instead.',
+    token_exchange_failed: 'Authentication failed - identity provider may be offline. Try local login.',
+    token_verification_failed: 'Token verification failed. Try again or use local login.',
+    invalid_state: 'Login session expired. Please try again.',
+    invalid_callback: 'Invalid authentication callback.',
+    nonce_mismatch: 'Security validation failed. Please try again.',
+    claims_error: 'Failed to read user information from identity provider.',
+  }
+
+  useEffect(() => {
+    if (urlError) {
+      setError(errorMessages[urlError] || `Authentication error: ${urlError}`)
+      setShowLocalForm(true)
+    }
+  }, [urlError])
+
   useEffect(() => {
     loadProviders()
   }, [])

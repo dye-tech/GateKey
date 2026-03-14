@@ -1418,16 +1418,23 @@ function GatewayAccessModal({ gateway, onClose }: GatewayAccessModalProps) {
     setLoading(true)
     setError(null)
     try {
-      const [networksData, allNetworksData, usersData, groupsData] = await Promise.all([
+      const results = await Promise.allSettled([
         getGatewayNetworks(gateway.id),
         getNetworks(),
         getGatewayUsers(gateway.id),
         getGatewayGroups(gateway.id),
       ])
-      setNetworks(networksData)
-      setAllNetworks(allNetworksData)
-      setUsers(usersData)
-      setGroups(groupsData)
+      const [networksData, allNetworksData, usersData, groupsData] = results
+
+      setNetworks(networksData.status === 'fulfilled' ? networksData.value : [])
+      setAllNetworks(allNetworksData.status === 'fulfilled' ? allNetworksData.value : [])
+      setUsers(usersData.status === 'fulfilled' ? usersData.value : [])
+      setGroups(groupsData.status === 'fulfilled' ? groupsData.value : [])
+
+      const failures = results.filter(r => r.status === 'rejected')
+      if (failures.length > 0) {
+        setError(`Some data failed to load. Partial data shown.`)
+      }
     } catch (err) {
       setError('Failed to load data')
     } finally {

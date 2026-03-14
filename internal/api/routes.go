@@ -151,10 +151,12 @@ func (s *Server) handleOIDCLogin(c *gin.Context) {
 		return
 	}
 
-	// Create OIDC provider
-	ctx := c.Request.Context()
+	// Create OIDC provider with timeout to avoid hanging when IdP is offline
 	issuerURL := strings.TrimSpace(providerConfig.Issuer)
 	s.logger.Info("Connecting to OIDC provider", zap.String("provider", providerName), zap.String("issuer", issuerURL))
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
 
 	oidcProvider, err := oidc.NewProvider(ctx, issuerURL)
 	if err != nil {
@@ -162,7 +164,10 @@ func (s *Server) handleOIDCLogin(c *gin.Context) {
 			zap.String("provider", providerName),
 			zap.String("issuer", issuerURL),
 			zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to connect to identity provider: " + err.Error()})
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "identity provider is unreachable",
+			"details": "The OIDC provider (" + providerName + ") is currently unavailable. Use local login if available.",
+		})
 		return
 	}
 
@@ -286,13 +291,17 @@ func (s *Server) handleOIDCCallback(c *gin.Context) {
 		return
 	}
 
-	// Create OIDC provider
-	ctx := c.Request.Context()
+	// Create OIDC provider with timeout to avoid hanging when IdP is offline
 	issuerURL := strings.TrimSpace(providerConfig.Issuer)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
 	oidcProvider, err := oidc.NewProvider(ctx, issuerURL)
 	if err != nil {
-		s.logger.Error("Failed to create OIDC provider", zap.Error(err))
-		c.Redirect(http.StatusFound, "/login?error=provider_error")
+		s.logger.Error("Failed to create OIDC provider - identity provider may be offline",
+			zap.String("issuer", issuerURL),
+			zap.Error(err))
+		c.Redirect(http.StatusFound, "/login?error=provider_offline")
 		return
 	}
 
@@ -310,10 +319,13 @@ func (s *Server) handleOIDCCallback(c *gin.Context) {
 		Scopes:       scopes,
 	}
 
-	// Exchange code for token
-	oauth2Token, err := oauth2Config.Exchange(ctx, code)
+	// Exchange code for token with timeout
+	exchangeCtx, exchangeCancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer exchangeCancel()
+
+	oauth2Token, err := oauth2Config.Exchange(exchangeCtx, code)
 	if err != nil {
-		s.logger.Error("Failed to exchange code for token", zap.Error(err))
+		s.logger.Error("Failed to exchange code for token - identity provider may be offline", zap.Error(err))
 		c.Redirect(http.StatusFound, "/login?error=token_exchange_failed")
 		return
 	}
@@ -467,10 +479,21 @@ func (s *Server) handleSAMLLogin(c *gin.Context) {
 		return
 	}
 
-	idpMetadata, err := samlsp.FetchMetadata(c.Request.Context(), http.DefaultClient, *idpMetadataURL)
+	// Fetch IdP metadata with timeout to avoid hanging when IdP is offline
+	metadataCtx, metadataCancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer metadataCancel()
+
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	idpMetadata, err := samlsp.FetchMetadata(metadataCtx, httpClient, *idpMetadataURL)
 	if err != nil {
-		s.logger.Error("Failed to fetch IdP metadata", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch IdP metadata"})
+		s.logger.Error("Failed to fetch IdP metadata - identity provider may be offline",
+			zap.String("provider", providerName),
+			zap.String("metadata_url", providerConfig.IDPMetadataURL),
+			zap.Error(err))
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "identity provider is unreachable",
+			"details": "The SAML provider (" + providerName + ") is currently unavailable. Use local login if available.",
+		})
 		return
 	}
 
