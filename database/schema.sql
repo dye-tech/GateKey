@@ -2,6 +2,7 @@
 -- PostgreSQL database dump
 --
 
+\restrict fb9PePKefO489YCCEoeOVgCJVHjuufXXVgX43rQv4UhXo9zWYYdf2LfA9uy19Bt
 
 -- Dumped from database version 16.10
 -- Dumped by pg_dump version 16.10
@@ -25,24 +26,10 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
 
 
 --
--- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: -
---
-
-COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
-
-
---
 -- Name: uuid-ossp; Type: EXTENSION; Schema: -; Owner: -
 --
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
-
-
---
--- Name: EXTENSION "uuid-ossp"; Type: COMMENT; Schema: -; Owner: -
---
-
-COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
 
 
 --
@@ -393,34 +380,6 @@ CREATE TABLE public.gateways (
 
 
 --
--- Name: COLUMN gateways.crypto_profile; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.gateways.crypto_profile IS 'Cryptographic profile: modern (default), fips (FIPS 140-2 compliant), compatible (legacy support)';
-
-
---
--- Name: COLUMN gateways.public_ip_v6; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.gateways.public_ip_v6 IS 'Public IPv6 address of the gateway';
-
-
---
--- Name: COLUMN gateways.internal_ip_v6; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.gateways.internal_ip_v6 IS 'Internal IPv6 address of the gateway';
-
-
---
--- Name: COLUMN gateways.vpn_subnet_v6; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.gateways.vpn_subnet_v6 IS 'IPv6 VPN subnet for client IP allocation';
-
-
---
 -- Name: generated_configs; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -516,6 +475,69 @@ CREATE TABLE public.group_proxy_applications (
 
 
 --
+-- Name: jit_access_grants; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.jit_access_grants (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    request_id uuid NOT NULL,
+    user_id character varying(255) NOT NULL,
+    resource_type character varying(20) NOT NULL,
+    resource_id uuid NOT NULL,
+    is_active boolean DEFAULT true NOT NULL,
+    granted_at timestamp with time zone DEFAULT now() NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    revoked_at timestamp with time zone,
+    revoked_by character varying(255),
+    revoke_reason character varying(255)
+);
+
+
+--
+-- Name: jit_access_policies; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.jit_access_policies (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    name character varying(255) NOT NULL,
+    description text,
+    resource_type character varying(20) NOT NULL,
+    resource_id uuid,
+    max_duration_minutes integer DEFAULT 480 NOT NULL,
+    default_duration_minutes integer DEFAULT 60 NOT NULL,
+    request_expiry_minutes integer DEFAULT 60 NOT NULL,
+    auto_approve boolean DEFAULT false NOT NULL,
+    require_justification boolean DEFAULT true NOT NULL,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: jit_access_requests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.jit_access_requests (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    requester_id character varying(255) NOT NULL,
+    requester_email character varying(255) NOT NULL,
+    resource_type character varying(20) NOT NULL,
+    resource_id uuid NOT NULL,
+    resource_name character varying(255) NOT NULL,
+    justification text NOT NULL,
+    requested_duration_minutes integer NOT NULL,
+    status character varying(20) DEFAULT 'pending'::character varying NOT NULL,
+    approver_id character varying(255),
+    approver_email character varying(255),
+    approval_note text,
+    expires_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    decided_at timestamp with time zone
+);
+
+
+--
 -- Name: local_group_members; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -604,20 +626,6 @@ CREATE TABLE public.mesh_connections (
 
 
 --
--- Name: COLUMN mesh_connections.client_ip_v6; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.mesh_connections.client_ip_v6 IS 'Client IPv6 address';
-
-
---
--- Name: COLUMN mesh_connections.tunnel_ip_v6; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.mesh_connections.tunnel_ip_v6 IS 'Tunnel IPv6 address assigned to client';
-
-
---
 -- Name: mesh_gateway_groups; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -673,20 +681,6 @@ CREATE TABLE public.mesh_gateways (
     enforce_fips_mode boolean DEFAULT false NOT NULL,
     CONSTRAINT valid_mesh_spoke_gateway_type CHECK (((gateway_type)::text = ANY ((ARRAY['openvpn'::character varying, 'wireguard'::character varying])::text[])))
 );
-
-
---
--- Name: COLUMN mesh_gateways.local_networks_v6; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.mesh_gateways.local_networks_v6 IS 'Array of IPv6 CIDRs for networks behind this gateway';
-
-
---
--- Name: COLUMN mesh_gateways.tunnel_ip_v6; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.mesh_gateways.tunnel_ip_v6 IS 'IPv6 tunnel IP assigned by hub';
 
 
 --
@@ -793,13 +787,6 @@ CREATE TABLE public.mesh_hubs (
 
 
 --
--- Name: COLUMN mesh_hubs.vpn_subnet_v6; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.mesh_hubs.vpn_subnet_v6 IS 'IPv6 mesh network subnet for dual-stack support';
-
-
---
 -- Name: networks; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -813,13 +800,6 @@ CREATE TABLE public.networks (
     updated_at timestamp with time zone DEFAULT now(),
     cidr_v6 text
 );
-
-
---
--- Name: COLUMN networks.cidr_v6; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.networks.cidr_v6 IS 'IPv6 network CIDR (optional, for dual-stack support)';
 
 
 --
@@ -857,13 +837,6 @@ CREATE TABLE public.oidc_providers (
     admin_group character varying(255) DEFAULT NULL::character varying,
     claim_mappings jsonb DEFAULT '{"name": "name", "email": "email", "groups": "groups", "given_name": "given_name", "family_name": "family_name"}'::jsonb
 );
-
-
---
--- Name: COLUMN oidc_providers.claim_mappings; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.oidc_providers.claim_mappings IS 'Maps GateKey fields to OIDC claim names from the IdP';
 
 
 --
@@ -963,20 +936,6 @@ CREATE TABLE public.proxy_applications (
 
 
 --
--- Name: COLUMN proxy_applications.skip_tls_verify; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.proxy_applications.skip_tls_verify IS 'Skip TLS certificate verification for this app (overrides global setting)';
-
-
---
--- Name: COLUMN proxy_applications.custom_ca_cert; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.proxy_applications.custom_ca_cert IS 'Custom CA certificate PEM for this app (optional)';
-
-
---
 -- Name: saml_providers; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -993,13 +952,6 @@ CREATE TABLE public.saml_providers (
     admin_group character varying(255) DEFAULT NULL::character varying,
     attribute_mappings jsonb DEFAULT '{"name": "displayName", "email": "email", "groups": "groups", "given_name": "givenName", "family_name": "sn"}'::jsonb
 );
-
-
---
--- Name: COLUMN saml_providers.attribute_mappings; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.saml_providers.attribute_mappings IS 'Maps GateKey fields to SAML attribute names from the IdP';
 
 
 --
@@ -1398,6 +1350,30 @@ ALTER TABLE ONLY public.group_geo_fence_rules
 
 ALTER TABLE ONLY public.group_proxy_applications
     ADD CONSTRAINT group_proxy_applications_pkey PRIMARY KEY (group_name, proxy_app_id);
+
+
+--
+-- Name: jit_access_grants jit_access_grants_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.jit_access_grants
+    ADD CONSTRAINT jit_access_grants_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: jit_access_policies jit_access_policies_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.jit_access_policies
+    ADD CONSTRAINT jit_access_policies_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: jit_access_requests jit_access_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.jit_access_requests
+    ADD CONSTRAINT jit_access_requests_pkey PRIMARY KEY (id);
 
 
 --
@@ -2139,6 +2115,62 @@ CREATE INDEX idx_group_proxy_apps_app ON public.group_proxy_applications USING b
 --
 
 CREATE INDEX idx_group_proxy_apps_group ON public.group_proxy_applications USING btree (group_name);
+
+
+--
+-- Name: idx_jit_grants_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_jit_grants_active ON public.jit_access_grants USING btree (is_active, expires_at) WHERE (is_active = true);
+
+
+--
+-- Name: idx_jit_grants_resource; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_jit_grants_resource ON public.jit_access_grants USING btree (resource_type, resource_id);
+
+
+--
+-- Name: idx_jit_grants_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_jit_grants_user ON public.jit_access_grants USING btree (user_id);
+
+
+--
+-- Name: idx_jit_policies_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_jit_policies_active ON public.jit_access_policies USING btree (is_active) WHERE (is_active = true);
+
+
+--
+-- Name: idx_jit_policies_resource; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_jit_policies_resource ON public.jit_access_policies USING btree (resource_type, resource_id);
+
+
+--
+-- Name: idx_jit_requests_expires; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_jit_requests_expires ON public.jit_access_requests USING btree (expires_at) WHERE ((status)::text = 'pending'::text);
+
+
+--
+-- Name: idx_jit_requests_requester; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_jit_requests_requester ON public.jit_access_requests USING btree (requester_id);
+
+
+--
+-- Name: idx_jit_requests_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_jit_requests_status ON public.jit_access_requests USING btree (status);
 
 
 --
@@ -2923,6 +2955,14 @@ ALTER TABLE ONLY public.group_proxy_applications
 
 
 --
+-- Name: jit_access_grants jit_access_grants_request_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.jit_access_grants
+    ADD CONSTRAINT jit_access_grants_request_id_fkey FOREIGN KEY (request_id) REFERENCES public.jit_access_requests(id) ON DELETE CASCADE;
+
+
+--
 -- Name: local_group_members local_group_members_group_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3110,4 +3150,5 @@ ALTER TABLE ONLY public.wireguard_peers
 -- PostgreSQL database dump complete
 --
 
+\unrestrict fb9PePKefO489YCCEoeOVgCJVHjuufXXVgX43rQv4UhXo9zWYYdf2LfA9uy19Bt
 
