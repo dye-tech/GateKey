@@ -5,6 +5,52 @@ All notable changes to GateKey are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-03-16
+
+### Added
+- **Just-In-Time (JIT) Access**: Time-limited, approval-based access request system
+  - Users request temporary access to resources (access rules, proxy apps, mesh hubs)
+  - Admin approval queue with approve/deny and optional notes
+  - Automatic revocation on expiry via 60-second background job
+  - JIT grants transparently enforced by existing gateway firewall
+  - Self-service portal with resource browser, countdown timers
+  - Configurable policies: per-resource auto-approve, max duration limits, request expiry
+  - Analytics dashboard: approval rates, average duration, requests by type, top requesters
+  - Slack/Teams webhook notifications on request, approval, and denial
+- **Session Recording**: Record and replay remote shell sessions for compliance
+  - Asciicast v2 format with gzip compression for web replay
+  - Recording hooks in WebSocket session manager (start on connect, tee output, stop on disconnect)
+  - Admin UI with recordings list, metadata, stream endpoint for replay
+  - Configurable retention with automatic cleanup (6-hour cycle)
+- **Proxy Access Logging**: Enhanced proxy app request logging
+  - Optional request/response header capture (sanitized — Cookie, Authorization redacted)
+  - Per-app logging toggle (`access_logging_enabled`) and header capture toggle (`log_headers`)
+  - Cross-app admin log viewer with filtering by app, user, method, status range
+- **VPN Network Flow Logging**: Per-connection network flow data from gateway agents
+  - Tracks destination IPs, ports, protocols, bytes sent/received, duration
+  - Gateway agent flow report endpoint (`POST /api/v1/gateway/flow-report`)
+  - Admin dashboard: flow list with filters, top destinations, per-user activity, aggregate stats
+- **Privacy Controls**: Sensitive data masking for session recordings
+  - Regex-based output masking (passwords, API keys, Bearer tokens)
+  - Configurable mask patterns via admin settings
+  - Per-session-type recording toggles (terminal, proxy, flow)
+  - Default patterns applied automatically on startup
+- **SSH Bastion Proxy**: SSH jump host with session recording
+  - SSH server on configurable port (default 2222)
+  - API key authentication for SSH access
+  - Session mode: terminate SSH, proxy to target with recording
+  - Jump host mode (`ssh -J`): direct-tcpip forwarding with flow logging
+  - Access rule enforcement against target host/port
+  - ED25519 host key generation and persistence
+  - Configurable target host key validation via environment variable
+
+### Database
+- Migration 049: `jit_access_requests`, `jit_access_grants`
+- Migration 050: `jit_access_policies`
+- Migration 051: `session_recordings`
+- Migration 052: Enhanced `proxy_access_logs` with headers, per-app logging toggles
+- Migration 053: `network_flow_logs`
+
 ## [1.7.0] - 2026-01-27
 
 ### Added

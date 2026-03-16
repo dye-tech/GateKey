@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict fb9PePKefO489YCCEoeOVgCJVHjuufXXVgX43rQv4UhXo9zWYYdf2LfA9uy19Bt
+\restrict H4Pagmh6SgX75MIQOainonsJZsylJsRxZeZn4iIwbV64NXjvlicWzWOyVaP51JZ
 
 -- Dumped from database version 16.10
 -- Dumped by pg_dump version 16.10
@@ -787,6 +787,28 @@ CREATE TABLE public.mesh_hubs (
 
 
 --
+-- Name: network_flow_logs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.network_flow_logs (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    gateway_id uuid NOT NULL,
+    gateway_name character varying(255) NOT NULL,
+    user_id character varying(255) NOT NULL,
+    user_email character varying(255) NOT NULL,
+    source_ip inet NOT NULL,
+    dest_ip inet NOT NULL,
+    dest_port integer,
+    protocol character varying(10),
+    bytes_sent bigint DEFAULT 0 NOT NULL,
+    bytes_received bigint DEFAULT 0 NOT NULL,
+    flow_start timestamp with time zone NOT NULL,
+    flow_end timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: networks; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -906,7 +928,10 @@ CREATE TABLE public.proxy_access_logs (
     response_time_ms integer,
     client_ip inet,
     user_agent text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    request_headers jsonb,
+    response_headers jsonb,
+    response_size_bytes integer
 );
 
 
@@ -931,7 +956,9 @@ CREATE TABLE public.proxy_applications (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     skip_tls_verify boolean DEFAULT false,
-    custom_ca_cert text
+    custom_ca_cert text,
+    access_logging_enabled boolean DEFAULT true NOT NULL,
+    log_headers boolean DEFAULT false NOT NULL
 );
 
 
@@ -961,6 +988,28 @@ CREATE TABLE public.saml_providers (
 CREATE TABLE public.schema_migrations (
     version bigint NOT NULL,
     dirty boolean NOT NULL
+);
+
+
+--
+-- Name: session_recordings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.session_recordings (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    session_type character varying(20) DEFAULT 'terminal'::character varying NOT NULL,
+    user_id character varying(255) NOT NULL,
+    user_email character varying(255) NOT NULL,
+    target_node_id character varying(255),
+    target_node_name character varying(255),
+    storage_path text NOT NULL,
+    file_size_bytes bigint DEFAULT 0 NOT NULL,
+    duration_seconds integer DEFAULT 0 NOT NULL,
+    recording_format character varying(20) DEFAULT 'asciicast'::character varying NOT NULL,
+    is_complete boolean DEFAULT false NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    completed_at timestamp with time zone
 );
 
 
@@ -1513,6 +1562,14 @@ ALTER TABLE ONLY public.mesh_hubs
 
 
 --
+-- Name: network_flow_logs network_flow_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.network_flow_logs
+    ADD CONSTRAINT network_flow_logs_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: networks networks_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1630,6 +1687,14 @@ ALTER TABLE ONLY public.saml_providers
 
 ALTER TABLE ONLY public.schema_migrations
     ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);
+
+
+--
+-- Name: session_recordings session_recordings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.session_recordings
+    ADD CONSTRAINT session_recordings_pkey PRIMARY KEY (id);
 
 
 --
@@ -1947,6 +2012,41 @@ CREATE INDEX idx_connections_gateway_id ON public.connections USING btree (gatew
 --
 
 CREATE INDEX idx_connections_user_id ON public.connections USING btree (user_id);
+
+
+--
+-- Name: idx_flow_logs_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_flow_logs_created ON public.network_flow_logs USING btree (created_at DESC);
+
+
+--
+-- Name: idx_flow_logs_dest; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_flow_logs_dest ON public.network_flow_logs USING btree (dest_ip);
+
+
+--
+-- Name: idx_flow_logs_gateway; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_flow_logs_gateway ON public.network_flow_logs USING btree (gateway_id);
+
+
+--
+-- Name: idx_flow_logs_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_flow_logs_user ON public.network_flow_logs USING btree (user_id);
+
+
+--
+-- Name: idx_flow_logs_user_dest; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_flow_logs_user_dest ON public.network_flow_logs USING btree (user_id, dest_ip);
 
 
 --
@@ -2486,6 +2586,27 @@ CREATE INDEX idx_saml_providers_enabled ON public.saml_providers USING btree (is
 --
 
 CREATE INDEX idx_saml_providers_name ON public.saml_providers USING btree (name);
+
+
+--
+-- Name: idx_session_recordings_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_session_recordings_created ON public.session_recordings USING btree (created_at DESC);
+
+
+--
+-- Name: idx_session_recordings_target; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_session_recordings_target ON public.session_recordings USING btree (target_node_name);
+
+
+--
+-- Name: idx_session_recordings_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_session_recordings_user ON public.session_recordings USING btree (user_id);
 
 
 --
@@ -3150,5 +3271,5 @@ ALTER TABLE ONLY public.wireguard_peers
 -- PostgreSQL database dump complete
 --
 
-\unrestrict fb9PePKefO489YCCEoeOVgCJVHjuufXXVgX43rQv4UhXo9zWYYdf2LfA9uy19Bt
+\unrestrict H4Pagmh6SgX75MIQOainonsJZsylJsRxZeZn4iIwbV64NXjvlicWzWOyVaP51JZ
 

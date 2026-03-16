@@ -197,6 +197,24 @@ const sections: Section[] = [
       </svg>
     ),
   },
+  {
+    id: 'jit-access',
+    title: 'JIT Access',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'session-recording',
+    title: 'Session Recording',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+      </svg>
+    ),
+  },
 ]
 
 export default function Help() {
@@ -2778,6 +2796,184 @@ gatekey disconnect primary-hub`}</pre>
                 <li>• Monitor audit logs for unusual certificate generation patterns</li>
               </ul>
             </div>
+          </div>
+        </section>
+
+        {/* JIT Access Section */}
+        <section id="jit-access" className="scroll-mt-24">
+          <div className="card">
+            <h1 className="text-2xl font-bold text-theme-primary mb-2">Just-In-Time (JIT) Access</h1>
+            <p className="text-theme-secondary mb-6">
+              Request temporary, approval-based access to resources instead of permanent access grants.
+            </p>
+
+            {/* How It Works */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">How It Works</h3>
+            <div className="bg-theme-tertiary rounded-lg p-4 mb-6">
+              <ul className="space-y-2 text-theme-secondary">
+                <li className="flex items-start">
+                  <svg className="h-5 w-5 text-green-500 mr-2 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Browse available resources and submit a request with justification and duration
+                </li>
+                <li className="flex items-start">
+                  <svg className="h-5 w-5 text-green-500 mr-2 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Admin reviews and approves or denies the request
+                </li>
+                <li className="flex items-start">
+                  <svg className="h-5 w-5 text-green-500 mr-2 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Access is granted immediately upon approval with a countdown timer
+                </li>
+                <li className="flex items-start">
+                  <svg className="h-5 w-5 text-green-500 mr-2 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Access automatically revokes when the grant expires (checked every 60 seconds)
+                </li>
+              </ul>
+            </div>
+
+            {/* User Portal */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Requesting Access</h3>
+            <p className="text-theme-secondary mb-4">
+              Navigate to <strong>Access Requests</strong> in the sidebar to browse resources, submit requests, and view active grants with countdown timers.
+              Requests support durations from 15 minutes to 8 hours with a required justification.
+            </p>
+
+            {/* Admin Approval */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Admin Approval</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">Pending Requests</h4>
+                <ul className="text-sm text-theme-secondary space-y-1">
+                  <li>• Review requester, resource, and justification</li>
+                  <li>• Approve or deny with optional notes</li>
+                  <li>• Requests auto-expire if not answered</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">Policies</h4>
+                <ul className="text-sm text-theme-secondary space-y-1">
+                  <li>• Set max duration per resource</li>
+                  <li>• Enable auto-approve for low-risk resources</li>
+                  <li>• Configure request expiry timeouts</li>
+                  <li>• Require or skip justification</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Notifications */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Webhook Notifications</h3>
+            <p className="text-theme-secondary mb-4">
+              Configure Slack or Teams webhook notifications for new requests, approvals, and denials.
+              Set up the webhook URL and GateKey base URL in the Settings tab to receive notifications with direct approval links.
+            </p>
+
+            {/* Analytics */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Analytics</h3>
+            <p className="text-theme-secondary mb-4">
+              The Analytics tab shows approval rates, average grant duration, requests by resource type, and top requesters over the last 30 days.
+            </p>
+          </div>
+        </section>
+
+        {/* Session Recording Section */}
+        <section id="session-recording" className="scroll-mt-24">
+          <div className="card">
+            <h1 className="text-2xl font-bold text-theme-primary mb-2">Session Recording</h1>
+            <p className="text-theme-secondary mb-6">
+              Record and audit remote sessions, proxy access, and network flows for compliance (SOC2, HIPAA, PCI).
+            </p>
+
+            {/* Recording Types */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Recording Types</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">Terminal Sessions</h4>
+                <ul className="text-sm text-theme-secondary space-y-1">
+                  <li>• Records remote shell sessions in asciicast v2 format</li>
+                  <li>• Gzip-compressed for efficient storage</li>
+                  <li>• Web-based replay in the admin UI</li>
+                  <li>• Privacy masking for sensitive output</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">Proxy Access Logs</h4>
+                <ul className="text-sm text-theme-secondary space-y-1">
+                  <li>• Logs method, path, status, response time</li>
+                  <li>• Optional header capture (sensitive headers redacted)</li>
+                  <li>• Per-app logging and header capture toggles</li>
+                  <li>• Cross-app admin log viewer with filters</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">Network Flow Logs</h4>
+                <ul className="text-sm text-theme-secondary space-y-1">
+                  <li>• Per-connection flow data from VPN gateways</li>
+                  <li>• Destination IPs, ports, protocols, bytes</li>
+                  <li>• Top destinations and per-user activity</li>
+                  <li>• Aggregate statistics dashboard</li>
+                </ul>
+              </div>
+              <div className="p-4 border border-theme rounded-lg">
+                <h4 className="font-medium text-theme-primary mb-2">SSH Bastion</h4>
+                <ul className="text-sm text-theme-secondary space-y-1">
+                  <li>• SSH jump host on configurable port (default 2222)</li>
+                  <li>• API key authentication for SSH access</li>
+                  <li>• Session recording and connection logging</li>
+                  <li>• Access rule enforcement for target hosts</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Privacy Controls */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Privacy Controls</h3>
+            <p className="text-theme-secondary mb-4">
+              Regex-based output masking is applied to terminal recordings before storage. Default patterns mask passwords, API keys, tokens, and Bearer credentials.
+              Add custom patterns in the Settings tab. Per-session-type toggles control which recording types are active.
+            </p>
+
+            {/* Admin Pages */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Admin Pages</h3>
+            <div className="overflow-x-auto mb-6">
+              <table className="min-w-full divide-y divide-theme">
+                <thead className="bg-theme-tertiary">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Page</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Description</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-theme-card divide-y divide-theme text-sm">
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Recordings</td>
+                    <td className="px-4 py-3">Browse and replay recorded terminal sessions with metadata</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Proxy Logs</td>
+                    <td className="px-4 py-3">Cross-app proxy access log viewer with filtering and header inspection</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Network Activity</td>
+                    <td className="px-4 py-3">VPN flow dashboard with top destinations, per-user activity, and stats</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium">Settings</td>
+                    <td className="px-4 py-3">Configure recording, retention, privacy masking, and SSH bastion</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Retention */}
+            <h3 className="text-lg font-medium text-theme-primary mb-3">Retention</h3>
+            <p className="text-theme-secondary mb-4">
+              Configure retention in the Settings tab. Recordings older than the retention period (default: 90 days) are automatically cleaned up every 6 hours.
+            </p>
           </div>
         </section>
 
