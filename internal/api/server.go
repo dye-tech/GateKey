@@ -755,6 +755,8 @@ func (s *Server) setupRoutes() {
 			{
 				jitRead.GET("/jit/requests", s.handleListAllJITRequests)
 				jitRead.GET("/jit/stats", s.handleGetJITStats)
+				jitRead.GET("/jit/stats/detailed", s.handleGetJITDetailedStats)
+				jitRead.GET("/jit/policies", s.handleListJITPolicies)
 			}
 			jitWrite := admin.Group("")
 			jitWrite.Use(s.requireAnyScope(ScopeConfigWrite, ScopeAdmin))
@@ -762,6 +764,9 @@ func (s *Server) setupRoutes() {
 				jitWrite.POST("/jit/requests/:id/approve", s.handleApproveJITRequest)
 				jitWrite.POST("/jit/requests/:id/deny", s.handleDenyJITRequest)
 				jitWrite.POST("/jit/grants/:id/revoke", s.handleRevokeJITGrant)
+				jitWrite.POST("/jit/policies", s.handleCreateJITPolicy)
+				jitWrite.PUT("/jit/policies/:id", s.handleUpdateJITPolicy)
+				jitWrite.DELETE("/jit/policies/:id", s.handleDeleteJITPolicy)
 			}
 
 			// Topology and network tools (admin scope - powerful operations)

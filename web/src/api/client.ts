@@ -2511,3 +2511,56 @@ export async function getSettings(): Promise<Record<string, string>> {
 export async function updateSettings(settings: Record<string, string>): Promise<void> {
   await api.put('/api/v1/admin/settings', settings)
 }
+
+// JIT Policies
+export interface JITPolicy {
+  id: string
+  name: string
+  description: string
+  resource_type: string
+  resource_id: string | null
+  max_duration_minutes: number
+  default_duration_minutes: number
+  request_expiry_minutes: number
+  auto_approve: boolean
+  require_justification: boolean
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface JITDetailedStats {
+  pending_requests: number
+  active_grants: number
+  total_requests: number
+  total_approved: number
+  total_denied: number
+  total_expired: number
+  approval_rate: number
+  avg_duration_minutes: number
+  requests_by_type: Record<string, number>
+  top_requesters: Array<{ email: string; count: number }>
+}
+
+export async function getJITPolicies(): Promise<JITPolicy[]> {
+  const response = await api.get('/api/v1/admin/jit/policies')
+  return response.data.policies || []
+}
+
+export async function createJITPolicy(policy: Partial<JITPolicy>): Promise<JITPolicy> {
+  const response = await api.post('/api/v1/admin/jit/policies', policy)
+  return response.data.policy
+}
+
+export async function updateJITPolicy(id: string, updates: Partial<JITPolicy>): Promise<void> {
+  await api.put(`/api/v1/admin/jit/policies/${id}`, updates)
+}
+
+export async function deleteJITPolicy(id: string): Promise<void> {
+  await api.delete(`/api/v1/admin/jit/policies/${id}`)
+}
+
+export async function getJITDetailedStats(): Promise<JITDetailedStats> {
+  const response = await api.get('/api/v1/admin/jit/stats/detailed')
+  return response.data
+}

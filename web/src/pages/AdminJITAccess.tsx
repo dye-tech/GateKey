@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   JITRequest,
   JITStats,
+  JITPolicy,
+  JITDetailedStats,
   getAdminJITRequests,
   approveJITRequest,
   denyJITRequest,
@@ -9,6 +11,11 @@ import {
   getJITStats,
   getSettings,
   updateSettings,
+  getJITPolicies,
+  createJITPolicy,
+  updateJITPolicy,
+  deleteJITPolicy,
+  getJITDetailedStats,
 } from '../api/client'
 
 const TYPE_LABELS: Record<string, string> = {
@@ -92,7 +99,7 @@ function CountdownTimer({ expiresAt }: { expiresAt: string }) {
 }
 
 export default function AdminJITAccess() {
-  const [tab, setTab] = useState<'pending' | 'active' | 'history' | 'settings'>('pending')
+  const [tab, setTab] = useState<'pending' | 'active' | 'history' | 'policies' | 'analytics' | 'settings'>('pending')
   const [pendingRequests, setPendingRequests] = useState<JITRequest[]>([])
   const [approvedRequests, setApprovedRequests] = useState<JITRequest[]>([])
   const [allRequests, setAllRequests] = useState<JITRequest[]>([])
@@ -107,6 +114,21 @@ export default function AdminJITAccess() {
   const [appURL, setAppURL] = useState('')
   const [settingsLoading, setSettingsLoading] = useState(false)
   const [settingsSaved, setSettingsSaved] = useState(false)
+  const [policies, setPolicies] = useState<JITPolicy[]>([])
+  const [detailedStats, setDetailedStats] = useState<JITDetailedStats | null>(null)
+  const [showPolicyForm, setShowPolicyForm] = useState(false)
+  const [editingPolicy, setEditingPolicy] = useState<JITPolicy | null>(null)
+  const [policyForm, setPolicyForm] = useState({
+    name: '',
+    description: '',
+    resource_type: 'access_rule',
+    max_duration_minutes: 480,
+    default_duration_minutes: 60,
+    request_expiry_minutes: 60,
+    auto_approve: false,
+    require_justification: true,
+  })
+  const [policyLoading, setPolicyLoading] = useState(false)
 
   const loadData = useCallback(async () => {
     try {
@@ -118,6 +140,8 @@ export default function AdminJITAccess() {
         getAdminJITRequests(),
         getJITStats(),
         getSettings(),
+        getJITPolicies(),
+        getJITDetailedStats(),
       ])
       if (results[0].status === 'fulfilled') setPendingRequests(results[0].value)
       if (results[1].status === 'fulfilled') setApprovedRequests(results[1].value)
@@ -129,6 +153,8 @@ export default function AdminJITAccess() {
         setWebhookURL(s['jit_webhook_url'] || '')
         setAppURL(s['jit_app_url'] || '')
       }
+      if (results[5].status === 'fulfilled') setPolicies(results[5].value)
+      if (results[6].status === 'fulfilled') setDetailedStats(results[6].value)
 
       const failed = results.filter(r => r.status === 'rejected')
       if (failed.length === results.length) {
@@ -191,6 +217,83 @@ export default function AdminJITAccess() {
       console.error(err)
     } finally {
       setActionLoading(null)
+    }
+  }
+
+  function resetPolicyForm() {
+    setPolicyForm({
+      name: '',
+      description: '',
+      resource_type: 'access_rule',
+      max_duration_minutes: 480,
+      default_duration_minutes: 60,
+      request_expiry_minutes: 60,
+      auto_approve: false,
+      require_justification: true,
+    })
+    setEditingPolicy(null)
+    setShowPolicyForm(false)
+  }
+
+  function startEditPolicy(p: JITPolicy) {
+    setPolicyForm({
+      name: p.name,
+      description: p.description,
+      resource_type: p.resource_type,
+      max_duration_minutes: p.max_duration_minutes,
+      default_duration_minutes: p.default_duration_minutes,
+      request_expiry_minutes: p.request_expiry_minutes,
+      auto_approve: p.auto_approve,
+      require_justification: p.require_justification,
+    })
+    setEditingPolicy(p)
+    setShowPolicyForm(true)
+  }
+
+  async function handleSavePolicy() {
+    try {
+      setPolicyLoading(true)
+      setError(null)
+      if (editingPolicy) {
+        await updateJITPolicy(editingPolicy.id, policyForm)
+        setSuccess('Policy updated')
+      } else {
+        await createJITPolicy(policyForm)
+        setSuccess('Policy created')
+      }
+      resetPolicyForm()
+      await loadData()
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      setError('Failed to save policy')
+      console.error(err)
+    } finally {
+      setPolicyLoading(false)
+    }
+  }
+
+  async function handleDeletePolicy(id: string) {
+    if (!confirm('Delete this policy? This cannot be undone.')) return
+    try {
+      setError(null)
+      await deleteJITPolicy(id)
+      setSuccess('Policy deleted')
+      await loadData()
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      setError('Failed to delete policy')
+      console.error(err)
+    }
+  }
+
+  async function handleTogglePolicy(p: JITPolicy) {
+    try {
+      setError(null)
+      await updateJITPolicy(p.id, { is_active: !p.is_active })
+      await loadData()
+    } catch (err) {
+      setError('Failed to update policy')
+      console.error(err)
     }
   }
 
@@ -303,6 +406,26 @@ export default function AdminJITAccess() {
             }`}
           >
             History
+          </button>
+          <button
+            onClick={() => setTab('policies')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              tab === 'policies'
+                ? 'bg-primary-600 text-white'
+                : 'bg-theme-tertiary text-theme-secondary hover:bg-theme-secondary'
+            }`}
+          >
+            Policies
+          </button>
+          <button
+            onClick={() => setTab('analytics')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              tab === 'analytics'
+                ? 'bg-primary-600 text-white'
+                : 'bg-theme-tertiary text-theme-secondary hover:bg-theme-secondary'
+            }`}
+          >
+            Analytics
           </button>
           <button
             onClick={() => setTab('settings')}
@@ -483,6 +606,289 @@ export default function AdminJITAccess() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </div>
+      ) : tab === 'policies' ? (
+        /* Policies */
+        <div className="space-y-4">
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-theme-primary">JIT Access Policies</h2>
+              <button
+                onClick={() => { resetPolicyForm(); setShowPolicyForm(true) }}
+                className="btn btn-primary text-sm"
+              >
+                Add Policy
+              </button>
+            </div>
+
+            {showPolicyForm && (
+              <div className="border border-theme rounded-lg p-4 mb-4 bg-theme-tertiary">
+                <h3 className="text-md font-semibold text-theme-primary mb-3">
+                  {editingPolicy ? 'Edit Policy' : 'New Policy'}
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-theme-primary mb-1">Name</label>
+                    <input
+                      type="text"
+                      value={policyForm.name}
+                      onChange={(e) => setPolicyForm({ ...policyForm, name: e.target.value })}
+                      className="input w-full"
+                      placeholder="Policy name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-theme-primary mb-1">Resource Type</label>
+                    <select
+                      value={policyForm.resource_type}
+                      onChange={(e) => setPolicyForm({ ...policyForm, resource_type: e.target.value })}
+                      className="input w-full"
+                    >
+                      <option value="access_rule">Access Rule</option>
+                      <option value="proxy_app">Proxy App</option>
+                      <option value="mesh_hub">Mesh Hub</option>
+                      <option value="network">Network</option>
+                      <option value="gateway">Gateway</option>
+                      <option value="*">All Resources (*)</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-theme-primary mb-1">Description</label>
+                    <input
+                      type="text"
+                      value={policyForm.description}
+                      onChange={(e) => setPolicyForm({ ...policyForm, description: e.target.value })}
+                      className="input w-full"
+                      placeholder="Optional description"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-theme-primary mb-1">Max Duration (minutes)</label>
+                    <input
+                      type="number"
+                      value={policyForm.max_duration_minutes}
+                      onChange={(e) => setPolicyForm({ ...policyForm, max_duration_minutes: parseInt(e.target.value) || 480 })}
+                      className="input w-full"
+                      min={15}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-theme-primary mb-1">Default Duration (minutes)</label>
+                    <input
+                      type="number"
+                      value={policyForm.default_duration_minutes}
+                      onChange={(e) => setPolicyForm({ ...policyForm, default_duration_minutes: parseInt(e.target.value) || 60 })}
+                      className="input w-full"
+                      min={15}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-theme-primary mb-1">Request Expiry (minutes)</label>
+                    <input
+                      type="number"
+                      value={policyForm.request_expiry_minutes}
+                      onChange={(e) => setPolicyForm({ ...policyForm, request_expiry_minutes: parseInt(e.target.value) || 60 })}
+                      className="input w-full"
+                      min={5}
+                    />
+                  </div>
+                  <div className="flex items-center space-x-6">
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={policyForm.auto_approve}
+                        onChange={(e) => setPolicyForm({ ...policyForm, auto_approve: e.target.checked })}
+                        className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                      <span className="text-sm text-theme-primary">Auto-approve</span>
+                    </label>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={policyForm.require_justification}
+                        onChange={(e) => setPolicyForm({ ...policyForm, require_justification: e.target.checked })}
+                        className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                      <span className="text-sm text-theme-primary">Require justification</span>
+                    </label>
+                  </div>
+                </div>
+                <div className="flex space-x-2 mt-4">
+                  <button
+                    onClick={handleSavePolicy}
+                    disabled={policyLoading || !policyForm.name}
+                    className="btn btn-primary text-sm"
+                  >
+                    {policyLoading ? 'Saving...' : editingPolicy ? 'Update Policy' : 'Create Policy'}
+                  </button>
+                  <button
+                    onClick={resetPolicyForm}
+                    className="btn bg-theme-tertiary text-theme-secondary hover:bg-theme-secondary text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {policies.length === 0 ? (
+              <p className="text-theme-tertiary text-center py-8">No policies configured. Add a policy to control JIT access behavior.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-theme">
+                  <thead className="bg-theme-tertiary">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Resource Type</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Max Duration</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Auto-Approve</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">Active</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-theme-tertiary uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-theme-card divide-y divide-theme">
+                    {policies.map((p) => (
+                      <tr key={p.id} className="hover:bg-theme-tertiary transition-colors">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="font-medium text-theme-primary">{p.name}</div>
+                          {p.description && <div className="text-xs text-theme-muted">{p.description}</div>}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {typeBadge(p.resource_type === '*' ? '*' : p.resource_type)}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-theme-tertiary">
+                          {p.max_duration_minutes >= 60 ? `${p.max_duration_minutes / 60}h` : `${p.max_duration_minutes}m`}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            p.auto_approve
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                              : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                          }`}>
+                            {p.auto_approve ? 'Yes' : 'No'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <button
+                            onClick={() => handleTogglePolicy(p)}
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-pointer ${
+                              p.is_active
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                            }`}
+                          >
+                            {p.is_active ? 'Active' : 'Inactive'}
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-right space-x-2">
+                          <button
+                            onClick={() => startEditPolicy(p)}
+                            className="text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-300 text-sm font-medium"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeletePolicy(p.id)}
+                            className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : tab === 'analytics' ? (
+        /* Analytics */
+        <div className="space-y-4">
+          {detailedStats && (
+            <>
+              {/* Stat cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div className="card">
+                  <p className="text-xs text-theme-tertiary uppercase font-medium">Total Requests</p>
+                  <p className="text-2xl font-bold text-theme-primary mt-1">{detailedStats.total_requests}</p>
+                </div>
+                <div className="card">
+                  <p className="text-xs text-theme-tertiary uppercase font-medium">Approved</p>
+                  <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">{detailedStats.total_approved}</p>
+                </div>
+                <div className="card">
+                  <p className="text-xs text-theme-tertiary uppercase font-medium">Denied</p>
+                  <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-1">{detailedStats.total_denied}</p>
+                </div>
+                <div className="card">
+                  <p className="text-xs text-theme-tertiary uppercase font-medium">Expired</p>
+                  <p className="text-2xl font-bold text-gray-600 dark:text-gray-400 mt-1">{detailedStats.total_expired}</p>
+                </div>
+                <div className="card">
+                  <p className="text-xs text-theme-tertiary uppercase font-medium">Approval Rate</p>
+                  <p className="text-2xl font-bold text-primary-600 dark:text-primary-400 mt-1">{detailedStats.approval_rate.toFixed(1)}%</p>
+                </div>
+                <div className="card">
+                  <p className="text-xs text-theme-tertiary uppercase font-medium">Avg Duration</p>
+                  <p className="text-2xl font-bold text-theme-primary mt-1">{detailedStats.avg_duration_minutes.toFixed(0)}m</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Requests by Type */}
+                <div className="card">
+                  <h3 className="text-lg font-semibold text-theme-primary mb-4">Requests by Type</h3>
+                  {detailedStats.requests_by_type && Object.keys(detailedStats.requests_by_type).length > 0 ? (
+                    <div className="space-y-3">
+                      {Object.entries(detailedStats.requests_by_type).map(([type_name, count]) => (
+                        <div key={type_name} className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            {typeBadge(type_name)}
+                          </div>
+                          <span className="text-sm font-medium text-theme-primary">{count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-theme-tertiary text-center py-4">No data yet</p>
+                  )}
+                </div>
+
+                {/* Top Requesters */}
+                <div className="card">
+                  <h3 className="text-lg font-semibold text-theme-primary mb-4">Top Requesters (30 days)</h3>
+                  {detailedStats.top_requesters && detailedStats.top_requesters.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-theme">
+                        <thead className="bg-theme-tertiary">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-theme-tertiary uppercase">Email</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-theme-tertiary uppercase">Requests</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-theme-card divide-y divide-theme">
+                          {detailedStats.top_requesters.map((r, i) => (
+                            <tr key={i} className="hover:bg-theme-tertiary transition-colors">
+                              <td className="px-4 py-2 text-sm text-theme-primary">{r.email}</td>
+                              <td className="px-4 py-2 text-sm text-theme-primary text-right font-medium">{r.count}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-theme-tertiary text-center py-4">No data yet</p>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+          {!detailedStats && (
+            <div className="card">
+              <p className="text-theme-tertiary text-center py-8">No analytics data available</p>
             </div>
           )}
         </div>
