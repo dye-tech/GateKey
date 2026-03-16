@@ -80,9 +80,11 @@ func GenerateAPIKey() (rawKey, keyHash, keyPrefix string, err error) {
 	return rawKey, keyHash, keyPrefix, nil
 }
 
-// HashAPIKey hashes an API key for lookup
+// HashAPIKey hashes an API key for lookup using SHA-256.
+// API keys are high-entropy random tokens (not user-chosen passwords),
+// so a fast hash is appropriate and standard for per-request key validation.
 func HashAPIKey(rawKey string) string {
-	hash := sha256.Sum256([]byte(rawKey))
+	hash := sha256.Sum256([]byte(rawKey)) // lgtm[go/weak-crypto] -- API key, not password
 	return hex.EncodeToString(hash[:])
 }
 
