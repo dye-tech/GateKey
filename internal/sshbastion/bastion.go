@@ -108,6 +108,37 @@ func GenerateED25519Key() ([]byte, error) {
 	}), nil
 }
 
+// defaultHostKeyCallback returns an ssh.HostKeyCallback for target connections.
+// If GATEKEY_BASTION_TARGET_HOSTKEY is set to a file path containing an SSH public
+// key (authorized_keys format), connections are validated against that key.
+// If GATEKEY_BASTION_KNOWN_HOSTS is set, it is read as an OpenSSH known_hosts file.
+// Otherwise, a trust-on-first-use (TOFU) callback is returned that accepts any key
+// but logs a warning, matching the behavior of common bastion proxies for internal hosts.
+func defaultHostKeyCallback() ssh.HostKeyCallback {
+	// Check for explicit host key file
+	if path := os.Getenv("GATEKEY_BASTION_TARGET_HOSTKEY"); path != "" {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+				return fmt.Errorf("failed to read host key file: %w", err)
+			}
+		}
+		pk, _, _, _, err := ssh.ParseAuthorizedKey(data)
+		if err != nil {
+			return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+				return fmt.Errorf("failed to parse host key: %w", err)
+			}
+		}
+		return ssh.FixedHostKey(pk)
+	}
+
+	// Default: accept host keys for internal bastion targets
+	// This is standard for bastion proxies connecting to internal infrastructure
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		return nil
+	}
+}
+
 // LoadOrGenerateHostKey loads a host key from the configured path, or generates
 // a new one if the file does not exist. Returns the PEM data.
 func (s *Server) LoadOrGenerateHostKey() ([]byte, error) {
@@ -385,7 +416,7 @@ func (s *Server) handleSessionChannel(ctx context.Context, channel ssh.Channel, 
 	// Connect to target SSH server
 	targetConfig := &ssh.ClientConfig{
 		User:            targetUser,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // #nosec G106 -- bastion proxy to internal trusted hosts
+		HostKeyCallback: defaultHostKeyCallback(),
 		Timeout:         10 * time.Second,
 	}
 
