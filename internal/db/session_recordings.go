@@ -61,7 +61,7 @@ func (s *SessionRecordingStore) Complete(ctx context.Context, id string, fileSiz
 		return err
 	}
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("recording not found: %s", id)
+		return fmt.Errorf("recording not found")
 	}
 	return nil
 }
@@ -134,7 +134,7 @@ func (s *SessionRecordingStore) Delete(ctx context.Context, id string) error {
 		return err
 	}
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("recording not found: %s", id)
+		return fmt.Errorf("recording not found")
 	}
 	return nil
 }

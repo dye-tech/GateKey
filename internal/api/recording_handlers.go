@@ -115,7 +115,8 @@ func (s *Server) handleStreamRecording(c *gin.Context) {
 	c.Header("Content-Type", "application/x-asciicast")
 	c.Header("Content-Disposition", "inline")
 	c.Status(http.StatusOK)
-	io.Copy(c.Writer, gz)
+	// Limit decompressed output to 100MB to prevent decompression bombs
+	io.Copy(c.Writer, io.LimitReader(gz, 100*1024*1024)) // #nosec G110 -- size limited to 100MB
 }
 
 // handleDeleteRecording deletes a recording
