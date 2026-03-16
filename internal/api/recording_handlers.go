@@ -2,6 +2,7 @@ package api
 
 import (
 	"compress/gzip"
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
@@ -148,9 +149,13 @@ func (s *Server) handleDeleteRecording(c *gin.Context) {
 func (s *Server) handleGetRecordingSettings(c *gin.Context) {
 	ctx := c.Request.Context()
 	c.JSON(http.StatusOK, gin.H{
-		"enabled":        s.settingsStore.GetString(ctx, db.SettingRecordingEnabled, "false"),
-		"storage_path":   s.settingsStore.GetString(ctx, db.SettingRecordingStoragePath, "/var/lib/gatekey/recordings"),
-		"retention_days": s.settingsStore.GetInt(ctx, db.SettingRecordingRetentionDays, 90),
+		"enabled":          s.settingsStore.GetString(ctx, db.SettingRecordingEnabled, "false"),
+		"storage_path":     s.settingsStore.GetString(ctx, db.SettingRecordingStoragePath, "/var/lib/gatekey/recordings"),
+		"retention_days":   s.settingsStore.GetInt(ctx, db.SettingRecordingRetentionDays, 90),
+		"mask_patterns":    s.settingsStore.GetString(ctx, db.SettingRecordingMaskPatterns, "[]"),
+		"terminal_enabled": s.settingsStore.GetString(ctx, db.SettingRecordingTerminalEnabled, "true"),
+		"proxy_enabled":    s.settingsStore.GetString(ctx, db.SettingRecordingProxyEnabled, "true"),
+		"flow_enabled":     s.settingsStore.GetString(ctx, db.SettingRecordingFlowEnabled, "true"),
 	})
 }
 
@@ -158,9 +163,13 @@ func (s *Server) handleGetRecordingSettings(c *gin.Context) {
 func (s *Server) handleUpdateRecordingSettings(c *gin.Context) {
 	ctx := c.Request.Context()
 	var body struct {
-		Enabled       *string `json:"enabled"`
-		StoragePath   *string `json:"storage_path"`
-		RetentionDays *string `json:"retention_days"`
+		Enabled         *string `json:"enabled"`
+		StoragePath     *string `json:"storage_path"`
+		RetentionDays   *string `json:"retention_days"`
+		MaskPatterns    *string `json:"mask_patterns"`
+		TerminalEnabled *string `json:"terminal_enabled"`
+		ProxyEnabled    *string `json:"proxy_enabled"`
+		FlowEnabled     *string `json:"flow_enabled"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -181,6 +190,28 @@ func (s *Server) handleUpdateRecordingSettings(c *gin.Context) {
 	}
 	if body.RetentionDays != nil {
 		_ = s.settingsStore.Set(ctx, db.SettingRecordingRetentionDays, *body.RetentionDays)
+	}
+	if body.MaskPatterns != nil {
+		_ = s.settingsStore.Set(ctx, db.SettingRecordingMaskPatterns, *body.MaskPatterns)
+		// Parse and update recorder mask patterns
+		if s.sessionRecorder != nil {
+			var patterns []string
+			if err := json.Unmarshal([]byte(*body.MaskPatterns), &patterns); err == nil {
+				s.sessionRecorder.SetMaskPatterns(patterns)
+			}
+		}
+	}
+	if body.TerminalEnabled != nil {
+		_ = s.settingsStore.Set(ctx, db.SettingRecordingTerminalEnabled, *body.TerminalEnabled)
+		if s.sessionRecorder != nil {
+			s.sessionRecorder.Config.TerminalEnabled = *body.TerminalEnabled == "true"
+		}
+	}
+	if body.ProxyEnabled != nil {
+		_ = s.settingsStore.Set(ctx, db.SettingRecordingProxyEnabled, *body.ProxyEnabled)
+	}
+	if body.FlowEnabled != nil {
+		_ = s.settingsStore.Set(ctx, db.SettingRecordingFlowEnabled, *body.FlowEnabled)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "settings updated"})

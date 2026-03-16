@@ -4762,9 +4762,13 @@ func (s *Server) handleUpdateSettings(c *gin.Context) {
 		db.SettingJITWebhookEnabled: true,
 		db.SettingJITAppURL:         true,
 		// Recording settings
-		db.SettingRecordingEnabled:       true,
-		db.SettingRecordingStoragePath:   true,
-		db.SettingRecordingRetentionDays: true,
+		db.SettingRecordingEnabled:         true,
+		db.SettingRecordingStoragePath:     true,
+		db.SettingRecordingRetentionDays:   true,
+		db.SettingRecordingMaskPatterns:    true,
+		db.SettingRecordingTerminalEnabled: true,
+		db.SettingRecordingProxyEnabled:    true,
+		db.SettingRecordingFlowEnabled:     true,
 		// Proxy log settings
 		db.SettingProxyLogRetentionDays: true,
 		// Flow log settings
