@@ -85,10 +85,7 @@ func (s *Server) handleUpsertDNSRule(c *gin.Context) {
 		return
 	}
 
-	s.logger.Info("DNS rule upserted",
-		zap.String("network_id", networkID),
-		zap.Strings("dns_servers", req.DNSServers),
-		zap.Strings("search_domains", req.SearchDomains))
+	s.logger.Info("DNS rule upserted")
 
 	c.JSON(http.StatusOK, gin.H{
 		"rule": gin.H{
@@ -118,7 +115,7 @@ func (s *Server) handleDeleteDNSRule(c *gin.Context) {
 		return
 	}
 
-	s.logger.Info("DNS rule deleted", zap.String("network_id", networkID))
+	s.logger.Info("DNS rule deleted")
 	c.JSON(http.StatusOK, gin.H{"message": "DNS rule deleted"})
 }
 
@@ -192,10 +189,7 @@ func (s *Server) handleCreateDNSRecord(c *gin.Context) {
 		return
 	}
 
-	s.logger.Info("DNS record created",
-		zap.String("network_id", networkID),
-		zap.String("hostname", req.Hostname),
-		zap.String("ip_address", req.IPAddress))
+	s.logger.Info("DNS record created")
 
 	c.JSON(http.StatusCreated, gin.H{
 		"record": gin.H{
@@ -254,7 +248,7 @@ func (s *Server) handleUpdateDNSRecord(c *gin.Context) {
 		return
 	}
 
-	s.logger.Info("DNS record updated", zap.String("record_id", recordID))
+	s.logger.Info("DNS record updated")
 	c.JSON(http.StatusOK, gin.H{"message": "DNS record updated"})
 }
 
@@ -273,7 +267,7 @@ func (s *Server) handleDeleteDNSRecord(c *gin.Context) {
 		return
 	}
 
-	s.logger.Info("DNS record deleted", zap.String("record_id", recordID))
+	s.logger.Info("DNS record deleted")
 	c.JSON(http.StatusOK, gin.H{"message": "DNS record deleted"})
 }
 
