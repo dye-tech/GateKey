@@ -141,6 +141,8 @@ func (s *Server) handleListDNSRecords(c *gin.Context) {
 			"hostname":    r.Hostname,
 			"ip_address":  r.IPAddress,
 			"description": r.Description,
+			"record_type": r.RecordType,
+			"is_wildcard": r.IsWildcard,
 			"is_active":   r.IsActive,
 			"created_at":  r.CreatedAt,
 		})
@@ -158,6 +160,8 @@ func (s *Server) handleCreateDNSRecord(c *gin.Context) {
 		Hostname    string `json:"hostname" binding:"required"`
 		IPAddress   string `json:"ip_address" binding:"required"`
 		Description string `json:"description"`
+		RecordType  string `json:"record_type"`
+		IsWildcard  bool   `json:"is_wildcard"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -175,11 +179,18 @@ func (s *Server) handleCreateDNSRecord(c *gin.Context) {
 		return
 	}
 
+	recordType := req.RecordType
+	if recordType == "" {
+		recordType = "A"
+	}
+
 	record := &db.DNSRecord{
 		NetworkID:   networkID,
 		Hostname:    req.Hostname,
 		IPAddress:   req.IPAddress,
 		Description: req.Description,
+		RecordType:  recordType,
+		IsWildcard:  req.IsWildcard,
 		IsActive:    true,
 	}
 
@@ -198,6 +209,8 @@ func (s *Server) handleCreateDNSRecord(c *gin.Context) {
 			"hostname":    record.Hostname,
 			"ip_address":  record.IPAddress,
 			"description": record.Description,
+			"record_type": record.RecordType,
+			"is_wildcard": record.IsWildcard,
 			"is_active":   record.IsActive,
 			"created_at":  record.CreatedAt,
 		},
@@ -214,6 +227,8 @@ func (s *Server) handleUpdateDNSRecord(c *gin.Context) {
 		IPAddress   *string `json:"ip_address"`
 		Description *string `json:"description"`
 		IsActive    *bool   `json:"is_active"`
+		RecordType  *string `json:"record_type"`
+		IsWildcard  *bool   `json:"is_wildcard"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -226,9 +241,10 @@ func (s *Server) handleUpdateDNSRecord(c *gin.Context) {
 	}
 
 	record := &db.DNSRecord{
-		ID:        recordID,
-		Hostname:  *req.Hostname,
-		IPAddress: *req.IPAddress,
+		ID:         recordID,
+		Hostname:   *req.Hostname,
+		IPAddress:  *req.IPAddress,
+		RecordType: "A",
 	}
 	if req.Description != nil {
 		record.Description = *req.Description
@@ -236,6 +252,12 @@ func (s *Server) handleUpdateDNSRecord(c *gin.Context) {
 	record.IsActive = true
 	if req.IsActive != nil {
 		record.IsActive = *req.IsActive
+	}
+	if req.RecordType != nil {
+		record.RecordType = *req.RecordType
+	}
+	if req.IsWildcard != nil {
+		record.IsWildcard = *req.IsWildcard
 	}
 
 	if err := s.dnsStore.UpdateRecord(ctx, record); err != nil {
@@ -350,6 +372,8 @@ func (s *Server) handleGetUserDNSConfig(c *gin.Context) {
 			"hostname":    r.Hostname,
 			"ip_address":  r.IPAddress,
 			"description": r.Description,
+			"record_type": r.RecordType,
+			"is_wildcard": r.IsWildcard,
 			"is_active":   r.IsActive,
 			"created_at":  r.CreatedAt,
 		})
@@ -366,5 +390,97 @@ func (s *Server) handleGetUserDNSConfig(c *gin.Context) {
 		"dns_servers":    dnsServers,
 		"search_domains": searchDomains,
 		"records":        records,
+	})
+}
+
+// handleExportDNSRecords exports all DNS records as JSON
+func (s *Server) handleExportDNSRecords(c *gin.Context) {
+	ctx := c.Request.Context()
+	records, err := s.dnsStore.GetAllActiveRecords(ctx)
+	if err != nil {
+		s.logger.Error("Failed to export DNS records", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to export records"})
+		return
+	}
+
+	type exportRecord struct {
+		Hostname    string `json:"hostname"`
+		IPAddress   string `json:"ip_address"`
+		RecordType  string `json:"record_type"`
+		IsWildcard  bool   `json:"is_wildcard"`
+		Description string `json:"description"`
+		NetworkID   string `json:"network_id"`
+	}
+
+	result := make([]exportRecord, len(records))
+	for i, r := range records {
+		result[i] = exportRecord{
+			Hostname:    r.Hostname,
+			IPAddress:   r.IPAddress,
+			RecordType:  r.RecordType,
+			IsWildcard:  r.IsWildcard,
+			Description: r.Description,
+			NetworkID:   r.NetworkID,
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"records": result, "count": len(result)})
+}
+
+// handleImportDNSRecords imports DNS records from JSON
+func (s *Server) handleImportDNSRecords(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var req struct {
+		Records []struct {
+			Hostname    string `json:"hostname" binding:"required"`
+			IPAddress   string `json:"ip_address" binding:"required"`
+			RecordType  string `json:"record_type"`
+			IsWildcard  bool   `json:"is_wildcard"`
+			Description string `json:"description"`
+			NetworkID   string `json:"network_id" binding:"required"`
+		} `json:"records" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	imported := 0
+	for _, r := range req.Records {
+		recordType := r.RecordType
+		if recordType == "" {
+			recordType = "A"
+		}
+
+		record := &db.DNSRecord{
+			NetworkID:   r.NetworkID,
+			Hostname:    r.Hostname,
+			IPAddress:   r.IPAddress,
+			RecordType:  recordType,
+			IsWildcard:  r.IsWildcard,
+			Description: r.Description,
+			IsActive:    true,
+		}
+
+		if err := s.dnsStore.CreateRecord(ctx, record); err != nil {
+			s.logger.Error("Failed to import DNS record", zap.Error(err))
+			continue
+		}
+		imported++
+	}
+
+	c.JSON(http.StatusOK, gin.H{"imported": imported, "total": len(req.Records)})
+}
+
+// handleGetDNSResolverStatus returns the DNS resolver status
+func (s *Server) handleGetDNSResolverStatus(c *gin.Context) {
+	ctx := c.Request.Context()
+	enabled := s.settingsStore.GetString(ctx, db.SettingDNSResolverEnabled, "false")
+	addr := s.settingsStore.GetString(ctx, db.SettingDNSResolverAddr, ":5353")
+
+	c.JSON(http.StatusOK, gin.H{
+		"enabled": enabled,
+		"address": addr,
 	})
 }

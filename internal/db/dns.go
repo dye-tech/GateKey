@@ -32,6 +32,8 @@ type DNSRecord struct {
 	IPAddress   string
 	Description string
 	IsActive    bool
+	RecordType  string // "A", "AAAA", "CNAME"
+	IsWildcard  bool   // true for *.example.com patterns
 	CreatedAt   time.Time
 }
 
@@ -119,7 +121,8 @@ func (s *DNSStore) GetRulesForNetworks(ctx context.Context, networkIDs []string)
 // ListRecords lists DNS records for a network
 func (s *DNSStore) ListRecords(ctx context.Context, networkID string) ([]*DNSRecord, error) {
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT id, network_id, hostname, host(ip_address), description, is_active, created_at
+		SELECT id, network_id, hostname, host(ip_address), description, is_active,
+		       record_type, is_wildcard, created_at
 		FROM dns_records WHERE network_id = $1
 		ORDER BY hostname
 	`, networkID)
@@ -133,7 +136,7 @@ func (s *DNSStore) ListRecords(ctx context.Context, networkID string) ([]*DNSRec
 		var r DNSRecord
 		var desc *string
 		if err := rows.Scan(&r.ID, &r.NetworkID, &r.Hostname, &r.IPAddress,
-			&desc, &r.IsActive, &r.CreatedAt); err != nil {
+			&desc, &r.IsActive, &r.RecordType, &r.IsWildcard, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		if desc != nil {
@@ -146,21 +149,30 @@ func (s *DNSStore) ListRecords(ctx context.Context, networkID string) ([]*DNSRec
 
 // CreateRecord creates a new DNS record
 func (s *DNSStore) CreateRecord(ctx context.Context, record *DNSRecord) error {
+	if record.RecordType == "" {
+		record.RecordType = "A"
+	}
 	return s.db.Pool.QueryRow(ctx, `
-		INSERT INTO dns_records (network_id, hostname, ip_address, description, is_active)
-		VALUES ($1, $2, $3::inet, $4, $5)
+		INSERT INTO dns_records (network_id, hostname, ip_address, description, is_active, record_type, is_wildcard)
+		VALUES ($1, $2, $3::inet, $4, $5, $6, $7)
 		RETURNING id, created_at
-	`, record.NetworkID, record.Hostname, record.IPAddress, nilIfEmpty(record.Description), record.IsActive).Scan(
+	`, record.NetworkID, record.Hostname, record.IPAddress, nilIfEmpty(record.Description),
+		record.IsActive, record.RecordType, record.IsWildcard).Scan(
 		&record.ID, &record.CreatedAt,
 	)
 }
 
 // UpdateRecord updates a DNS record
 func (s *DNSStore) UpdateRecord(ctx context.Context, record *DNSRecord) error {
+	if record.RecordType == "" {
+		record.RecordType = "A"
+	}
 	result, err := s.db.Pool.Exec(ctx, `
-		UPDATE dns_records SET hostname = $2, ip_address = $3::inet, description = $4, is_active = $5
+		UPDATE dns_records SET hostname = $2, ip_address = $3::inet, description = $4, is_active = $5,
+		       record_type = $6, is_wildcard = $7
 		WHERE id = $1
-	`, record.ID, record.Hostname, record.IPAddress, nilIfEmpty(record.Description), record.IsActive)
+	`, record.ID, record.Hostname, record.IPAddress, nilIfEmpty(record.Description), record.IsActive,
+		record.RecordType, record.IsWildcard)
 	if err != nil {
 		return err
 	}
@@ -188,7 +200,8 @@ func (s *DNSStore) GetRecordsForNetworks(ctx context.Context, networkIDs []strin
 		return nil, nil
 	}
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT id, network_id, hostname, host(ip_address), description, is_active, created_at
+		SELECT id, network_id, hostname, host(ip_address), description, is_active,
+		       record_type, is_wildcard, created_at
 		FROM dns_records
 		WHERE network_id = ANY($1) AND is_active = true
 		ORDER BY hostname
@@ -203,11 +216,36 @@ func (s *DNSStore) GetRecordsForNetworks(ctx context.Context, networkIDs []strin
 		var r DNSRecord
 		var desc *string
 		if err := rows.Scan(&r.ID, &r.NetworkID, &r.Hostname, &r.IPAddress,
-			&desc, &r.IsActive, &r.CreatedAt); err != nil {
+			&desc, &r.IsActive, &r.RecordType, &r.IsWildcard, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		if desc != nil {
 			r.Description = *desc
+		}
+		records = append(records, &r)
+	}
+	return records, rows.Err()
+}
+
+// GetAllActiveRecords returns all active DNS records across all networks (for the built-in resolver)
+func (s *DNSStore) GetAllActiveRecords(ctx context.Context) ([]*DNSRecord, error) {
+	rows, err := s.db.Pool.Query(ctx, `
+		SELECT id, network_id, hostname, host(ip_address), COALESCE(description, ''), is_active,
+		       record_type, is_wildcard, created_at
+		FROM dns_records WHERE is_active = true
+		ORDER BY hostname
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []*DNSRecord
+	for rows.Next() {
+		var r DNSRecord
+		if err := rows.Scan(&r.ID, &r.NetworkID, &r.Hostname, &r.IPAddress,
+			&r.Description, &r.IsActive, &r.RecordType, &r.IsWildcard, &r.CreatedAt); err != nil {
+			return nil, err
 		}
 		records = append(records, &r)
 	}

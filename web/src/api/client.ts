@@ -2737,6 +2737,8 @@ export interface DNSRecord {
   hostname: string
   ip_address: string
   description: string
+  record_type: string
+  is_wildcard: boolean
   is_active: boolean
   created_at: string
 }
@@ -2763,7 +2765,7 @@ export async function getNetworkDNSRecords(networkId: string): Promise<DNSRecord
   return response.data.records || []
 }
 
-export async function createDNSRecord(networkId: string, record: { hostname: string; ip_address: string; description?: string }): Promise<DNSRecord> {
+export async function createDNSRecord(networkId: string, record: { hostname: string; ip_address: string; description?: string; record_type?: string; is_wildcard?: boolean }): Promise<DNSRecord> {
   const response = await api.post(`/api/v1/admin/networks/${networkId}/dns/records`, record)
   return response.data.record
 }
@@ -2778,5 +2780,20 @@ export async function deleteDNSRecord(id: string): Promise<void> {
 
 export async function getUserDNSConfig(): Promise<{ dns_servers: string[]; search_domains: string[]; records: DNSRecord[] }> {
   const response = await api.get('/api/v1/dns/config')
+  return response.data
+}
+
+export async function exportDNSRecords(): Promise<{ records: DNSRecord[]; count: number }> {
+  const response = await api.get('/api/v1/admin/dns/export')
+  return response.data
+}
+
+export async function importDNSRecords(records: Array<{ hostname: string; ip_address: string; record_type?: string; is_wildcard?: boolean; description?: string; network_id: string }>): Promise<{ imported: number; total: number }> {
+  const response = await api.post('/api/v1/admin/dns/import', { records })
+  return response.data
+}
+
+export async function getDNSResolverStatus(): Promise<{ enabled: string; address: string }> {
+  const response = await api.get('/api/v1/admin/dns/resolver/status')
   return response.data
 }
