@@ -308,7 +308,7 @@ func (s *Server) handleProxyRequest(c *gin.Context) {
 
 	// 6. Log the access (async)
 	responseTime := time.Since(start)
-	go s.logProxyAccessAsync(c, app, path, c.Writer.Status(), responseTime, userID, userEmail)
+	go s.logProxyAccessAsync(c, app, path, c.Writer.Status(), responseTime, userID, userEmail, c.Writer.Size(), nil)
 }
 
 // createReverseProxy creates a configured reverse proxy for the application
@@ -902,7 +902,11 @@ func (s *Server) handleWebSocketProxy(c *gin.Context, app *db.ProxyApplication, 
 }
 
 // logProxyAccessAsync logs proxy access asynchronously
-func (s *Server) logProxyAccessAsync(c *gin.Context, app *db.ProxyApplication, path string, status int, duration time.Duration, userID, userEmail string) {
+func (s *Server) logProxyAccessAsync(c *gin.Context, app *db.ProxyApplication, path string, status int, duration time.Duration, userID, userEmail string, responseSize int, responseHeaders http.Header) {
+	if !app.AccessLoggingEnabled {
+		return
+	}
+
 	log := &db.ProxyAccessLog{
 		ProxyAppID:     app.ID,
 		UserID:         userID,
@@ -913,11 +917,39 @@ func (s *Server) logProxyAccessAsync(c *gin.Context, app *db.ProxyApplication, p
 		ResponseTimeMs: int(duration.Milliseconds()),
 		ClientIP:       c.ClientIP(),
 		UserAgent:      c.Request.UserAgent(),
+		ResponseSize:   responseSize,
+	}
+
+	if app.LogHeaders {
+		log.RequestHeaders = sanitizeHeaders(c.Request.Header)
+		if responseHeaders != nil {
+			log.ResponseHeaders = sanitizeHeaders(responseHeaders)
+		}
 	}
 
 	if err := s.proxyAppStore.LogProxyAccess(c.Request.Context(), log); err != nil {
 		s.logger.Warn("Failed to log proxy access", zap.Error(err))
 	}
+}
+
+// sanitizeHeaders converts http.Header to a map, redacting sensitive values
+func sanitizeHeaders(headers http.Header) map[string]string {
+	sensitiveHeaders := map[string]bool{
+		"Cookie":        true,
+		"Authorization": true,
+		"Set-Cookie":    true,
+		"X-Csrf-Token":  true,
+		"X-Api-Key":     true,
+	}
+	result := make(map[string]string)
+	for key, values := range headers {
+		if sensitiveHeaders[key] {
+			result[key] = "[REDACTED]"
+		} else {
+			result[key] = strings.Join(values, ", ")
+		}
+	}
+	return result
 }
 
 // Helper functions

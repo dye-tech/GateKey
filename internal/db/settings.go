@@ -139,6 +139,9 @@ const (
 	SettingRecordingEnabled       = "recording_enabled"
 	SettingRecordingStoragePath   = "recording_storage_path"
 	SettingRecordingRetentionDays = "recording_retention_days"
+
+	// Proxy log settings
+	SettingProxyLogRetentionDays = "proxy_log_retention_days"
 )
 
 // Default crypto profiles (all enabled by default)

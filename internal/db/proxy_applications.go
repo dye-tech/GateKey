@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -30,25 +31,43 @@ type ProxyApplication struct {
 	WebsocketEnabled   bool              `json:"websocket_enabled"`
 	TimeoutSeconds     int               `json:"timeout_seconds"`
 	// TLS verification settings (per-app override)
-	SkipTLSVerify bool      `json:"skip_tls_verify"` // If true, skip TLS verification for this app (overrides global setting)
-	CustomCACert  *string   `json:"custom_ca_cert"`  // Custom CA certificate PEM for this app (optional)
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	SkipTLSVerify bool    `json:"skip_tls_verify"` // If true, skip TLS verification for this app (overrides global setting)
+	CustomCACert  *string `json:"custom_ca_cert"`  // Custom CA certificate PEM for this app (optional)
+	// Logging settings
+	AccessLoggingEnabled bool      `json:"access_logging_enabled"`
+	LogHeaders           bool      `json:"log_headers"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 // ProxyAccessLog represents an access log entry for proxy requests
 type ProxyAccessLog struct {
-	ID             string    `json:"id"`
-	ProxyAppID     string    `json:"proxy_app_id"`
-	UserID         string    `json:"user_id"`
-	UserEmail      string    `json:"user_email"`
-	RequestMethod  string    `json:"request_method"`
-	RequestPath    string    `json:"request_path"`
-	ResponseStatus int       `json:"response_status"`
-	ResponseTimeMs int       `json:"response_time_ms"`
-	ClientIP       string    `json:"client_ip"`
-	UserAgent      string    `json:"user_agent"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID              string            `json:"id"`
+	ProxyAppID      string            `json:"proxy_app_id"`
+	AppName         string            `json:"app_name,omitempty"`
+	UserID          string            `json:"user_id"`
+	UserEmail       string            `json:"user_email"`
+	RequestMethod   string            `json:"request_method"`
+	RequestPath     string            `json:"request_path"`
+	ResponseStatus  int               `json:"response_status"`
+	ResponseTimeMs  int               `json:"response_time_ms"`
+	ResponseSize    int               `json:"response_size_bytes,omitempty"`
+	ClientIP        string            `json:"client_ip"`
+	UserAgent       string            `json:"user_agent"`
+	RequestHeaders  map[string]string `json:"request_headers,omitempty"`
+	ResponseHeaders map[string]string `json:"response_headers,omitempty"`
+	CreatedAt       time.Time         `json:"created_at"`
+}
+
+// ProxyLogFilter defines filtering options for cross-app log listing
+type ProxyLogFilter struct {
+	AppID     string
+	UserEmail string
+	Method    string
+	MinStatus int
+	MaxStatus int
+	Limit     int
+	Offset    int
 }
 
 // ProxyApplicationStore handles proxy application persistence
@@ -75,12 +94,13 @@ func (s *ProxyApplicationStore) CreateProxyApplication(ctx context.Context, app 
 	err = s.db.Pool.QueryRow(ctx, `
 		INSERT INTO proxy_applications (name, slug, description, internal_url, icon_url, is_active,
 			preserve_host_header, strip_prefix, inject_headers, allowed_headers, websocket_enabled, timeout_seconds,
-			skip_tls_verify, custom_ca_cert)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			skip_tls_verify, custom_ca_cert, access_logging_enabled, log_headers)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		RETURNING id, created_at, updated_at
 	`, app.Name, app.Slug, app.Description, app.InternalURL, app.IconURL, app.IsActive,
 		app.PreserveHostHeader, app.StripPrefix, injectHeaders, allowedHeaders,
-		app.WebsocketEnabled, app.TimeoutSeconds, app.SkipTLSVerify, app.CustomCACert).Scan(&app.ID, &app.CreatedAt, &app.UpdatedAt)
+		app.WebsocketEnabled, app.TimeoutSeconds, app.SkipTLSVerify, app.CustomCACert,
+		app.AccessLoggingEnabled, app.LogHeaders).Scan(&app.ID, &app.CreatedAt, &app.UpdatedAt)
 
 	if err != nil && isUniqueViolation(err) {
 		return ErrProxyAppExists
@@ -93,7 +113,8 @@ func (s *ProxyApplicationStore) GetProxyApplication(ctx context.Context, id stri
 	return s.scanProxyApp(s.db.Pool.QueryRow(ctx, `
 		SELECT id, name, slug, description, internal_url, icon_url, is_active,
 			preserve_host_header, strip_prefix, inject_headers, allowed_headers,
-			websocket_enabled, timeout_seconds, skip_tls_verify, custom_ca_cert, created_at, updated_at
+			websocket_enabled, timeout_seconds, skip_tls_verify, custom_ca_cert,
+			access_logging_enabled, log_headers, created_at, updated_at
 		FROM proxy_applications WHERE id = $1
 	`, id))
 }
@@ -103,7 +124,8 @@ func (s *ProxyApplicationStore) GetProxyApplicationBySlug(ctx context.Context, s
 	return s.scanProxyApp(s.db.Pool.QueryRow(ctx, `
 		SELECT id, name, slug, description, internal_url, icon_url, is_active,
 			preserve_host_header, strip_prefix, inject_headers, allowed_headers,
-			websocket_enabled, timeout_seconds, skip_tls_verify, custom_ca_cert, created_at, updated_at
+			websocket_enabled, timeout_seconds, skip_tls_verify, custom_ca_cert,
+			access_logging_enabled, log_headers, created_at, updated_at
 		FROM proxy_applications WHERE slug = $1
 	`, slug))
 }
@@ -115,7 +137,8 @@ func (s *ProxyApplicationStore) scanProxyApp(row pgx.Row) (*ProxyApplication, er
 	err := row.Scan(&app.ID, &app.Name, &app.Slug, &app.Description, &app.InternalURL,
 		&app.IconURL, &app.IsActive, &app.PreserveHostHeader, &app.StripPrefix,
 		&injectHeaders, &allowedHeaders, &app.WebsocketEnabled, &app.TimeoutSeconds,
-		&app.SkipTLSVerify, &app.CustomCACert, &app.CreatedAt, &app.UpdatedAt)
+		&app.SkipTLSVerify, &app.CustomCACert,
+		&app.AccessLoggingEnabled, &app.LogHeaders, &app.CreatedAt, &app.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, ErrProxyAppNotFound
 	}
@@ -138,7 +161,8 @@ func (s *ProxyApplicationStore) ListProxyApplications(ctx context.Context) ([]*P
 	rows, err := s.db.Pool.Query(ctx, `
 		SELECT id, name, slug, description, internal_url, icon_url, is_active,
 			preserve_host_header, strip_prefix, inject_headers, allowed_headers,
-			websocket_enabled, timeout_seconds, skip_tls_verify, custom_ca_cert, created_at, updated_at
+			websocket_enabled, timeout_seconds, skip_tls_verify, custom_ca_cert,
+			access_logging_enabled, log_headers, created_at, updated_at
 		FROM proxy_applications ORDER BY name
 	`)
 	if err != nil {
@@ -154,7 +178,8 @@ func (s *ProxyApplicationStore) ListActiveProxyApplications(ctx context.Context)
 	rows, err := s.db.Pool.Query(ctx, `
 		SELECT id, name, slug, description, internal_url, icon_url, is_active,
 			preserve_host_header, strip_prefix, inject_headers, allowed_headers,
-			websocket_enabled, timeout_seconds, skip_tls_verify, custom_ca_cert, created_at, updated_at
+			websocket_enabled, timeout_seconds, skip_tls_verify, custom_ca_cert,
+			access_logging_enabled, log_headers, created_at, updated_at
 		FROM proxy_applications WHERE is_active = true ORDER BY name
 	`)
 	if err != nil {
@@ -174,7 +199,8 @@ func (s *ProxyApplicationStore) scanProxyApps(rows pgx.Rows) ([]*ProxyApplicatio
 		if err := rows.Scan(&app.ID, &app.Name, &app.Slug, &app.Description, &app.InternalURL,
 			&app.IconURL, &app.IsActive, &app.PreserveHostHeader, &app.StripPrefix,
 			&injectHeaders, &allowedHeaders, &app.WebsocketEnabled, &app.TimeoutSeconds,
-			&app.SkipTLSVerify, &app.CustomCACert, &app.CreatedAt, &app.UpdatedAt); err != nil {
+			&app.SkipTLSVerify, &app.CustomCACert,
+			&app.AccessLoggingEnabled, &app.LogHeaders, &app.CreatedAt, &app.UpdatedAt); err != nil {
 			return nil, err
 		}
 
@@ -205,11 +231,12 @@ func (s *ProxyApplicationStore) UpdateProxyApplication(ctx context.Context, app 
 		UPDATE proxy_applications SET name = $2, slug = $3, description = $4, internal_url = $5,
 			icon_url = $6, is_active = $7, preserve_host_header = $8, strip_prefix = $9,
 			inject_headers = $10, allowed_headers = $11, websocket_enabled = $12, timeout_seconds = $13,
-			skip_tls_verify = $14, custom_ca_cert = $15
+			skip_tls_verify = $14, custom_ca_cert = $15, access_logging_enabled = $16, log_headers = $17
 		WHERE id = $1
 	`, app.ID, app.Name, app.Slug, app.Description, app.InternalURL, app.IconURL, app.IsActive,
 		app.PreserveHostHeader, app.StripPrefix, injectHeaders, allowedHeaders,
-		app.WebsocketEnabled, app.TimeoutSeconds, app.SkipTLSVerify, app.CustomCACert)
+		app.WebsocketEnabled, app.TimeoutSeconds, app.SkipTLSVerify, app.CustomCACert,
+		app.AccessLoggingEnabled, app.LogHeaders)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return ErrProxyAppExists
@@ -325,7 +352,8 @@ func (s *ProxyApplicationStore) GetUserProxyApplications(ctx context.Context, us
 		SELECT DISTINCT pa.id, pa.name, pa.slug, pa.description, pa.internal_url, pa.icon_url,
 			pa.is_active, pa.preserve_host_header, pa.strip_prefix, pa.inject_headers,
 			pa.allowed_headers, pa.websocket_enabled, pa.timeout_seconds,
-			pa.skip_tls_verify, pa.custom_ca_cert, pa.created_at, pa.updated_at
+			pa.skip_tls_verify, pa.custom_ca_cert,
+			pa.access_logging_enabled, pa.log_headers, pa.created_at, pa.updated_at
 		FROM proxy_applications pa
 		LEFT JOIN user_proxy_applications upa ON pa.id = upa.proxy_app_id AND upa.user_id = $1
 		LEFT JOIN group_proxy_applications gpa ON pa.id = gpa.proxy_app_id
@@ -355,7 +383,8 @@ func (s *ProxyApplicationStore) CanUserAccessApp(ctx context.Context, userID str
 		SELECT DISTINCT pa.id, pa.name, pa.slug, pa.description, pa.internal_url, pa.icon_url,
 			pa.is_active, pa.preserve_host_header, pa.strip_prefix, pa.inject_headers,
 			pa.allowed_headers, pa.websocket_enabled, pa.timeout_seconds,
-			pa.skip_tls_verify, pa.custom_ca_cert, pa.created_at, pa.updated_at
+			pa.skip_tls_verify, pa.custom_ca_cert,
+			pa.access_logging_enabled, pa.log_headers, pa.created_at, pa.updated_at
 		FROM proxy_applications pa
 		LEFT JOIN user_proxy_applications upa ON pa.id = upa.proxy_app_id AND upa.user_id = $1
 		LEFT JOIN group_proxy_applications gpa ON pa.id = gpa.proxy_app_id
@@ -384,12 +413,29 @@ func (s *ProxyApplicationStore) CanUserAccessApp(ctx context.Context, userID str
 
 // LogProxyAccess logs a proxy access event
 func (s *ProxyApplicationStore) LogProxyAccess(ctx context.Context, log *ProxyAccessLog) error {
-	_, err := s.db.Pool.Exec(ctx, `
+	var reqHeaders, respHeaders []byte
+	var err error
+	if log.RequestHeaders != nil {
+		reqHeaders, err = json.Marshal(log.RequestHeaders)
+		if err != nil {
+			return err
+		}
+	}
+	if log.ResponseHeaders != nil {
+		respHeaders, err = json.Marshal(log.ResponseHeaders)
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = s.db.Pool.Exec(ctx, `
 		INSERT INTO proxy_access_logs (proxy_app_id, user_id, user_email, request_method,
-			request_path, response_status, response_time_ms, client_ip, user_agent)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8::inet, $9)
+			request_path, response_status, response_time_ms, client_ip, user_agent,
+			request_headers, response_headers, response_size_bytes)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8::inet, $9, $10, $11, $12)
 	`, log.ProxyAppID, log.UserID, log.UserEmail, log.RequestMethod, log.RequestPath,
-		log.ResponseStatus, log.ResponseTimeMs, log.ClientIP, log.UserAgent)
+		log.ResponseStatus, log.ResponseTimeMs, log.ClientIP, log.UserAgent,
+		reqHeaders, respHeaders, log.ResponseSize)
 	return err
 }
 
@@ -401,7 +447,8 @@ func (s *ProxyApplicationStore) GetProxyAccessLogs(ctx context.Context, appID st
 
 	rows, err := s.db.Pool.Query(ctx, `
 		SELECT id, proxy_app_id, user_id, user_email, request_method, request_path,
-			response_status, response_time_ms, host(client_ip), user_agent, created_at
+			response_status, response_time_ms, host(client_ip), user_agent,
+			request_headers, response_headers, response_size_bytes, created_at
 		FROM proxy_access_logs
 		WHERE proxy_app_id = $1
 		ORDER BY created_at DESC
@@ -412,17 +459,143 @@ func (s *ProxyApplicationStore) GetProxyAccessLogs(ctx context.Context, appID st
 	}
 	defer rows.Close()
 
+	return s.scanProxyAccessLogs(rows)
+}
+
+// ListAllProxyAccessLogs lists proxy access logs across all apps with filtering
+func (s *ProxyApplicationStore) ListAllProxyAccessLogs(ctx context.Context, filter ProxyLogFilter) ([]*ProxyAccessLog, error) {
+	query := `
+		SELECT pal.id, pal.proxy_app_id, pa.name, pal.user_id, pal.user_email,
+			pal.request_method, pal.request_path, pal.response_status, pal.response_time_ms,
+			host(pal.client_ip), pal.user_agent, pal.request_headers, pal.response_headers,
+			pal.response_size_bytes, pal.created_at
+		FROM proxy_access_logs pal
+		JOIN proxy_applications pa ON pal.proxy_app_id = pa.id
+	`
+	var conditions []string
+	var args []interface{}
+	paramIdx := 1
+
+	if filter.AppID != "" {
+		conditions = append(conditions, fmt.Sprintf("pal.proxy_app_id = $%d", paramIdx))
+		args = append(args, filter.AppID)
+		paramIdx++
+	}
+	if filter.UserEmail != "" {
+		conditions = append(conditions, fmt.Sprintf("pal.user_email ILIKE $%d", paramIdx))
+		args = append(args, "%"+filter.UserEmail+"%")
+		paramIdx++
+	}
+	if filter.Method != "" {
+		conditions = append(conditions, fmt.Sprintf("pal.request_method = $%d", paramIdx))
+		args = append(args, filter.Method)
+		paramIdx++
+	}
+	if filter.MinStatus > 0 {
+		conditions = append(conditions, fmt.Sprintf("pal.response_status >= $%d", paramIdx))
+		args = append(args, filter.MinStatus)
+		paramIdx++
+	}
+	if filter.MaxStatus > 0 {
+		conditions = append(conditions, fmt.Sprintf("pal.response_status <= $%d", paramIdx))
+		args = append(args, filter.MaxStatus)
+		paramIdx++
+	}
+
+	if len(conditions) > 0 {
+		query += " WHERE "
+		for i, cond := range conditions {
+			if i > 0 {
+				query += " AND "
+			}
+			query += cond
+		}
+	}
+
+	query += " ORDER BY pal.created_at DESC"
+
+	if filter.Limit <= 0 {
+		filter.Limit = 100
+	}
+	query += fmt.Sprintf(" LIMIT $%d", paramIdx)
+	args = append(args, filter.Limit)
+	paramIdx++
+
+	if filter.Offset > 0 {
+		query += fmt.Sprintf(" OFFSET $%d", paramIdx)
+		args = append(args, filter.Offset)
+	}
+
+	rows, err := s.db.Pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return s.scanProxyAccessLogsWithAppName(rows)
+}
+
+// DeleteProxyLogsOlderThan deletes proxy access logs older than the specified number of days
+func (s *ProxyApplicationStore) DeleteProxyLogsOlderThan(ctx context.Context, days int) (int, error) {
+	result, err := s.db.Pool.Exec(ctx, `DELETE FROM proxy_access_logs WHERE created_at < NOW() - ($1 || ' days')::interval`, fmt.Sprintf("%d", days))
+	if err != nil {
+		return 0, err
+	}
+	return int(result.RowsAffected()), nil
+}
+
+func (s *ProxyApplicationStore) scanProxyAccessLogs(rows pgx.Rows) ([]*ProxyAccessLog, error) {
 	var logs []*ProxyAccessLog
 	for rows.Next() {
 		var log ProxyAccessLog
 		var clientIP *string
+		var reqHeaders, respHeaders []byte
+		var responseSize *int
 		if err := rows.Scan(&log.ID, &log.ProxyAppID, &log.UserID, &log.UserEmail,
 			&log.RequestMethod, &log.RequestPath, &log.ResponseStatus, &log.ResponseTimeMs,
-			&clientIP, &log.UserAgent, &log.CreatedAt); err != nil {
+			&clientIP, &log.UserAgent, &reqHeaders, &respHeaders, &responseSize, &log.CreatedAt); err != nil {
 			return nil, err
 		}
 		if clientIP != nil {
 			log.ClientIP = *clientIP
+		}
+		if responseSize != nil {
+			log.ResponseSize = *responseSize
+		}
+		if reqHeaders != nil {
+			_ = json.Unmarshal(reqHeaders, &log.RequestHeaders)
+		}
+		if respHeaders != nil {
+			_ = json.Unmarshal(respHeaders, &log.ResponseHeaders)
+		}
+		logs = append(logs, &log)
+	}
+	return logs, rows.Err()
+}
+
+func (s *ProxyApplicationStore) scanProxyAccessLogsWithAppName(rows pgx.Rows) ([]*ProxyAccessLog, error) {
+	var logs []*ProxyAccessLog
+	for rows.Next() {
+		var log ProxyAccessLog
+		var clientIP *string
+		var reqHeaders, respHeaders []byte
+		var responseSize *int
+		if err := rows.Scan(&log.ID, &log.ProxyAppID, &log.AppName, &log.UserID, &log.UserEmail,
+			&log.RequestMethod, &log.RequestPath, &log.ResponseStatus, &log.ResponseTimeMs,
+			&clientIP, &log.UserAgent, &reqHeaders, &respHeaders, &responseSize, &log.CreatedAt); err != nil {
+			return nil, err
+		}
+		if clientIP != nil {
+			log.ClientIP = *clientIP
+		}
+		if responseSize != nil {
+			log.ResponseSize = *responseSize
+		}
+		if reqHeaders != nil {
+			_ = json.Unmarshal(reqHeaders, &log.RequestHeaders)
+		}
+		if respHeaders != nil {
+			_ = json.Unmarshal(respHeaders, &log.ResponseHeaders)
 		}
 		logs = append(logs, &log)
 	}
