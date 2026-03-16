@@ -4800,6 +4800,10 @@ func (s *Server) handleUpdateSettings(c *gin.Context) {
 		db.SettingProxyLogRetentionDays: true,
 		// Flow log settings
 		db.SettingFlowLogRetentionDays: true,
+		// DNS Resolver settings
+		db.SettingDNSResolverEnabled: true,
+		db.SettingDNSResolverAddr:    true,
+		db.SettingDNSUpstreamServers: true,
 	}
 
 	for key, value := range req {

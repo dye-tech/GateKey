@@ -21,6 +21,7 @@ import (
 
 	"github.com/gatekey-project/gatekey/internal/config"
 	"github.com/gatekey-project/gatekey/internal/db"
+	gatekeydns "github.com/gatekey-project/gatekey/internal/dns"
 	"github.com/gatekey-project/gatekey/internal/k8s"
 	"github.com/gatekey-project/gatekey/internal/metrics"
 	"github.com/gatekey-project/gatekey/internal/openvpn"
@@ -437,6 +438,44 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	bastionEnabled := settingsStore.GetBool(ctx, db.SettingSSHBastionEnabled, false)
 	if bastionEnabled {
 		srv.startBastionServer(bgCtx, settingsStore)
+	}
+
+	// Start DNS resolver if enabled
+	dnsResolverEnabled := settingsStore.GetString(ctx, db.SettingDNSResolverEnabled, "false") == "true"
+	if dnsResolverEnabled {
+		dnsAddr := settingsStore.GetString(ctx, db.SettingDNSResolverAddr, ":5353")
+		upstreamStr := settingsStore.GetString(ctx, db.SettingDNSUpstreamServers, "1.1.1.1:53,8.8.8.8:53")
+		upstreams := strings.Split(upstreamStr, ",")
+		for i := range upstreams {
+			upstreams[i] = strings.TrimSpace(upstreams[i])
+		}
+
+		dnsResolver := gatekeydns.NewResolver(gatekeydns.ResolverConfig{
+			ListenAddr:      dnsAddr,
+			UpstreamDNS:     upstreams,
+			RefreshInterval: 30 * time.Second,
+		}, func(ctx context.Context) ([]*gatekeydns.Record, error) {
+			dbRecords, err := dnsStore.GetAllActiveRecords(ctx)
+			if err != nil {
+				return nil, err
+			}
+			records := make([]*gatekeydns.Record, len(dbRecords))
+			for i, r := range dbRecords {
+				records[i] = &gatekeydns.Record{
+					Hostname:   r.Hostname,
+					IPAddress:  r.IPAddress,
+					RecordType: r.RecordType,
+					IsWildcard: r.IsWildcard,
+				}
+			}
+			return records, nil
+		}, logger)
+
+		go func() {
+			if err := dnsResolver.Start(bgCtx); err != nil {
+				logger.Warn("DNS resolver stopped", zap.Error(err))
+			}
+		}()
 	}
 
 	return srv, nil
@@ -872,6 +911,8 @@ func (s *Server) setupRoutes() {
 				configRead.GET("/networks/:id/mesh-hubs", s.handleGetNetworkMeshHubs)
 				configRead.GET("/networks/:id/dns", s.handleGetDNSRule)
 				configRead.GET("/networks/:id/dns/records", s.handleListDNSRecords)
+				configRead.GET("/dns/export", s.handleExportDNSRecords)
+				configRead.GET("/dns/resolver/status", s.handleGetDNSResolverStatus)
 				configRead.GET("/access-rules", s.handleListAccessRules)
 				configRead.GET("/access-rules/:id", s.handleGetAccessRule)
 			}
@@ -886,6 +927,7 @@ func (s *Server) setupRoutes() {
 				configWrite.POST("/networks/:id/dns/records", s.handleCreateDNSRecord)
 				configWrite.PUT("/dns/records/:id", s.handleUpdateDNSRecord)
 				configWrite.DELETE("/dns/records/:id", s.handleDeleteDNSRecord)
+				configWrite.POST("/dns/import", s.handleImportDNSRecords)
 				configWrite.POST("/access-rules", s.handleCreateAccessRule)
 				configWrite.PUT("/access-rules/:id", s.handleUpdateAccessRule)
 				configWrite.DELETE("/access-rules/:id", s.handleDeleteAccessRule)

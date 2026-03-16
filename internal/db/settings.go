@@ -155,6 +155,11 @@ const (
 	SettingSSHBastionEnabled = "ssh_bastion_enabled"  // bool: enable/disable SSH bastion proxy
 	SettingSSHBastionPort    = "ssh_bastion_port"     // port number (default: 2222)
 	SettingSSHBastionHostKey = "ssh_bastion_host_key" // PEM-encoded ED25519 host key
+
+	// DNS Resolver settings
+	SettingDNSResolverEnabled = "dns_resolver_enabled" // bool: enable/disable built-in DNS resolver
+	SettingDNSResolverAddr    = "dns_resolver_addr"    // e.g., ":5353"
+	SettingDNSUpstreamServers = "dns_upstream_servers" // comma-separated upstream DNS servers
 )
 
 // Default crypto profiles (all enabled by default)

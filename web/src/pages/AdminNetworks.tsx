@@ -19,6 +19,8 @@ import {
   getNetworkDNSRecords,
   createDNSRecord,
   deleteDNSRecord,
+  exportDNSRecords,
+  importDNSRecords,
   Network,
   Gateway,
   AdminGateway,
@@ -947,6 +949,8 @@ function DNSModal({ network, onClose }: DNSModalProps) {
   const [newHostname, setNewHostname] = useState('')
   const [newIPAddress, setNewIPAddress] = useState('')
   const [newDescription, setNewDescription] = useState('')
+  const [newRecordType, setNewRecordType] = useState('A')
+  const [newIsWildcard, setNewIsWildcard] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -1033,14 +1037,59 @@ function DNSModal({ network, onClose }: DNSModalProps) {
         hostname: newHostname.trim(),
         ip_address: newIPAddress.trim(),
         description: newDescription.trim() || undefined,
+        record_type: newRecordType,
+        is_wildcard: newIsWildcard,
       })
       setNewHostname('')
       setNewIPAddress('')
       setNewDescription('')
+      setNewRecordType('A')
+      setNewIsWildcard(false)
       await loadData()
     } catch {
       setError('Failed to create DNS record')
     }
+  }
+
+  async function handleExport() {
+    try {
+      const data = await exportDNSRecords()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'dns-records-export.json'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      setError('Failed to export DNS records')
+    }
+  }
+
+  async function handleImport() {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      try {
+        const text = await file.text()
+        const data = JSON.parse(text)
+        const records = data.records || data
+        if (!Array.isArray(records)) {
+          setError('Invalid import file format')
+          return
+        }
+        const result = await importDNSRecords(records)
+        setError(null)
+        await loadData()
+        alert(`Imported ${result.imported} of ${result.total} records`)
+      } catch {
+        setError('Failed to import DNS records')
+      }
+    }
+    input.click()
   }
 
   async function handleDeleteRecord(id: string) {
@@ -1144,7 +1193,13 @@ function DNSModal({ network, onClose }: DNSModalProps) {
 
             {/* Static DNS Records */}
             <div>
-              <h3 className="text-sm font-medium text-theme-secondary mb-2">Static DNS Records</h3>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium text-theme-secondary">Static DNS Records</h3>
+                <div className="flex space-x-2">
+                  <button onClick={handleExport} className="btn btn-secondary text-xs px-2 py-1">Export</button>
+                  <button onClick={handleImport} className="btn btn-secondary text-xs px-2 py-1">Import</button>
+                </div>
+              </div>
               <div className="grid grid-cols-3 gap-2 mb-2">
                 <input
                   type="text"
@@ -1160,23 +1215,51 @@ function DNSModal({ network, onClose }: DNSModalProps) {
                   placeholder="10.0.17.75"
                   className="input font-mono"
                 />
-                <div className="flex space-x-2">
+                <input
+                  type="text"
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  placeholder="Description"
+                  className="input"
+                />
+              </div>
+              <div className="flex items-center space-x-3 mb-2">
+                <select
+                  value={newRecordType}
+                  onChange={(e) => setNewRecordType(e.target.value)}
+                  className="input w-28"
+                >
+                  <option value="A">A</option>
+                  <option value="AAAA">AAAA</option>
+                  <option value="CNAME">CNAME</option>
+                </select>
+                <label className="flex items-center space-x-1 text-sm text-theme-secondary">
                   <input
-                    type="text"
-                    value={newDescription}
-                    onChange={(e) => setNewDescription(e.target.value)}
-                    placeholder="Description"
-                    className="input flex-1"
+                    type="checkbox"
+                    checked={newIsWildcard}
+                    onChange={(e) => setNewIsWildcard(e.target.checked)}
+                    className="rounded"
                   />
-                  <button onClick={handleAddRecord} className="btn btn-primary">Add</button>
-                </div>
+                  <span>Wildcard</span>
+                </label>
+                <button onClick={handleAddRecord} className="btn btn-primary">Add</button>
               </div>
               {records.length > 0 ? (
                 <div className="border border-theme rounded-lg divide-y divide-theme">
                   {records.map((record) => (
                     <div key={record.id} className="flex items-center justify-between p-3">
                       <div>
-                        <div className="text-sm font-medium text-theme-primary font-mono">{record.hostname}</div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-medium text-theme-primary font-mono">{record.hostname}</span>
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                            {record.record_type || 'A'}
+                          </span>
+                          {record.is_wildcard && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                              Wildcard
+                            </span>
+                          )}
+                        </div>
                         <div className="text-xs text-theme-tertiary font-mono">{record.ip_address}</div>
                         {record.description && (
                           <div className="text-xs text-theme-muted">{record.description}</div>
