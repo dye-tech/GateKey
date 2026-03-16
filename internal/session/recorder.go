@@ -181,7 +181,7 @@ func (r *Recorder) SetMaskPatterns(patterns []string) {
 		if re, err := regexp.Compile(p); err == nil {
 			compiled = append(compiled, re)
 		} else {
-			r.logger.Warn("Invalid mask pattern, skipping", zap.String("pattern", p), zap.Error(err))
+			r.logger.Warn("Invalid mask pattern, skipping", zap.Error(err))
 		}
 	}
 	r.mutex.Lock()
