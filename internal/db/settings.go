@@ -142,6 +142,9 @@ const (
 
 	// Proxy log settings
 	SettingProxyLogRetentionDays = "proxy_log_retention_days"
+
+	// Flow log settings
+	SettingFlowLogRetentionDays = "flow_log_retention_days"
 )
 
 // Default crypto profiles (all enabled by default)

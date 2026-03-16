@@ -62,6 +62,7 @@ type Server struct {
 	telemetry       *telemetry.Provider // OpenTelemetry provider
 	recordingStore  *db.SessionRecordingStore
 	sessionRecorder *session.Recorder
+	flowStore       *db.NetworkFlowStore
 }
 
 // NewServer creates a new API server instance.
@@ -257,6 +258,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	wgPeerStore := db.NewWireGuardPeerStore(database)
 	jitStore := db.NewJITAccessStore(database)
 	recordingStore := db.NewSessionRecordingStore(database)
+	flowStore := db.NewNetworkFlowStore(database)
 
 	// Initialize PKI with database store for CA persistence
 	// This ensures all pods share the same CA
@@ -305,6 +307,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 		wgPeerStore:     wgPeerStore,
 		jitStore:        jitStore,
 		recordingStore:  recordingStore,
+		flowStore:       flowStore,
 		ca:              ca,
 		configGen:       configGen,
 		adminPassword:   adminPassword,
@@ -494,6 +497,7 @@ func (s *Server) setupRoutes() {
 			gateway.POST("/client-rules", s.handleGatewayClientRules)
 			gateway.POST("/all-rules", s.handleGatewayAllRules)
 			gateway.POST("/client-stats", s.handleGatewayClientStats)           // Periodic client stats sync
+			gateway.POST("/flow-report", s.handleGatewayFlowReport)             // Network flow log reports
 			gateway.POST("/pending-disconnects", s.handleGetPendingDisconnects) // Poll for pending user disconnects
 			gateway.POST("/ack-disconnect", s.handleAckDisconnect)              // Acknowledge disconnect executed
 		}
@@ -826,6 +830,16 @@ func (s *Server) setupRoutes() {
 			{
 				recWrite.DELETE("/recordings/:id", s.handleDeleteRecording)
 				recWrite.PUT("/recordings/settings", s.handleUpdateRecordingSettings)
+			}
+
+			// Network flow logs with scope enforcement
+			flowRead := admin.Group("")
+			flowRead.Use(s.requireAnyScope(ScopeConfigRead, ScopeConfigWrite, ScopeAdmin))
+			{
+				flowRead.GET("/flow-logs", s.handleListFlowLogs)
+				flowRead.GET("/flow-logs/stats", s.handleGetFlowStats)
+				flowRead.GET("/flow-logs/top-destinations", s.handleGetTopDestinations)
+				flowRead.GET("/flow-logs/user/:userId", s.handleGetUserFlowActivity)
 			}
 
 			// Topology and network tools (admin scope - powerful operations)
@@ -1203,6 +1217,17 @@ func (s *Server) runRecordingCleanup(ctx context.Context) {
 				s.logger.Error("Failed to cleanup recordings", zap.Error(err))
 			} else if count > 0 {
 				s.logger.Info("Cleaned up old recordings", zap.Int("count", count))
+			}
+
+			// Cleanup old flow logs
+			flowRetention := s.settingsStore.GetInt(ctx, db.SettingFlowLogRetentionDays, 30)
+			if flowRetention > 0 {
+				flowCount, flowErr := s.flowStore.DeleteOlderThan(ctx, flowRetention)
+				if flowErr != nil {
+					s.logger.Error("Failed to cleanup flow logs", zap.Error(flowErr))
+				} else if flowCount > 0 {
+					s.logger.Info("Cleaned up old flow logs", zap.Int("count", flowCount))
+				}
 			}
 
 			// Cleanup old proxy access logs

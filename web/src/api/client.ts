@@ -2653,3 +2653,62 @@ export async function getRecordingSettings(): Promise<RecordingSettings> {
 export async function updateRecordingSettings(settings: Partial<Record<string, string>>): Promise<void> {
   await api.put('/api/v1/admin/recordings/settings', settings)
 }
+
+// ==================== Network Flow Logs ====================
+
+export interface NetworkFlowLog {
+  id: string
+  gateway_name: string
+  user_email: string
+  source_ip: string
+  dest_ip: string
+  dest_port: number
+  protocol: string
+  bytes_sent: number
+  bytes_received: number
+  flow_start: string
+  flow_end?: string
+  created_at: string
+}
+
+export interface FlowStats {
+  total_flows: number
+  total_bytes: number
+  unique_users: number
+  unique_destinations: number
+  flows_today: number
+}
+
+export interface TopDestination {
+  dest_ip: string
+  flow_count: number
+  total_bytes: number
+}
+
+export async function getFlowLogs(params?: {
+  gateway_id?: string; user_email?: string; dest_ip?: string;
+  protocol?: string; limit?: number; offset?: number
+}): Promise<NetworkFlowLog[]> {
+  const query = new URLSearchParams()
+  if (params) {
+    Object.entries(params).forEach(([k, v]) => { if (v !== undefined) query.set(k, String(v)) })
+  }
+  const qs = query.toString()
+  const response = await api.get(`/api/v1/admin/flow-logs${qs ? '?' + qs : ''}`)
+  return response.data.flows || []
+}
+
+export async function getFlowStats(): Promise<FlowStats> {
+  const response = await api.get('/api/v1/admin/flow-logs/stats')
+  return response.data
+}
+
+export async function getTopDestinations(limit = 20): Promise<TopDestination[]> {
+  const response = await api.get(`/api/v1/admin/flow-logs/top-destinations?limit=${limit}`)
+  return response.data.destinations || []
+}
+
+export async function getUserFlowActivity(userId: string, limit = 100): Promise<NetworkFlowLog[]> {
+  const response = await api.get(`/api/v1/admin/flow-logs/user/${userId}?limit=${limit}`)
+  return response.data.flows || []
+}

@@ -4767,6 +4767,8 @@ func (s *Server) handleUpdateSettings(c *gin.Context) {
 		db.SettingRecordingRetentionDays: true,
 		// Proxy log settings
 		db.SettingProxyLogRetentionDays: true,
+		// Flow log settings
+		db.SettingFlowLogRetentionDays: true,
 	}
 
 	for key, value := range req {
