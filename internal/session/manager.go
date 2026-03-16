@@ -89,13 +89,17 @@ type ConnectedAgent struct {
 
 // AdminSession represents an admin connected for remote sessions
 type AdminSession struct {
-	ID          string
-	Conn        *websocket.Conn
-	Send        chan []byte
-	Done        chan struct{}
-	ConnectedTo string // AgentID currently connected to
-	UserEmail   string
-	mutex       sync.Mutex
+	ID                string
+	Conn              *websocket.Conn
+	Send              chan []byte
+	Done              chan struct{}
+	ConnectedTo       string // AgentID currently connected to
+	UserEmail         string
+	RecordingID       string
+	RecordingPath     string
+	RecordingNodeID   string
+	RecordingNodeName string
+	mutex             sync.Mutex
 }
 
 // Manager handles remote session connections
@@ -112,6 +116,13 @@ type Manager struct {
 
 	// Token validation function
 	ValidateAgentToken func(nodeType, nodeID, token string) bool
+
+	// Session recorder
+	recorder *Recorder
+
+	// Callbacks for recording lifecycle
+	OnRecordingStart    func(recordingID, storagePath, userID, userEmail, nodeID, nodeName string)
+	OnRecordingComplete func(recordingID string, fileSize int64, durationSec int)
 }
 
 // NewManager creates a new session manager
@@ -144,6 +155,11 @@ func NewManager(logger *zap.Logger) *Manager {
 	}
 
 	return m
+}
+
+// SetRecorder sets the session recorder
+func (m *Manager) SetRecorder(rec *Recorder) {
+	m.recorder = rec
 }
 
 // SetAllowedOrigins configures the allowed origins for admin WebSocket connections
@@ -383,6 +399,23 @@ func (m *Manager) agentReader(agent *ConnectedAgent) {
 			}
 			// Forward output to connected admin
 			m.forwardOutputToAdmin(agent.Info.AgentID, msg)
+
+			// Record output if any admin recording this agent
+			if m.recorder != nil {
+				var outputPayload OutputPayload
+				if err := json.Unmarshal(msg.Payload, &outputPayload); err == nil && outputPayload.Output != "" {
+					m.mutex.RLock()
+					for _, adm := range m.admins {
+						adm.mutex.Lock()
+						connTo := adm.ConnectedTo
+						adm.mutex.Unlock()
+						if connTo == agent.Info.AgentID {
+							m.recorder.WriteOutput(adm.ID, outputPayload.Output)
+						}
+					}
+					m.mutex.RUnlock()
+				}
+			}
 		}
 	}
 }
@@ -457,6 +490,34 @@ func (m *Manager) adminReader(admin *AdminSession) {
 				zap.String("adminSession", admin.ID),
 				zap.String("agentId", payload.AgentID))
 
+			// Start recording if recorder is enabled
+			if m.recorder != nil {
+				m.mutex.RLock()
+				agent, agentOk := m.agents[payload.AgentID]
+				m.mutex.RUnlock()
+				nodeName := ""
+				nodeID := ""
+				if agentOk {
+					nodeName = agent.Info.NodeName
+					nodeID = agent.Info.NodeID
+				}
+				recordingID := uuid.New().String()
+				storagePath, recErr := m.recorder.StartRecording(admin.ID, recordingID, admin.UserEmail, nodeName)
+				if recErr != nil {
+					m.logger.Warn("Failed to start recording", zap.Error(recErr))
+				} else if storagePath != "" {
+					admin.mutex.Lock()
+					admin.RecordingID = recordingID
+					admin.RecordingPath = storagePath
+					admin.RecordingNodeID = nodeID
+					admin.RecordingNodeName = nodeName
+					admin.mutex.Unlock()
+					if m.OnRecordingStart != nil {
+						m.OnRecordingStart(recordingID, storagePath, admin.UserEmail, admin.UserEmail, nodeID, nodeName)
+					}
+				}
+			}
+
 			// Send agent_connected response
 			m.sendAdminMessage(admin, Message{
 				Type:      "agent_connected",
@@ -488,6 +549,22 @@ func (m *Manager) adminReader(admin *AdminSession) {
 			m.sendCommandToAgent(agentID, cmdPayload.Command, msg.ID)
 
 		case MsgTypeDisconnect:
+			// Stop recording
+			if m.recorder != nil {
+				admin.mutex.Lock()
+				recID := admin.RecordingID
+				admin.RecordingID = ""
+				admin.mutex.Unlock()
+				if recID != "" {
+					go func(id string, adminID string) {
+						fileSize, duration, _ := m.recorder.StopRecording(adminID)
+						if m.OnRecordingComplete != nil {
+							m.OnRecordingComplete(id, fileSize, duration)
+						}
+					}(recID, admin.ID)
+				}
+			}
+
 			admin.mutex.Lock()
 			admin.ConnectedTo = ""
 			admin.mutex.Unlock()
@@ -534,6 +611,16 @@ func (m *Manager) removeAdmin(sessionID string) {
 	m.mutex.Unlock()
 
 	if exists {
+		// Stop any active recording
+		if m.recorder != nil && admin.RecordingID != "" {
+			recID := admin.RecordingID
+			go func() {
+				fileSize, duration, _ := m.recorder.StopRecording(sessionID)
+				if m.OnRecordingComplete != nil {
+					m.OnRecordingComplete(recID, fileSize, duration)
+				}
+			}()
+		}
 		m.logger.Info("Admin session ended", zap.String("sessionId", sessionID))
 	}
 }

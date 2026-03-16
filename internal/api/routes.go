@@ -4761,6 +4761,10 @@ func (s *Server) handleUpdateSettings(c *gin.Context) {
 		db.SettingJITWebhookURL:     true,
 		db.SettingJITWebhookEnabled: true,
 		db.SettingJITAppURL:         true,
+		// Recording settings
+		db.SettingRecordingEnabled:       true,
+		db.SettingRecordingStoragePath:   true,
+		db.SettingRecordingRetentionDays: true,
 	}
 
 	for key, value := range req {
