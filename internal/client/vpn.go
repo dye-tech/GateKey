@@ -17,10 +17,21 @@ import (
 	"time"
 )
 
+// DNSConfig represents the user's DNS configuration from the server
+type DNSConfig struct {
+	DNSServers    []string `json:"dns_servers"`
+	SearchDomains []string `json:"search_domains"`
+	Records       []struct {
+		Hostname  string `json:"hostname"`
+		IPAddress string `json:"ip_address"`
+	} `json:"records"`
+}
+
 // VPNManager handles OpenVPN process management.
 type VPNManager struct {
-	config *Config
-	auth   *AuthManager
+	config     *Config
+	auth       *AuthManager
+	dnsManager *DNSManager
 }
 
 // ConnectionState holds the current VPN connection state.
@@ -59,8 +70,9 @@ type Gateway struct {
 // NewVPNManager creates a new VPN manager.
 func NewVPNManager(config *Config) *VPNManager {
 	return &VPNManager{
-		config: config,
-		auth:   NewAuthManager(config),
+		config:     config,
+		auth:       NewAuthManager(config),
+		dnsManager: NewDNSManager(),
 	}
 }
 
@@ -319,6 +331,13 @@ func (v *VPNManager) DisconnectGateway(gatewayName string) error {
 func (v *VPNManager) disconnectAll(multiState *MultiConnectionState) error {
 	if len(multiState.Connections) == 0 {
 		return fmt.Errorf("not connected to any gateway")
+	}
+
+	// Restore DNS configuration
+	if v.dnsManager != nil {
+		if err := v.dnsManager.RestoreDNS(); err != nil {
+			fmt.Printf("Note: Could not restore DNS: %s\n", err)
+		}
 	}
 
 	var disconnected []string
@@ -1843,6 +1862,34 @@ func (v *VPNManager) promptMeshHubSelection(hubs []MeshHub) error {
 	return nil
 }
 
+// fetchDNSConfig fetches the user's DNS config from the server
+func (v *VPNManager) fetchDNSConfig(ctx context.Context, authHeader string) (*DNSConfig, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	reqURL := fmt.Sprintf("%s/api/v1/dns/config", v.config.ServerURL)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", authHeader)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to fetch DNS config: status %d", resp.StatusCode)
+	}
+
+	var config DNSConfig
+	if err := json.NewDecoder(resp.Body).Decode(&config); err != nil {
+		return nil, err
+	}
+	return &config, nil
+}
+
 // connectWireGuard connects to a WireGuard gateway.
 func (v *VPNManager) connectWireGuard(ctx context.Context, gateway *Gateway, multiState *MultiConnectionState) error {
 	authHeader, err := v.auth.GetAuthHeader()
@@ -1887,6 +1934,16 @@ func (v *VPNManager) connectWireGuard(ctx context.Context, gateway *Gateway, mul
 
 	// Update state with IP info from the interface
 	v.updateStateFromWireGuard(conn)
+
+	// Configure DNS from server
+	dnsConfig, dnsErr := v.fetchDNSConfig(ctx, authHeader)
+	if dnsErr != nil {
+		fmt.Printf("Note: Could not fetch DNS config: %s\n", dnsErr)
+	} else if len(dnsConfig.DNSServers) > 0 {
+		if err := v.dnsManager.ConfigureDNS(wgInterface, dnsConfig.DNSServers, dnsConfig.SearchDomains); err != nil {
+			fmt.Printf("Note: Could not configure system DNS: %s\n", err)
+		}
+	}
 
 	fmt.Printf("Connected to %s (Interface: %s)\n", gateway.Name, wgInterface)
 	fmt.Println("WireGuard VPN connection established. Use 'gatekey status' to check connection.")
@@ -2132,6 +2189,13 @@ func (v *VPNManager) findAvailableWgNumber(multiState *MultiConnectionState) int
 
 // disconnectWireGuard disconnects a WireGuard connection.
 func (v *VPNManager) disconnectWireGuard(conn *ConnectionState, gatewayName string) {
+	// Restore DNS before tearing down the interface
+	if v.dnsManager != nil {
+		if err := v.dnsManager.RestoreDNS(); err != nil {
+			fmt.Printf("Note: Could not restore DNS: %s\n", err)
+		}
+	}
+
 	if conn.TunInterface != "" {
 		if err := v.stopWireGuard(conn.TunInterface); err != nil {
 			// Try to force remove the interface
@@ -2217,6 +2281,16 @@ func (v *VPNManager) connectWireGuardMesh(ctx context.Context, hub *MeshHub, mul
 
 	// Update state with IP info from the interface
 	v.updateStateFromWireGuard(conn)
+
+	// Configure DNS from server
+	dnsConfig, dnsErr := v.fetchDNSConfig(ctx, authHeader)
+	if dnsErr != nil {
+		fmt.Printf("Note: Could not fetch DNS config: %s\n", dnsErr)
+	} else if len(dnsConfig.DNSServers) > 0 {
+		if err := v.dnsManager.ConfigureDNS(wgInterface, dnsConfig.DNSServers, dnsConfig.SearchDomains); err != nil {
+			fmt.Printf("Note: Could not configure system DNS: %s\n", err)
+		}
+	}
 
 	fmt.Printf("Connected to mesh hub %s (Interface: %s)\n", hub.Name, wgInterface)
 	fmt.Println("WireGuard mesh VPN connection established. Use 'gatekey status' to check connection.")
