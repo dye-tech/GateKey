@@ -7,6 +7,8 @@ import {
   denyJITRequest,
   revokeJITGrant,
   getJITStats,
+  getSettings,
+  updateSettings,
 } from '../api/client'
 
 const TYPE_LABELS: Record<string, string> = {
@@ -90,7 +92,7 @@ function CountdownTimer({ expiresAt }: { expiresAt: string }) {
 }
 
 export default function AdminJITAccess() {
-  const [tab, setTab] = useState<'pending' | 'active' | 'history'>('pending')
+  const [tab, setTab] = useState<'pending' | 'active' | 'history' | 'settings'>('pending')
   const [pendingRequests, setPendingRequests] = useState<JITRequest[]>([])
   const [approvedRequests, setApprovedRequests] = useState<JITRequest[]>([])
   const [allRequests, setAllRequests] = useState<JITRequest[]>([])
@@ -100,6 +102,11 @@ export default function AdminJITAccess() {
   const [success, setSuccess] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [notes, setNotes] = useState<Record<string, string>>({})
+  const [webhookEnabled, setWebhookEnabled] = useState(false)
+  const [webhookURL, setWebhookURL] = useState('')
+  const [appURL, setAppURL] = useState('')
+  const [settingsLoading, setSettingsLoading] = useState(false)
+  const [settingsSaved, setSettingsSaved] = useState(false)
 
   const loadData = useCallback(async () => {
     try {
@@ -110,11 +117,18 @@ export default function AdminJITAccess() {
         getAdminJITRequests('approved'),
         getAdminJITRequests(),
         getJITStats(),
+        getSettings(),
       ])
       if (results[0].status === 'fulfilled') setPendingRequests(results[0].value)
       if (results[1].status === 'fulfilled') setApprovedRequests(results[1].value)
       if (results[2].status === 'fulfilled') setAllRequests(results[2].value)
       if (results[3].status === 'fulfilled') setStats(results[3].value)
+      if (results[4].status === 'fulfilled') {
+        const s = results[4].value
+        setWebhookEnabled(s['jit_webhook_enabled'] === 'true')
+        setWebhookURL(s['jit_webhook_url'] || '')
+        setAppURL(s['jit_app_url'] || '')
+      }
 
       const failed = results.filter(r => r.status === 'rejected')
       if (failed.length === results.length) {
@@ -177,6 +191,25 @@ export default function AdminJITAccess() {
       console.error(err)
     } finally {
       setActionLoading(null)
+    }
+  }
+
+  async function handleSaveSettings() {
+    try {
+      setSettingsLoading(true)
+      setError(null)
+      await updateSettings({
+        jit_webhook_enabled: webhookEnabled ? 'true' : 'false',
+        jit_webhook_url: webhookURL,
+        jit_app_url: appURL,
+      })
+      setSettingsSaved(true)
+      setTimeout(() => setSettingsSaved(false), 3000)
+    } catch (err) {
+      setError('Failed to save webhook settings')
+      console.error(err)
+    } finally {
+      setSettingsLoading(false)
     }
   }
 
@@ -270,6 +303,16 @@ export default function AdminJITAccess() {
             }`}
           >
             History
+          </button>
+          <button
+            onClick={() => setTab('settings')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              tab === 'settings'
+                ? 'bg-primary-600 text-white'
+                : 'bg-theme-tertiary text-theme-secondary hover:bg-theme-secondary'
+            }`}
+          >
+            Settings
           </button>
         </div>
       </div>
@@ -390,7 +433,7 @@ export default function AdminJITAccess() {
             </div>
           )}
         </div>
-      ) : (
+      ) : tab === 'history' ? (
         /* History */
         <div className="card">
           <h2 className="text-lg font-semibold text-theme-primary mb-4">
@@ -442,6 +485,68 @@ export default function AdminJITAccess() {
               </table>
             </div>
           )}
+        </div>
+      ) : (
+        /* Settings */
+        <div className="card">
+          <h2 className="text-lg font-semibold text-theme-primary mb-4">Webhook Notifications</h2>
+          <p className="text-sm text-theme-tertiary mb-6">
+            Configure webhook notifications for JIT access requests. Supports Slack and Microsoft Teams incoming webhooks.
+          </p>
+          <div className="space-y-4 max-w-lg">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-theme-primary">Enable Webhook Notifications</label>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={webhookEnabled}
+                onClick={() => setWebhookEnabled(!webhookEnabled)}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
+                  webhookEnabled ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    webhookEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-theme-primary mb-1">Webhook URL</label>
+              <input
+                type="url"
+                value={webhookURL}
+                onChange={(e) => setWebhookURL(e.target.value)}
+                className="input w-full"
+                placeholder="https://hooks.slack.com/services/..."
+              />
+              <p className="text-xs text-theme-muted mt-1">Slack or Teams incoming webhook URL</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-theme-primary mb-1">Application URL</label>
+              <input
+                type="url"
+                value={appURL}
+                onChange={(e) => setAppURL(e.target.value)}
+                className="input w-full"
+                placeholder="https://gatekey.example.com"
+              />
+              <p className="text-xs text-theme-muted mt-1">Base URL for approval links in notifications</p>
+            </div>
+            <div className="pt-2">
+              <button
+                onClick={handleSaveSettings}
+                disabled={settingsLoading}
+                className="btn btn-primary"
+              >
+                {settingsLoading ? 'Saving...' : 'Save Settings'}
+              </button>
+              {settingsSaved && (
+                <span className="ml-3 text-sm text-green-600 dark:text-green-400">Settings saved</span>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
