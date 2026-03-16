@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict H4Pagmh6SgX75MIQOainonsJZsylJsRxZeZn4iIwbV64NXjvlicWzWOyVaP51JZ
+\restrict QzujeLR0MdFj3TNRFAWSGLbhShnHYuLWcYwvbfH7xvyRYN970R1R4eMdaJuuGsG
 
 -- Dumped from database version 16.10
 -- Dumped by pg_dump version 16.10
@@ -305,6 +305,38 @@ CREATE TABLE public.crl_cache (
     next_update timestamp with time zone NOT NULL,
     crl_number bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: dns_records; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.dns_records (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    network_id uuid NOT NULL,
+    hostname character varying(255) NOT NULL,
+    ip_address inet NOT NULL,
+    description text,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    record_type character varying(10) DEFAULT 'A'::character varying NOT NULL,
+    is_wildcard boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: dns_rules; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.dns_rules (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    network_id uuid NOT NULL,
+    dns_servers text[] DEFAULT '{}'::text[] NOT NULL,
+    search_domains text[] DEFAULT '{}'::text[] NOT NULL,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -1314,6 +1346,22 @@ ALTER TABLE ONLY public.crl_cache
 
 
 --
+-- Name: dns_records dns_records_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dns_records
+    ADD CONSTRAINT dns_records_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: dns_rules dns_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dns_rules
+    ADD CONSTRAINT dns_rules_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: gateway_connections gateway_connections_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2012,6 +2060,27 @@ CREATE INDEX idx_connections_gateway_id ON public.connections USING btree (gatew
 --
 
 CREATE INDEX idx_connections_user_id ON public.connections USING btree (user_id);
+
+
+--
+-- Name: idx_dns_records_hostname; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_dns_records_hostname ON public.dns_records USING btree (hostname);
+
+
+--
+-- Name: idx_dns_records_network; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_dns_records_network ON public.dns_records USING btree (network_id);
+
+
+--
+-- Name: idx_dns_rules_network; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_dns_rules_network ON public.dns_rules USING btree (network_id);
 
 
 --
@@ -3004,6 +3073,22 @@ ALTER TABLE ONLY public.connections
 
 
 --
+-- Name: dns_records dns_records_network_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dns_records
+    ADD CONSTRAINT dns_records_network_id_fkey FOREIGN KEY (network_id) REFERENCES public.networks(id) ON DELETE CASCADE;
+
+
+--
+-- Name: dns_rules dns_rules_network_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dns_rules
+    ADD CONSTRAINT dns_rules_network_id_fkey FOREIGN KEY (network_id) REFERENCES public.networks(id) ON DELETE CASCADE;
+
+
+--
 -- Name: gateway_connections gateway_connections_gateway_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3271,5 +3356,5 @@ ALTER TABLE ONLY public.wireguard_peers
 -- PostgreSQL database dump complete
 --
 
-\unrestrict H4Pagmh6SgX75MIQOainonsJZsylJsRxZeZn4iIwbV64NXjvlicWzWOyVaP51JZ
+\unrestrict QzujeLR0MdFj3TNRFAWSGLbhShnHYuLWcYwvbfH7xvyRYN970R1R4eMdaJuuGsG
 
