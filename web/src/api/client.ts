@@ -2404,3 +2404,94 @@ export async function addGroupGeoRule(groupName: string, ruleId: string): Promis
 export async function removeGroupGeoRule(groupName: string, ruleId: string): Promise<void> {
   await api.delete(`/api/v1/admin/geo-fence/groups/${encodeURIComponent(groupName)}/rules/${ruleId}`)
 }
+
+// ==================== JIT Access ====================
+
+export interface JITResource {
+  id: string
+  name: string
+  description: string
+  type: string
+}
+
+export interface JITRequest {
+  id: string
+  requester_id?: string
+  requester_email?: string
+  resource_type: string
+  resource_id: string
+  resource_name: string
+  justification: string
+  duration_minutes: number
+  status: string
+  approver_email?: string
+  approval_note?: string
+  expires_at: string
+  created_at: string
+  decided_at?: string
+}
+
+export interface JITGrant {
+  id: string
+  request_id: string
+  resource_type: string
+  resource_id: string
+  is_active: boolean
+  granted_at: string
+  expires_at: string
+}
+
+export interface JITStats {
+  pending_requests: number
+  active_grants: number
+}
+
+// User endpoints
+export async function getJITResources(): Promise<JITResource[]> {
+  const response = await api.get('/api/v1/jit/resources')
+  return response.data.resources || []
+}
+
+export async function createJITRequest(req: { resource_type: string; resource_id: string; justification: string; duration_minutes: number }): Promise<JITRequest> {
+  const response = await api.post('/api/v1/jit/requests', req)
+  return response.data.request
+}
+
+export async function getMyJITRequests(): Promise<JITRequest[]> {
+  const response = await api.get('/api/v1/jit/requests')
+  return response.data.requests || []
+}
+
+export async function cancelJITRequest(id: string): Promise<void> {
+  await api.post(`/api/v1/jit/requests/${id}/cancel`)
+}
+
+export async function getMyJITGrants(): Promise<JITGrant[]> {
+  const response = await api.get('/api/v1/jit/grants')
+  return response.data.grants || []
+}
+
+// Admin endpoints
+export async function getAdminJITRequests(status?: string): Promise<JITRequest[]> {
+  const params = status ? `?status=${status}` : ''
+  const response = await api.get(`/api/v1/admin/jit/requests${params}`)
+  return response.data.requests || []
+}
+
+export async function approveJITRequest(id: string, note?: string): Promise<JITGrant> {
+  const response = await api.post(`/api/v1/admin/jit/requests/${id}/approve`, { note: note || '' })
+  return response.data.grant
+}
+
+export async function denyJITRequest(id: string, note?: string): Promise<void> {
+  await api.post(`/api/v1/admin/jit/requests/${id}/deny`, { note: note || '' })
+}
+
+export async function revokeJITGrant(id: string, reason?: string): Promise<void> {
+  await api.post(`/api/v1/admin/jit/grants/${id}/revoke`, { reason: reason || '' })
+}
+
+export async function getJITStats(): Promise<JITStats> {
+  const response = await api.get('/api/v1/admin/jit/stats')
+  return response.data
+}
