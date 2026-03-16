@@ -2495,3 +2495,19 @@ export async function getJITStats(): Promise<JITStats> {
   const response = await api.get('/api/v1/admin/jit/stats')
   return response.data
 }
+
+export async function getSettings(): Promise<Record<string, string>> {
+  const response = await api.get('/api/v1/admin/settings')
+  const settings = response.data.settings || []
+  const result: Record<string, string> = {}
+  for (const s of settings) {
+    if (s.key && s.value !== undefined) {
+      result[s.key] = s.value
+    }
+  }
+  return result
+}
+
+export async function updateSettings(settings: Record<string, string>): Promise<void> {
+  await api.put('/api/v1/admin/settings', settings)
+}

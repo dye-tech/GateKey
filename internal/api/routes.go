@@ -4757,6 +4757,10 @@ func (s *Server) handleUpdateSettings(c *gin.Context) {
 		db.SettingProxySSRFProtection:         true,
 		db.SettingProxyDNSRebindingProtection: true,
 		db.SettingProxyTLSVerify:              true,
+		// JIT settings
+		db.SettingJITWebhookURL:     true,
+		db.SettingJITWebhookEnabled: true,
+		db.SettingJITAppURL:         true,
 	}
 
 	for key, value := range req {

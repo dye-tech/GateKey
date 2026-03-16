@@ -129,6 +129,11 @@ const (
 
 	// CA Key Encryption - auto-generated and stored for encrypting CA private keys at rest
 	SettingCAKeyEncryptionKey = "ca_key_encryption_key" // base64-encoded 32-byte AES-256-GCM key
+
+	// JIT Access settings
+	SettingJITWebhookURL     = "jit_webhook_url"      // Slack/Teams webhook URL for notifications
+	SettingJITWebhookEnabled = "jit_webhook_enabled"   // bool: enable webhook notifications
+	SettingJITAppURL         = "jit_app_url"           // Base URL for approval links (e.g., https://gatekey.dye.tech)
 )
 
 // Default crypto profiles (all enabled by default)

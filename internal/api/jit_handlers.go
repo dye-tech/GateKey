@@ -268,6 +268,9 @@ func (s *Server) handleCreateJITRequest(c *gin.Context) {
 		return
 	}
 
+	// Send webhook notification asynchronously
+	go s.sendJITRequestNotification(req)
+
 	c.JSON(http.StatusCreated, gin.H{
 		"request": gin.H{
 			"id":               req.ID,
@@ -466,6 +469,13 @@ func (s *Server) handleApproveJITRequest(c *gin.Context) {
 		return
 	}
 
+	// Send webhook notification asynchronously
+	go func() {
+		if origReq, err := s.jitStore.GetRequest(ctx, id); err == nil {
+			s.sendJITApprovalNotification(origReq, grant, user.Email)
+		}
+	}()
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "request approved",
 		"grant": gin.H{
@@ -502,6 +512,13 @@ func (s *Server) handleDenyJITRequest(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Send webhook notification asynchronously
+	go func() {
+		if origReq, err := s.jitStore.GetRequest(ctx, id); err == nil {
+			s.sendJITDenialNotification(origReq, user.Email, body.Note)
+		}
+	}()
 
 	c.JSON(http.StatusOK, gin.H{"message": "request denied"})
 }
