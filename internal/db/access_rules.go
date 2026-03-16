@@ -195,7 +195,8 @@ func (s *AccessRuleStore) GetUserAccessRules(ctx context.Context, userID string,
 		FROM access_rules ar
 		LEFT JOIN user_access_rules uar ON ar.id = uar.access_rule_id AND uar.user_id = $1
 		LEFT JOIN group_access_rules gar ON ar.id = gar.access_rule_id
-		WHERE ar.is_active = true AND (uar.user_id IS NOT NULL OR gar.group_name = ANY($2))
+		LEFT JOIN jit_access_grants jag ON ar.id = jag.resource_id AND jag.resource_type = 'access_rule' AND jag.user_id = $1 AND jag.is_active = true AND jag.expires_at > NOW()
+		WHERE ar.is_active = true AND (uar.user_id IS NOT NULL OR gar.group_name = ANY($2) OR jag.id IS NOT NULL)
 		ORDER BY ar.name
 	`
 	rows, err := s.db.Pool.Query(ctx, query, userID, groups)
@@ -312,9 +313,10 @@ func (s *AccessRuleStore) GetUserAccessRulesForGateway(ctx context.Context, user
 		JOIN gateway_networks gn ON ar.network_id = gn.network_id
 		LEFT JOIN user_access_rules uar ON ar.id = uar.access_rule_id AND uar.user_id = $1
 		LEFT JOIN group_access_rules gar ON ar.id = gar.access_rule_id
+		LEFT JOIN jit_access_grants jag ON ar.id = jag.resource_id AND jag.resource_type = 'access_rule' AND jag.user_id = $1 AND jag.is_active = true AND jag.expires_at > NOW()
 		WHERE ar.is_active = true
 		AND gn.gateway_id = $3
-		AND (uar.user_id IS NOT NULL OR gar.group_name = ANY($2))
+		AND (uar.user_id IS NOT NULL OR gar.group_name = ANY($2) OR jag.id IS NOT NULL)
 		ORDER BY ar.name
 	`
 	rows, err := s.db.Pool.Query(ctx, query, userID, groups, gatewayID)
