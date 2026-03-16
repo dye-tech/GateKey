@@ -11,7 +11,7 @@ import (
 // DNSManager handles system DNS configuration
 type DNSManager struct {
 	originalResolv string // backup of /etc/resolv.conf content
-	interface_name string // VPN interface name
+	interfaceName  string // VPN interface name
 	configured     bool
 }
 
@@ -26,7 +26,7 @@ func (d *DNSManager) ConfigureDNS(interfaceName string, dnsServers, searchDomain
 		return nil
 	}
 
-	d.interface_name = interfaceName
+	d.interfaceName = interfaceName
 
 	switch runtime.GOOS {
 	case "linux":
@@ -155,8 +155,8 @@ func (d *DNSManager) configureDarwin(interfaceName string, dnsServers, searchDom
 func (d *DNSManager) restoreLinux() error {
 	if _, err := exec.LookPath("resolvectl"); err == nil {
 		// Revert systemd-resolved by resetting the interface
-		if d.interface_name != "" {
-			exec.Command("resolvectl", "revert", d.interface_name).Run()
+		if d.interfaceName != "" {
+			exec.Command("resolvectl", "revert", d.interfaceName).Run()
 		}
 		d.configured = false
 		return nil
@@ -173,8 +173,8 @@ func (d *DNSManager) restoreLinux() error {
 }
 
 func (d *DNSManager) restoreDarwin() error {
-	if d.interface_name != "" {
-		config := fmt.Sprintf("remove State:/Network/Service/GateKey-%s/DNS\n", d.interface_name)
+	if d.interfaceName != "" {
+		config := fmt.Sprintf("remove State:/Network/Service/GateKey-%s/DNS\n", d.interfaceName)
 		cmd := exec.Command("scutil")
 		cmd.Stdin = strings.NewReader(config)
 		cmd.Run()
