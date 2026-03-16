@@ -1,3 +1,4 @@
+// Package dns provides a lightweight DNS resolver that serves static records from the database.
 package dns
 
 import (
@@ -74,7 +75,7 @@ func (r *Resolver) Start(ctx context.Context) error {
 
 	go func() {
 		<-ctx.Done()
-		r.server.Shutdown()
+		_ = r.server.Shutdown()
 	}()
 
 	return r.server.ListenAndServe()
