@@ -319,3 +319,228 @@ func (s *JITAccessStore) GetGrantStats(ctx context.Context) (pending int, active
 	`).Scan(&pending, &active)
 	return
 }
+
+// ==================== JIT Access Policies ====================
+
+// JITAccessPolicy represents a JIT access policy configuration
+type JITAccessPolicy struct {
+	ID                   string
+	Name                 string
+	Description          string
+	ResourceType         string
+	ResourceID           *string
+	MaxDurationMin       int
+	DefaultDurationMin   int
+	RequestExpiryMin     int
+	AutoApprove          bool
+	RequireJustification bool
+	IsActive             bool
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+// CreatePolicy creates a new JIT access policy
+func (s *JITAccessStore) CreatePolicy(ctx context.Context, policy *JITAccessPolicy) error {
+	err := s.db.Pool.QueryRow(ctx, `
+		INSERT INTO jit_access_policies (name, description, resource_type, resource_id,
+			max_duration_minutes, default_duration_minutes, request_expiry_minutes,
+			auto_approve, require_justification, is_active)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		RETURNING id, created_at, updated_at
+	`, policy.Name, policy.Description, policy.ResourceType, policy.ResourceID,
+		policy.MaxDurationMin, policy.DefaultDurationMin, policy.RequestExpiryMin,
+		policy.AutoApprove, policy.RequireJustification, policy.IsActive).Scan(
+		&policy.ID, &policy.CreatedAt, &policy.UpdatedAt,
+	)
+	return err
+}
+
+// GetPolicy retrieves a JIT access policy by ID
+func (s *JITAccessStore) GetPolicy(ctx context.Context, id string) (*JITAccessPolicy, error) {
+	var p JITAccessPolicy
+	err := s.db.Pool.QueryRow(ctx, `
+		SELECT id, name, COALESCE(description, ''), resource_type, resource_id,
+			max_duration_minutes, default_duration_minutes, request_expiry_minutes,
+			auto_approve, require_justification, is_active, created_at, updated_at
+		FROM jit_access_policies WHERE id = $1
+	`, id).Scan(&p.ID, &p.Name, &p.Description, &p.ResourceType, &p.ResourceID,
+		&p.MaxDurationMin, &p.DefaultDurationMin, &p.RequestExpiryMin,
+		&p.AutoApprove, &p.RequireJustification, &p.IsActive, &p.CreatedAt, &p.UpdatedAt)
+	if err == pgx.ErrNoRows {
+		return nil, fmt.Errorf("JIT policy not found")
+	}
+	return &p, err
+}
+
+// ListPolicies lists all JIT access policies
+func (s *JITAccessStore) ListPolicies(ctx context.Context) ([]*JITAccessPolicy, error) {
+	rows, err := s.db.Pool.Query(ctx, `
+		SELECT id, name, COALESCE(description, ''), resource_type, resource_id,
+			max_duration_minutes, default_duration_minutes, request_expiry_minutes,
+			auto_approve, require_justification, is_active, created_at, updated_at
+		FROM jit_access_policies ORDER BY name
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var policies []*JITAccessPolicy
+	for rows.Next() {
+		var p JITAccessPolicy
+		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.ResourceType, &p.ResourceID,
+			&p.MaxDurationMin, &p.DefaultDurationMin, &p.RequestExpiryMin,
+			&p.AutoApprove, &p.RequireJustification, &p.IsActive, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return nil, err
+		}
+		policies = append(policies, &p)
+	}
+	return policies, rows.Err()
+}
+
+// UpdatePolicy updates a JIT access policy
+func (s *JITAccessStore) UpdatePolicy(ctx context.Context, policy *JITAccessPolicy) error {
+	result, err := s.db.Pool.Exec(ctx, `
+		UPDATE jit_access_policies
+		SET name = $2, description = $3, resource_type = $4, resource_id = $5,
+			max_duration_minutes = $6, default_duration_minutes = $7, request_expiry_minutes = $8,
+			auto_approve = $9, require_justification = $10, is_active = $11, updated_at = NOW()
+		WHERE id = $1
+	`, policy.ID, policy.Name, policy.Description, policy.ResourceType, policy.ResourceID,
+		policy.MaxDurationMin, policy.DefaultDurationMin, policy.RequestExpiryMin,
+		policy.AutoApprove, policy.RequireJustification, policy.IsActive)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("JIT policy not found")
+	}
+	return nil
+}
+
+// DeletePolicy deletes a JIT access policy
+func (s *JITAccessStore) DeletePolicy(ctx context.Context, id string) error {
+	result, err := s.db.Pool.Exec(ctx, `DELETE FROM jit_access_policies WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("JIT policy not found")
+	}
+	return nil
+}
+
+// GetMatchingPolicy finds the most specific active policy for a resource.
+// Priority: exact resource match > resource type wildcard > global wildcard
+func (s *JITAccessStore) GetMatchingPolicy(ctx context.Context, resourceType, resourceID string) (*JITAccessPolicy, error) {
+	var p JITAccessPolicy
+	err := s.db.Pool.QueryRow(ctx, `
+		SELECT id, name, COALESCE(description, ''), resource_type, resource_id,
+			max_duration_minutes, default_duration_minutes, request_expiry_minutes,
+			auto_approve, require_justification, is_active, created_at, updated_at
+		FROM jit_access_policies
+		WHERE is_active = true
+		AND (
+			(resource_type = $1 AND resource_id = $2)
+			OR (resource_type = $1 AND resource_id IS NULL)
+			OR (resource_type = '*' AND resource_id IS NULL)
+		)
+		ORDER BY
+			CASE WHEN resource_type = $1 AND resource_id = $2 THEN 0
+				 WHEN resource_type = $1 AND resource_id IS NULL THEN 1
+				 ELSE 2 END
+		LIMIT 1
+	`, resourceType, resourceID).Scan(&p.ID, &p.Name, &p.Description, &p.ResourceType, &p.ResourceID,
+		&p.MaxDurationMin, &p.DefaultDurationMin, &p.RequestExpiryMin,
+		&p.AutoApprove, &p.RequireJustification, &p.IsActive, &p.CreatedAt, &p.UpdatedAt)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	return &p, err
+}
+
+// GetDetailedStats returns comprehensive JIT access statistics
+func (s *JITAccessStore) GetDetailedStats(ctx context.Context) (map[string]interface{}, error) {
+	stats := make(map[string]interface{})
+
+	// Basic counts
+	var pending, active, totalRequests, totalApproved, totalDenied, totalExpired int
+	err := s.db.Pool.QueryRow(ctx, `
+		SELECT
+			(SELECT COUNT(*) FROM jit_access_requests WHERE status = 'pending'),
+			(SELECT COUNT(*) FROM jit_access_grants WHERE is_active = true AND expires_at > NOW()),
+			(SELECT COUNT(*) FROM jit_access_requests),
+			(SELECT COUNT(*) FROM jit_access_requests WHERE status = 'approved'),
+			(SELECT COUNT(*) FROM jit_access_requests WHERE status = 'denied'),
+			(SELECT COUNT(*) FROM jit_access_requests WHERE status = 'expired')
+	`).Scan(&pending, &active, &totalRequests, &totalApproved, &totalDenied, &totalExpired)
+	if err != nil {
+		return nil, err
+	}
+
+	stats["pending_requests"] = pending
+	stats["active_grants"] = active
+	stats["total_requests"] = totalRequests
+	stats["total_approved"] = totalApproved
+	stats["total_denied"] = totalDenied
+	stats["total_expired"] = totalExpired
+
+	// Approval rate
+	decided := totalApproved + totalDenied
+	if decided > 0 {
+		stats["approval_rate"] = float64(totalApproved) / float64(decided) * 100
+	} else {
+		stats["approval_rate"] = 0.0
+	}
+
+	// Average grant duration (minutes)
+	var avgDuration *float64
+	_ = s.db.Pool.QueryRow(ctx, `
+		SELECT AVG(requested_duration_minutes)::float FROM jit_access_requests WHERE status = 'approved'
+	`).Scan(&avgDuration)
+	if avgDuration != nil {
+		stats["avg_duration_minutes"] = *avgDuration
+	} else {
+		stats["avg_duration_minutes"] = 0.0
+	}
+
+	// Requests by resource type
+	rows, err := s.db.Pool.Query(ctx, `
+		SELECT resource_type, COUNT(*) FROM jit_access_requests GROUP BY resource_type ORDER BY count DESC
+	`)
+	if err == nil {
+		defer rows.Close()
+		byType := make(map[string]int)
+		for rows.Next() {
+			var rt string
+			var count int
+			if err := rows.Scan(&rt, &count); err == nil {
+				byType[rt] = count
+			}
+		}
+		stats["requests_by_type"] = byType
+	}
+
+	// Top requesters (last 30 days)
+	rows2, err := s.db.Pool.Query(ctx, `
+		SELECT requester_email, COUNT(*) as cnt
+		FROM jit_access_requests
+		WHERE created_at > NOW() - INTERVAL '30 days'
+		GROUP BY requester_email
+		ORDER BY cnt DESC LIMIT 10
+	`)
+	if err == nil {
+		defer rows2.Close()
+		var topRequesters []map[string]interface{}
+		for rows2.Next() {
+			var email string
+			var count int
+			if err := rows2.Scan(&email, &count); err == nil {
+				topRequesters = append(topRequesters, map[string]interface{}{"email": email, "count": count})
+			}
+		}
+		stats["top_requesters"] = topRequesters
+	}
+
+	return stats, nil
+}

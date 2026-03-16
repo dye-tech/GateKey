@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -157,9 +158,20 @@ func (s *Server) handleCreateJITRequest(c *gin.Context) {
 		return
 	}
 
+	// Look up matching policy for this resource
+	policy, _ := s.jitStore.GetMatchingPolicy(ctx, body.ResourceType, body.ResourceID)
+
+	// Apply policy constraints
+	maxDuration := 480
+	requestExpiry := 60
+	if policy != nil {
+		maxDuration = policy.MaxDurationMin
+		requestExpiry = policy.RequestExpiryMin
+	}
+
 	// Validate duration
-	if body.DurationMinutes < 15 || body.DurationMinutes > 480 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "duration must be between 15 and 480 minutes"})
+	if body.DurationMinutes < 15 || body.DurationMinutes > maxDuration {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("duration must be between 15 and %d minutes", maxDuration)})
 		return
 	}
 
@@ -259,13 +271,49 @@ func (s *Server) handleCreateJITRequest(c *gin.Context) {
 		Justification:        body.Justification,
 		RequestedDurationMin: body.DurationMinutes,
 		Status:               "pending",
-		ExpiresAt:            time.Now().Add(60 * time.Minute),
+		ExpiresAt:            time.Now().Add(time.Duration(requestExpiry) * time.Minute),
 	}
 
 	if err := s.jitStore.CreateRequest(ctx, req); err != nil {
 		s.logger.Error("Failed to create JIT request", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create request"})
 		return
+	}
+
+	// Auto-approve if policy allows
+	if policy != nil && policy.AutoApprove {
+		grant, approveErr := s.jitStore.ApproveRequest(ctx, req.ID, "system", "auto-policy", "Auto-approved by policy: "+policy.Name)
+		if approveErr != nil {
+			s.logger.Error("Failed to auto-approve JIT request", zap.Error(approveErr))
+		} else {
+			s.logger.Info("JIT request auto-approved by policy",
+				zap.String("request_id", req.ID),
+				zap.String("policy", policy.Name))
+
+			// Send approval notification
+			go s.sendJITApprovalNotification(req, grant, "auto-policy")
+
+			c.JSON(http.StatusCreated, gin.H{
+				"request": gin.H{
+					"id":               req.ID,
+					"resource_type":    req.ResourceType,
+					"resource_id":      req.ResourceID,
+					"resource_name":    req.ResourceName,
+					"justification":    req.Justification,
+					"duration_minutes": req.RequestedDurationMin,
+					"status":           "approved",
+					"expires_at":       req.ExpiresAt.Format(time.RFC3339),
+					"created_at":       req.CreatedAt.Format(time.RFC3339),
+				},
+				"grant": gin.H{
+					"id":         grant.ID,
+					"granted_at": grant.GrantedAt.Format(time.RFC3339),
+					"expires_at": grant.ExpiresAt.Format(time.RFC3339),
+				},
+				"auto_approved": true,
+			})
+			return
+		}
 	}
 
 	// Send webhook notification asynchronously
@@ -568,4 +616,188 @@ func (s *Server) handleGetJITStats(c *gin.Context) {
 		"pending_requests": pending,
 		"active_grants":    active,
 	})
+}
+
+// ==================== JIT Policy Endpoints ====================
+
+// handleListJITPolicies lists all JIT access policies (admin)
+func (s *Server) handleListJITPolicies(c *gin.Context) {
+	ctx := c.Request.Context()
+	policies, err := s.jitStore.ListPolicies(ctx)
+	if err != nil {
+		s.logger.Error("Failed to list JIT policies", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list policies"})
+		return
+	}
+
+	result := make([]gin.H, 0, len(policies))
+	for _, p := range policies {
+		item := gin.H{
+			"id":                       p.ID,
+			"name":                     p.Name,
+			"description":              p.Description,
+			"resource_type":            p.ResourceType,
+			"resource_id":              p.ResourceID,
+			"max_duration_minutes":     p.MaxDurationMin,
+			"default_duration_minutes": p.DefaultDurationMin,
+			"request_expiry_minutes":   p.RequestExpiryMin,
+			"auto_approve":             p.AutoApprove,
+			"require_justification":    p.RequireJustification,
+			"is_active":                p.IsActive,
+			"created_at":               p.CreatedAt.Format(time.RFC3339),
+			"updated_at":               p.UpdatedAt.Format(time.RFC3339),
+		}
+		result = append(result, item)
+	}
+	c.JSON(http.StatusOK, gin.H{"policies": result})
+}
+
+// handleCreateJITPolicy creates a new JIT access policy (admin)
+func (s *Server) handleCreateJITPolicy(c *gin.Context) {
+	var body struct {
+		Name                 string  `json:"name" binding:"required"`
+		Description          string  `json:"description"`
+		ResourceType         string  `json:"resource_type" binding:"required"`
+		ResourceID           *string `json:"resource_id"`
+		MaxDurationMin       int     `json:"max_duration_minutes"`
+		DefaultDurationMin   int     `json:"default_duration_minutes"`
+		RequestExpiryMin     int     `json:"request_expiry_minutes"`
+		AutoApprove          bool    `json:"auto_approve"`
+		RequireJustification *bool   `json:"require_justification"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Defaults
+	if body.MaxDurationMin <= 0 {
+		body.MaxDurationMin = 480
+	}
+	if body.DefaultDurationMin <= 0 {
+		body.DefaultDurationMin = 60
+	}
+	if body.RequestExpiryMin <= 0 {
+		body.RequestExpiryMin = 60
+	}
+	requireJustification := true
+	if body.RequireJustification != nil {
+		requireJustification = *body.RequireJustification
+	}
+
+	policy := &db.JITAccessPolicy{
+		Name:                 body.Name,
+		Description:          body.Description,
+		ResourceType:         body.ResourceType,
+		ResourceID:           body.ResourceID,
+		MaxDurationMin:       body.MaxDurationMin,
+		DefaultDurationMin:   body.DefaultDurationMin,
+		RequestExpiryMin:     body.RequestExpiryMin,
+		AutoApprove:          body.AutoApprove,
+		RequireJustification: requireJustification,
+		IsActive:             true,
+	}
+
+	if err := s.jitStore.CreatePolicy(c.Request.Context(), policy); err != nil {
+		s.logger.Error("Failed to create JIT policy", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create policy"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"policy": gin.H{
+			"id":   policy.ID,
+			"name": policy.Name,
+		},
+	})
+}
+
+// handleUpdateJITPolicy updates a JIT access policy (admin)
+func (s *Server) handleUpdateJITPolicy(c *gin.Context) {
+	id := c.Param("id")
+
+	existing, err := s.jitStore.GetPolicy(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "policy not found"})
+		return
+	}
+
+	var body struct {
+		Name                 *string `json:"name"`
+		Description          *string `json:"description"`
+		ResourceType         *string `json:"resource_type"`
+		ResourceID           *string `json:"resource_id"`
+		MaxDurationMin       *int    `json:"max_duration_minutes"`
+		DefaultDurationMin   *int    `json:"default_duration_minutes"`
+		RequestExpiryMin     *int    `json:"request_expiry_minutes"`
+		AutoApprove          *bool   `json:"auto_approve"`
+		RequireJustification *bool   `json:"require_justification"`
+		IsActive             *bool   `json:"is_active"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if body.Name != nil {
+		existing.Name = *body.Name
+	}
+	if body.Description != nil {
+		existing.Description = *body.Description
+	}
+	if body.ResourceType != nil {
+		existing.ResourceType = *body.ResourceType
+	}
+	if body.ResourceID != nil {
+		existing.ResourceID = body.ResourceID
+	}
+	if body.MaxDurationMin != nil {
+		existing.MaxDurationMin = *body.MaxDurationMin
+	}
+	if body.DefaultDurationMin != nil {
+		existing.DefaultDurationMin = *body.DefaultDurationMin
+	}
+	if body.RequestExpiryMin != nil {
+		existing.RequestExpiryMin = *body.RequestExpiryMin
+	}
+	if body.AutoApprove != nil {
+		existing.AutoApprove = *body.AutoApprove
+	}
+	if body.RequireJustification != nil {
+		existing.RequireJustification = *body.RequireJustification
+	}
+	if body.IsActive != nil {
+		existing.IsActive = *body.IsActive
+	}
+
+	if err := s.jitStore.UpdatePolicy(c.Request.Context(), existing); err != nil {
+		s.logger.Error("Failed to update JIT policy", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update policy"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "policy updated"})
+}
+
+// handleDeleteJITPolicy deletes a JIT access policy (admin)
+func (s *Server) handleDeleteJITPolicy(c *gin.Context) {
+	id := c.Param("id")
+	if err := s.jitStore.DeletePolicy(c.Request.Context(), id); err != nil {
+		s.logger.Error("Failed to delete JIT policy", zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "policy deleted"})
+}
+
+// handleGetJITDetailedStats returns comprehensive JIT analytics (admin)
+func (s *Server) handleGetJITDetailedStats(c *gin.Context) {
+	ctx := c.Request.Context()
+	stats, err := s.jitStore.GetDetailedStats(ctx)
+	if err != nil {
+		s.logger.Error("Failed to get JIT detailed stats", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get stats"})
+		return
+	}
+	c.JSON(http.StatusOK, stats)
 }
