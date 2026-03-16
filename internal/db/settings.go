@@ -140,6 +140,11 @@ const (
 	SettingRecordingStoragePath   = "recording_storage_path"
 	SettingRecordingRetentionDays = "recording_retention_days"
 
+	SettingRecordingMaskPatterns    = "recording_mask_patterns"    // JSON array of regex patterns
+	SettingRecordingTerminalEnabled = "recording_terminal_enabled" // bool: record terminal sessions
+	SettingRecordingProxyEnabled    = "recording_proxy_enabled"    // bool: record proxy access
+	SettingRecordingFlowEnabled     = "recording_flow_enabled"     // bool: record network flows
+
 	// Proxy log settings
 	SettingProxyLogRetentionDays = "proxy_log_retention_days"
 

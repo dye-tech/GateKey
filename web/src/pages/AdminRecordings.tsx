@@ -51,6 +51,10 @@ export default function AdminRecordings() {
     storage_path: '/var/lib/gatekey/recordings',
     retention_days: '90',
   })
+  const [maskPatterns, setMaskPatterns] = useState('')
+  const [terminalEnabled, setTerminalEnabled] = useState(true)
+  const [proxyEnabled, setProxyEnabled] = useState(true)
+  const [flowEnabled, setFlowEnabled] = useState(true)
   const [savingSettings, setSavingSettings] = useState(false)
   const [settingsMsg, setSettingsMsg] = useState('')
 
@@ -76,6 +80,13 @@ export default function AdminRecordings() {
         storage_path: data.storage_path,
         retention_days: String(data.retention_days),
       })
+      try {
+        const patterns = JSON.parse(data.mask_patterns || '[]')
+        setMaskPatterns(patterns.join('\n'))
+      } catch { setMaskPatterns('') }
+      setTerminalEnabled(data.terminal_enabled !== 'false')
+      setProxyEnabled(data.proxy_enabled !== 'false')
+      setFlowEnabled(data.flow_enabled !== 'false')
     } catch {
       setError('Failed to load settings')
     }
@@ -112,7 +123,15 @@ export default function AdminRecordings() {
   const handleSaveSettings = async () => {
     try {
       setSavingSettings(true)
-      await updateRecordingSettings(settingsForm)
+      const patternsArray = maskPatterns.split('\n').filter(p => p.trim())
+      const settingsToSave: Record<string, string> = {
+        ...settingsForm,
+        mask_patterns: JSON.stringify(patternsArray),
+        terminal_enabled: String(terminalEnabled),
+        proxy_enabled: String(proxyEnabled),
+        flow_enabled: String(flowEnabled),
+      }
+      await updateRecordingSettings(settingsToSave)
       setSettingsMsg('Settings saved')
       setTimeout(() => setSettingsMsg(''), 3000)
       loadSettings()
@@ -277,6 +296,70 @@ export default function AdminRecordings() {
                 min="0"
               />
               <p className="text-xs text-theme-secondary mt-1">Set to 0 to keep recordings forever.</p>
+            </div>
+            <div className="border-t border-theme pt-4 mt-4">
+              <h3 className="text-md font-semibold text-theme-primary mb-3">Session Type Recording</h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-theme-primary">Terminal Recording</label>
+                  <button
+                    onClick={() => setTerminalEnabled(prev => !prev)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      terminalEnabled ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        terminalEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-theme-primary">Proxy Logging</label>
+                  <button
+                    onClick={() => setProxyEnabled(prev => !prev)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      proxyEnabled ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        proxyEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-theme-primary">Flow Logging</label>
+                  <button
+                    onClick={() => setFlowEnabled(prev => !prev)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      flowEnabled ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        flowEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-theme pt-4 mt-4">
+              <h3 className="text-md font-semibold text-theme-primary mb-3">Privacy Masking</h3>
+              <div>
+                <label className="block text-sm font-medium text-theme-primary mb-1">Mask Patterns (one regex per line)</label>
+                <textarea
+                  value={maskPatterns}
+                  onChange={(e) => setMaskPatterns(e.target.value)}
+                  rows={5}
+                  className="w-full px-3 py-2 border border-theme rounded-md bg-theme-primary text-theme-primary font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder={"(?i)password\\s*[:=]\\s*\\S+\n(?i)(api[_-]?key|token|secret)\\s*[:=]\\s*\\S+\n(?i)bearer\\s+\\S+"}
+                />
+                <p className="text-xs text-theme-secondary mt-1">Matched text in terminal recordings will be replaced with [REDACTED].</p>
+              </div>
             </div>
             <div className="flex items-center space-x-3">
               <button

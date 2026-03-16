@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"time"
 
@@ -14,8 +15,10 @@ import (
 
 // RecordingConfig holds configuration for the recorder
 type RecordingConfig struct {
-	StorageDir string // Base directory for recordings
-	Enabled    bool
+	StorageDir      string // Base directory for recordings
+	Enabled         bool
+	MaskPatterns    []string // Regex patterns to mask in output
+	TerminalEnabled bool
 }
 
 // ActiveRecording represents an in-progress recording
@@ -30,10 +33,11 @@ type ActiveRecording struct {
 
 // Recorder manages session recordings
 type Recorder struct {
-	Config     RecordingConfig
-	recordings map[string]*ActiveRecording // adminSessionID -> recording
-	mutex      sync.RWMutex
-	logger     *zap.Logger
+	Config       RecordingConfig
+	recordings   map[string]*ActiveRecording // adminSessionID -> recording
+	mutex        sync.RWMutex
+	maskPatterns []*regexp.Regexp
+	logger       *zap.Logger
 }
 
 // NewRecorder creates a new recorder
@@ -47,7 +51,7 @@ func NewRecorder(config RecordingConfig, logger *zap.Logger) *Recorder {
 
 // StartRecording begins recording a session. Returns the storage path.
 func (r *Recorder) StartRecording(adminSessionID, recordingID, userEmail, targetNodeName string) (string, error) {
-	if !r.Config.Enabled {
+	if !r.Config.Enabled || !r.Config.TerminalEnabled {
 		return "", nil
 	}
 
@@ -117,7 +121,8 @@ func (r *Recorder) WriteOutput(adminSessionID, output string) {
 
 	elapsed := time.Since(rec.StartTime).Seconds()
 	// Asciicast v2 event: [elapsed, "o", "output"]
-	event := []interface{}{elapsed, "o", output}
+	maskedOutput := r.maskOutput(output)
+	event := []interface{}{elapsed, "o", maskedOutput}
 	eventBytes, err := json.Marshal(event)
 	if err != nil {
 		return
@@ -167,6 +172,33 @@ func (r *Recorder) StopRecording(adminSessionID string) (fileSize int64, duratio
 		zap.Int("duration_seconds", duration))
 
 	return size, duration, nil
+}
+
+// SetMaskPatterns compiles and sets the mask patterns
+func (r *Recorder) SetMaskPatterns(patterns []string) {
+	var compiled []*regexp.Regexp
+	for _, p := range patterns {
+		if re, err := regexp.Compile(p); err == nil {
+			compiled = append(compiled, re)
+		} else {
+			r.logger.Warn("Invalid mask pattern, skipping", zap.Error(err))
+		}
+	}
+	r.mutex.Lock()
+	r.maskPatterns = compiled
+	r.mutex.Unlock()
+}
+
+// maskOutput applies masking patterns to output text
+func (r *Recorder) maskOutput(output string) string {
+	r.mutex.RLock()
+	patterns := r.maskPatterns
+	r.mutex.RUnlock()
+
+	for _, re := range patterns {
+		output = re.ReplaceAllString(output, "[REDACTED]")
+	}
+	return output
 }
 
 // IsRecording checks if a session is being recorded

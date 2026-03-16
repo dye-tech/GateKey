@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -355,12 +356,32 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	ctx2 := context.Background()
 	recordingEnabled := settingsStore.GetString(ctx2, db.SettingRecordingEnabled, "false") == "true"
 	recordingStoragePath := settingsStore.GetString(ctx2, db.SettingRecordingStoragePath, "/var/lib/gatekey/recordings")
+	recordingTerminalEnabled := settingsStore.GetString(ctx2, db.SettingRecordingTerminalEnabled, "true") == "true"
 	sessionRecorder := session.NewRecorder(session.RecordingConfig{
-		StorageDir: recordingStoragePath,
-		Enabled:    recordingEnabled,
+		StorageDir:      recordingStoragePath,
+		Enabled:         recordingEnabled,
+		TerminalEnabled: recordingTerminalEnabled,
 	}, logger)
 	srv.sessionRecorder = sessionRecorder
 	srv.sessionMgr.SetRecorder(sessionRecorder)
+
+	// Load mask patterns from settings
+	maskPatternsJSON := settingsStore.GetString(ctx2, db.SettingRecordingMaskPatterns, "[]")
+	var maskPatterns []string
+	if err := json.Unmarshal([]byte(maskPatternsJSON), &maskPatterns); err == nil && len(maskPatterns) > 0 {
+		sessionRecorder.SetMaskPatterns(maskPatterns)
+		logger.Info("Loaded recording mask patterns", zap.Int("count", len(maskPatterns)))
+	}
+
+	// Set default mask patterns if none configured
+	if len(maskPatterns) == 0 {
+		defaultPatterns := []string{
+			`(?i)password\s*[:=]\s*\S+`,
+			`(?i)(api[_-]?key|token|secret)\s*[:=]\s*\S+`,
+			`(?i)bearer\s+\S+`,
+		}
+		sessionRecorder.SetMaskPatterns(defaultPatterns)
+	}
 
 	// Set recording lifecycle callbacks
 	srv.sessionMgr.OnRecordingStart = func(recordingID, storagePath, userID, userEmail, nodeID, nodeName string) {

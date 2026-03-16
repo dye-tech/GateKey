@@ -2624,6 +2624,10 @@ export interface RecordingSettings {
   enabled: string
   storage_path: string
   retention_days: number
+  mask_patterns: string
+  terminal_enabled: string
+  proxy_enabled: string
+  flow_enabled: string
 }
 
 export async function getRecordings(limit = 50, offset = 0): Promise<SessionRecording[]> {
