@@ -134,6 +134,11 @@ const (
 	SettingJITWebhookURL     = "jit_webhook_url"      // Slack/Teams webhook URL for notifications
 	SettingJITWebhookEnabled = "jit_webhook_enabled"   // bool: enable webhook notifications
 	SettingJITAppURL         = "jit_app_url"           // Base URL for approval links (e.g., https://gatekey.dye.tech)
+
+	// Session recording settings
+	SettingRecordingEnabled       = "recording_enabled"
+	SettingRecordingStoragePath   = "recording_storage_path"
+	SettingRecordingRetentionDays = "recording_retention_days"
 )
 
 // Default crypto profiles (all enabled by default)

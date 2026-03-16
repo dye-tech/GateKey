@@ -2564,3 +2564,51 @@ export async function getJITDetailedStats(): Promise<JITDetailedStats> {
   const response = await api.get('/api/v1/admin/jit/stats/detailed')
   return response.data
 }
+
+// ==================== Session Recordings ====================
+
+export interface SessionRecording {
+  id: string
+  session_type: string
+  user_email: string
+  target_node_name: string | null
+  file_size_bytes: number
+  duration_seconds: number
+  is_complete: boolean
+  created_at: string
+  completed_at: string | null
+}
+
+export interface RecordingSettings {
+  enabled: string
+  storage_path: string
+  retention_days: number
+}
+
+export async function getRecordings(limit = 50, offset = 0): Promise<SessionRecording[]> {
+  const response = await api.get(`/api/v1/admin/recordings?limit=${limit}&offset=${offset}`)
+  return response.data.recordings || []
+}
+
+export async function getRecording(id: string): Promise<SessionRecording> {
+  const response = await api.get(`/api/v1/admin/recordings/${id}`)
+  return response.data
+}
+
+export async function streamRecording(id: string): Promise<string> {
+  const response = await api.get(`/api/v1/admin/recordings/${id}/stream`, { responseType: 'text' })
+  return response.data
+}
+
+export async function deleteRecording(id: string): Promise<void> {
+  await api.delete(`/api/v1/admin/recordings/${id}`)
+}
+
+export async function getRecordingSettings(): Promise<RecordingSettings> {
+  const response = await api.get('/api/v1/admin/recordings/settings')
+  return response.data
+}
+
+export async function updateRecordingSettings(settings: Partial<Record<string, string>>): Promise<void> {
+  await api.put('/api/v1/admin/recordings/settings', settings)
+}

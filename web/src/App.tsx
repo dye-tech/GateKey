@@ -20,6 +20,7 @@ import AdminNetworkTools from './pages/AdminNetworkTools'
 import AdminRemoteSessions from './pages/AdminRemoteSessions'
 import AccessRequests from './pages/AccessRequests'
 import AdminJITAccess from './pages/AdminJITAccess'
+import AdminRecordings from './pages/AdminRecordings'
 import Help from './pages/Help'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
@@ -202,6 +203,13 @@ function AppRoutes() {
         <AdminRoute>
           <Layout>
             <AdminJITAccess />
+          </Layout>
+        </AdminRoute>
+      } />
+      <Route path="/admin/recordings" element={
+        <AdminRoute>
+          <Layout>
+            <AdminRecordings />
           </Layout>
         </AdminRoute>
       } />

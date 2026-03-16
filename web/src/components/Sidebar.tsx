@@ -53,6 +53,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
       items: [
         { name: 'Network Tools', href: '/admin/network-tools', icon: 'tools' },
         { name: 'Remote Sessions', href: '/admin/remote-sessions', icon: 'terminal' },
+        { name: 'Recordings', href: '/admin/recordings', icon: 'recording' },
       ]
     },
     {
@@ -199,6 +200,12 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
         return (
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        )
+      case 'recording':
+        return (
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
           </svg>
         )
       default:

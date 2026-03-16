@@ -60,6 +60,8 @@ type Server struct {
 	sessionMgr      *session.Manager    // Remote session manager
 	authRateLimiter *rateLimiter        // Rate limiter for auth endpoints
 	telemetry       *telemetry.Provider // OpenTelemetry provider
+	recordingStore  *db.SessionRecordingStore
+	sessionRecorder *session.Recorder
 }
 
 // NewServer creates a new API server instance.
@@ -254,6 +256,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	wgConfigStore := db.NewWireGuardConfigStore(database)
 	wgPeerStore := db.NewWireGuardPeerStore(database)
 	jitStore := db.NewJITAccessStore(database)
+	recordingStore := db.NewSessionRecordingStore(database)
 
 	// Initialize PKI with database store for CA persistence
 	// This ensures all pods share the same CA
@@ -301,6 +304,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 		wgConfigStore:   wgConfigStore,
 		wgPeerStore:     wgPeerStore,
 		jitStore:        jitStore,
+		recordingStore:  recordingStore,
 		ca:              ca,
 		configGen:       configGen,
 		adminPassword:   adminPassword,
@@ -344,6 +348,43 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 		srv.sessionMgr.SetAllowedOrigins(cfg.Server.CORSOrigins)
 	}
 
+	// Initialize session recorder
+	ctx2 := context.Background()
+	recordingEnabled := settingsStore.GetString(ctx2, db.SettingRecordingEnabled, "false") == "true"
+	recordingStoragePath := settingsStore.GetString(ctx2, db.SettingRecordingStoragePath, "/var/lib/gatekey/recordings")
+	sessionRecorder := session.NewRecorder(session.RecordingConfig{
+		StorageDir: recordingStoragePath,
+		Enabled:    recordingEnabled,
+	}, logger)
+	srv.sessionRecorder = sessionRecorder
+	srv.sessionMgr.SetRecorder(sessionRecorder)
+
+	// Set recording lifecycle callbacks
+	srv.sessionMgr.OnRecordingStart = func(recordingID, storagePath, userID, userEmail, nodeID, nodeName string) {
+		cbCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		rec := &db.SessionRecording{
+			ID:              recordingID,
+			SessionType:     "terminal",
+			UserID:          userID,
+			UserEmail:       userEmail,
+			TargetNodeID:    &nodeID,
+			TargetNodeName:  &nodeName,
+			StoragePath:     storagePath,
+			RecordingFormat: "asciicast",
+		}
+		if err := srv.recordingStore.Create(cbCtx, rec); err != nil {
+			srv.logger.Error("Failed to create recording entry", zap.Error(err))
+		}
+	}
+	srv.sessionMgr.OnRecordingComplete = func(recordingID string, fileSize int64, durationSec int) {
+		cbCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := srv.recordingStore.Complete(cbCtx, recordingID, fileSize, durationSec); err != nil {
+			srv.logger.Error("Failed to complete recording", zap.Error(err), zap.String("recording_id", recordingID))
+		}
+	}
+
 	// Create background context for all background tasks
 	bgCtx, bgCancel := context.WithCancel(context.Background())
 	srv.bgCancel = bgCancel
@@ -360,6 +401,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	go srv.runLoginLogCleanup(bgCtx)
 	go srv.runMeshHealthCheck(bgCtx)
 	go srv.runJITCleanup(bgCtx)
+	go srv.runRecordingCleanup(bgCtx)
 
 	return srv, nil
 }
@@ -769,6 +811,22 @@ func (s *Server) setupRoutes() {
 				jitWrite.DELETE("/jit/policies/:id", s.handleDeleteJITPolicy)
 			}
 
+			// Session recordings with scope enforcement
+			recRead := admin.Group("")
+			recRead.Use(s.requireAnyScope(ScopeConfigRead, ScopeConfigWrite, ScopeAdmin))
+			{
+				recRead.GET("/recordings", s.handleListRecordings)
+				recRead.GET("/recordings/:id", s.handleGetRecording)
+				recRead.GET("/recordings/:id/stream", s.handleStreamRecording)
+				recRead.GET("/recordings/settings", s.handleGetRecordingSettings)
+			}
+			recWrite := admin.Group("")
+			recWrite.Use(s.requireAnyScope(ScopeConfigWrite, ScopeAdmin))
+			{
+				recWrite.DELETE("/recordings/:id", s.handleDeleteRecording)
+				recWrite.PUT("/recordings/settings", s.handleUpdateRecordingSettings)
+			}
+
 			// Topology and network tools (admin scope - powerful operations)
 			toolsRoutes := admin.Group("")
 			toolsRoutes.Use(s.requireScope(ScopeAdmin))
@@ -1122,6 +1180,30 @@ func (s *Server) cleanupJITAccess(ctx context.Context) {
 		s.logger.Error("Failed to expire pending JIT requests", zap.Error(err))
 	} else if expired > 0 {
 		s.logger.Info("Expired pending JIT requests", zap.Int("count", expired))
+	}
+}
+
+// runRecordingCleanup periodically deletes old session recordings
+func (s *Server) runRecordingCleanup(ctx context.Context) {
+	ticker := time.NewTicker(6 * time.Hour)
+	defer ticker.Stop()
+	s.logger.Info("Started recording cleanup background task")
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			retentionDays := s.settingsStore.GetInt(ctx, db.SettingRecordingRetentionDays, 90)
+			if retentionDays <= 0 {
+				continue
+			}
+			count, err := s.recordingStore.DeleteOlderThan(ctx, retentionDays)
+			if err != nil {
+				s.logger.Error("Failed to cleanup recordings", zap.Error(err))
+			} else if count > 0 {
+				s.logger.Info("Cleaned up old recordings", zap.Int("count", count))
+			}
+		}
 	}
 }
 
