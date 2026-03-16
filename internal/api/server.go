@@ -52,6 +52,7 @@ type Server struct {
 	geoFenceStore   *db.GeoFenceStore
 	wgConfigStore   *db.WireGuardConfigStore // WireGuard config store
 	wgPeerStore     *db.WireGuardPeerStore   // WireGuard peer store
+	jitStore        *db.JITAccessStore       // JIT access store
 	ca              *pki.CA
 	configGen       *openvpn.ConfigGenerator
 	adminPassword   string              // Initial admin password (shown once at startup)
@@ -252,6 +253,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	geoFenceStore := db.NewGeoFenceStore(database)
 	wgConfigStore := db.NewWireGuardConfigStore(database)
 	wgPeerStore := db.NewWireGuardPeerStore(database)
+	jitStore := db.NewJITAccessStore(database)
 
 	// Initialize PKI with database store for CA persistence
 	// This ensures all pods share the same CA
@@ -298,6 +300,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 		geoFenceStore:   geoFenceStore,
 		wgConfigStore:   wgConfigStore,
 		wgPeerStore:     wgPeerStore,
+		jitStore:        jitStore,
 		ca:              ca,
 		configGen:       configGen,
 		adminPassword:   adminPassword,
@@ -356,6 +359,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	go srv.runConfigCleanup(bgCtx)
 	go srv.runLoginLogCleanup(bgCtx)
 	go srv.runMeshHealthCheck(bgCtx)
+	go srv.runJITCleanup(bgCtx)
 
 	return srv, nil
 }
@@ -745,6 +749,21 @@ func (s *Server) setupRoutes() {
 				geoWrite.DELETE("/geo-fence/groups/:groupName/rules/:ruleId", s.handleRemoveGroupGeoRule)
 			}
 
+			// JIT access management with scope enforcement
+			jitRead := admin.Group("")
+			jitRead.Use(s.requireAnyScope(ScopeConfigRead, ScopeConfigWrite, ScopeAdmin))
+			{
+				jitRead.GET("/jit/requests", s.handleListAllJITRequests)
+				jitRead.GET("/jit/stats", s.handleGetJITStats)
+			}
+			jitWrite := admin.Group("")
+			jitWrite.Use(s.requireAnyScope(ScopeConfigWrite, ScopeAdmin))
+			{
+				jitWrite.POST("/jit/requests/:id/approve", s.handleApproveJITRequest)
+				jitWrite.POST("/jit/requests/:id/deny", s.handleDenyJITRequest)
+				jitWrite.POST("/jit/grants/:id/revoke", s.handleRevokeJITGrant)
+			}
+
 			// Topology and network tools (admin scope - powerful operations)
 			toolsRoutes := admin.Group("")
 			toolsRoutes.Use(s.requireScope(ScopeAdmin))
@@ -788,6 +807,13 @@ func (s *Server) setupRoutes() {
 
 		// User proxy applications portal
 		v1.GET("/proxy-apps", s.handleListUserProxyApps)
+
+		// JIT access - user endpoints
+		v1.GET("/jit/resources", s.handleListJITResources)
+		v1.POST("/jit/requests", s.handleCreateJITRequest)
+		v1.GET("/jit/requests", s.handleListMyJITRequests)
+		v1.POST("/jit/requests/:id/cancel", s.handleCancelJITRequest)
+		v1.GET("/jit/grants", s.handleListMyJITGrants)
 
 		// User mesh hub access
 		v1.GET("/mesh/hubs", s.handleListUserMeshHubs)
@@ -1059,6 +1085,38 @@ func (s *Server) cleanupOldLoginLogs(ctx context.Context) {
 		s.logger.Info("Cleaned up old login logs",
 			zap.Int64("deleted", count),
 			zap.Int("retention_days", retentionDays))
+	}
+}
+
+// runJITCleanup periodically revokes expired JIT grants and expires pending requests
+func (s *Server) runJITCleanup(ctx context.Context) {
+	ticker := time.NewTicker(60 * time.Second)
+	defer ticker.Stop()
+	s.logger.Info("Started JIT access cleanup background task", zap.Duration("interval", 60*time.Second))
+	s.cleanupJITAccess(ctx)
+	for {
+		select {
+		case <-ctx.Done():
+			s.logger.Info("JIT access cleanup stopped")
+			return
+		case <-ticker.C:
+			s.cleanupJITAccess(ctx)
+		}
+	}
+}
+
+func (s *Server) cleanupJITAccess(ctx context.Context) {
+	revoked, err := s.jitStore.RevokeExpiredGrants(ctx)
+	if err != nil {
+		s.logger.Error("Failed to revoke expired JIT grants", zap.Error(err))
+	} else if revoked > 0 {
+		s.logger.Info("Revoked expired JIT grants", zap.Int("count", revoked))
+	}
+	expired, err := s.jitStore.ExpirePendingRequests(ctx)
+	if err != nil {
+		s.logger.Error("Failed to expire pending JIT requests", zap.Error(err))
+	} else if expired > 0 {
+		s.logger.Info("Expired pending JIT requests", zap.Int("count", expired))
 	}
 }
 

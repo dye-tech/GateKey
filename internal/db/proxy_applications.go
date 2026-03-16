@@ -329,10 +329,12 @@ func (s *ProxyApplicationStore) GetUserProxyApplications(ctx context.Context, us
 		FROM proxy_applications pa
 		LEFT JOIN user_proxy_applications upa ON pa.id = upa.proxy_app_id AND upa.user_id = $1
 		LEFT JOIN group_proxy_applications gpa ON pa.id = gpa.proxy_app_id
+		LEFT JOIN jit_access_grants jag ON pa.id = jag.resource_id AND jag.resource_type = 'proxy_app' AND jag.user_id = $1 AND jag.is_active = true AND jag.expires_at > NOW()
 		WHERE pa.is_active = true
 			AND (
 				upa.user_id IS NOT NULL
 				OR gpa.group_name = ANY($2)
+				OR jag.id IS NOT NULL
 			)
 		ORDER BY pa.name
 	`
@@ -357,10 +359,12 @@ func (s *ProxyApplicationStore) CanUserAccessApp(ctx context.Context, userID str
 		FROM proxy_applications pa
 		LEFT JOIN user_proxy_applications upa ON pa.id = upa.proxy_app_id AND upa.user_id = $1
 		LEFT JOIN group_proxy_applications gpa ON pa.id = gpa.proxy_app_id
+		LEFT JOIN jit_access_grants jag ON pa.id = jag.resource_id AND jag.resource_type = 'proxy_app' AND jag.user_id = $1 AND jag.is_active = true AND jag.expires_at > NOW()
 		WHERE pa.slug = $3 AND pa.is_active = true
 			AND (
 				upa.user_id IS NOT NULL
 				OR gpa.group_name = ANY($2)
+				OR jag.id IS NOT NULL
 			)
 		LIMIT 1
 	`
