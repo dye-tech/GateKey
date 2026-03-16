@@ -18,6 +18,8 @@ import AdminConfigs from './pages/AdminConfigs'
 import AdminTopology from './pages/AdminTopology'
 import AdminNetworkTools from './pages/AdminNetworkTools'
 import AdminRemoteSessions from './pages/AdminRemoteSessions'
+import AccessRequests from './pages/AccessRequests'
+import AdminJITAccess from './pages/AdminJITAccess'
 import Help from './pages/Help'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
@@ -99,6 +101,13 @@ function AppRoutes() {
         <ProtectedRoute>
           <Layout>
             <APIKeys />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/access-requests" element={
+        <ProtectedRoute>
+          <Layout>
+            <AccessRequests />
           </Layout>
         </ProtectedRoute>
       } />
@@ -186,6 +195,13 @@ function AppRoutes() {
         <AdminRoute>
           <Layout>
             <AdminRemoteSessions />
+          </Layout>
+        </AdminRoute>
+      } />
+      <Route path="/admin/jit-access" element={
+        <AdminRoute>
+          <Layout>
+            <AdminJITAccess />
           </Layout>
         </AdminRoute>
       } />
