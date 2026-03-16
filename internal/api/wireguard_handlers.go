@@ -148,6 +148,7 @@ func (s *Server) handleGenerateWireGuardConfig(c *gin.Context) {
 
 	// Get user's access rules to build AllowedIPs
 	var allowedIPs []string
+	var accessRulesForDNS []*db.AccessRule
 	if gateway.FullTunnelMode {
 		// Full tunnel mode - route all traffic through VPN
 		allowedIPs = []string{"0.0.0.0/0", "::/0"}
@@ -159,6 +160,7 @@ func (s *Server) handleGenerateWireGuardConfig(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get access rules"})
 			return
 		}
+		accessRulesForDNS = rules
 
 		// Build allowed IPs from CIDR and IP-type rules
 		for _, rule := range rules {
@@ -191,6 +193,53 @@ func (s *Server) handleGenerateWireGuardConfig(c *gin.Context) {
 			dnsServers = gateway.DNSServers
 		} else {
 			dnsServers = []string{"1.1.1.1", "8.8.8.8"}
+		}
+	}
+
+	// Merge in network-level DNS servers from Split DNS rules
+	{
+		// Collect unique network IDs from the user's access rules
+		networkIDSet := make(map[string]bool)
+		if !gateway.FullTunnelMode {
+			// accessRulesForDNS already fetched above
+			for _, rule := range accessRulesForDNS {
+				if rule.NetworkID != nil && *rule.NetworkID != "" {
+					networkIDSet[*rule.NetworkID] = true
+				}
+			}
+		} else {
+			// In full tunnel mode, get all gateway networks
+			gwNetworks, gwErr := s.networkStore.GetGatewayNetworks(ctx, gateway.ID)
+			if gwErr == nil {
+				for _, n := range gwNetworks {
+					networkIDSet[n.ID] = true
+				}
+			}
+		}
+
+		networkIDs := make([]string, 0, len(networkIDSet))
+		for id := range networkIDSet {
+			networkIDs = append(networkIDs, id)
+		}
+
+		if len(networkIDs) > 0 {
+			dnsRules, dnsErr := s.dnsStore.GetRulesForNetworks(ctx, networkIDs)
+			if dnsErr != nil {
+				s.logger.Warn("Failed to get DNS rules for WireGuard config", zap.Error(dnsErr))
+			} else {
+				dnsSet := make(map[string]bool)
+				for _, srv := range dnsServers {
+					dnsSet[srv] = true
+				}
+				for _, rule := range dnsRules {
+					for _, srv := range rule.DNSServers {
+						if !dnsSet[srv] {
+							dnsSet[srv] = true
+							dnsServers = append(dnsServers, srv)
+						}
+					}
+				}
+			}
 		}
 	}
 

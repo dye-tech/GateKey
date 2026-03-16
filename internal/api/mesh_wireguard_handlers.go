@@ -789,9 +789,38 @@ func (s *Server) handleGenerateWireGuardMeshClientConfig(c *gin.Context) {
 	configID := generateUUID()
 
 	// Build DNS config
-	var dnsServers string
+	var dnsServerList []string
 	if hub.PushDNS && len(hub.DNSServers) > 0 {
-		dnsServers = strings.Join(hub.DNSServers, ", ")
+		dnsServerList = append(dnsServerList, hub.DNSServers...)
+	}
+
+	// Merge in network-level DNS servers from Split DNS rules
+	hubNetworks, hubNetErr := s.meshStore.GetHubNetworks(ctx, hub.ID)
+	if hubNetErr == nil && len(hubNetworks) > 0 {
+		networkIDs := make([]string, 0, len(hubNetworks))
+		for _, n := range hubNetworks {
+			networkIDs = append(networkIDs, n.ID)
+		}
+		dnsRules, dnsErr := s.dnsStore.GetRulesForNetworks(ctx, networkIDs)
+		if dnsErr == nil {
+			dnsSet := make(map[string]bool)
+			for _, srv := range dnsServerList {
+				dnsSet[srv] = true
+			}
+			for _, rule := range dnsRules {
+				for _, srv := range rule.DNSServers {
+					if !dnsSet[srv] {
+						dnsSet[srv] = true
+						dnsServerList = append(dnsServerList, srv)
+					}
+				}
+			}
+		}
+	}
+
+	var dnsServers string
+	if len(dnsServerList) > 0 {
+		dnsServers = strings.Join(dnsServerList, ", ")
 	}
 
 	// Generate WireGuard config file content
