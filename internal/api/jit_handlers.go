@@ -357,7 +357,7 @@ func (s *Server) handleCancelJITRequest(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "request cancelled"})
+	c.JSON(http.StatusOK, gin.H{"message": "request canceled"})
 }
 
 // handleListMyJITGrants lists active JIT grants for the authenticated user
@@ -457,7 +457,7 @@ func (s *Server) handleApproveJITRequest(c *gin.Context) {
 	var body struct {
 		Note string `json:"note"`
 	}
-	c.ShouldBindJSON(&body)
+	_ = c.ShouldBindJSON(&body)
 
 	grant, err := s.jitStore.ApproveRequest(ctx, id, user.UserID, user.Email, body.Note)
 	if err != nil {
@@ -495,7 +495,7 @@ func (s *Server) handleDenyJITRequest(c *gin.Context) {
 	var body struct {
 		Note string `json:"note"`
 	}
-	c.ShouldBindJSON(&body)
+	_ = c.ShouldBindJSON(&body)
 
 	if err := s.jitStore.DenyRequest(ctx, id, user.UserID, user.Email, body.Note); err != nil {
 		s.logger.Error("Failed to deny JIT request", zap.Error(err))
@@ -520,7 +520,7 @@ func (s *Server) handleRevokeJITGrant(c *gin.Context) {
 	var body struct {
 		Reason string `json:"reason"`
 	}
-	c.ShouldBindJSON(&body)
+	_ = c.ShouldBindJSON(&body)
 
 	reason := body.Reason
 	if reason == "" {

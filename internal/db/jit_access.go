@@ -171,7 +171,7 @@ func (s *JITAccessStore) ApproveRequest(ctx context.Context, requestID, approver
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Update the request status
 	var req JITAccessRequest
