@@ -13,12 +13,20 @@ import {
   getMeshHubs,
   assignMeshHubNetwork,
   removeMeshHubNetwork,
+  getNetworkDNSRule,
+  upsertNetworkDNSRule,
+  deleteNetworkDNSRule,
+  getNetworkDNSRecords,
+  createDNSRecord,
+  deleteDNSRecord,
   Network,
   Gateway,
   AdminGateway,
   NetworkAccessRule,
   NetworkMeshHub,
   MeshHub,
+  DNSRule,
+  DNSRecord,
 } from '../api/client'
 import ActionDropdown, { ActionItem } from '../components/ActionDropdown'
 
@@ -31,6 +39,7 @@ export default function AdminNetworks() {
   const [showGatewaysModal, setShowGatewaysModal] = useState(false)
   const [showAccessRulesModal, setShowAccessRulesModal] = useState(false)
   const [showMeshModal, setShowMeshModal] = useState(false)
+  const [showDNSModal, setShowDNSModal] = useState(false)
   const [selectedNetwork, setSelectedNetwork] = useState<Network | null>(null)
 
   useEffect(() => {
@@ -76,6 +85,11 @@ export default function AdminNetworks() {
   function handleManageMesh(network: Network) {
     setSelectedNetwork(network)
     setShowMeshModal(true)
+  }
+
+  function handleManageDNS(network: Network) {
+    setSelectedNetwork(network)
+    setShowDNSModal(true)
   }
 
   return (
@@ -186,6 +200,7 @@ export default function AdminNetworks() {
                         { label: 'Gateways', icon: 'gateway', onClick: () => handleManageGateways(network), color: 'primary' },
                         { label: 'Mesh Hubs', icon: 'mesh', onClick: () => handleManageMesh(network), color: 'purple' },
                         { label: 'Access Rules', icon: 'rules', onClick: () => handleManageAccessRules(network), color: 'green' },
+                        { label: 'DNS', icon: 'rules', onClick: () => handleManageDNS(network), color: 'primary' },
                         { label: 'Edit', icon: 'edit', onClick: () => setEditingNetwork(network), color: 'gray' },
                         { label: 'Delete', icon: 'delete', onClick: () => handleDelete(network), color: 'red' },
                       ] as ActionItem[]}
@@ -265,6 +280,17 @@ export default function AdminNetworks() {
           network={selectedNetwork}
           onClose={() => {
             setShowMeshModal(false)
+            setSelectedNetwork(null)
+          }}
+        />
+      )}
+
+      {/* DNS Configuration Modal */}
+      {showDNSModal && selectedNetwork && (
+        <DNSModal
+          network={selectedNetwork}
+          onClose={() => {
+            setShowDNSModal(false)
             setSelectedNetwork(null)
           }}
         />
@@ -889,6 +915,287 @@ function MeshHubsModal({ network, onClose }: MeshHubsModalProps) {
               )}
             </div>
           </>
+        )}
+
+        <div className="mt-6 flex justify-end">
+          <button onClick={onClose} className="btn btn-secondary">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface DNSModalProps {
+  network: Network
+  onClose: () => void
+}
+
+function DNSModal({ network, onClose }: DNSModalProps) {
+  const [rule, setRule] = useState<DNSRule | null>(null)
+  const [records, setRecords] = useState<DNSRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [dnsServerInput, setDnsServerInput] = useState('')
+  const [searchDomainInput, setSearchDomainInput] = useState('')
+  const [dnsServers, setDnsServers] = useState<string[]>([])
+  const [searchDomains, setSearchDomains] = useState<string[]>([])
+  const [saving, setSaving] = useState(false)
+
+  // New record form
+  const [newHostname, setNewHostname] = useState('')
+  const [newIPAddress, setNewIPAddress] = useState('')
+  const [newDescription, setNewDescription] = useState('')
+
+  useEffect(() => {
+    loadData()
+  }, [network.id])
+
+  async function loadData() {
+    try {
+      setLoading(true)
+      const [dnsRule, dnsRecords] = await Promise.all([
+        getNetworkDNSRule(network.id),
+        getNetworkDNSRecords(network.id),
+      ])
+      setRule(dnsRule)
+      setRecords(dnsRecords)
+      if (dnsRule) {
+        setDnsServers(dnsRule.dns_servers || [])
+        setSearchDomains(dnsRule.search_domains || [])
+      }
+      setError(null)
+    } catch {
+      setError('Failed to load DNS configuration')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function handleAddDNSServer() {
+    const val = dnsServerInput.trim()
+    if (val && !dnsServers.includes(val)) {
+      setDnsServers([...dnsServers, val])
+    }
+    setDnsServerInput('')
+  }
+
+  function handleRemoveDNSServer(srv: string) {
+    setDnsServers(dnsServers.filter(s => s !== srv))
+  }
+
+  function handleAddSearchDomain() {
+    const val = searchDomainInput.trim()
+    if (val && !searchDomains.includes(val)) {
+      setSearchDomains([...searchDomains, val])
+    }
+    setSearchDomainInput('')
+  }
+
+  function handleRemoveSearchDomain(dom: string) {
+    setSearchDomains(searchDomains.filter(d => d !== dom))
+  }
+
+  async function handleSaveRule() {
+    try {
+      setSaving(true)
+      await upsertNetworkDNSRule(network.id, {
+        dns_servers: dnsServers,
+        search_domains: searchDomains,
+      })
+      await loadData()
+      setError(null)
+    } catch {
+      setError('Failed to save DNS rule')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDeleteRule() {
+    if (!confirm('Delete DNS configuration for this network?')) return
+    try {
+      await deleteNetworkDNSRule(network.id)
+      setDnsServers([])
+      setSearchDomains([])
+      setRule(null)
+      await loadData()
+    } catch {
+      setError('Failed to delete DNS rule')
+    }
+  }
+
+  async function handleAddRecord() {
+    if (!newHostname.trim() || !newIPAddress.trim()) return
+    try {
+      await createDNSRecord(network.id, {
+        hostname: newHostname.trim(),
+        ip_address: newIPAddress.trim(),
+        description: newDescription.trim() || undefined,
+      })
+      setNewHostname('')
+      setNewIPAddress('')
+      setNewDescription('')
+      await loadData()
+    } catch {
+      setError('Failed to create DNS record')
+    }
+  }
+
+  async function handleDeleteRecord(id: string) {
+    try {
+      await deleteDNSRecord(id)
+      await loadData()
+    } catch {
+      setError('Failed to delete DNS record')
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+      <div className="bg-theme-card rounded-lg shadow-xl max-w-2xl w-full mx-4 p-6 max-h-[90vh] overflow-y-auto border border-theme">
+        <h2 className="text-xl font-semibold text-theme-primary mb-2">
+          DNS Configuration
+        </h2>
+        <p className="text-sm text-theme-tertiary mb-4">
+          Network: <span className="font-medium">{network.name}</span> ({network.cidr})
+        </p>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* DNS Servers */}
+            <div>
+              <h3 className="text-sm font-medium text-theme-secondary mb-2">DNS Servers</h3>
+              <div className="flex space-x-2 mb-2">
+                <input
+                  type="text"
+                  value={dnsServerInput}
+                  onChange={(e) => setDnsServerInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddDNSServer() } }}
+                  placeholder="10.0.0.2"
+                  className="input flex-1 font-mono"
+                />
+                <button onClick={handleAddDNSServer} className="btn btn-primary">Add</button>
+              </div>
+              {dnsServers.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {dnsServers.map((srv) => (
+                    <span key={srv} className="inline-flex items-center px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-sm font-mono">
+                      {srv}
+                      <button onClick={() => handleRemoveDNSServer(srv)} className="ml-1 text-blue-500 hover:text-blue-700">&times;</button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-theme-muted">No DNS servers configured</p>
+              )}
+            </div>
+
+            {/* Search Domains */}
+            <div>
+              <h3 className="text-sm font-medium text-theme-secondary mb-2">Search Domains</h3>
+              <div className="flex space-x-2 mb-2">
+                <input
+                  type="text"
+                  value={searchDomainInput}
+                  onChange={(e) => setSearchDomainInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddSearchDomain() } }}
+                  placeholder=".internal"
+                  className="input flex-1 font-mono"
+                />
+                <button onClick={handleAddSearchDomain} className="btn btn-primary">Add</button>
+              </div>
+              {searchDomains.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {searchDomains.map((dom) => (
+                    <span key={dom} className="inline-flex items-center px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded text-sm font-mono">
+                      {dom}
+                      <button onClick={() => handleRemoveSearchDomain(dom)} className="ml-1 text-green-500 hover:text-green-700">&times;</button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-theme-muted">No search domains configured</p>
+              )}
+            </div>
+
+            {/* Save / Delete DNS Rule */}
+            <div className="flex space-x-2">
+              <button onClick={handleSaveRule} disabled={saving} className="btn btn-primary">
+                {saving ? 'Saving...' : 'Save DNS Rule'}
+              </button>
+              {rule && (
+                <button onClick={handleDeleteRule} className="btn btn-secondary text-red-600 dark:text-red-400">
+                  Delete Rule
+                </button>
+              )}
+            </div>
+
+            {/* Static DNS Records */}
+            <div>
+              <h3 className="text-sm font-medium text-theme-secondary mb-2">Static DNS Records</h3>
+              <div className="grid grid-cols-3 gap-2 mb-2">
+                <input
+                  type="text"
+                  value={newHostname}
+                  onChange={(e) => setNewHostname(e.target.value)}
+                  placeholder="db-prod"
+                  className="input font-mono"
+                />
+                <input
+                  type="text"
+                  value={newIPAddress}
+                  onChange={(e) => setNewIPAddress(e.target.value)}
+                  placeholder="10.0.17.75"
+                  className="input font-mono"
+                />
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={newDescription}
+                    onChange={(e) => setNewDescription(e.target.value)}
+                    placeholder="Description"
+                    className="input flex-1"
+                  />
+                  <button onClick={handleAddRecord} className="btn btn-primary">Add</button>
+                </div>
+              </div>
+              {records.length > 0 ? (
+                <div className="border border-theme rounded-lg divide-y divide-theme">
+                  {records.map((record) => (
+                    <div key={record.id} className="flex items-center justify-between p-3">
+                      <div>
+                        <div className="text-sm font-medium text-theme-primary font-mono">{record.hostname}</div>
+                        <div className="text-xs text-theme-tertiary font-mono">{record.ip_address}</div>
+                        {record.description && (
+                          <div className="text-xs text-theme-muted">{record.description}</div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleDeleteRecord(record.id)}
+                        className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-theme-tertiary italic">No static DNS records</p>
+              )}
+            </div>
+          </div>
         )}
 
         <div className="mt-6 flex justify-end">

@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS dns_records;
+DROP TABLE IF EXISTS dns_rules;

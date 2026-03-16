@@ -2663,6 +2663,33 @@ func (s *Server) handleGatewayConnect(c *gin.Context) {
 		}
 	}
 
+	// Merge in network-level DNS from Split DNS rules
+	{
+		networkIDSet := make(map[string]bool)
+		for _, rule := range accessRules {
+			if rule.NetworkID != nil && *rule.NetworkID != "" {
+				networkIDSet[*rule.NetworkID] = true
+			}
+		}
+		networkIDs := make([]string, 0, len(networkIDSet))
+		for id := range networkIDSet {
+			networkIDs = append(networkIDs, id)
+		}
+		if len(networkIDs) > 0 {
+			dnsRules, dnsErr := s.dnsStore.GetRulesForNetworks(ctx, networkIDs)
+			if dnsErr == nil {
+				for _, dnsRule := range dnsRules {
+					for _, dns := range dnsRule.DNSServers {
+						clientConfig = append(clientConfig, fmt.Sprintf("push \"dhcp-option DNS %s\"", dns))
+					}
+					for _, domain := range dnsRule.SearchDomains {
+						clientConfig = append(clientConfig, fmt.Sprintf("push \"dhcp-option DOMAIN %s\"", domain))
+					}
+				}
+			}
+		}
+	}
+
 	for _, rule := range accessRules {
 		if !rule.IsActive {
 			continue

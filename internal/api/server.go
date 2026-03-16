@@ -66,6 +66,7 @@ type Server struct {
 	recordingStore  *db.SessionRecordingStore
 	sessionRecorder *session.Recorder
 	flowStore       *db.NetworkFlowStore
+	dnsStore        *db.DNSStore
 	bastionServer   *sshbastion.Server
 }
 
@@ -263,6 +264,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	jitStore := db.NewJITAccessStore(database)
 	recordingStore := db.NewSessionRecordingStore(database)
 	flowStore := db.NewNetworkFlowStore(database)
+	dnsStore := db.NewDNSStore(database)
 
 	// Initialize PKI with database store for CA persistence
 	// This ensures all pods share the same CA
@@ -312,6 +314,7 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 		jitStore:        jitStore,
 		recordingStore:  recordingStore,
 		flowStore:       flowStore,
+		dnsStore:        dnsStore,
 		ca:              ca,
 		configGen:       configGen,
 		adminPassword:   adminPassword,
@@ -867,6 +870,8 @@ func (s *Server) setupRoutes() {
 				configRead.GET("/networks/:id/gateways", s.handleGetNetworkGateways)
 				configRead.GET("/networks/:id/access-rules", s.handleGetNetworkAccessRules)
 				configRead.GET("/networks/:id/mesh-hubs", s.handleGetNetworkMeshHubs)
+				configRead.GET("/networks/:id/dns", s.handleGetDNSRule)
+				configRead.GET("/networks/:id/dns/records", s.handleListDNSRecords)
 				configRead.GET("/access-rules", s.handleListAccessRules)
 				configRead.GET("/access-rules/:id", s.handleGetAccessRule)
 			}
@@ -876,6 +881,11 @@ func (s *Server) setupRoutes() {
 				configWrite.POST("/networks", s.handleCreateNetwork)
 				configWrite.PUT("/networks/:id", s.handleUpdateNetwork)
 				configWrite.DELETE("/networks/:id", s.handleDeleteNetwork)
+				configWrite.PUT("/networks/:id/dns", s.handleUpsertDNSRule)
+				configWrite.DELETE("/networks/:id/dns", s.handleDeleteDNSRule)
+				configWrite.POST("/networks/:id/dns/records", s.handleCreateDNSRecord)
+				configWrite.PUT("/dns/records/:id", s.handleUpdateDNSRecord)
+				configWrite.DELETE("/dns/records/:id", s.handleDeleteDNSRecord)
 				configWrite.POST("/access-rules", s.handleCreateAccessRule)
 				configWrite.PUT("/access-rules/:id", s.handleUpdateAccessRule)
 				configWrite.DELETE("/access-rules/:id", s.handleDeleteAccessRule)
@@ -1161,6 +1171,9 @@ func (s *Server) setupRoutes() {
 		v1.GET("/mesh-configs", s.handleListUserMeshConfigs)
 		v1.GET("/mesh-configs/:id/download", s.handleDownloadMeshConfig)
 		v1.POST("/mesh-configs/:id/revoke", s.handleRevokeMeshConfig)
+
+		// User DNS config
+		v1.GET("/dns/config", s.handleGetUserDNSConfig)
 
 		// User WireGuard config management
 		wgConfigs := v1.Group("/wireguard/configs")

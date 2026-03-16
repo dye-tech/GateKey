@@ -2473,8 +2473,25 @@ func (s *Server) handleGenerateMeshClientConfig(c *gin.Context) {
 		fullCAChain += rootCACert
 	}
 
+	// Fetch network-level DNS rules for the mesh hub's networks
+	var extraDNSServers, extraSearchDomains []string
+	meshHubNetworks, meshNetErr := s.meshStore.GetHubNetworks(ctx, hub.ID)
+	if meshNetErr == nil && len(meshHubNetworks) > 0 {
+		meshNetworkIDs := make([]string, 0, len(meshHubNetworks))
+		for _, n := range meshHubNetworks {
+			meshNetworkIDs = append(meshNetworkIDs, n.ID)
+		}
+		meshDNSRules, meshDNSErr := s.dnsStore.GetRulesForNetworks(ctx, meshNetworkIDs)
+		if meshDNSErr == nil {
+			for _, dnsRule := range meshDNSRules {
+				extraDNSServers = append(extraDNSServers, dnsRule.DNSServers...)
+				extraSearchDomains = append(extraSearchDomains, dnsRule.SearchDomains...)
+			}
+		}
+	}
+
 	// Generate OpenVPN config
-	configData := generateMeshClientOVPNConfig(hub, fullCAChain, clientCert, clientKey, routes)
+	configData := generateMeshClientOVPNConfig(hub, fullCAChain, clientCert, clientKey, routes, extraDNSServers, extraSearchDomains)
 
 	// Generate unique config ID
 	configID := generateUUID()
@@ -2638,7 +2655,7 @@ func issueClientCertFromPEM(caCertPEM, caKeyPEM, commonName string, validity tim
 }
 
 // generateMeshClientOVPNConfig generates an OpenVPN client config for mesh hub access
-func generateMeshClientOVPNConfig(hub *db.MeshHub, caChain, clientCert, clientKey string, routes []string) string {
+func generateMeshClientOVPNConfig(hub *db.MeshHub, caChain, clientCert, clientKey string, routes []string, extraDNSServers []string, extraSearchDomains []string) string {
 	var sb strings.Builder
 
 	sb.WriteString("# GateKey Mesh VPN Configuration\n")
@@ -2726,6 +2743,18 @@ func generateMeshClientOVPNConfig(hub *db.MeshHub, caChain, clientCert, clientKe
 			// Default DNS servers
 			sb.WriteString("dhcp-option DNS 1.1.1.1\n")
 			sb.WriteString("dhcp-option DNS 8.8.8.8\n")
+		}
+		sb.WriteString("\n")
+	}
+
+	// Merge in network-level DNS from Split DNS rules
+	if len(extraDNSServers) > 0 || len(extraSearchDomains) > 0 {
+		sb.WriteString("# Network-level DNS (Split DNS)\n")
+		for _, dns := range extraDNSServers {
+			fmt.Fprintf(&sb, "dhcp-option DNS %s\n", dns)
+		}
+		for _, domain := range extraSearchDomains {
+			fmt.Fprintf(&sb, "dhcp-option DOMAIN %s\n", domain)
 		}
 		sb.WriteString("\n")
 	}

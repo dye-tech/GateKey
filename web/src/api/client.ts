@@ -2718,3 +2718,65 @@ export async function getUserFlowActivity(userId: string, limit = 100): Promise<
   const response = await api.get(`/api/v1/admin/flow-logs/user/${userId}?limit=${limit}`)
   return response.data.flows || []
 }
+
+// ==================== DNS Configuration ====================
+
+export interface DNSRule {
+  id: string
+  network_id: string
+  dns_servers: string[]
+  search_domains: string[]
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface DNSRecord {
+  id: string
+  network_id: string
+  hostname: string
+  ip_address: string
+  description: string
+  is_active: boolean
+  created_at: string
+}
+
+export async function getNetworkDNSRule(networkId: string): Promise<DNSRule | null> {
+  try {
+    const response = await api.get(`/api/v1/admin/networks/${networkId}/dns`)
+    return response.data.rule || null
+  } catch {
+    return null
+  }
+}
+
+export async function upsertNetworkDNSRule(networkId: string, rule: { dns_servers: string[]; search_domains: string[] }): Promise<void> {
+  await api.put(`/api/v1/admin/networks/${networkId}/dns`, rule)
+}
+
+export async function deleteNetworkDNSRule(networkId: string): Promise<void> {
+  await api.delete(`/api/v1/admin/networks/${networkId}/dns`)
+}
+
+export async function getNetworkDNSRecords(networkId: string): Promise<DNSRecord[]> {
+  const response = await api.get(`/api/v1/admin/networks/${networkId}/dns/records`)
+  return response.data.records || []
+}
+
+export async function createDNSRecord(networkId: string, record: { hostname: string; ip_address: string; description?: string }): Promise<DNSRecord> {
+  const response = await api.post(`/api/v1/admin/networks/${networkId}/dns/records`, record)
+  return response.data.record
+}
+
+export async function updateDNSRecord(id: string, record: { hostname?: string; ip_address?: string; description?: string; is_active?: boolean }): Promise<void> {
+  await api.put(`/api/v1/admin/dns/records/${id}`, record)
+}
+
+export async function deleteDNSRecord(id: string): Promise<void> {
+  await api.delete(`/api/v1/admin/dns/records/${id}`)
+}
+
+export async function getUserDNSConfig(): Promise<{ dns_servers: string[]; search_domains: string[]; records: DNSRecord[] }> {
+  const response = await api.get('/api/v1/dns/config')
+  return response.data
+}
