@@ -489,11 +489,12 @@ func (s *Server) startBastionServer(ctx context.Context, settingsStore *db.Setti
 		if apiKey == nil || user == nil {
 			return nil, fmt.Errorf("invalid API key")
 		}
-		// Update last used
-		go func() {
-			updateCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		// Update last used asynchronously (detached from request context)
+		keyID := apiKey.ID
+		go func() { // #nosec G118 -- intentionally detached from request context for async update
+			asyncCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			_ = s.apiKeyStore.UpdateLastUsed(updateCtx, apiKey.ID, "ssh-bastion")
+			_ = s.apiKeyStore.UpdateLastUsed(asyncCtx, keyID, "ssh-bastion")
 		}()
 		return &sshbastion.AuthResult{
 			UserID:    user.ID,

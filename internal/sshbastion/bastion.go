@@ -13,6 +13,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -63,8 +64,6 @@ type Server struct {
 	StopRecording  func(sessionID string) (int64, int, error)
 	OnRecordStart  func(recordingID, userID, userEmail, targetHost, storagePath string)
 	OnRecordStop   func(recordingID string, fileSize int64, durationSec int)
-
-	mu sync.Mutex
 }
 
 // NewServer creates a new SSH bastion server.
@@ -117,7 +116,8 @@ func GenerateED25519Key() ([]byte, error) {
 func defaultHostKeyCallback() ssh.HostKeyCallback {
 	// Check for explicit host key file
 	if path := os.Getenv("GATEKEY_BASTION_TARGET_HOSTKEY"); path != "" {
-		data, err := os.ReadFile(path)
+		cleanPath := filepath.Clean(path)
+		data, err := os.ReadFile(cleanPath) // #nosec G703 -- path from trusted env var, cleaned
 		if err != nil {
 			return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 				return fmt.Errorf("failed to read host key file: %w", err)
@@ -173,7 +173,7 @@ func (s *Server) LoadOrGenerateHostKey() ([]byte, error) {
 	return pemData, s.SetHostKey(pemData)
 }
 
-// Start begins listening for SSH connections. Blocks until context is cancelled.
+// Start begins listening for SSH connections. Blocks until context is canceled.
 func (s *Server) Start(ctx context.Context) error {
 	listener, err := net.Listen("tcp", s.config.ListenAddr)
 	if err != nil {
@@ -274,7 +274,7 @@ func (s *Server) handleConnection(ctx context.Context, netConn net.Conn) {
 			var payload directTCPIPPayload
 			if err := ssh.Unmarshal(newChannel.ExtraData(), &payload); err != nil {
 				s.logger.Warn("Failed to parse direct-tcpip payload", zap.Error(err))
-				newChannel.Reject(ssh.ConnectionFailed, "invalid payload")
+				_ = newChannel.Reject(ssh.ConnectionFailed, "invalid payload")
 				continue
 			}
 			// Check access
@@ -286,7 +286,7 @@ func (s *Server) handleConnection(ctx context.Context, netConn net.Conn) {
 					s.logger.Warn("SSH bastion access denied (direct-tcpip)",
 						zap.String("user", authResult.UserEmail),
 						zap.String("target", fmt.Sprintf("%s:%d", targetHost, targetPort)))
-					newChannel.Reject(ssh.Prohibited, "access denied")
+					_ = newChannel.Reject(ssh.Prohibited, "access denied")
 					continue
 				}
 			}
@@ -299,7 +299,7 @@ func (s *Server) handleConnection(ctx context.Context, netConn net.Conn) {
 			go s.handleDirectTCPIP(ctx, channel, authResult, remoteIP, targetHost, targetPort)
 
 		default:
-			newChannel.Reject(ssh.UnknownChannelType, "unsupported channel type")
+			_ = newChannel.Reject(ssh.UnknownChannelType, "unsupported channel type")
 		}
 	}
 }
@@ -318,7 +318,7 @@ type directTCPIPPayload struct {
 func (s *Server) handleDirectTCPIP(ctx context.Context, channel ssh.Channel, auth *AuthResult, sourceIP, targetHost string, targetPort int) {
 	defer channel.Close()
 
-	targetAddr := fmt.Sprintf("%s:%d", targetHost, targetPort)
+	targetAddr := net.JoinHostPort(targetHost, fmt.Sprintf("%d", targetPort))
 	startTime := time.Now()
 
 	s.logger.Info("SSH bastion direct-tcpip connection",
@@ -516,17 +516,17 @@ func (s *Server) handleSessionChannel(ctx context.Context, channel ssh.Channel, 
 			case "pty-req":
 				ok, _ := targetSession.SendRequest(req.Type, req.WantReply, req.Payload)
 				if req.WantReply {
-					req.Reply(ok, nil)
+					_ = req.Reply(ok, nil)
 				}
 			case "window-change":
 				ok, _ := targetSession.SendRequest(req.Type, req.WantReply, req.Payload)
 				if req.WantReply {
-					req.Reply(ok, nil)
+					_ = req.Reply(ok, nil)
 				}
 			case "shell":
 				ok := targetSession.Shell() == nil
 				if req.WantReply {
-					req.Reply(ok, nil)
+					_ = req.Reply(ok, nil)
 				}
 			case "exec":
 				// Extract the command from the payload
@@ -536,22 +536,22 @@ func (s *Server) handleSessionChannel(ctx context.Context, channel ssh.Channel, 
 						cmd := string(req.Payload[4 : 4+cmdLen])
 						ok := targetSession.Start(cmd) == nil
 						if req.WantReply {
-							req.Reply(ok, nil)
+							_ = req.Reply(ok, nil)
 						}
 					} else if req.WantReply {
-						req.Reply(false, nil)
+						_ = req.Reply(false, nil)
 					}
 				} else if req.WantReply {
-					req.Reply(false, nil)
+					_ = req.Reply(false, nil)
 				}
 			case "env":
 				ok, _ := targetSession.SendRequest(req.Type, req.WantReply, req.Payload)
 				if req.WantReply {
-					req.Reply(ok, nil)
+					_ = req.Reply(ok, nil)
 				}
 			default:
 				if req.WantReply {
-					req.Reply(false, nil)
+					_ = req.Reply(false, nil)
 				}
 			}
 		}
@@ -610,7 +610,7 @@ func (s *Server) handleSessionChannel(ctx context.Context, channel ssh.Channel, 
 	}()
 
 	// Wait for target session to end
-	targetSession.Wait()
+	_ = targetSession.Wait()
 	wg.Wait()
 
 	endTime := time.Now()
