@@ -665,6 +665,7 @@ func (s *Server) setupRoutes() {
 				proxyRead.GET("/proxy-apps/:id/users", s.handleGetProxyAppUsers)
 				proxyRead.GET("/proxy-apps/:id/groups", s.handleGetProxyAppGroups)
 				proxyRead.GET("/proxy-apps/:id/logs", s.handleGetProxyAppLogs)
+				proxyRead.GET("/proxy-logs", s.handleListAllProxyLogs)
 			}
 			proxyWrite := admin.Group("")
 			proxyWrite.Use(s.requireAnyScope(ScopeConfigWrite, ScopeAdmin))
@@ -1202,6 +1203,17 @@ func (s *Server) runRecordingCleanup(ctx context.Context) {
 				s.logger.Error("Failed to cleanup recordings", zap.Error(err))
 			} else if count > 0 {
 				s.logger.Info("Cleaned up old recordings", zap.Int("count", count))
+			}
+
+			// Cleanup old proxy access logs
+			proxyRetention := s.settingsStore.GetInt(ctx, db.SettingProxyLogRetentionDays, 30)
+			if proxyRetention > 0 {
+				proxyCount, proxyErr := s.proxyAppStore.DeleteProxyLogsOlderThan(ctx, proxyRetention)
+				if proxyErr != nil {
+					s.logger.Error("Failed to cleanup proxy logs", zap.Error(proxyErr))
+				} else if proxyCount > 0 {
+					s.logger.Info("Cleaned up old proxy access logs", zap.Int("count", proxyCount))
+				}
 			}
 		}
 	}

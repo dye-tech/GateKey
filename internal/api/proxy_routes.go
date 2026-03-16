@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,20 +53,22 @@ func (s *Server) handleCreateProxyApp(c *gin.Context) {
 	}
 
 	var req struct {
-		Name               string            `json:"name" binding:"required"`
-		Slug               string            `json:"slug" binding:"required"`
-		Description        string            `json:"description"`
-		InternalURL        string            `json:"internal_url" binding:"required"`
-		IconURL            *string           `json:"icon_url"`
-		IsActive           *bool             `json:"is_active"`
-		PreserveHostHeader *bool             `json:"preserve_host_header"`
-		StripPrefix        *bool             `json:"strip_prefix"`
-		InjectHeaders      map[string]string `json:"inject_headers"`
-		AllowedHeaders     []string          `json:"allowed_headers"`
-		WebsocketEnabled   *bool             `json:"websocket_enabled"`
-		TimeoutSeconds     *int              `json:"timeout_seconds"`
-		SkipTLSVerify      *bool             `json:"skip_tls_verify"`
-		CustomCACert       *string           `json:"custom_ca_cert"`
+		Name                 string            `json:"name" binding:"required"`
+		Slug                 string            `json:"slug" binding:"required"`
+		Description          string            `json:"description"`
+		InternalURL          string            `json:"internal_url" binding:"required"`
+		IconURL              *string           `json:"icon_url"`
+		IsActive             *bool             `json:"is_active"`
+		PreserveHostHeader   *bool             `json:"preserve_host_header"`
+		StripPrefix          *bool             `json:"strip_prefix"`
+		InjectHeaders        map[string]string `json:"inject_headers"`
+		AllowedHeaders       []string          `json:"allowed_headers"`
+		WebsocketEnabled     *bool             `json:"websocket_enabled"`
+		TimeoutSeconds       *int              `json:"timeout_seconds"`
+		SkipTLSVerify        *bool             `json:"skip_tls_verify"`
+		CustomCACert         *string           `json:"custom_ca_cert"`
+		AccessLoggingEnabled *bool             `json:"access_logging_enabled"`
+		LogHeaders           *bool             `json:"log_headers"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -129,6 +132,15 @@ func (s *Server) handleCreateProxyApp(c *gin.Context) {
 		skipTLSVerify = *req.SkipTLSVerify
 	}
 
+	accessLoggingEnabled := true
+	if req.AccessLoggingEnabled != nil {
+		accessLoggingEnabled = *req.AccessLoggingEnabled
+	}
+	logHeaders := false
+	if req.LogHeaders != nil {
+		logHeaders = *req.LogHeaders
+	}
+
 	app := &db.ProxyApplication{
 		Name:               strings.TrimSpace(req.Name),
 		Slug:               slug,
@@ -142,8 +154,10 @@ func (s *Server) handleCreateProxyApp(c *gin.Context) {
 		AllowedHeaders:     req.AllowedHeaders,
 		WebsocketEnabled:   websocketEnabled,
 		TimeoutSeconds:     timeoutSeconds,
-		SkipTLSVerify:      skipTLSVerify,
-		CustomCACert:       req.CustomCACert,
+		SkipTLSVerify:        skipTLSVerify,
+		CustomCACert:         req.CustomCACert,
+		AccessLoggingEnabled: accessLoggingEnabled,
+		LogHeaders:           logHeaders,
 	}
 
 	if err := s.proxyAppStore.CreateProxyApplication(c.Request.Context(), app); err != nil {
@@ -218,20 +232,22 @@ func (s *Server) handleUpdateProxyApp(c *gin.Context) {
 	}
 
 	var req struct {
-		Name               *string           `json:"name"`
-		Slug               *string           `json:"slug"`
-		Description        *string           `json:"description"`
-		InternalURL        *string           `json:"internal_url"`
-		IconURL            *string           `json:"icon_url"`
-		IsActive           *bool             `json:"is_active"`
-		PreserveHostHeader *bool             `json:"preserve_host_header"`
-		StripPrefix        *bool             `json:"strip_prefix"`
-		InjectHeaders      map[string]string `json:"inject_headers"`
-		AllowedHeaders     []string          `json:"allowed_headers"`
-		WebsocketEnabled   *bool             `json:"websocket_enabled"`
-		TimeoutSeconds     *int              `json:"timeout_seconds"`
-		SkipTLSVerify      *bool             `json:"skip_tls_verify"`
-		CustomCACert       *string           `json:"custom_ca_cert"`
+		Name                 *string           `json:"name"`
+		Slug                 *string           `json:"slug"`
+		Description          *string           `json:"description"`
+		InternalURL          *string           `json:"internal_url"`
+		IconURL              *string           `json:"icon_url"`
+		IsActive             *bool             `json:"is_active"`
+		PreserveHostHeader   *bool             `json:"preserve_host_header"`
+		StripPrefix          *bool             `json:"strip_prefix"`
+		InjectHeaders        map[string]string `json:"inject_headers"`
+		AllowedHeaders       []string          `json:"allowed_headers"`
+		WebsocketEnabled     *bool             `json:"websocket_enabled"`
+		TimeoutSeconds       *int              `json:"timeout_seconds"`
+		SkipTLSVerify        *bool             `json:"skip_tls_verify"`
+		CustomCACert         *string           `json:"custom_ca_cert"`
+		AccessLoggingEnabled *bool             `json:"access_logging_enabled"`
+		LogHeaders           *bool             `json:"log_headers"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -291,6 +307,12 @@ func (s *Server) handleUpdateProxyApp(c *gin.Context) {
 	}
 	if req.CustomCACert != nil {
 		app.CustomCACert = req.CustomCACert
+	}
+	if req.AccessLoggingEnabled != nil {
+		app.AccessLoggingEnabled = *req.AccessLoggingEnabled
+	}
+	if req.LogHeaders != nil {
+		app.LogHeaders = *req.LogHeaders
 	}
 
 	if err := s.proxyAppStore.UpdateProxyApplication(c.Request.Context(), app); err != nil {
@@ -518,6 +540,53 @@ func (s *Server) handleGetProxyAppLogs(c *gin.Context) {
 	if err != nil {
 		s.logger.Error("Failed to get proxy access logs", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get logs"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"logs": logs})
+}
+
+// ---- Cross-App Logs Handler ----
+
+// handleListAllProxyLogs lists proxy access logs across all apps with filtering
+func (s *Server) handleListAllProxyLogs(c *gin.Context) {
+	user, err := s.getAuthenticatedUser(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+	if !user.IsAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "admin access required"})
+		return
+	}
+
+	filter := db.ProxyLogFilter{
+		AppID:     c.Query("app_id"),
+		UserEmail: c.Query("user_email"),
+		Method:    c.Query("method"),
+		Limit:     100,
+	}
+	if l := c.Query("limit"); l != "" {
+		if v, _ := strconv.Atoi(l); v > 0 && v <= 500 {
+			filter.Limit = v
+		}
+	}
+	if o := c.Query("offset"); o != "" {
+		if v, _ := strconv.Atoi(o); v >= 0 {
+			filter.Offset = v
+		}
+	}
+	if ms := c.Query("min_status"); ms != "" {
+		filter.MinStatus, _ = strconv.Atoi(ms)
+	}
+	if ms := c.Query("max_status"); ms != "" {
+		filter.MaxStatus, _ = strconv.Atoi(ms)
+	}
+
+	logs, err := s.proxyAppStore.ListAllProxyAccessLogs(c.Request.Context(), filter)
+	if err != nil {
+		s.logger.Error("Failed to list proxy logs", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list logs"})
 		return
 	}
 

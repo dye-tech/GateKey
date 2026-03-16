@@ -990,6 +990,47 @@ export async function getProxyAppLogs(appId: string): Promise<ProxyAccessLog[]> 
   }))
 }
 
+// Cross-app proxy access log entry (with app_name)
+export interface ProxyAccessLogEntry {
+  id: string
+  proxy_app_id: string
+  app_name?: string
+  user_id: string
+  user_email: string
+  request_method: string
+  request_path: string
+  response_status: number
+  response_time_ms: number
+  response_size_bytes?: number
+  client_ip: string
+  user_agent: string
+  request_headers?: Record<string, string>
+  response_headers?: Record<string, string>
+  created_at: string
+}
+
+export async function getAllProxyLogs(params?: {
+  app_id?: string
+  user_email?: string
+  method?: string
+  min_status?: number
+  max_status?: number
+  limit?: number
+  offset?: number
+}): Promise<ProxyAccessLogEntry[]> {
+  const query = new URLSearchParams()
+  if (params?.app_id) query.set('app_id', params.app_id)
+  if (params?.user_email) query.set('user_email', params.user_email)
+  if (params?.method) query.set('method', params.method)
+  if (params?.min_status) query.set('min_status', String(params.min_status))
+  if (params?.max_status) query.set('max_status', String(params.max_status))
+  if (params?.limit) query.set('limit', String(params.limit))
+  if (params?.offset) query.set('offset', String(params.offset))
+  const qs = query.toString()
+  const response = await api.get(`/api/v1/admin/proxy-logs${qs ? '?' + qs : ''}`)
+  return response.data.logs || []
+}
+
 // User Portal - Get apps user can access
 export async function getUserProxyApps(): Promise<UserProxyApplication[]> {
   const response = await api.get('/api/v1/proxy-apps')

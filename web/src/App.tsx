@@ -21,6 +21,7 @@ import AdminRemoteSessions from './pages/AdminRemoteSessions'
 import AccessRequests from './pages/AccessRequests'
 import AdminJITAccess from './pages/AdminJITAccess'
 import AdminRecordings from './pages/AdminRecordings'
+import AdminProxyLogs from './pages/AdminProxyLogs'
 import Help from './pages/Help'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
@@ -154,6 +155,13 @@ function AppRoutes() {
         <AdminRoute>
           <Layout>
             <AdminProxyApps />
+          </Layout>
+        </AdminRoute>
+      } />
+      <Route path="/admin/proxy-logs" element={
+        <AdminRoute>
+          <Layout>
+            <AdminProxyLogs />
           </Layout>
         </AdminRoute>
       } />
