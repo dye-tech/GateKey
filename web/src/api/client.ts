@@ -2628,6 +2628,8 @@ export interface RecordingSettings {
   terminal_enabled: string
   proxy_enabled: string
   flow_enabled: string
+  bastion_enabled: string
+  bastion_port: number
 }
 
 export async function getRecordings(limit = 50, offset = 0): Promise<SessionRecording[]> {

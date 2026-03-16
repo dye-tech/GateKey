@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -25,6 +26,7 @@ import (
 	"github.com/gatekey-project/gatekey/internal/openvpn"
 	"github.com/gatekey-project/gatekey/internal/pki"
 	"github.com/gatekey-project/gatekey/internal/session"
+	"github.com/gatekey-project/gatekey/internal/sshbastion"
 	"github.com/gatekey-project/gatekey/internal/telemetry"
 )
 
@@ -64,6 +66,7 @@ type Server struct {
 	recordingStore  *db.SessionRecordingStore
 	sessionRecorder *session.Recorder
 	flowStore       *db.NetworkFlowStore
+	bastionServer   *sshbastion.Server
 }
 
 // NewServer creates a new API server instance.
@@ -427,7 +430,241 @@ func NewServer(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	go srv.runJITCleanup(bgCtx)
 	go srv.runRecordingCleanup(bgCtx)
 
+	// Initialize SSH bastion server if enabled
+	bastionEnabled := settingsStore.GetBool(ctx, db.SettingSSHBastionEnabled, false)
+	if bastionEnabled {
+		srv.startBastionServer(bgCtx, settingsStore)
+	}
+
 	return srv, nil
+}
+
+// startBastionServer initializes and starts the SSH bastion proxy server.
+func (s *Server) startBastionServer(ctx context.Context, settingsStore *db.SettingsStore) {
+	bastionPort := settingsStore.GetInt(ctx, db.SettingSSHBastionPort, 2222)
+	listenAddr := fmt.Sprintf(":%d", bastionPort)
+
+	bastion, err := sshbastion.NewServer(sshbastion.Config{
+		ListenAddr: listenAddr,
+	}, s.logger)
+	if err != nil {
+		s.logger.Error("Failed to create SSH bastion server", zap.Error(err))
+		return
+	}
+
+	// Load or generate host key
+	hostKeyPEM := settingsStore.GetString(ctx, db.SettingSSHBastionHostKey, "")
+	if hostKeyPEM != "" {
+		if err := bastion.SetHostKey([]byte(hostKeyPEM)); err != nil {
+			s.logger.Warn("Failed to load stored SSH bastion host key, generating new one", zap.Error(err))
+			hostKeyPEM = ""
+		}
+	}
+	if hostKeyPEM == "" {
+		newKey, genErr := sshbastion.GenerateED25519Key()
+		if genErr != nil {
+			s.logger.Error("Failed to generate SSH bastion host key", zap.Error(genErr))
+			return
+		}
+		if err := bastion.SetHostKey(newKey); err != nil {
+			s.logger.Error("Failed to set generated SSH bastion host key", zap.Error(err))
+			return
+		}
+		// Persist host key to settings
+		if err := settingsStore.Set(ctx, db.SettingSSHBastionHostKey, string(newKey)); err != nil {
+			s.logger.Warn("Failed to persist SSH bastion host key", zap.Error(err))
+		}
+	}
+
+	// Wire up authentication: validate API key
+	bastion.AuthenticateUser = func(authCtx context.Context, password string) (*sshbastion.AuthResult, error) {
+		if !strings.HasPrefix(password, "gk_") {
+			return nil, fmt.Errorf("invalid API key format")
+		}
+		keyHash := db.HashAPIKey(password)
+		apiKey, user, err := s.apiKeyStore.ValidateKey(authCtx, keyHash)
+		if err != nil {
+			return nil, fmt.Errorf("API key validation failed: %w", err)
+		}
+		if apiKey == nil || user == nil {
+			return nil, fmt.Errorf("invalid API key")
+		}
+		// Update last used
+		go func() {
+			updateCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = s.apiKeyStore.UpdateLastUsed(updateCtx, apiKey.ID, "ssh-bastion")
+		}()
+		return &sshbastion.AuthResult{
+			UserID:    user.ID,
+			UserEmail: user.Email,
+			IsAdmin:   user.IsAdmin,
+			Groups:    user.Groups,
+		}, nil
+	}
+
+	// Wire up access checking
+	bastion.CheckAccess = func(authCtx context.Context, userID string, groups []string, targetHost string, targetPort int) (bool, error) {
+		rules, err := s.accessRuleStore.GetUserAccessRules(authCtx, userID, groups)
+		if err != nil {
+			return false, err
+		}
+		for _, rule := range rules {
+			if matchesTarget(rule, targetHost, targetPort) {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+
+	// Wire up connection logging
+	bastion.LogConnection = func(userID, userEmail, sourceIP, targetHost string, targetPort int, bytesSent, bytesReceived int64, start, end time.Time) {
+		logCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		flow := &db.NetworkFlowLog{
+			GatewayID:     "ssh-bastion",
+			GatewayName:   "SSH Bastion",
+			UserID:        userID,
+			UserEmail:     userEmail,
+			SourceIP:      sourceIP,
+			DestIP:        targetHost,
+			DestPort:      targetPort,
+			Protocol:      "tcp",
+			BytesSent:     bytesSent,
+			BytesReceived: bytesReceived,
+			FlowStart:     start,
+			FlowEnd:       &end,
+		}
+		if err := s.flowStore.BatchInsert(logCtx, []*db.NetworkFlowLog{flow}); err != nil {
+			s.logger.Warn("Failed to log SSH bastion connection", zap.Error(err))
+		}
+	}
+
+	// Wire up session recording
+	bastion.StartRecording = func(sessionID, recordingID, userEmail, targetHost string) (string, error) {
+		return s.sessionRecorder.StartRecording(sessionID, recordingID, userEmail, targetHost)
+	}
+	bastion.WriteRecording = func(sessionID, output string) {
+		s.sessionRecorder.WriteOutput(sessionID, output)
+	}
+	bastion.StopRecording = func(sessionID string) (int64, int, error) {
+		return s.sessionRecorder.StopRecording(sessionID)
+	}
+	bastion.OnRecordStart = func(recordingID, userID, userEmail, targetHost, storagePath string) {
+		cbCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		rec := &db.SessionRecording{
+			ID:              recordingID,
+			SessionType:     "bastion",
+			UserID:          userID,
+			UserEmail:       userEmail,
+			TargetNodeName:  &targetHost,
+			StoragePath:     storagePath,
+			RecordingFormat: "asciicast",
+		}
+		if err := s.recordingStore.Create(cbCtx, rec); err != nil {
+			s.logger.Error("Failed to create bastion recording entry", zap.Error(err))
+		}
+	}
+	bastion.OnRecordStop = func(recordingID string, fileSize int64, durationSec int) {
+		cbCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := s.recordingStore.Complete(cbCtx, recordingID, fileSize, durationSec); err != nil {
+			s.logger.Error("Failed to complete bastion recording", zap.Error(err))
+		}
+	}
+
+	s.bastionServer = bastion
+	go func() {
+		if err := bastion.Start(ctx); err != nil {
+			s.logger.Error("SSH bastion server error", zap.Error(err))
+		}
+	}()
+
+	s.logger.Info("SSH bastion server initialized",
+		zap.String("listen_addr", listenAddr))
+}
+
+// matchesTarget checks if an access rule matches a target host and port.
+func matchesTarget(rule *db.AccessRule, targetHost string, targetPort int) bool {
+	// Check host match
+	switch rule.RuleType {
+	case db.AccessRuleTypeIP:
+		if rule.Value != targetHost {
+			// Also check IPv6
+			if rule.ValueV6 == nil || *rule.ValueV6 != targetHost {
+				return false
+			}
+		}
+	case db.AccessRuleTypeCIDR:
+		_, cidr, err := net.ParseCIDR(rule.Value)
+		if err != nil {
+			return false
+		}
+		ip := net.ParseIP(targetHost)
+		if ip == nil || !cidr.Contains(ip) {
+			// Check IPv6 CIDR
+			if rule.ValueV6 != nil {
+				_, cidrV6, err := net.ParseCIDR(*rule.ValueV6)
+				if err != nil || !cidrV6.Contains(ip) {
+					return false
+				}
+			} else {
+				return false
+			}
+		}
+	case db.AccessRuleTypeHostname:
+		if !strings.EqualFold(rule.Value, targetHost) {
+			return false
+		}
+	case db.AccessRuleTypeHostnameWildcard:
+		pattern := strings.ToLower(rule.Value)
+		host := strings.ToLower(targetHost)
+		if !matchWildcard(pattern, host) {
+			return false
+		}
+	default:
+		return false
+	}
+
+	// Check port match if rule specifies a port range
+	if rule.PortRange != nil && *rule.PortRange != "" && *rule.PortRange != "*" {
+		portRange := *rule.PortRange
+		if strings.Contains(portRange, "-") {
+			parts := strings.SplitN(portRange, "-", 2)
+			var low, high int
+			fmt.Sscanf(parts[0], "%d", &low)
+			fmt.Sscanf(parts[1], "%d", &high)
+			if targetPort < low || targetPort > high {
+				return false
+			}
+		} else {
+			var rulePort int
+			fmt.Sscanf(portRange, "%d", &rulePort)
+			if rulePort != targetPort {
+				return false
+			}
+		}
+	}
+
+	// Check protocol if specified (bastion is always TCP)
+	if rule.Protocol != nil && *rule.Protocol != "" && *rule.Protocol != "*" && *rule.Protocol != "tcp" {
+		return false
+	}
+
+	return true
+}
+
+// matchWildcard performs simple wildcard matching (*.example.com).
+func matchWildcard(pattern, s string) bool {
+	if pattern == "*" {
+		return true
+	}
+	if strings.HasPrefix(pattern, "*.") {
+		suffix := pattern[1:] // ".example.com"
+		return strings.HasSuffix(s, suffix) || s == pattern[2:]
+	}
+	return pattern == s
 }
 
 // setupRoutes configures all API routes.

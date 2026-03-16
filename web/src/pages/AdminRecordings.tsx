@@ -55,6 +55,8 @@ export default function AdminRecordings() {
   const [terminalEnabled, setTerminalEnabled] = useState(true)
   const [proxyEnabled, setProxyEnabled] = useState(true)
   const [flowEnabled, setFlowEnabled] = useState(true)
+  const [bastionEnabled, setBastionEnabled] = useState(false)
+  const [bastionPort, setBastionPort] = useState('2222')
   const [savingSettings, setSavingSettings] = useState(false)
   const [settingsMsg, setSettingsMsg] = useState('')
 
@@ -87,6 +89,8 @@ export default function AdminRecordings() {
       setTerminalEnabled(data.terminal_enabled !== 'false')
       setProxyEnabled(data.proxy_enabled !== 'false')
       setFlowEnabled(data.flow_enabled !== 'false')
+      setBastionEnabled(data.bastion_enabled === 'true')
+      setBastionPort(String(data.bastion_port || 2222))
     } catch {
       setError('Failed to load settings')
     }
@@ -130,6 +134,8 @@ export default function AdminRecordings() {
         terminal_enabled: String(terminalEnabled),
         proxy_enabled: String(proxyEnabled),
         flow_enabled: String(flowEnabled),
+        bastion_enabled: String(bastionEnabled),
+        bastion_port: bastionPort,
       }
       await updateRecordingSettings(settingsToSave)
       setSettingsMsg('Settings saved')
@@ -344,6 +350,43 @@ export default function AdminRecordings() {
                       }`}
                     />
                   </button>
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-theme pt-4 mt-4">
+              <h3 className="text-md font-semibold text-theme-primary mb-3">SSH Bastion Proxy</h3>
+              <p className="text-xs text-theme-secondary mb-3">
+                The SSH bastion proxy allows users to SSH through GateKey to reach internal hosts.
+                Users authenticate with their API key and access is controlled by access rules.
+                Session mode records terminal I/O; jump host mode logs connection metadata.
+              </p>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-theme-primary">Bastion Enabled</label>
+                  <button
+                    onClick={() => setBastionEnabled(prev => !prev)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      bastionEnabled ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        bastionEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-theme-primary mb-1">Listen Port</label>
+                  <input
+                    type="number"
+                    value={bastionPort}
+                    onChange={(e) => setBastionPort(e.target.value)}
+                    className="w-32 px-3 py-2 border border-theme rounded-md bg-theme-primary text-theme-primary focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    min="1"
+                    max="65535"
+                  />
+                  <p className="text-xs text-theme-secondary mt-1">Default: 2222. Changes require a server restart.</p>
                 </div>
               </div>
             </div>

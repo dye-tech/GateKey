@@ -150,6 +150,11 @@ const (
 
 	// Flow log settings
 	SettingFlowLogRetentionDays = "flow_log_retention_days"
+
+	// SSH Bastion settings
+	SettingSSHBastionEnabled = "ssh_bastion_enabled"  // bool: enable/disable SSH bastion proxy
+	SettingSSHBastionPort    = "ssh_bastion_port"     // port number (default: 2222)
+	SettingSSHBastionHostKey = "ssh_bastion_host_key" // PEM-encoded ED25519 host key
 )
 
 // Default crypto profiles (all enabled by default)

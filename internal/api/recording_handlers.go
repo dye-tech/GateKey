@@ -156,6 +156,8 @@ func (s *Server) handleGetRecordingSettings(c *gin.Context) {
 		"terminal_enabled": s.settingsStore.GetString(ctx, db.SettingRecordingTerminalEnabled, "true"),
 		"proxy_enabled":    s.settingsStore.GetString(ctx, db.SettingRecordingProxyEnabled, "true"),
 		"flow_enabled":     s.settingsStore.GetString(ctx, db.SettingRecordingFlowEnabled, "true"),
+		"bastion_enabled":  s.settingsStore.GetString(ctx, db.SettingSSHBastionEnabled, "false"),
+		"bastion_port":     s.settingsStore.GetInt(ctx, db.SettingSSHBastionPort, 2222),
 	})
 }
 
@@ -170,6 +172,8 @@ func (s *Server) handleUpdateRecordingSettings(c *gin.Context) {
 		TerminalEnabled *string `json:"terminal_enabled"`
 		ProxyEnabled    *string `json:"proxy_enabled"`
 		FlowEnabled     *string `json:"flow_enabled"`
+		BastionEnabled  *string `json:"bastion_enabled"`
+		BastionPort     *string `json:"bastion_port"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -213,6 +217,12 @@ func (s *Server) handleUpdateRecordingSettings(c *gin.Context) {
 	if body.FlowEnabled != nil {
 		_ = s.settingsStore.Set(ctx, db.SettingRecordingFlowEnabled, *body.FlowEnabled)
 	}
+	if body.BastionEnabled != nil {
+		_ = s.settingsStore.Set(ctx, db.SettingSSHBastionEnabled, *body.BastionEnabled)
+	}
+	if body.BastionPort != nil {
+		_ = s.settingsStore.Set(ctx, db.SettingSSHBastionPort, *body.BastionPort)
+	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "settings updated"})
+	c.JSON(http.StatusOK, gin.H{"message": "settings updated (bastion changes require server restart)"})
 }
