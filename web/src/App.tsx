@@ -21,6 +21,7 @@ import AdminRemoteSessions from './pages/AdminRemoteSessions'
 import AccessRequests from './pages/AccessRequests'
 import AdminJITAccess from './pages/AdminJITAccess'
 import AdminRecordings from './pages/AdminRecordings'
+import AdminNetworkActivity from './pages/AdminNetworkActivity'
 import AdminProxyLogs from './pages/AdminProxyLogs'
 import Help from './pages/Help'
 import Layout from './components/Layout'
@@ -218,6 +219,13 @@ function AppRoutes() {
         <AdminRoute>
           <Layout>
             <AdminRecordings />
+          </Layout>
+        </AdminRoute>
+      } />
+      <Route path="/admin/network-activity" element={
+        <AdminRoute>
+          <Layout>
+            <AdminNetworkActivity />
           </Layout>
         </AdminRoute>
       } />
