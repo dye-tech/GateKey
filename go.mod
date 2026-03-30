@@ -5,13 +5,13 @@ go 1.25.0
 require (
 	github.com/coreos/go-oidc/v3 v3.17.0
 	github.com/crewjam/saml v0.5.1
-	github.com/gin-contrib/cors v1.7.6
+	github.com/gin-contrib/cors v1.7.7
 	github.com/gin-gonic/gin v1.12.0
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/google/nftables v0.3.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
-	github.com/jackc/pgx/v5 v5.8.0
+	github.com/jackc/pgx/v5 v5.9.1
 	github.com/miekg/dns v1.1.72
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
