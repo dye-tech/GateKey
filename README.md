@@ -2,8 +2,11 @@
   <img src="docs/logo.png" alt="GateKey" width="400">
 </p>
 
+<h3 align="center">Zero Trust VPN &mdash; Authenticate First, Connect Second</h3>
+
 <p align="center">
-  <strong>Zero Trust VPN - Authenticate First, Connect Second</strong>
+  Wrap OpenVPN and WireGuard with SSO, short-lived certificates, and per-user firewall rules.<br>
+  No passwords to remember. No certificates to manage. Just <code>gatekey login</code> and <code>gatekey connect</code>.
 </p>
 
 <p align="center">
@@ -16,245 +19,176 @@
 </p>
 
 <p align="center">
-  <a href="#for-end-users">End Users</a> •
-  <a href="#for-administrators">Administrators</a> •
-  <a href="#how-it-works">How It Works</a> •
-  <a href="https://github.com/dye-tech/gatekey-helm-chart">Helm Chart</a>
+  <a href="https://gatekey.net/docs/getting-started/quickstart"><strong>Documentation</strong></a> &nbsp;&bull;&nbsp;
+  <a href="https://gatekey.net/docs/getting-started/quickstart"><strong>Quick Start</strong></a> &nbsp;&bull;&nbsp;
+  <a href="https://github.com/dye-tech/gatekey-helm-chart"><strong>Helm Chart</strong></a> &nbsp;&bull;&nbsp;
+  <a href="https://gatekey.net/docs/api/overview"><strong>API Reference</strong></a>
 </p>
 
 ---
 
-## What is GateKey?
-
-GateKey is a **zero-trust VPN solution** that wraps OpenVPN and WireGuard. Users authenticate via their company's identity provider (Okta, Azure AD, Google Workspace, etc.) and get short-lived VPN credentials automatically.
-
-**No passwords to remember. No certificates to manage. Just SSO and connect.**
-
-### Key Features
-
-- **Dual Protocol Support** - OpenVPN and WireGuard gateways with the same zero-trust model
-- **SSO Authentication** - Integrate with Okta, Azure AD, Google, or any OIDC/SAML provider
-- **Short-Lived Credentials** - VPN certificates auto-expire (24 hours default), no manual rotation
-- **Per-User Firewall Rules** - Each user gets individualized network access based on their role
-- **Multi-Gateway** - Connect to multiple VPN gateways simultaneously
-- **Mesh Networking** - Hub-and-spoke topology for site-to-site connectivity
-- **Mobile Support** - Android and iOS apps with WireGuard integration
+<p align="center">
+  <img src="docs/diagrams/terminal-demo.svg" alt="GateKey CLI Demo" width="720">
+</p>
 
 ---
 
-## Table of Contents
+## Why GateKey?
 
-- [For End Users](#for-end-users)
-  - [Prerequisites](#prerequisites)
-  - [Install the Client](#install-the-client)
-  - [Connect to VPN](#connect-to-vpn)
-  - [Client Commands](#client-commands)
-- [For Administrators](#for-administrators)
-  - [Architecture Overview](#architecture-overview)
-  - [Server Setup](#server-setup)
-  - [Web UI Setup](#web-ui-setup)
-  - [Gateway Setup](#gateway-setup)
-  - [Admin CLI Setup](#admin-cli-setup)
-  - [Configuration](#configuration)
-- [How It Works](#how-it-works)
-- [Components Reference](#components-reference)
-- [API Reference](#api-reference)
-- [Security Features](#security-features)
-- [Development](#development)
-- [Additional Documentation](#additional-documentation)
-- [License](#license)
+Traditional VPNs weren't built for zero trust. GateKey fixes that.
+
+| | Traditional VPN | GateKey |
+|---|---|---|
+| **Certificates** | Long-lived (years), manually rotated | Short-lived (24h), auto-rotating |
+| **Authentication** | Separate VPN passwords | SSO via Okta, Azure AD, Google, any OIDC/SAML |
+| **Network access** | Full network after connect | Per-user firewall rules (least privilege) |
+| **Access control** | Static, IP-based | Dynamic, identity-based, role-aware |
+| **Certificate management** | Manual provisioning & revocation | Fully automatic with embedded CA |
+| **Protocol support** | Pick one | OpenVPN + WireGuard, same security model |
 
 ---
 
-# For End Users
+## Features
 
-This section is for employees who need to connect to your company's VPN.
+<table>
+<tr>
+<td width="33%" valign="top">
 
-## Prerequisites
+### Zero Trust Security
+Every connection is authenticated. Short-lived certificates auto-expire, and per-user nftables rules enforce least-privilege access at the network layer.
 
-You need a VPN client installed on your machine. GateKey supports both OpenVPN and WireGuard:
+</td>
+<td width="33%" valign="top">
 
-### OpenVPN Client
+### SSO Integration
+Okta, Azure AD, Google Workspace, or any OIDC/SAML provider. No separate VPN passwords &mdash; users authenticate with existing credentials.
 
-| Platform | Installation |
-|----------|--------------|
-| macOS | `brew install openvpn` |
-| Ubuntu/Debian | `sudo apt install openvpn` |
-| Fedora | `sudo dnf install openvpn` |
-| Windows | [Download OpenVPN Connect](https://openvpn.net/client/) |
+</td>
+<td width="33%" valign="top">
 
-### WireGuard Client (Alternative)
+### Dual Protocol
+Choose OpenVPN for maximum compatibility (FIPS 140-3) or WireGuard for peak performance. Both use the same zero-trust model.
 
-| Platform | Installation |
-|----------|--------------|
-| macOS | [WireGuard App Store](https://apps.apple.com/us/app/wireguard/id1451685025) |
-| Ubuntu/Debian | `sudo apt install wireguard-tools` |
-| Fedora | `sudo dnf install wireguard-tools` |
-| Windows | [Download WireGuard](https://www.wireguard.com/install/) |
-| iOS | [WireGuard App Store](https://apps.apple.com/us/app/wireguard/id1441195209) |
-| Android | [WireGuard Play Store](https://play.google.com/store/apps/details?id=com.wireguard.android) |
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
 
-## Install the Client
+### Multi-Gateway
+Connect to multiple VPN gateways simultaneously. Automatic interface management &mdash; access resources across networks without reconnecting.
 
-### macOS / Linux (Homebrew)
+</td>
+<td width="33%" valign="top">
+
+### Mesh Networking
+Hub-and-spoke topology for site-to-site connectivity. Connect remote offices through a central mesh hub with zero-trust controls.
+
+</td>
+<td width="33%" valign="top">
+
+### Kubernetes Native
+Deploy with Helm in minutes. Native secret storage, horizontal scaling, and seamless integration with your existing K8s infrastructure.
+
+</td>
+</tr>
+</table>
+
+---
+
+## Quick Start
+
+### Install
 
 ```bash
-brew tap dye-tech/gatekey
-brew install gatekey
+brew tap dye-tech/gatekey && brew install gatekey
 ```
 
-### Download Binary
+<details>
+<summary>Other installation methods</summary>
 
-Download the latest release for your platform from [GitHub Releases](https://github.com/dye-tech/GateKey/releases).
-
+**Download binary:**
 ```bash
 # Linux (amd64)
 curl -LO https://github.com/dye-tech/GateKey/releases/latest/download/gatekey-linux-amd64.tar.gz
-tar -xzf gatekey-linux-amd64.tar.gz
-sudo mv gatekey /usr/local/bin/
+tar -xzf gatekey-linux-amd64.tar.gz && sudo mv gatekey /usr/local/bin/
 
 # macOS (Apple Silicon)
 curl -LO https://github.com/dye-tech/GateKey/releases/latest/download/gatekey-darwin-arm64.tar.gz
-tar -xzf gatekey-darwin-arm64.tar.gz
-sudo mv gatekey /usr/local/bin/
+tar -xzf gatekey-darwin-arm64.tar.gz && sudo mv gatekey /usr/local/bin/
 ```
 
-### Build from Source
-
+**Build from source:**
 ```bash
-git clone https://github.com/dye-tech/GateKey.git
-cd GateKey
-make build-gatekey
-sudo cp bin/gatekey /usr/local/bin/
+git clone https://github.com/dye-tech/GateKey.git && cd GateKey
+make build-gatekey && sudo cp bin/gatekey /usr/local/bin/
 ```
 
-## Connect to VPN
+</details>
 
-### Step 1: Configure Your Server
-
-Run this once to point the client at your company's GateKey server:
+### Connect
 
 ```bash
+# 1. Point at your company's GateKey server
 gatekey config init --server https://vpn.yourcompany.com
-```
 
-### Step 2: Login
-
-Authenticate with your company credentials:
-
-```bash
+# 2. Authenticate via SSO (opens browser)
 gatekey login
-```
 
-This opens your browser for SSO login (Okta, Azure AD, Google, etc.).
-
-**For headless/automated environments**, use an API key:
-
-```bash
-gatekey login --api-key gk_your_api_key_here
-```
-
-### Step 3: Connect
-
-```bash
+# 3. Connect
 gatekey connect
 ```
 
-That's it! You're connected.
+That's it. Your credentials auto-refresh &mdash; no certificate management needed.
 
-## Client Commands
+### CLI Reference
 
 | Command | Description |
 |---------|-------------|
 | `gatekey login` | Authenticate with SSO or API key |
-| `gatekey connect` | Connect to VPN |
-| `gatekey disconnect` | Disconnect from VPN |
+| `gatekey connect [gateway]` | Connect to VPN (optionally specify gateway) |
+| `gatekey disconnect [--all]` | Disconnect from VPN |
 | `gatekey status` | Check connection status |
 | `gatekey list` | List available gateways |
-| `gatekey logout` | Clear saved session |
 | `gatekey config init` | Configure server URL |
 
-### Multi-Gateway Support
-
-Connect to multiple gateways simultaneously:
-
+**Multi-gateway example:**
 ```bash
 gatekey connect us-east-1    # Connect to first gateway
-gatekey connect eu-west-1    # Connect to second gateway
-gatekey status               # Shows all connections
-gatekey disconnect us-east-1 # Disconnect from specific gateway
-gatekey disconnect --all     # Disconnect from all
+gatekey connect eu-west-1    # Connect to second simultaneously
+gatekey status               # Shows all active connections
 ```
-
-### Alternative: Web UI
-
-If you prefer not to use the CLI:
-
-1. Go to `https://vpn.yourcompany.com` in your browser
-2. Login with your company credentials
-3. Click "Download Config"
-4. Import the `.ovpn` file into your OpenVPN client
 
 ---
 
-# For Administrators
+## Architecture
 
-This section is for IT administrators setting up GateKey infrastructure.
+<p align="center">
+  <img src="docs/diagrams/readme-architecture.svg" alt="GateKey Architecture" width="800">
+</p>
 
-## Architecture Overview
+**Control Plane** &mdash; Handles authentication, certificate generation, and policy management. Deploys as a single Go binary + PostgreSQL.
 
-![Architecture Overview](docs/diagrams/readme-architecture.svg)
+**Gateway Agents** &mdash; Lightweight agents on each VPN node that sync firewall rules and manage VPN tunnels. Available for both OpenVPN and WireGuard.
 
-## Server Setup
+**Per-Identity Firewall** &mdash; Each connected user gets individualized nftables rules based on their role and group membership. Rules update in real-time when policies change.
 
-The GateKey server is the control plane that handles authentication, certificate generation, and policy management.
+---
 
-### Prerequisites
+## Deploy
 
-- PostgreSQL 16+
-- Go 1.25+ (if building from source)
-
-### Option 1: Kubernetes (Recommended)
+### Kubernetes (Recommended)
 
 ```bash
-# Add the Helm repository
 helm repo add gatekey https://dye-tech.github.io/gatekey-helm-chart
 helm repo update
-
-# Install with default settings
 helm install gatekey gatekey/gatekey -n gatekey --create-namespace
-
-# Or install with custom admin password
-helm install gatekey gatekey/gatekey -n gatekey --create-namespace \
-  --set secrets.adminPassword="your-secure-password"
 ```
 
-Retrieve the auto-generated admin password:
+See [gatekey-helm-chart](https://github.com/dye-tech/gatekey-helm-chart) for configuration options.
 
-```bash
-kubectl get secret gatekey-admin-password -n gatekey -o jsonpath='{.data.admin-password}' | base64 -d
-```
-
-See [gatekey-helm-chart](https://github.com/dye-tech/gatekey-helm-chart) for all configuration options.
-
-### Option 2: Docker
-
-```bash
-docker run -d \
-  --name gatekey-server \
-  -p 8080:8080 \
-  -e DATABASE_URL="postgres://gatekey:password@host.docker.internal/gatekey?sslmode=disable" \
-  -e GATEKEY_ADMIN_PASSWORD="your-secure-password" \
-  dyetech/gatekey-server:latest
-```
-
-### Option 3: Docker Compose
-
-Create a `docker-compose.yml`:
+### Docker Compose
 
 ```yaml
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -267,441 +201,113 @@ services:
 
   gatekey-server:
     image: dyetech/gatekey-server:latest
-    ports:
-      - "8080:8080"
+    ports: ["8080:8080"]
     environment:
       DATABASE_URL: postgres://gatekey:password@postgres/gatekey?sslmode=disable
       GATEKEY_ADMIN_PASSWORD: your-secure-password
-    depends_on:
-      - postgres
+    depends_on: [postgres]
 
   gatekey-web:
     image: dyetech/gatekey-web:latest
-    ports:
-      - "80:8080"
-    depends_on:
-      - gatekey-server
+    ports: ["80:8080"]
+    depends_on: [gatekey-server]
 
 volumes:
   postgres_data:
 ```
 
-Run:
-
 ```bash
 docker-compose up -d
 ```
 
-### Option 4: Build from Source
+<details>
+<summary>More deployment options</summary>
 
+**Docker (server only):**
 ```bash
-# Clone
-git clone https://github.com/dye-tech/GateKey.git
-cd GateKey
+docker run -d --name gatekey-server -p 8080:8080 \
+  -e DATABASE_URL="postgres://gatekey:password@host.docker.internal/gatekey?sslmode=disable" \
+  -e GATEKEY_ADMIN_PASSWORD="your-secure-password" \
+  dyetech/gatekey-server:latest
+```
 
-# Build server
+**Build from source:**
+```bash
+git clone https://github.com/dye-tech/GateKey.git && cd GateKey
 make build-gatekey-server
-
-# Setup database
 export DATABASE_URL="postgres://gatekey:password@localhost/gatekey?sslmode=disable"
 make migrate-up
-
-# Configure
-cp configs/gatekey.yaml.example configs/gatekey.yaml
-# Edit configs/gatekey.yaml with your settings
-
-# Run
 ./bin/gatekey-server --config configs/gatekey.yaml
 ```
 
----
+</details>
 
-## Web UI Setup
-
-The Web UI provides a browser-based interface for users to download VPN configs and for admins to manage the system.
-
-### Option 1: Docker (Standalone)
-
-```bash
-docker run -d \
-  --name gatekey-web \
-  -p 80:8080 \
-  dyetech/gatekey-web:latest
-```
-
-**Note:** Configure your reverse proxy to route `/api` requests to the gatekey-server.
-
-### Option 2: Nginx Reverse Proxy
-
-If running the server and web UI separately, use nginx to proxy API requests:
-
-```nginx
-server {
-    listen 80;
-    server_name vpn.yourcompany.com;
-
-    # Web UI
-    location / {
-        proxy_pass http://gatekey-web:8080;
-    }
-
-    # API requests to server
-    location /api {
-        proxy_pass http://gatekey-server:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
-
-### Option 3: Build from Source
-
-```bash
-cd GateKey
-
-# Install frontend dependencies
-cd web && npm install
-
-# Build frontend
-npm run build
-cd ..
-
-# The built files are in web/dist/
-# Serve with any static file server or nginx
-```
+> For gateway setup, identity provider configuration, and admin CLI usage, see the [full documentation](https://gatekey.net/docs/getting-started/quickstart).
 
 ---
 
-## Gateway Setup
+## Security
 
-GateKey supports both OpenVPN and WireGuard gateways. Choose based on your requirements:
+GateKey implements a zero-trust model where **all traffic is denied by default**. Users access only the resources explicitly permitted by their access rules.
 
-| Protocol | Best For | Performance | Compatibility |
-|----------|----------|-------------|---------------|
-| **OpenVPN** | Maximum compatibility, complex firewall rules | Good | All platforms |
-| **WireGuard** | Performance, mobile devices, modern deployments | Excellent | Linux, macOS, Windows, iOS, Android |
-
-### Prerequisites
-
-- Linux server with root access
-- nftables (for firewall rules)
-- **OpenVPN Gateway**: OpenVPN 2.5+
-- **WireGuard Gateway**: WireGuard kernel module or wireguard-go
-
-### Option 1: Install Script (Recommended)
-
-```bash
-curl -sSL https://vpn.yourcompany.com/scripts/install-gateway.sh | sudo bash
-```
-
-This script:
-- Downloads the gateway binary
-- Installs OpenVPN if not present
-- Configures the gateway service
-- Sets up firewall rules
-
-### Option 2: Manual Installation
-
-```bash
-# Download gateway binary
-curl -LO https://vpn.yourcompany.com/downloads/gatekey-gateway-linux-amd64
-chmod +x gatekey-gateway-linux-amd64
-sudo mv gatekey-gateway-linux-amd64 /usr/local/bin/gatekey-gateway
-
-# Create config directory
-sudo mkdir -p /etc/gatekey
-
-# Create config file
-sudo cat > /etc/gatekey/gateway.yaml << EOF
-server_url: https://vpn.yourcompany.com
-gateway_token: your-gateway-registration-token
-openvpn_config: /etc/openvpn/server.conf
-EOF
-
-# Create systemd service
-sudo cat > /etc/systemd/system/gatekey-gateway.service << EOF
-[Unit]
-Description=GateKey Gateway Agent
-After=network.target openvpn.service
-
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/gatekey-gateway --config /etc/gatekey/gateway.yaml
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Start service
-sudo systemctl daemon-reload
-sudo systemctl enable gatekey-gateway
-sudo systemctl start gatekey-gateway
-```
-
-### Option 3: Build from Source
-
-```bash
-cd GateKey
-make build-gatekey-gateway
-sudo cp bin/gatekey-gateway /usr/local/bin/
-```
-
-### WireGuard Gateway Setup
-
-For WireGuard gateways, use the WireGuard-specific agent:
-
-```bash
-# Download WireGuard gateway binary
-curl -LO https://vpn.yourcompany.com/downloads/gatekey-wireguard-gateway-linux-amd64
-chmod +x gatekey-wireguard-gateway-linux-amd64
-sudo mv gatekey-wireguard-gateway-linux-amd64 /usr/local/bin/gatekey-wireguard-gateway
-
-# Create config
-sudo mkdir -p /etc/gatekey
-sudo cat > /etc/gatekey/wireguard-gateway.yaml << EOF
-server_url: https://vpn.yourcompany.com
-gateway_token: your-gateway-registration-token
-interface_name: wg0
-listen_port: 51820
-EOF
-
-# Create systemd service
-sudo cat > /etc/systemd/system/gatekey-wireguard-gateway.service << EOF
-[Unit]
-Description=GateKey WireGuard Gateway Agent
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/gatekey-wireguard-gateway --config /etc/gatekey/wireguard-gateway.yaml
-Restart=always
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Start service
-sudo systemctl daemon-reload
-sudo systemctl enable gatekey-wireguard-gateway
-sudo systemctl start gatekey-wireguard-gateway
-```
-
-Or build from source:
-
-```bash
-cd GateKey
-make build-gatekey-wireguard-gateway
-sudo cp bin/gatekey-wireguard-gateway /usr/local/bin/
-```
+- **Short-lived certificates** &mdash; Auto-expire after 24 hours (configurable)
+- **Per-identity firewall** &mdash; Individualized nftables rules per connected user
+- **Embedded CA** &mdash; No external PKI infrastructure needed
+- **FIPS 140-3 compliance** &mdash; Available with OpenVPN crypto profiles
+- **Audit logging** &mdash; All authentication and access events logged
+- **Geo-fencing** &mdash; IP-based access restrictions
+- **JIT access** &mdash; Temporary, approval-based resource access with auto-revocation
+- **Session recording** &mdash; Terminal recording and proxy logging
 
 ---
 
-## Admin CLI Setup
+## Components
 
-The Admin CLI (`gatekey-admin`) allows administrators to manage users, policies, and gateways from the command line.
+| Binary | Description |
+|--------|-------------|
+| `gatekey` | VPN client CLI |
+| `gatekey-server` | Control plane (API + embedded CA) |
+| `gatekey-gateway` | OpenVPN gateway agent |
+| `gatekey-wireguard-gateway` | WireGuard gateway agent |
+| `gatekey-admin` | Admin CLI for policy management |
+| `gatekey-hub` / `gatekey-wireguard-hub` | Mesh hub (OpenVPN / WireGuard) |
+| `gatekey-mesh-gateway` / `gatekey-wireguard-mesh-gateway` | Mesh spoke (OpenVPN / WireGuard) |
 
-### Installation
-
-#### Download Binary
-
-```bash
-# Linux
-curl -LO https://vpn.yourcompany.com/downloads/gatekey-admin-linux-amd64
-chmod +x gatekey-admin-linux-amd64
-sudo mv gatekey-admin-linux-amd64 /usr/local/bin/gatekey-admin
-
-# macOS
-curl -LO https://vpn.yourcompany.com/downloads/gatekey-admin-darwin-arm64
-chmod +x gatekey-admin-darwin-arm64
-sudo mv gatekey-admin-darwin-arm64 /usr/local/bin/gatekey-admin
-```
-
-#### Build from Source
-
-```bash
-cd GateKey
-make build-gatekey-admin
-sudo cp bin/gatekey-admin /usr/local/bin/
-```
-
-### Usage
-
-```bash
-# Login as admin
-gatekey-admin login --server https://vpn.yourcompany.com
-
-# List users
-gatekey-admin users list
-
-# Create API key for a user
-gatekey-admin api-keys create --user user@example.com --name "CI/CD Key"
-
-# List gateways
-gatekey-admin gateways list
-
-# Manage access rules
-gatekey-admin rules list
-gatekey-admin rules create --name "Engineering" --cidr "10.0.0.0/8"
-```
+**Docker images:** [`dyetech/gatekey-server`](https://hub.docker.com/r/dyetech/gatekey-server) &bull; [`dyetech/gatekey-web`](https://hub.docker.com/r/dyetech/gatekey-web) &bull; [`dyetech/gatekey-gateway`](https://hub.docker.com/r/dyetech/gatekey-gateway) &bull; [`dyetech/gatekey-wireguard-gateway`](https://hub.docker.com/r/dyetech/gatekey-wireguard-gateway)
 
 ---
 
-## Configuration
+## Development
 
-### OIDC Provider Setup
-
-Configure your identity provider in `configs/gatekey.yaml`:
-
-```yaml
-auth:
-  oidc:
-    enabled: true
-    providers:
-      - name: "okta"
-        display_name: "Company SSO"
-        issuer: "https://yourcompany.okta.com"
-        client_id: "your-client-id"
-        client_secret: "your-client-secret"
-        redirect_url: "https://vpn.yourcompany.com/api/v1/auth/oidc/callback"
-        scopes: ["openid", "profile", "email", "groups"]
+```bash
+make dev          # Run server in dev mode
+make test         # Run tests
+make lint         # Run linter
+make frontend-dev # Run frontend dev server
+make build        # Build all binaries
 ```
 
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | Required |
-| `GATEKEY_ADMIN_PASSWORD` | Initial admin password | Auto-generated |
-| `GATEKEY_JWT_SECRET` | JWT signing secret | Auto-generated |
-| `GATEKEY_CA_VALIDITY_DAYS` | CA certificate validity | 3650 |
-| `GATEKEY_CERT_VALIDITY_HOURS` | Client cert validity | 24 |
-
-### Network and Access Rules
-
-Use the admin UI or API to:
-- Define **Networks** (CIDR blocks like `10.0.0.0/8`)
-- Create **Access Rules** (IP/hostname whitelists)
-- Assign rules to users or groups
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
 
 ---
 
-# How It Works
+## Documentation
 
-1. **`gatekey login`** - Opens your browser to authenticate with your company's SSO (Okta, Azure AD, etc.)
-2. **`gatekey connect`** - Downloads a short-lived VPN config (valid ~24 hours) and connects via OpenVPN or WireGuard
-3. Your firewall rules are automatically applied based on your role/group membership
-4. Configs auto-refresh, so you never deal with expired certificates
+Full documentation is available at **[gatekey.net](https://gatekey.net)**
 
-![Connection Flow](docs/diagrams/connection-flow.svg)
-
----
-
-# Components Reference
-
-## Binaries
-
-| Binary | Description | Who Uses It |
-|--------|-------------|-------------|
-| `gatekey` | VPN client CLI | End users |
-| `gatekey-server` | Control plane server | Administrators |
-| `gatekey-gateway` | OpenVPN gateway agent | Gateway servers |
-| `gatekey-wireguard-gateway` | WireGuard gateway agent | Gateway servers |
-| `gatekey-admin` | Admin CLI for policy management | Administrators |
-| `gatekey-hub` | OpenVPN mesh hub | Mesh deployments |
-| `gatekey-mesh-gateway` | OpenVPN mesh spoke | Mesh deployments |
-| `gatekey-wireguard-hub` | WireGuard mesh hub | Mesh deployments |
-| `gatekey-wireguard-mesh-gateway` | WireGuard mesh spoke | Mesh deployments |
-
-## Docker Images
-
-| Image | Description |
+| Guide | Description |
 |-------|-------------|
-| [`dyetech/gatekey-server`](https://hub.docker.com/r/dyetech/gatekey-server) | Control plane (API + embedded CA) |
-| [`dyetech/gatekey-web`](https://hub.docker.com/r/dyetech/gatekey-web) | Web UI (nginx + React) |
-| [`dyetech/gatekey-gateway`](https://hub.docker.com/r/dyetech/gatekey-gateway) | OpenVPN gateway agent |
-| [`dyetech/gatekey-hub`](https://hub.docker.com/r/dyetech/gatekey-hub) | OpenVPN mesh hub |
-| [`dyetech/gatekey-mesh-gateway`](https://hub.docker.com/r/dyetech/gatekey-mesh-gateway) | OpenVPN mesh spoke |
-| [`dyetech/gatekey-wireguard-gateway`](https://hub.docker.com/r/dyetech/gatekey-wireguard-gateway) | WireGuard gateway agent |
-| [`dyetech/gatekey-wireguard-hub`](https://hub.docker.com/r/dyetech/gatekey-wireguard-hub) | WireGuard mesh hub |
-| [`dyetech/gatekey-wireguard-mesh-gateway`](https://hub.docker.com/r/dyetech/gatekey-wireguard-mesh-gateway) | WireGuard mesh spoke |
+| [Quick Start](https://gatekey.net/docs/getting-started/quickstart) | Get connected in 5 minutes |
+| [Server Setup](https://gatekey.net/docs/admin-guide/server-setup) | Deploy the control plane |
+| [Gateway Setup](https://gatekey.net/docs/admin-guide/gateway-setup) | Configure VPN gateways |
+| [Identity Providers](https://gatekey.net/docs/admin-guide/identity-providers) | SSO configuration (OIDC/SAML) |
+| [Access Control](https://gatekey.net/docs/admin-guide/access-control) | Firewall rules and policies |
+| [Mesh Networking](https://gatekey.net/docs/user-guide/mesh-networking) | Site-to-site connectivity |
+| [API Reference](https://gatekey.net/docs/api/overview) | REST API documentation |
+| [Architecture](https://gatekey.net/docs/architecture/overview) | System design and components |
 
 ---
 
-# Documentation
+## License
 
-| Document | Description |
-|----------|-------------|
-| [docs/api.md](docs/api.md) | REST API reference |
-| [docs/wireguard.md](docs/wireguard.md) | WireGuard VPN setup and configuration |
-| [docs/mesh-networking.md](docs/mesh-networking.md) | Hub-and-spoke mesh networking |
-| [docs/security.md](docs/security.md) | Security model and best practices |
-| [docs/architecture.md](docs/architecture.md) | System architecture overview |
-
-# API Reference
-
-See [docs/api.md](docs/api.md) for full API documentation.
-
-### Key Endpoints
-
-| Endpoint | Description |
-|----------|-------------|
-| `POST /api/v1/auth/oidc/login` | Initiate SSO login |
-| `GET /api/v1/auth/api-key/validate` | Validate API key |
-| `POST /api/v1/configs/generate` | Generate VPN config |
-| `GET /api/v1/gateways` | List available gateways |
-| `GET /api/v1/api-keys` | Manage API keys |
-| `GET /api/v1/admin/networks` | Manage networks |
-| `GET /api/v1/admin/access-rules` | Manage access rules |
-| `GET /api/v1/admin/login-logs` | View login activity |
-
----
-
-# Security Features
-
-GateKey implements a **Zero Trust** security model where all traffic is denied by default. Users can only access resources explicitly permitted by their access rules.
-
-![Permission Flow](docs/diagrams/permission-flow.svg)
-
-- **Zero Trust**: No network access without authentication
-- **Short-Lived Certificates**: Auto-expire after 24 hours (configurable)
-- **Per-Identity Firewall**: Each user gets their own firewall rules (nftables)
-- **Dual Protocol Support**: OpenVPN and WireGuard gateways with same security model
-- **API Key Authentication**: Programmatic access for CLI and automation
-- **FIPS Compliance**: Built with FIPS-validated crypto (when enabled)
-- **Audit Logging**: All access is logged
-- **Login Monitoring**: Track all authentication events with IP, location, and status
-- **Geo-Fencing**: IP-based access restrictions using whitelist model
-
----
-
-# Development
-
-```bash
-make dev                            # Run server in dev mode
-make test                           # Run tests
-make lint                           # Run linter
-make frontend-dev                   # Run frontend in dev mode
-make build                          # Build all binaries
-make build-gatekey                  # Build gatekey (VPN client CLI)
-make build-gatekey-server           # Build gatekey-server (control plane)
-make build-gatekey-gateway          # Build gatekey-gateway (OpenVPN gateway)
-make build-gatekey-wireguard-gateway # Build gatekey-wireguard-gateway
-make build-gatekey-admin            # Build gatekey-admin (admin CLI)
-make build-gatekey-hub              # Build gatekey-hub (OpenVPN mesh hub)
-make build-gatekey-mesh-gateway     # Build gatekey-mesh-gateway (mesh spoke)
-```
-
----
-
-# Additional Documentation
-
-Visit our documentation website at <https://gatekey.net>
-
----
-
-
-# License
-
-Apache 2.0
+[Apache 2.0](LICENSE)
