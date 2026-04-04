@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 620">
+  <defs>
+    <linearGradient id="termBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e1e2e;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#181825;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="titleBarGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#313244;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#2a2a3c;stop-opacity:1"/>
+    </linearGradient>
+    <filter id="termShadow" x="-5%" y="-3%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#000000" flood-opacity="0.5"/>
+    </filter>
+    <clipPath id="termClip">
+      <rect x="10" y="10" width="800" height="600" rx="12"/>
+    </clipPath>
+  </defs>
+
+  <!-- Terminal Window -->
+  <g filter="url(#termShadow)">
+    <rect x="10" y="10" width="800" height="600" rx="12" fill="url(#termBg)" stroke="#45475a" stroke-width="1.5"/>
+
+    <!-- Title Bar -->
+    <rect x="10" y="10" width="800" height="40" rx="12" fill="url(#titleBarGrad)" clip-path="url(#termClip)"/>
+    <rect x="10" y="38" width="800" height="12" fill="url(#titleBarGrad)"/>
+
+    <!-- Traffic Light Buttons -->
+    <circle cx="38" cy="30" r="7" fill="#f38ba8"/>
+    <circle cx="60" cy="30" r="7" fill="#f9e2af"/>
+    <circle cx="82" cy="30" r="7" fill="#a6e3a1"/>
+
+    <!-- Title -->
+    <text x="410" y="35" text-anchor="middle" fill="#a6adc8" font-family="SF Mono, Menlo, Monaco, Consolas, monospace" font-size="13">Terminal</text>
+  </g>
+
+  <!-- Terminal Content -->
+  <g font-family="SF Mono, Menlo, Monaco, Consolas, Liberation Mono, monospace" font-size="13.5">
+
+    <!-- Line 1: gatekey login -->
+    <text x="30" y="80">
+      <tspan fill="#89b4fa" font-weight="bold">jesse</tspan>
+      <tspan fill="#a6adc8"> ~ </tspan>
+      <tspan fill="#a6e3a1">&#x27A4; </tspan>
+      <tspan fill="#cdd6f4">gatekey login</tspan>
+    </text>
+
+    <!-- Line 2-4: Login output -->
+    <text x="30" y="104" fill="#bac2de">Authenticating with GateKey server...</text>
+    <text x="30" y="128" fill="#bac2de">Opening browser for authentication...</text>
+    <text x="30" y="152" fill="#bac2de">Waiting for authentication...</text>
+
+    <!-- Line 5: Success -->
+    <text x="30" y="176" fill="#a6e3a1" font-weight="bold">Authentication successful!</text>
+
+    <!-- Line 6: Logged in -->
+    <text x="30" y="200" fill="#bac2de">Logged in as: jesse@example.com</text>
+
+    <!-- Line 7: gatekey list -->
+    <text x="30" y="236">
+      <tspan fill="#89b4fa" font-weight="bold">jesse</tspan>
+      <tspan fill="#a6adc8"> ~ </tspan>
+      <tspan fill="#a6e3a1">&#x27A4; </tspan>
+      <tspan fill="#cdd6f4">gatekey list</tspan>
+    </text>
+
+    <!-- Line 8-9: List header -->
+    <text x="30" y="260" fill="#bac2de">Available Gateways:</text>
+    <text x="30" y="284" fill="#585b70">-------------------</text>
+
+    <!-- Line 10-12: Gateway 1 -->
+    <text x="30" y="308">
+      <tspan fill="#a6e3a1">&#x2713; </tspan>
+      <tspan fill="#a6e3a1" font-weight="bold">gateway</tspan>
+      <tspan fill="#a6adc8"> [openvpn]</tspan>
+    </text>
+    <text x="50" y="332" fill="#bac2de">Public IP:   203.0.113.45</text>
+    <text x="50" y="356">
+      <tspan fill="#bac2de">Status:      </tspan>
+      <tspan fill="#a6e3a1">online</tspan>
+    </text>
+
+    <!-- Line 13-15: Gateway 2 -->
+    <text x="30" y="392">
+      <tspan fill="#a6e3a1">&#x2713; </tspan>
+      <tspan fill="#a6e3a1" font-weight="bold">hub</tspan>
+      <tspan fill="#a6adc8"> [wireguard-mesh]</tspan>
+    </text>
+    <text x="50" y="416" fill="#bac2de">Public IP:   198.51.100.22</text>
+    <text x="50" y="440">
+      <tspan fill="#bac2de">Status:      </tspan>
+      <tspan fill="#a6e3a1">online</tspan>
+    </text>
+
+    <!-- Line 16: gatekey connect -->
+    <text x="30" y="476">
+      <tspan fill="#89b4fa" font-weight="bold">jesse</tspan>
+      <tspan fill="#a6adc8"> ~ </tspan>
+      <tspan fill="#a6e3a1">&#x27A4; </tspan>
+      <tspan fill="#cdd6f4">gatekey connect hub</tspan>
+    </text>
+
+    <!-- Line 17-19: Connect output -->
+    <text x="30" y="500" fill="#bac2de">Connecting to WireGuard mesh hub...</text>
+    <text x="30" y="524" fill="#585b70">[#] ip link add dev wg0 type wireguard</text>
+    <text x="30" y="548" fill="#585b70">[#] ip -4 address add 172.30.0.4/32 dev wg0</text>
+    <text x="30" y="572" fill="#a6e3a1" font-weight="bold">Connected to mesh hub (Interface: wg0)</text>
+    <text x="30" y="596" fill="#bac2de">WireGuard mesh VPN connection established.</text>
+
+  </g>
+</svg>
