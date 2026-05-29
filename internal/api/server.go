@@ -1845,6 +1845,7 @@ func (s *Server) ensureCSRFCookie(c *gin.Context) {
 		// Set cookie with SameSite=Lax for CSRF protection
 		// HttpOnly=false because JavaScript needs to read the token for header inclusion
 		// Secure=true when TLS is enabled
+		//nolint:gosec // G124: HttpOnly is intentionally false for the CSRF double-submit pattern (JS must read the token); Secure tracks TLS and SameSite=Lax mitigates cross-site use.
 		cookie := &http.Cookie{
 			Name:     csrfCookieName,
 			Value:    token,
