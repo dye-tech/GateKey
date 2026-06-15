@@ -22,7 +22,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app-binary ./cmd/${BINARY}
 
 # Final image
-FROM alpine:3.23
+FROM alpine:3.24
 
 # Runtime dependencies vary by binary type:
 #   server:    ca-certificates tzdata
