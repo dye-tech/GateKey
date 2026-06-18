@@ -5,6 +5,40 @@ All notable changes to GateKey are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.1] - 2026-06-17
+
+### Changed
+- **Dependencies**: Bumped Go modules and web (npm) packages to their latest versions
+  - Go: `coreos/go-oidc/v3` 3.18.0→3.19.0, `jackc/pgx/v5` 5.9.2→5.10.0,
+    `golang.org/x/crypto` 0.52.0→0.53.0, Kubernetes libraries 0.36.1→0.36.2,
+    plus assorted indirect dependency updates (`go mod tidy`)
+  - Web: `axios` 1.16.1→1.18.0, `react`/`react-dom` 19.2.6→19.2.7,
+    `react-router-dom` 7.16.0→7.18.0, `vite` 8.0.14→8.0.16,
+    `tailwindcss`/`@tailwindcss/*` 4.3.0→4.3.1, `@types/react` 19.2.15→19.2.17
+  - Resolved npm audit advisories for `esbuild` and `form-data` (0 vulnerabilities)
+
+## [1.11.0] - 2026-05-30
+
+### Changed
+- Bumped Go toolchain to 1.26 and Kubernetes client libraries to 0.36.1
+
+## [1.10.0] - 2026-05-29
+
+### Changed
+- Routine dependency maintenance: Go modules, web (React/Vite) packages, Docker
+  base images, and CI actions updated to latest
+- Overhauled README as a project landing page
+
+## [1.9.0] - 2026-03-16
+
+### Added
+- **Split DNS**: Per-network DNS rules and static DNS records
+- **Built-in DNS resolver**: Wildcard records with import/export support
+- **CLI**: Automatic system DNS configuration on VPN connect/disconnect
+
+### Database
+- Migrations 054–055: DNS records and rules
+
 ## [1.8.0] - 2026-03-16
 
 ### Added
