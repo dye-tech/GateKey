@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -77,7 +77,7 @@ jobs:
             description: GateKey Zero-Trust VPN WireGuard Mesh Hub Server
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Get version from tag
         id: version
@@ -125,7 +125,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Get version from tag
         id: version
@@ -170,7 +170,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Get version from tag
         id: version
@@ -188,7 +188,7 @@ jobs:
           cd dist && sha256sum *.tar.gz > checksums.txt
 
       - name: Checkout Homebrew Tap
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: dye-tech/homebrew-gatekey
           path: homebrew-gatekey
@@ -220,7 +220,7 @@ jobs:
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Checkout Helm Chart
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: dye-tech/gatekey-helm-chart
           path: helm-chart
