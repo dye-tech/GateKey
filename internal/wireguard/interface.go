@@ -113,12 +113,20 @@ func (m *InterfaceManager) configureRouting(ctx context.Context) error {
 		return fmt.Errorf("failed to enable IP forwarding: %w", err)
 	}
 
-	// Disable reverse path filtering on the WireGuard interface
-	// rp_filter=1 (strict) drops packets where the source address would not be
-	// routed back via the same interface, which breaks VPN forwarding
-	rpFilterKey := fmt.Sprintf("net.ipv4.conf.%s.rp_filter=0", m.name)
-	if err := m.executor.Run(ctx, "sysctl", "-w", rpFilterKey); err != nil {
-		return fmt.Errorf("failed to disable rp_filter: %w", err)
+	// Disable reverse path filtering so asymmetrically-routed VPN traffic is
+	// not dropped. rp_filter=1 (strict) drops packets whose source address
+	// would not be routed back via the same interface, which breaks VPN
+	// forwarding. The kernel uses max(conf.all.rp_filter, conf.<iface>.rp_filter)
+	// as the effective value, so setting only the per-interface key is a no-op
+	// when conf.all is strict (the default on many distros) -- relax both.
+	rpFilterKeys := []string{
+		"net.ipv4.conf.all.rp_filter=0",
+		fmt.Sprintf("net.ipv4.conf.%s.rp_filter=0", m.name),
+	}
+	for _, key := range rpFilterKeys {
+		if err := m.executor.Run(ctx, "sysctl", "-w", key); err != nil {
+			return fmt.Errorf("failed to disable rp_filter (%s): %w", key, err)
+		}
 	}
 
 	// Add NAT masquerade for VPN traffic exiting to the LAN
@@ -132,9 +140,12 @@ func (m *InterfaceManager) configureRouting(ctx context.Context) error {
 				_, ipNet, err := net.ParseCIDR(m.config.Address)
 				if err == nil {
 					subnet := ipNet.String()
-					// Check if masquerade rule already exists before adding
+					// Check if masquerade rule already exists before adding.
+					// The check must use the exact same predicate as the add
+					// ("! -o <wg iface>", not "-o eth0"); otherwise it never
+					// matches and a duplicate rule is appended on every re-setup.
 					checkErr := m.executor.Run(ctx, "iptables", "-t", "nat", "-C", "POSTROUTING",
-						"-s", subnet, "-o", "eth0", "-j", "MASQUERADE")
+						"-s", subnet, "!", "-o", m.name, "-j", "MASQUERADE")
 					if checkErr != nil {
 						// Rule doesn't exist, add it
 						if err := m.executor.Run(ctx, "iptables", "-t", "nat", "-A", "POSTROUTING",
@@ -396,6 +407,17 @@ func (m *InterfaceManager) AddPeer(ctx context.Context, peer PeerConfig) error {
 
 // addRouteForAllowedIP adds a route for an AllowedIP if it's a network range
 func (m *InterfaceManager) addRouteForAllowedIP(ctx context.Context, allowedIP string) error {
+	// Never inject a default route into the main table here. A naive
+	// "ip route add 0.0.0.0/0 dev <wg iface>" clobbers the host's real default
+	// route and creates a routing loop -- the encrypted WireGuard packets to the
+	// peer's endpoint get matched by the default route and sent back into the
+	// tunnel, so the handshake never completes. Full-tunnel routing requires
+	// policy routing (fwmark + a dedicated table, the wg-quick approach) and is
+	// the gateway agent's responsibility, not this helper's.
+	if allowedIP == "0.0.0.0/0" || allowedIP == "::/0" {
+		return nil
+	}
+
 	// Skip single host addresses (/32 for IPv4, /128 for IPv6) that are in the VPN subnet
 	// These are typically peer tunnel IPs and don't need explicit routes
 	if strings.HasSuffix(allowedIP, "/32") || strings.HasSuffix(allowedIP, "/128") {
