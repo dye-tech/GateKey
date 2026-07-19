@@ -669,6 +669,15 @@ func setupInterface(ctx context.Context) error {
 		logger.Warn("Failed to setup NAT", zap.Error(err))
 	}
 
+	// Allow packets to be forwarded between the tunnel and local networks.
+	// Without this, hosts whose FORWARD policy is DROP (Docker installs one,
+	// and many cloud AMIs default to it) silently drop all wg0<->LAN traffic
+	// even though the tunnel is up, so clients can never reach the local
+	// networks this gateway serves.
+	if err := setupForwarding(ctx); err != nil {
+		logger.Warn("Failed to setup forwarding rules", zap.Error(err))
+	}
+
 	logger.Info("WireGuard interface setup complete",
 		zap.String("address", tunnelAddr),
 		zap.String("hub", hubEndpoint),
@@ -754,6 +763,67 @@ func setupNAT(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// setupForwarding installs FORWARD-chain accept rules so packets can traverse
+// between the WireGuard tunnel (interfaceName) and the local networks this
+// gateway serves.
+//
+// Unlike the other GateKey gateway binaries, the mesh gateway does not pull in
+// the policy-enforcing internal/firewall manager; it previously relied only on
+// masquerade plus the host's default FORWARD policy. On hosts where that policy
+// is DROP, forwarded VPN traffic is silently dropped and clients cannot reach
+// the local networks behind this gateway even though the tunnel is up. These
+// rules make forwarding explicit. IPv6 is best-effort.
+func setupForwarding(ctx context.Context) error {
+	if err := ensureForwardAccept(ctx, "iptables"); err != nil {
+		return err
+	}
+	// IPv6 forwarding is only meaningful when IPv6 networks are in play; a
+	// failure here (e.g. ip6tables absent) must not block IPv4 connectivity.
+	if err := ensureForwardAccept(ctx, "ip6tables"); err != nil {
+		logger.Debug("IPv6 forwarding rules not applied", zap.Error(err))
+	}
+	return nil
+}
+
+// ensureForwardAccept idempotently inserts ACCEPT rules for tunnel<->LAN
+// forwarding using the given iptables-compatible binary (iptables or ip6tables):
+//   - established/related return traffic
+//   - anything arriving on the WireGuard interface (tunnel -> local)
+//   - anything leaving on the WireGuard interface (local -> tunnel)
+//
+// Rules are inserted at the top of the FORWARD chain (-I FORWARD 1) so they take
+// effect regardless of an existing DROP policy or later drop rules, and are
+// checked with -C first so re-runs do not create duplicates.
+func ensureForwardAccept(ctx context.Context, ipt string) error {
+	rules := [][]string{
+		{"-m", "conntrack", "--ctstate", "RELATED,ESTABLISHED", "-j", "ACCEPT"},
+		{"-i", interfaceName, "-j", "ACCEPT"},
+		{"-o", interfaceName, "-j", "ACCEPT"},
+	}
+
+	var lastErr error
+	for _, rule := range rules {
+		// Skip if an identical rule already exists.
+		checkArgs := append([]string{"-C", "FORWARD"}, rule...)
+		if exec.CommandContext(ctx, ipt, checkArgs...).Run() == nil {
+			continue
+		}
+
+		insertArgs := append([]string{"-I", "FORWARD", "1"}, rule...)
+		if output, err := exec.CommandContext(ctx, ipt, insertArgs...).CombinedOutput(); err != nil {
+			// Keep going: the essential -i/-o wg rules must still be applied
+			// even if, say, the conntrack match is unavailable.
+			lastErr = fmt.Errorf("%s FORWARD %v: %s: %w", ipt, rule, strings.TrimSpace(string(output)), err)
+			logger.Debug("FORWARD accept rule failed", zap.String("cmd", ipt), zap.Strings("rule", rule), zap.Error(lastErr))
+			continue
+		}
+
+		logger.Info("Added FORWARD accept rule", zap.String("cmd", ipt), zap.Strings("rule", rule))
+	}
+
+	return lastErr
 }
 
 func setupNftablesNAT(ctx context.Context, vpnSubnet, outIface string) error {
