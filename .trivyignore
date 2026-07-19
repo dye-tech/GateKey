@@ -1,0 +1,10 @@
+# Trivy vulnerability ignore list.
+# Each entry MUST document why the finding is not applicable.
+
+# GO-2026-5932 — golang.org/x/crypto/openpgp is unmaintained/deprecated.
+# GateKey does not import the openpgp subpackage, so it is not compiled into any
+# binary (verified with `govulncheck ./...`, which reports it as NOT called).
+# Trivy matches it at the x/crypto module level regardless. There is no fixed
+# version (the package is deprecated, not patched). Re-evaluate if we ever add
+# an openpgp dependency.
+GO-2026-5932
