@@ -1,0 +1,42 @@
+# GateKey control-plane server image — Chainguard distroless.
+#
+# The server is a pure-Go, CGO-free binary whose only runtime needs are a CA
+# bundle and timezone data. That makes it a perfect fit for a distroless base:
+# no shell, no package manager, no busybox — a minimal attack surface and a
+# near-zero-CVE runtime, running as nonroot by default.
+#
+# The gateway/hub images stay on the alpine-based Dockerfile because they exec
+# openvpn / wg / nft / ip at runtime and therefore need OS packages.
+
+# Build stage
+FROM golang:1.26.5-alpine AS builder
+
+ARG BINARY=gatekey-server
+
+WORKDIR /app
+
+RUN apk add --no-cache git
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+# CGO_ENABLED=0 -> fully static binary (no libc), so it runs on a distroless
+# base. -tags timetzdata embeds the IANA tz database into the binary, removing
+# the runtime tzdata OS dependency. ca-certificates ship with the base image.
+RUN CGO_ENABLED=0 GOOS=linux go build -tags timetzdata -ldflags="-s -w" \
+    -o /app-binary ./cmd/${BINARY}
+
+# Final image — Chainguard distroless static (nonroot, ca-certificates included)
+FROM cgr.dev/chainguard/static:latest
+
+WORKDIR /app
+
+COPY --from=builder /app-binary /app/gatekey
+# Install scripts served by the control plane
+COPY --from=builder /app/scripts /app/scripts
+
+EXPOSE 8080
+
+ENTRYPOINT ["/app/gatekey"]
