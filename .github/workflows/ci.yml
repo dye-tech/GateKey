@@ -189,6 +189,7 @@ jobs:
             binary: gatekey-server
             deps: ca-certificates tzdata
             tag: gatekey-server:test
+            dockerfile: ./Dockerfile.server
           - name: Gateway
             binary: gatekey-gateway
             deps: ca-certificates tzdata openvpn nftables iptables iproute2
@@ -224,7 +225,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ./Dockerfile
+          file: ${{ matrix.image.dockerfile || './Dockerfile' }}
           build-args: |
             BINARY=${{ matrix.image.binary }}
             RUNTIME_DEPS=${{ matrix.image.deps }}

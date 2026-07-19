@@ -55,6 +55,7 @@ jobs:
             deps: ca-certificates tzdata
             title: GateKey Server
             description: GateKey Zero-Trust VPN Control Plane
+            dockerfile: ./Dockerfile.server
           - image: gatekey-gateway
             binary: gatekey-gateway
             deps: ca-certificates tzdata openvpn nftables iptables iproute2
@@ -99,7 +100,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ./Dockerfile
+          file: ${{ matrix.dockerfile || './Dockerfile' }}
           build-args: |
             BINARY=${{ matrix.binary }}
             RUNTIME_DEPS=${{ matrix.deps }}
