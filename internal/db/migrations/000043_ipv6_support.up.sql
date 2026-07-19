@@ -1,8 +1,20 @@
 -- IPv6 Support Migration
 -- Adds IPv6 columns to networks, gateways, and mesh tables
 
--- Add IPv6 CIDR to networks table
+-- GiST indexes on inet/cidr columns (below) use the inet_ops operator class,
+-- which is provided by the btree_gist contrib extension. Ensure it exists so a
+-- fresh database can apply this migration without relying on it being
+-- pre-provisioned. btree_gist is a trusted extension (creatable by the DB
+-- owner) from PostgreSQL 13 onward.
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+-- Add IPv6 CIDR to networks table.
+-- Migration 000042 already created networks.cidr_v6 as TEXT, so the ADD below is
+-- a no-op on a fresh in-order apply; coerce the column to CIDR so the GiST
+-- inet_ops index further down can be built. The USING cast is safe: cidr_v6
+-- holds a single IPv6 CIDR (or NULL).
 ALTER TABLE networks ADD COLUMN IF NOT EXISTS cidr_v6 CIDR;
+ALTER TABLE networks ALTER COLUMN cidr_v6 TYPE CIDR USING cidr_v6::CIDR;
 COMMENT ON COLUMN networks.cidr_v6 IS 'IPv6 network CIDR (optional, for dual-stack support)';
 
 -- Add IPv6 columns to gateways table

@@ -16,4 +16,4 @@ INSERT INTO system_settings (key, value, description) VALUES
 CREATE TRIGGER update_system_settings_updated_at
     BEFORE UPDATE ON system_settings
     FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at();
+    EXECUTE FUNCTION update_updated_at_column();

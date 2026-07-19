@@ -9,6 +9,7 @@ ALTER TABLE gateway_connections
 
 -- Drop indexes
 DROP INDEX IF EXISTS idx_pending_disconnects_cleanup;
+DROP INDEX IF EXISTS idx_pending_disconnects_executed;
 DROP INDEX IF EXISTS idx_pending_disconnects_user;
 DROP INDEX IF EXISTS idx_pending_disconnects_gateway;
 

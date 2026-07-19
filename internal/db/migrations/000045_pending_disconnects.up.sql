@@ -24,16 +24,25 @@ CREATE TABLE IF NOT EXISTS pending_disconnects (
 );
 
 -- Index for gateway polling (find pending disconnects for a specific gateway)
+-- Partial index over not-yet-executed requests. The expires_at > NOW() filter
+-- was dropped from the predicate (NOW() is not IMMUTABLE and is rejected in
+-- index predicates); callers still filter expires_at at query time.
 CREATE INDEX idx_pending_disconnects_gateway ON pending_disconnects(gateway_id, node_type)
-    WHERE executed_at IS NULL AND expires_at > NOW();
+    WHERE executed_at IS NULL;
 
 -- Index for user lookup (find all pending disconnects for a user)
 CREATE INDEX idx_pending_disconnects_user ON pending_disconnects(user_id)
     WHERE executed_at IS NULL;
 
--- Index for cleanup of expired/executed records
-CREATE INDEX idx_pending_disconnects_cleanup ON pending_disconnects(expires_at)
-    WHERE executed_at IS NOT NULL OR expires_at < NOW();
+-- Index for cleanup of expired/executed records.
+-- A plain btree index on expires_at serves the cleanup scan
+-- (WHERE expires_at < NOW()); the executed_at IS NOT NULL branch is covered by
+-- the partial index below. The previous partial predicate referenced NOW(),
+-- which Postgres rejects ("functions in index predicate must be marked
+-- IMMUTABLE"), so this migration could never apply to a fresh database.
+CREATE INDEX idx_pending_disconnects_cleanup ON pending_disconnects(expires_at);
+CREATE INDEX idx_pending_disconnects_executed ON pending_disconnects(executed_at)
+    WHERE executed_at IS NOT NULL;
 
 -- Add disconnect_requested_at to gateway_connections for tracking
 ALTER TABLE gateway_connections
