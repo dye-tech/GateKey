@@ -15,7 +15,7 @@
     "axios": "^1.18.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-router-dom": "^7.18.0",
+    "react-router-dom": "^7.18.1",
     "reactflow": "^11.11.4"
   },
   "devDependencies": {
