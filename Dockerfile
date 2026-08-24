@@ -4,7 +4,7 @@
 # Build stage
 # Pinned to 1.26.5: ships the Go stdlib security fixes (GO-2026-4599..5856,
 # fixed across 1.26.2-1.26.5). Bump in lockstep with the go directive in go.mod.
-FROM golang:1.26.5-alpine AS builder
+FROM golang:1.27.0-alpine AS builder
 
 ARG BINARY=gatekey-server
 
