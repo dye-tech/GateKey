@@ -12,9 +12,8 @@
 <p align="center">
   <a href="https://github.com/dye-tech/GateKey/actions/workflows/ci.yml"><img src="https://github.com/dye-tech/GateKey/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/dye-tech/GateKey/actions/workflows/codeql.yml"><img src="https://github.com/dye-tech/GateKey/actions/workflows/codeql.yml/badge.svg" alt="CodeQL"></a>
-  <a href="https://goreportcard.com/report/github.com/dye-tech/GateKey"><img src="https://goreportcard.com/badge/github.com/dye-tech/GateKey" alt="Go Report Card"></a>
   <a href="https://github.com/dye-tech/GateKey/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
-  <a href="https://golang.org/doc/go1.25"><img src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go" alt="Go Version"></a>
+  <a href="https://go.dev/doc/go1.26"><img src="https://img.shields.io/badge/Go-1.26.8+-00ADD8?logo=go" alt="Go Version"></a>
   <a href="https://hub.docker.com/r/dyetech/gatekey-server"><img src="https://img.shields.io/docker/v/dyetech/gatekey-server?label=Docker&logo=docker" alt="Docker"></a>
 </p>
 
@@ -209,7 +208,7 @@ services:
 
   gatekey-web:
     image: dyetech/gatekey-web:latest
-    ports: ["80:8080"]
+    ports: ["80:80"]
     depends_on: [gatekey-server]
 
 volumes:
@@ -258,6 +257,31 @@ GateKey implements a zero-trust model where **all traffic is denied by default**
 - **Geo-fencing** &mdash; IP-based access restrictions
 - **JIT access** &mdash; Temporary, approval-based resource access with auto-revocation
 - **Session recording** &mdash; Terminal recording and proxy logging
+
+### Container security
+
+GateKey uses [Chainguard images](https://images.chainguard.dev/) for its Go and
+Node builds and application runtimes to reduce unnecessary packages and exposure
+to known vulnerabilities.
+
+| Component | Chainguard image | Security approach |
+|-----------|------------------|-------------------|
+| Go builds | `go:latest` | Use the image's maintained Go compiler |
+| Web builds | `node:latest-dev` | Keep Node, npm, and build tools in the build stage |
+| Control plane | `static:latest` | Nonroot by default, with no shell or package manager |
+| VPN gateways and hubs | `wolfi-base:latest` | Install the VPN and networking tools required by each component |
+| Web runtime | `nginx:latest` | Serve compiled assets without Node or npm; nginx workers drop privileges |
+
+All images above come from `cgr.dev/chainguard`. Release container builds include
+SBOM and build provenance attestations. CI runs CodeQL, golangci-lint, Go tests,
+and frontend type checks. Dependency and image checks can be run with
+`govulncheck ./...`, `npm audit` in `web/`, and Trivy; documented scanner exceptions
+are tracked in [`.trivyignore`](.trivyignore).
+
+Base images alone do not eliminate application vulnerabilities. Rebuild with
+`docker build --pull` to pick up current base-image fixes, keep Go and npm
+dependencies updated, and deploy a current GateKey release. Pin deployed images
+by digest when you need reproducible rollouts.
 
 ---
 

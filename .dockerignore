@@ -1,0 +1,22 @@
+# Repository metadata and local build artifacts are not build inputs.
+.git
+bin
+dist
+web/node_modules
+web/dist
+# Downloads are proxied to the server's release endpoint by web/nginx.conf.
+# Do not ship obsolete checked-in CLI binaries in the frontend image.
+web/public/downloads/*-amd64
+web/public/downloads/*-arm64
+web/public/downloads/*.exe
+coverage*.out
+coverage*.html
+*.test
+*.log
+
+# Keep local environment configuration out of build layers.
+.env
+.env.*
+**/.env
+**/.env.*
+**/*.env

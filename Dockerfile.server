@@ -1,21 +1,20 @@
 # GateKey control-plane server image — Chainguard distroless.
 #
-# The server is a pure-Go, CGO-free binary whose only runtime needs are a CA
-# bundle and timezone data. That makes it a perfect fit for a distroless base:
-# no shell, no package manager, no busybox — a minimal attack surface and a
-# near-zero-CVE runtime, running as nonroot by default.
+# The CGO-free server uses a distroless runtime with CA certificates and
+# embedded timezone data, running as nonroot by default.
 #
-# The gateway/hub images stay on the alpine-based Dockerfile because they exec
+# The gateway/hub images use Wolfi in the main Dockerfile because they exec
 # openvpn / wg / nft / ip at runtime and therefore need OS packages.
 
-# Build stage
-FROM golang:1.26.5-alpine AS builder
+# Use --pull when building to pick up the latest base-image security fixes.
+# The Go builder includes git and a shell.
+FROM cgr.dev/chainguard/go:latest AS builder
+
+ENV GOTOOLCHAIN=local
 
 ARG BINARY=gatekey-server
 
 WORKDIR /app
-
-RUN apk add --no-cache git
 
 COPY go.mod go.sum ./
 RUN go mod download

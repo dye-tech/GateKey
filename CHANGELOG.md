@@ -5,6 +5,29 @@ All notable changes to GateKey are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.0] - 2026-09-22
+
+### Changed
+- Build Go and Node applications with Chainguard images. Use Chainguard Wolfi
+  for VPN gateway and hub runtimes and Chainguard nginx for the web UI.
+- Retain the nonroot Chainguard static control-plane runtime and existing
+  HTTP ports, install scripts, and gateway networking tools.
+- Raise the minimum Go version to 1.26.8 and update cryptography, gRPC,
+  OpenTelemetry, and frontend dependencies to address security advisories.
+- Run frontend CI with Node 26 and enforce the existing TypeScript check.
+
+### Fixed
+- Exclude obsolete bundled CLI binaries from the web image. Client downloads
+  continue through the control plane to the current GitHub release.
+- Exclude local dependencies, build output, and environment files from Docker
+  build contexts.
+- Stop release packaging immediately if a build fails.
+- Migrate the application reverse proxy to Go's `Rewrite` API, preserving
+  authenticated identity headers after hop-by-hop header removal.
+
+### Removed
+- Retired Go Report Card badge from the README.
+
 ## [1.11.1] - 2026-06-17
 
 ### Changed

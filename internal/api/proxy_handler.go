@@ -314,7 +314,8 @@ func (s *Server) handleProxyRequest(c *gin.Context) {
 // createReverseProxy creates a configured reverse proxy for the application
 func (s *Server) createReverseProxy(app *db.ProxyApplication, targetURL *url.URL, userID, userEmail string, groups []string, slug string, c *gin.Context) *httputil.ReverseProxy {
 	proxy := &httputil.ReverseProxy{
-		Director: func(req *http.Request) {
+		Rewrite: func(proxyReq *httputil.ProxyRequest) {
+			req := proxyReq.Out
 			// Set target scheme and host
 			req.URL.Scheme = targetURL.Scheme
 			req.URL.Host = targetURL.Host
@@ -356,12 +357,10 @@ func (s *Server) createReverseProxy(app *db.ProxyApplication, targetURL *url.URL
 			req.Header.Set("X-Forwarded-Groups", strings.Join(groups, ","))
 
 			// Standard proxy headers
+			// Rewrite strips incoming forwarding headers before this callback.
+			// Only forward the client address resolved by Gin's trusted-proxy policy.
 			if clientIP := c.ClientIP(); clientIP != "" {
-				if prior := req.Header.Get("X-Forwarded-For"); prior != "" {
-					req.Header.Set("X-Forwarded-For", prior+", "+clientIP)
-				} else {
-					req.Header.Set("X-Forwarded-For", clientIP)
-				}
+				req.Header.Set("X-Forwarded-For", clientIP)
 			}
 			req.Header.Set("X-Forwarded-Proto", "https")
 			req.Header.Set("X-Forwarded-Host", c.Request.Host)

@@ -87,13 +87,13 @@ RELEASE_BINARIES=gatekey gatekey-server gatekey-gateway gatekey-wireguard-gatewa
 # Release build function: $(call release-binary,binary-name)
 define release-binary
 	@mkdir -p $(RELEASE_DIR)
-	@for platform in $(PLATFORMS); do \
+	@set -e; for platform in $(PLATFORMS); do \
 		os=$${platform%/*}; \
 		arch=$${platform#*/}; \
 		echo "Building $(1) for $$os/$$arch..."; \
 		output_name="$(1)-$(VERSION)-$$os-$$arch"; \
 		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GOBUILD) $(LDFLAGS) -o $(RELEASE_DIR)/$$output_name/$(1) ./cmd/$(1); \
-		cp README.md LICENSE $(RELEASE_DIR)/$$output_name/ 2>/dev/null || true; \
+		cp README.md LICENSE $(RELEASE_DIR)/$$output_name/; \
 		tar -czf $(RELEASE_DIR)/$$output_name.tar.gz -C $(RELEASE_DIR) $$output_name; \
 		rm -rf $(RELEASE_DIR)/$$output_name; \
 		sha256sum $(RELEASE_DIR)/$$output_name.tar.gz >> $(RELEASE_DIR)/checksums.txt; \
@@ -102,7 +102,7 @@ define release-binary
 endef
 
 release: ## Build release archives for all binaries
-	@for binary in $(RELEASE_BINARIES); do \
+	@set -e; for binary in $(RELEASE_BINARIES); do \
 		$(MAKE) release-$$binary; \
 	done
 	@echo "Release archives created in $(RELEASE_DIR)/"
